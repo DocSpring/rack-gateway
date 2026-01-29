@@ -1,14 +1,326 @@
 ---
 title: "Monitoring"
-description: "Health checks and monitoring."
+description: "Health checks, metrics, and error tracking."
 ---
 
-import { Aside } from '@astrojs/starlight/components';
+import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
 
-<Aside type="caution" title="Coming Soon">
-This page is under construction. Check back soon for complete documentation.
+Effective monitoring ensures Rack Gateway remains available and helps identify issues before they impact users.
+
+## Health Endpoints
+
+Rack Gateway exposes health endpoints for monitoring and orchestration:
+
+### Liveness Check
+
+```bash
+curl https://gateway.example.com/api/v1/health
+```
+
+Response:
+```json
+{
+  "status": "ok"
+}
+```
+
+Use for:
+- Container/pod liveness probes
+- Basic uptime monitoring
+- Load balancer health checks
+
+### Readiness Check
+
+```bash
+curl https://gateway.example.com/api/v1/health/ready
+```
+
+Response:
+```json
+{
+  "status": "ready",
+  "database": "connected"
+}
+```
+
+Use for:
+- Container/pod readiness probes
+- Deployment verification
+- Dependency health validation
+
+<Aside type="tip">
+The readiness endpoint verifies database connectivity. If it fails, the gateway can receive requests but may not function correctly.
 </Aside>
 
-## Overview
+## Kubernetes Probes
 
-Content coming soon.
+Configure health checks in your Kubernetes deployment:
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rack-gateway
+spec:
+  template:
+    spec:
+      containers:
+        - name: gateway
+          livenessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: 8443
+            initialDelaySeconds: 10
+            periodSeconds: 15
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /api/v1/health/ready
+              port: 8443
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3
+```
+
+## Convox Health Checks
+
+Configure in `convox.yml`:
+
+```yaml
+services:
+  gateway:
+    health:
+      path: /api/v1/health
+      interval: 15
+      timeout: 5
+```
+
+## Error Tracking with Sentry
+
+Rack Gateway integrates with Sentry for error tracking and performance monitoring.
+
+### Configuration
+
+```bash
+# Backend error tracking
+SENTRY_DSN=https://abc123@sentry.io/123456
+
+# Frontend error tracking
+SENTRY_JS_DSN=https://def456@sentry.io/789012
+
+# Environment tag
+SENTRY_ENVIRONMENT=production
+```
+
+### What Gets Tracked
+
+| Event Type | Details |
+|------------|---------|
+| **Panics** | Unhandled errors with stack traces |
+| **HTTP Errors** | 5xx responses with request context |
+| **Database Errors** | Connection failures, query timeouts |
+| **External Failures** | OAuth, Convox API errors |
+
+### Filtering Sensitive Data
+
+Sentry automatically filters sensitive fields. Additional scrubbing is configured for:
+
+- Session tokens
+- API tokens
+- OAuth tokens
+- Environment variable values
+
+## Log Monitoring
+
+### Log Format
+
+Rack Gateway uses structured JSON logging:
+
+```json
+{
+  "level": "info",
+  "time": "2024-01-15T10:30:00Z",
+  "message": "Request completed",
+  "method": "POST",
+  "path": "/apps/myapp/releases",
+  "status": 200,
+  "duration_ms": 150,
+  "user": "alice@example.com",
+  "request_id": "req_abc123"
+}
+```
+
+### Log Levels
+
+| Level | When Used |
+|-------|-----------|
+| `error` | Failures requiring attention |
+| `warn` | Potential issues, degraded functionality |
+| `info` | Normal operations, request logging |
+| `debug` | Detailed diagnostic information |
+
+Configure with:
+```bash
+LOG_LEVEL=info  # Options: debug, info, warn, error
+```
+
+### Log Aggregation
+
+<Tabs>
+<TabItem label="CloudWatch">
+
+For AWS deployments, logs are automatically available in CloudWatch:
+
+```bash
+# View logs in CloudWatch
+aws logs tail /ecs/rack-gateway --follow
+```
+
+</TabItem>
+<TabItem label="Datadog">
+
+Add the Datadog agent and configure log collection:
+
+```yaml
+logs:
+  - type: docker
+    source: rack-gateway
+    service: rack-gateway
+```
+
+</TabItem>
+<TabItem label="Elasticsearch">
+
+Use Filebeat to ship logs:
+
+```yaml
+filebeat.inputs:
+  - type: container
+    paths:
+      - /var/lib/docker/containers/*/*.log
+    processors:
+      - add_kubernetes_metadata: ~
+```
+
+</TabItem>
+</Tabs>
+
+## Key Metrics
+
+Monitor these metrics for Rack Gateway health:
+
+### Application Metrics
+
+| Metric | Description | Alert Threshold |
+|--------|-------------|-----------------|
+| Request latency | p50, p95, p99 response times | p99 &gt; 2s |
+| Error rate | 5xx responses / total requests | &gt; 1% |
+| Request volume | Requests per second | Baseline deviation |
+
+### Infrastructure Metrics
+
+| Metric | Description | Alert Threshold |
+|--------|-------------|-----------------|
+| CPU usage | Container CPU utilization | &gt; 80% sustained |
+| Memory usage | Container memory utilization | &gt; 80% |
+| Database connections | Active connection count | Near max_connections |
+
+### Business Metrics
+
+| Metric | Description | Alert Threshold |
+|--------|-------------|-----------------|
+| Active sessions | Concurrent authenticated users | Capacity planning |
+| API token usage | Requests per token | Anomaly detection |
+| Failed authentications | OAuth/MFA failures | Spike detection |
+
+## Alerting
+
+### Critical Alerts (Page On-Call)
+
+- Health endpoint returns non-200
+- Error rate exceeds 5%
+- Database connection failures
+- Authentication system unavailable
+
+### Warning Alerts (Notify Team)
+
+- Error rate exceeds 1%
+- Latency p99 exceeds SLA
+- CPU/memory approaching limits
+- Unusual access patterns detected
+
+### Example Alerting Rules
+
+<Tabs>
+<TabItem label="Prometheus">
+
+```yaml
+groups:
+  - name: rack-gateway
+    rules:
+      - alert: GatewayHighErrorRate
+        expr: |
+          sum(rate(http_requests_total{job="rack-gateway",status=~"5.."}[5m]))
+          / sum(rate(http_requests_total{job="rack-gateway"}[5m])) > 0.01
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High error rate on Rack Gateway"
+
+      - alert: GatewayDown
+        expr: up{job="rack-gateway"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Rack Gateway is down"
+```
+
+</TabItem>
+<TabItem label="CloudWatch">
+
+```bash
+aws cloudwatch put-metric-alarm \
+  --alarm-name rack-gateway-health \
+  --metric-name HealthCheckStatus \
+  --namespace AWS/Route53 \
+  --statistic Minimum \
+  --period 60 \
+  --threshold 1 \
+  --comparison-operator LessThanThreshold \
+  --evaluation-periods 2 \
+  --alarm-actions arn:aws:sns:us-east-1:123456789:alerts
+```
+
+</TabItem>
+</Tabs>
+
+## Dashboard Example
+
+Key panels for a monitoring dashboard:
+
+| Category | Metric | Value |
+|----------|--------|-------|
+| **Traffic** | Request Rate | 100 req/s |
+| | Error Rate | 0.5% |
+| | Latency (p99) | 150ms |
+| **Users** | Active Users | 50 |
+| | API Token Usage | 200 req/min |
+| | MFA Events | 10 |
+| **Resources** | Database Connections | 15/50 |
+| | CPU Usage | 45% |
+| | Memory | 60% |
+
+## Best Practices
+
+1. **Set up health check monitoring first** - Basic availability is critical
+2. **Configure error tracking early** - Catch issues before users report them
+3. **Create runbooks for alerts** - Document response procedures
+4. **Review logs regularly** - Don't just alert, understand patterns
+5. **Test alerting** - Verify alerts reach the right people
+
+## Further Reading
+
+- [Troubleshooting](/operations/troubleshooting/) - Common issues and solutions
+- [Production Checklist](/deployment/production-checklist/) - Pre-deployment verification

@@ -1,14 +1,385 @@
 ---
 title: "Audit Logging"
-description: "Why audit logs matter for compliance."
+description: "Building tamper-evident records for compliance and forensics."
 ---
 
-import { Aside } from '@astrojs/starlight/components';
+import { Aside, Steps } from '@astrojs/starlight/components';
 
-<Aside type="caution" title="Coming Soon">
-This page is under construction. Check back soon for complete documentation.
+Audit logging creates a permanent record of all actions taken in a system. These logs serve multiple purposes: security forensics, compliance evidence, and operational visibility. Effective audit logs answer the questions: Who did what, when, and what was the outcome?
+
+## Why Audit Logs Matter
+
+### Security Forensics
+
+When a security incident occurs, audit logs are essential for:
+
+- **Determining scope**: What was accessed?
+- **Identifying attackers**: Who performed the actions?
+- **Understanding timeline**: When did the breach begin and end?
+- **Assessing damage**: What changes were made?
+
+### Compliance Requirements
+
+Regulatory frameworks mandate audit logging:
+
+| Framework | Audit Requirements |
+|-----------|-------------------|
+| **SOC 2** | Log access to customer data, retain for defined period |
+| **HIPAA** | Log access to protected health information |
+| **PCI DSS** | Log all access to cardholder data |
+| **GDPR** | Document processing activities |
+| **ISO 27001** | Event logging and monitoring |
+
+### Operational Visibility
+
+Beyond security, audit logs provide:
+
+- **Change tracking**: Who modified configuration?
+- **Troubleshooting**: What happened before the outage?
+- **Usage patterns**: How is the system being used?
+- **Accountability**: Who approved this deployment?
+
+## Anatomy of an Audit Log Entry
+
+A complete audit log entry captures:
+
+```json
+{
+  "timestamp": "2024-01-15T14:30:45.123Z",
+  "event_type": "convox.releases.promote",
+  "actor": {
+    "type": "user",
+    "id": "user_123",
+    "email": "alice@example.com",
+    "ip_address": "192.168.1.100",
+    "user_agent": "rack-gateway-cli/1.2.0"
+  },
+  "action": {
+    "method": "POST",
+    "path": "/apps/myapp/releases/R123/promote",
+    "parameters": {
+      "app": "myapp",
+      "release_id": "R123"
+    }
+  },
+  "outcome": {
+    "status": "success",
+    "response_code": 200
+  },
+  "context": {
+    "rack": "production",
+    "session_id": "sess_abc123",
+    "request_id": "req_xyz789"
+  }
+}
+```
+
+### Required Fields
+
+| Field | Purpose | Example |
+|-------|---------|---------|
+| **timestamp** | When the event occurred | ISO 8601 format |
+| **event_type** | What kind of event | `convox.apps.create` |
+| **actor** | Who performed the action | User email, IP address |
+| **action** | What was done | HTTP method, path, parameters |
+| **outcome** | What happened | Success/failure, status code |
+
+### Optional but Valuable
+
+| Field | Purpose |
+|-------|---------|
+| **session_id** | Links multiple actions |
+| **request_id** | Traces through distributed systems |
+| **user_agent** | Client identification |
+| **changes** | Before/after values |
+
+## Sensitive Data in Logs
+
+### The Problem
+
+Logs often contain sensitive data:
+
+```json
+{
+  "action": "env.set",
+  "parameters": {
+    "DATABASE_URL": "postgres://user:password@host/db",
+    "API_KEY": "sk_live_abc123secret"
+  }
+}
+```
+
+This creates risk:
+- Logs may be accessed by support staff
+- Log aggregation services may store data externally
+- Breached logs expose credentials
+
+### The Solution: Automatic Redaction
+
+Rack Gateway automatically redacts sensitive data:
+
+```json
+{
+  "action": "env.set",
+  "parameters": {
+    "DATABASE_URL": "[REDACTED]",
+    "API_KEY": "[REDACTED]"
+  }
+}
+```
+
+<Aside type="note">
+Rack Gateway identifies sensitive fields by name patterns (password, secret, key, token) and value patterns (connection strings, API keys). The original values are never logged.
 </Aside>
 
-## Overview
+### What Gets Redacted
 
-Content coming soon.
+| Pattern | Examples |
+|---------|----------|
+| **Passwords** | `password`, `passwd`, `db_password` |
+| **Secrets** | `secret`, `secret_key`, `client_secret` |
+| **Tokens** | `token`, `api_token`, `access_token` |
+| **Keys** | `api_key`, `private_key`, `encryption_key` |
+| **Connection strings** | `postgres://...`, `mysql://...` |
+
+## Immutability and Integrity
+
+### Why Immutability Matters
+
+If attackers can modify logs, they can:
+- Delete evidence of their access
+- Alter timestamps to confuse investigations
+- Remove their user from logged actions
+- Make it appear another user was responsible
+
+### Achieving Immutability
+
+**Write-Once Storage (WORM)**
+
+Rack Gateway supports S3 Object Lock for tamper-evident logs:
+
+```mermaid
+flowchart LR
+    Gateway[Rack Gateway]
+    S3[(S3 WORM Bucket)]
+    Anchor[Audit Anchor]
+
+    Gateway -->|1. Log entry| DB[(Database)]
+    Gateway -->|2. Create anchor| Anchor
+    Anchor -->|3. Store with Object Lock| S3
+
+    Note[Cannot be deleted or modified<br/>for retention period]
+    S3 --- Note
+```
+
+**Cryptographic Chaining**
+
+Each anchor includes a hash of the previous anchor:
+
+```
+Anchor 1: hash(logs_1_100) | prev_hash: null
+Anchor 2: hash(logs_101_200) | prev_hash: hash(anchor_1)
+Anchor 3: hash(logs_201_300) | prev_hash: hash(anchor_2)
+```
+
+This creates a verifiable chain:
+- Any modification breaks the chain
+- Deletion is detectable
+- Sequence is provable
+
+### Verifying Integrity
+
+```bash
+# Verify audit chain integrity
+rack-gateway admin audit verify --from 2024-01-01 --to 2024-01-31
+
+✓ Verified 45 anchors
+✓ Chain integrity confirmed
+✓ No gaps detected
+```
+
+## Log Retention
+
+### Determining Retention Period
+
+| Factor | Consideration |
+|--------|--------------|
+| **Compliance** | SOC 2 typically requires 1 year |
+| **Legal** | Potential litigation may require 7+ years |
+| **Investigation** | Incidents may not be discovered for months |
+| **Cost** | Storage costs increase with retention |
+
+Rack Gateway default: 400 days (exceeds most compliance requirements)
+
+### Implementing Retention
+
+```bash
+# Environment variable
+LOG_RETENTION_DAYS=400
+
+# For S3 WORM
+WORM_RETENTION_DAYS=400  # Objects locked for this period
+```
+
+<Aside type="caution">
+Once data is written to WORM storage with a retention period, it **cannot** be deleted until that period expires—even by administrators. Set retention carefully.
+</Aside>
+
+## Audit Log Architecture
+
+### Rack Gateway Implementation
+
+```mermaid
+flowchart TD
+    Request[Incoming Request]
+    Middleware[Audit Middleware]
+    Handler[Request Handler]
+    Response[Response]
+    Log[Audit Log Entry]
+    DB[(PostgreSQL)]
+    Anchor[Anchor Service]
+    S3[(S3 WORM)]
+
+    Request --> Middleware
+    Middleware --> Handler
+    Handler --> Response
+    Middleware --> Log
+    Log --> DB
+    DB -->|Periodic| Anchor
+    Anchor --> S3
+```
+
+**Flow**:
+1. Audit middleware captures request details
+2. Request processed by handler
+3. Response captured (success/failure)
+4. Log entry written to database
+5. Periodic job creates anchors in S3 WORM
+
+### What Gets Logged
+
+| Event Type | Details Captured |
+|------------|-----------------|
+| **Authentication** | Login attempts, OAuth callbacks |
+| **Session** | Session creation, expiration, logout |
+| **MFA** | Enrollment, verification, removal |
+| **Convox API** | All proxied requests and responses |
+| **Admin Actions** | User management, role changes |
+| **API Tokens** | Creation, deletion, usage |
+| **Settings** | Configuration changes |
+
+### What Doesn't Get Logged
+
+- Health check requests (`/api/v1/health`)
+- Static asset requests
+- Actual response bodies (only status codes)
+- Sensitive field values (redacted)
+
+## Querying Audit Logs
+
+### Web UI
+
+Access audit logs through the web interface:
+- Filter by user, time range, event type
+- Export to CSV for external analysis
+- View detailed JSON for each entry
+
+### API
+
+```bash
+# Get recent audit logs
+curl https://gateway.example.com/api/v1/admin/audit \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"from": "2024-01-01", "to": "2024-01-31"}'
+```
+
+### CLI
+
+```bash
+# View recent logs
+rack-gateway admin audit list --limit 100
+
+# Filter by user
+rack-gateway admin audit list --user alice@example.com
+
+# Filter by event type
+rack-gateway admin audit list --type convox.releases.promote
+```
+
+## Best Practices
+
+<Steps>
+
+1. **Log everything**
+
+   It's better to have logs you don't need than to need logs you don't have
+
+2. **Redact automatically**
+
+   Don't rely on developers to remember—use pattern-based redaction
+
+3. **Use structured logging**
+
+   JSON format enables querying and analysis
+
+4. **Include context**
+
+   Request IDs, session IDs, and correlation IDs help trace actions
+
+5. **Store immutably**
+
+   Use WORM storage to prevent tampering
+
+6. **Retain adequately**
+
+   Meet compliance requirements with margin for safety
+
+7. **Monitor the logs**
+
+   Logs are useless if no one watches them
+
+8. **Test your logging**
+
+   Verify logs capture what you need before an incident
+
+</Steps>
+
+## Audit Logs and Compliance
+
+### SOC 2 Mapping
+
+| SOC 2 Criteria | Audit Log Support |
+|----------------|-------------------|
+| **CC6.1** | All access logged with user attribution |
+| **CC7.1** | Configuration changes logged |
+| **CC7.2** | Security events captured |
+| **A1.2** | Log integrity via WORM anchoring |
+
+### Demonstrating Compliance
+
+Auditors typically request:
+1. **Evidence of logging**: Screenshot of log entries
+2. **Retention policy**: Documentation of retention settings
+3. **Access controls**: Who can view/modify logs
+4. **Integrity**: Evidence of WORM storage configuration
+
+Rack Gateway provides:
+- Audit log viewer in web UI
+- WORM bucket configuration documentation
+- RBAC for log access (admin only)
+- Verification command for chain integrity
+
+## Key Takeaways
+
+1. **Audit logs are essential** for security, compliance, and operations
+2. **Automatic redaction** protects sensitive data in logs
+3. **Immutable storage** prevents evidence tampering
+4. **Cryptographic chaining** enables integrity verification
+5. **Retention policies** must meet compliance requirements
+6. **Structured logs** enable effective querying and analysis
+
+## Further Reading
+
+- [S3 WORM Storage](/deployment/terraform/s3-worm-storage/) - Configure immutable log storage
+- [Audit Trail](/security/compliance/audit-trail/) - Compliance documentation
+- [SOC 2 Compliance](/security/compliance/soc2/) - Meeting audit requirements

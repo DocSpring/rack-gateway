@@ -15,41 +15,31 @@ Rack Gateway consists of three main components:
 2. **Web Admin UI** - A React SPA for user management, token administration, and audit log viewing
 3. **CLI Client** - A wrapper around the Convox CLI that manages authentication and multi-rack configuration
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                        Developer Machine                         │
-│  ┌──────────────────┐    ┌───────────────┐                      │
-│  │ rack-gateway CLI │    │  Native       │                      │
-│  │ (wrapper)        │    │  convox CLI   │                      │
-│  └────────┬─────────┘    └───────┬───────┘                      │
-│           │                      │                               │
-│           └──────────┬───────────┘                               │
-│                      │                                           │
-│                      ▼                                           │
-│           RACK_URL=https://convox:<token>@gateway                │
-└──────────────────────┼───────────────────────────────────────────┘
-                       │
-                       │ HTTPS
-                       ▼
-┌──────────────────────────────────────────────────────────────────┐
-│                     Gateway Server (per rack)                     │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐              │
-│  │    Auth     │  │    RBAC     │  │   Proxy     │              │
-│  │  (OAuth)    │──│  (Roles)    │──│ (Forward)   │──────────────┼──▶ Convox Rack
-│  └─────────────┘  └─────────────┘  └─────────────┘              │     (real API)
-│         │                                 │                      │
-│         ▼                                 ▼                      │
-│  ┌─────────────┐                  ┌─────────────┐               │
-│  │  Sessions   │                  │   Audit     │               │
-│  │  (DB)       │                  │   Logs      │               │
-│  └─────────────┘                  └─────────────┘               │
-│         │                                 │                      │
-│         ▼                                 ▼                      │
-│  ┌─────────────────────────────────────────────────┐            │
-│  │              PostgreSQL Database                 │            │
-│  │  (users, sessions, tokens, audit_logs, etc.)    │            │
-│  └─────────────────────────────────────────────────┘            │
-└──────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    subgraph Developer["Developer Machine"]
+        CLI["rack-gateway CLI"]
+        Convox["Native convox CLI"]
+        CLI --> RACKURL["RACK_URL=https://convox:token@gateway"]
+        Convox --> RACKURL
+    end
+
+    RACKURL -->|HTTPS| Gateway
+
+    subgraph Gateway["Gateway Server (per rack)"]
+        Auth["Auth (OAuth)"]
+        RBAC["RBAC (Roles)"]
+        Proxy["Proxy (Forward)"]
+        Sessions["Sessions (DB)"]
+        Audit["Audit Logs"]
+        DB[("PostgreSQL Database")]
+
+        Auth --> RBAC --> Proxy
+        Auth --> Sessions --> DB
+        Proxy --> Audit --> DB
+    end
+
+    Proxy -->|Proxied Request| ConvoxRack["Convox Rack (real API)"]
 ```
 
 ## Request Flow
@@ -250,15 +240,15 @@ See [Private Network Deployment](/deployment/private-network/) for complete setu
 
 The gateway is stateless (session state in database) and can be horizontally scaled:
 
-```
-Load Balancer
-    │
-    ├── Gateway Instance 1
-    ├── Gateway Instance 2
-    └── Gateway Instance 3
-           │
-           ▼
-      PostgreSQL (shared)
+```mermaid
+flowchart TD
+    LB[Load Balancer]
+    LB --> G1[Gateway Instance 1]
+    LB --> G2[Gateway Instance 2]
+    LB --> G3[Gateway Instance 3]
+    G1 --> DB[(PostgreSQL - shared)]
+    G2 --> DB
+    G3 --> DB
 ```
 
 Typical deployment runs 1-2 instances. The gateway adds minimal latency (typically under 10ms) to requests.

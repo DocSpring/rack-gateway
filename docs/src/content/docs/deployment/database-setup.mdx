@@ -1,14 +1,496 @@
 ---
 title: "Database Setup"
-description: "PostgreSQL configuration."
+description: "PostgreSQL configuration for Rack Gateway."
 ---
 
-import { Aside } from '@astrojs/starlight/components';
+import { Aside, Steps, Tabs, TabItem } from '@astrojs/starlight/components';
 
-<Aside type="caution" title="Coming Soon">
-This page is under construction. Check back soon for complete documentation.
+Rack Gateway requires PostgreSQL 14+ for storing users, API tokens, audit logs, and session data.
+
+## Requirements
+
+| Requirement | Minimum | Recommended |
+|-------------|---------|-------------|
+| **PostgreSQL version** | 14 | 16 |
+| **Storage** | 10GB | 50GB+ (scales with audit logs) |
+| **Memory** | 256MB | 1GB+ |
+| **Connections** | 25 | 50+ |
+
+## Connection Configuration
+
+### Connection String
+
+Set the `DATABASE_URL` environment variable:
+
+```bash
+DATABASE_URL=postgres://user:password@host:5432/rack_gateway
+```
+
+### Alternative: Individual Variables
+
+Use PostgreSQL standard environment variables:
+
+```bash
+PGHOST=database.example.com
+PGPORT=5432
+PGUSER=rack_gateway
+PGPASSWORD=your-password
+PGDATABASE=rack_gateway
+```
+
+<Aside type="note">
+The gateway checks variables in order: `RGW_DATABASE_URL`, `GATEWAY_DATABASE_URL`, `DATABASE_URL`, then `PG*` variables.
 </Aside>
 
-## Overview
+## Connection Pool
 
-Content coming soon.
+Configure the connection pool for your workload:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DB_MAX_OPEN_CONNS` | `25` | Maximum concurrent connections |
+| `DB_MAX_IDLE_CONNS` | `5` | Idle connections to keep warm |
+| `DB_CONN_MAX_LIFETIME` | `30m` | Connection lifetime before recycling |
+| `DB_CONN_MAX_IDLE_TIME` | `10m` | Idle time before closing |
+
+### Sizing Guidelines
+
+| Workload | Max Open | Max Idle | Notes |
+|----------|----------|----------|-------|
+| Small (&lt;100 users) | 10 | 3 | Conservative for shared DB |
+| Medium (&lt;1000 users) | 25 | 5 | Default settings |
+| Large (&gt;1000 users) | 50 | 10 | Increase with load |
+
+<Aside type="tip">
+Monitor PostgreSQL `max_connections` - ensure it exceeds the sum of all application pools.
+</Aside>
+
+## Database Provisioning
+
+<Tabs>
+<TabItem label="Convox Resource">
+
+Create a PostgreSQL resource in your Convox rack:
+
+```bash
+# Create database
+convox resources create postgres --name gateway-db
+
+# Link to application
+convox resources link gateway-db -a rack-gateway
+
+# View connection info
+convox resources info gateway-db
+```
+
+Convox automatically sets `DATABASE_URL` for linked apps.
+
+</TabItem>
+<TabItem label="AWS RDS">
+
+Create an RDS PostgreSQL instance:
+
+```hcl
+resource "aws_db_instance" "gateway" {
+  identifier     = "rack-gateway"
+  engine         = "postgres"
+  engine_version = "16.1"
+  instance_class = "db.t3.medium"
+
+  allocated_storage     = 50
+  max_allocated_storage = 200
+  storage_type          = "gp3"
+  storage_encrypted     = true
+
+  db_name  = "rack_gateway"
+  username = "rack_gateway_admin"
+  password = var.db_password
+
+  vpc_security_group_ids = [aws_security_group.rds.id]
+  db_subnet_group_name   = aws_db_subnet_group.private.name
+
+  backup_retention_period = 30
+  backup_window           = "03:00-04:00"
+  maintenance_window      = "sun:04:00-sun:05:00"
+
+  deletion_protection = true
+  skip_final_snapshot = false
+
+  performance_insights_enabled = true
+}
+```
+
+</TabItem>
+<TabItem label="Docker (Dev)">
+
+For local development:
+
+```yaml
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: rack_gateway
+      POSTGRES_PASSWORD: development
+      POSTGRES_DB: rack_gateway
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+volumes:
+  pgdata:
+```
+
+</TabItem>
+</Tabs>
+
+## Migrations
+
+### Automatic Migrations
+
+Migrations run automatically when the gateway starts. The gateway:
+
+1. Checks current schema version in `schema_migrations`
+2. Applies any pending migrations
+3. Continues to API server startup
+
+### Manual Migrations
+
+Run migrations manually:
+
+```bash
+# Via Docker
+docker exec rack-gateway rack-gateway migrate
+
+# Via Convox
+convox run gateway -- rack-gateway migrate -a rack-gateway
+```
+
+### Migration Safety
+
+- Migrations are idempotent - safe to run multiple times
+- Each migration runs in a transaction
+- Failures abort startup with clear error messages
+
+## Database Reset
+
+<Aside type="danger">
+The reset command **deletes all data**. Use only for development or emergency recovery.
+</Aside>
+
+### Development Reset
+
+```bash
+export RESET_RACK_GATEWAY_DATABASE=DELETE_ALL_DATA
+export DEV_MODE=true
+rack-gateway reset-db
+```
+
+### Emergency Production Reset
+
+```bash
+export RESET_RACK_GATEWAY_DATABASE=DELETE_ALL_DATA
+export DISABLE_DATABASE_ENVIRONMENT_CHECK=1
+rack-gateway reset-db
+```
+
+### Safety Guards
+
+The reset command enforces safety checks:
+
+| Check | Purpose | Override |
+|-------|---------|----------|
+| `RESET_RACK_GATEWAY_DATABASE=DELETE_ALL_DATA` | Explicit confirmation | Required |
+| Development mode or environment check | Prevent accidental prod reset | `DISABLE_DATABASE_ENVIRONMENT_CHECK=1` |
+
+## Schema Overview
+
+The gateway creates these tables:
+
+| Table | Purpose |
+|-------|---------|
+| `users` | User accounts and roles |
+| `sessions` | Active user sessions |
+| `api_tokens` | API tokens for CI/CD |
+| `mfa_methods` | MFA registrations (TOTP, WebAuthn) |
+| `trusted_devices` | Remembered MFA devices |
+| `audit_events` | Complete audit trail |
+| `deploy_approval_requests` | Deploy workflow state |
+| `settings` | Configuration settings |
+| `slack_integration` | Slack OAuth tokens |
+| `schema_migrations` | Migration tracking |
+
+## Backup and Recovery
+
+### Backup Strategy
+
+For production, implement regular backups:
+
+| Frequency | Retention | Purpose |
+|-----------|-----------|---------|
+| Hourly | 24 hours | Point-in-time recovery |
+| Daily | 30 days | Operational recovery |
+| Weekly | 1 year | Compliance/audit |
+
+### RDS Automated Backups
+
+```hcl
+resource "aws_db_instance" "gateway" {
+  # ... other config
+  backup_retention_period = 30  # days
+  backup_window           = "03:00-04:00"  # UTC
+
+  # Enable PITR
+  delete_automated_backups = false
+}
+```
+
+### Manual Backup
+
+```bash
+# Export full database
+pg_dump -h $PGHOST -U $PGUSER $PGDATABASE | gzip > backup-$(date +%Y%m%d).sql.gz
+
+# Export specific tables
+pg_dump -h $PGHOST -U $PGUSER -t audit_events $PGDATABASE > audit-backup.sql
+```
+
+### Recovery
+
+```bash
+# Restore full backup
+gunzip -c backup-20240115.sql.gz | psql -h $PGHOST -U $PGUSER $PGDATABASE
+
+# Restore from RDS snapshot
+aws rds restore-db-instance-from-db-snapshot \
+  --db-instance-identifier rack-gateway-restored \
+  --db-snapshot-identifier rds:rack-gateway-2024-01-15-03-00
+```
+
+## Audit Log Considerations
+
+### Storage Growth
+
+Audit logs grow continuously. Estimate storage needs:
+
+| Events/Day | Annual Storage | Notes |
+|------------|----------------|-------|
+| 1,000 | ~5 GB | Small team |
+| 10,000 | ~50 GB | Medium team |
+| 100,000 | ~500 GB | Large/busy |
+
+### Log Retention
+
+For compliance, set appropriate retention:
+
+```bash
+# 400 days (annual audit + buffer)
+convox env set LOG_RETENTION_DAYS=400
+
+# 7 years (SOX/FINRA compliance)
+convox env set LOG_RETENTION_DAYS=2557
+```
+
+### Audit Anchoring
+
+For tamper-evident logs, enable S3 WORM anchoring:
+
+```bash
+convox env set \
+  AUDIT_ANCHOR_BUCKET=audit-anchors-prod \
+  AUDIT_ANCHOR_CHAIN_ID=production
+```
+
+See [S3 WORM Storage](/deployment/terraform/s3-worm-storage/) for setup details.
+
+## Performance Tuning
+
+### PostgreSQL Configuration
+
+For dedicated gateway databases:
+
+```sql
+-- Connection limits
+ALTER SYSTEM SET max_connections = 100;
+
+-- Memory settings
+ALTER SYSTEM SET shared_buffers = '256MB';
+ALTER SYSTEM SET work_mem = '16MB';
+ALTER SYSTEM SET maintenance_work_mem = '64MB';
+
+-- Write performance
+ALTER SYSTEM SET wal_buffers = '16MB';
+ALTER SYSTEM SET checkpoint_completion_target = 0.9;
+
+-- Query optimization
+ALTER SYSTEM SET effective_cache_size = '768MB';
+ALTER SYSTEM SET random_page_cost = 1.1;  -- For SSD
+
+SELECT pg_reload_conf();
+```
+
+### Index Maintenance
+
+The gateway creates necessary indexes automatically. For high-volume deployments, monitor and maintain:
+
+```sql
+-- Check index usage
+SELECT
+  relname AS table,
+  indexrelname AS index,
+  idx_scan AS scans,
+  idx_tup_read AS tuples_read,
+  idx_tup_fetch AS tuples_fetched
+FROM pg_stat_user_indexes
+ORDER BY idx_scan DESC;
+
+-- Reindex if needed
+REINDEX TABLE audit_events;
+```
+
+## Monitoring
+
+### Key Metrics
+
+Monitor these PostgreSQL metrics:
+
+| Metric | Warning Threshold | Critical Threshold |
+|--------|-------------------|-------------------|
+| Connection usage | 70% | 90% |
+| Replication lag | 1s | 10s |
+| Transaction rate | - | Baseline + 200% |
+| Disk usage | 70% | 85% |
+
+### CloudWatch (RDS)
+
+```hcl
+resource "aws_cloudwatch_metric_alarm" "db_connections" {
+  alarm_name          = "rack-gateway-db-connections"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 2
+  metric_name         = "DatabaseConnections"
+  namespace           = "AWS/RDS"
+  period              = 300
+  statistic           = "Average"
+  threshold           = 40
+
+  dimensions = {
+    DBInstanceIdentifier = aws_db_instance.gateway.identifier
+  }
+}
+```
+
+### Query Performance
+
+Enable slow query logging:
+
+```sql
+ALTER SYSTEM SET log_min_duration_statement = 1000;  -- Log queries > 1s
+SELECT pg_reload_conf();
+```
+
+## Security
+
+### Network Isolation
+
+- Place database in private subnet
+- Use security groups to restrict access
+- Enable SSL for connections
+
+```hcl
+resource "aws_security_group" "rds" {
+  name        = "rack-gateway-rds"
+  vpc_id      = var.vpc_id
+
+  ingress {
+    from_port       = 5432
+    to_port         = 5432
+    protocol        = "tcp"
+    security_groups = [aws_security_group.gateway.id]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+```
+
+### Encryption
+
+- Enable encryption at rest (RDS default)
+- Use SSL for connections in transit
+- Consider KMS for key management
+
+```bash
+# Force SSL connections
+DATABASE_URL=postgres://user:pass@host:5432/db?sslmode=require
+```
+
+### Access Control
+
+Create a dedicated database user:
+
+```sql
+-- Create role with minimal privileges
+CREATE ROLE rack_gateway_app WITH LOGIN PASSWORD 'secure-password';
+
+-- Grant necessary permissions
+GRANT CONNECT ON DATABASE rack_gateway TO rack_gateway_app;
+GRANT USAGE ON SCHEMA public TO rack_gateway_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO rack_gateway_app;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO rack_gateway_app;
+
+-- For migrations (separate admin user)
+CREATE ROLE rack_gateway_admin WITH LOGIN PASSWORD 'admin-password';
+GRANT ALL PRIVILEGES ON DATABASE rack_gateway TO rack_gateway_admin;
+```
+
+## Troubleshooting
+
+### Connection Issues
+
+```bash
+# Test connection
+psql $DATABASE_URL -c "SELECT 1"
+
+# Check connection count
+psql $DATABASE_URL -c "SELECT count(*) FROM pg_stat_activity"
+
+# View active connections
+psql $DATABASE_URL -c "SELECT * FROM pg_stat_activity WHERE datname = 'rack_gateway'"
+```
+
+### Migration Failures
+
+```bash
+# Check migration status
+psql $DATABASE_URL -c "SELECT * FROM schema_migrations ORDER BY version"
+
+# View gateway logs for migration errors
+convox logs -a rack-gateway --filter migration
+```
+
+### Performance Issues
+
+```sql
+-- Find slow queries
+SELECT query, calls, mean_time, total_time
+FROM pg_stat_statements
+ORDER BY total_time DESC
+LIMIT 10;
+
+-- Check table sizes
+SELECT relname, pg_size_pretty(pg_total_relation_size(relid))
+FROM pg_stat_user_tables
+ORDER BY pg_total_relation_size(relid) DESC;
+```
+
+## Next Steps
+
+- [Convox Deployment](/deployment/convox/) - Deploy the gateway
+- [S3 WORM Storage](/deployment/terraform/s3-worm-storage/) - Audit anchoring
+- [Production Checklist](/deployment/production-checklist/) - Go-live preparation

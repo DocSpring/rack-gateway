@@ -1,14 +1,242 @@
 ---
 title: "MFA Verification"
-description: "Using MFA with the CLI."
+description: "Using multi-factor authentication with the rack-gateway CLI."
 ---
 
-import { Aside } from '@astrojs/starlight/components';
+import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
 
-<Aside type="caution" title="Coming Soon">
-This page is under construction. Check back soon for complete documentation.
+The `rack-gateway` CLI supports multi-factor authentication (MFA) for enhanced security. This page covers how MFA works in the CLI and how to handle step-up authentication prompts.
+
+## When MFA is Required
+
+MFA verification may be required in several scenarios:
+
+1. **During login** - If your account has MFA enabled
+2. **Step-up authentication** - When performing sensitive operations
+3. **Session refresh** - When your MFA verification has expired
+
+The gateway administrator configures which operations require MFA and how long verifications remain valid.
+
+## MFA Methods
+
+The CLI supports multiple MFA methods:
+
+<Tabs>
+  <TabItem label="TOTP">
+    **Time-based One-Time Passwords** (Google Authenticator, Authy, 1Password, etc.)
+
+    ```bash
+    Enter TOTP code: 123456
+    ```
+
+    Enter the 6-digit code from your authenticator app.
+  </TabItem>
+  <TabItem label="WebAuthn">
+    **Security Keys** (YubiKey 5, Touch ID, Windows Hello)
+
+    ```bash
+    Touch your security key...
+    ```
+
+    The CLI prompts you to touch your hardware security key.
+
+    <Aside type="note">
+    WebAuthn requires system libraries on Linux. See [Installation](/user-guide/cli/installation/#webauthn-support-optional).
+    </Aside>
+  </TabItem>
+  <TabItem label="Backup Codes">
+    **One-time recovery codes**
+
+    ```bash
+    Enter backup code: XXXX-XXXX-XXXX
+    ```
+
+    Use a backup code if you've lost access to your primary MFA device.
+
+    <Aside type="caution">
+    Each backup code can only be used once. Generate new codes from the web UI after using them.
+    </Aside>
+  </TabItem>
+</Tabs>
+
+## MFA During Login
+
+If MFA is required for your account, you'll be prompted after OAuth authentication:
+
+```bash
+$ rack-gateway login production https://gateway.example.com
+
+Opening browser for authentication...
+✓ OAuth successful
+
+MFA verification required.
+Available methods: TOTP, WebAuthn
+
+Attempting WebAuthn verification...
+Touch your security key...
+✓ MFA verified
+
+✓ Logged in as developer@company.com
+```
+
+### Fallback Behavior
+
+If you have multiple MFA methods enrolled:
+
+1. **WebAuthn is tried first** (if available and your CLI supports it)
+2. **Falls back to TOTP** if WebAuthn fails or isn't available
+3. **Backup codes** can be used if prompted
+
+## Step-Up Authentication
+
+Certain sensitive operations require "step-up" MFA verification, even if you're already logged in. When this happens:
+
+```bash
+$ rack-gateway env set DATABASE_URL=... -a myapp
+
+Step-up MFA required for this operation.
+Enter TOTP code: 123456
+✓ MFA verified
+
+Setting DATABASE_URL...
+✓ Environment variable set
+```
+
+### Operations That May Require Step-Up
+
+Operations requiring step-up MFA are configured by your administrator, but commonly include:
+
+- Environment variable changes
+- App deletion
+- Resource management
+- API token creation
+- User management (admins)
+
+### Step-Up Window
+
+After successful MFA verification, there's typically a window (default: 10 minutes) where additional step-up prompts aren't required. This is configurable by the gateway administrator.
+
+## Pre-emptive MFA Verification
+
+You can verify MFA before running commands using the `--mfa` flag or `--mfa-code`:
+
+### Using --mfa flag
+
+```bash
+# Triggers interactive MFA prompt before the command
+rack-gateway deploy -a myapp --mfa
+```
+
+### Using --mfa-code
+
+```bash
+# Provide the code directly (useful for scripting)
+rack-gateway deploy -a myapp --mfa-code 123456
+```
+
+### Using --mfa-method
+
+```bash
+# Force a specific method
+rack-gateway deploy -a myapp --mfa-method totp
+rack-gateway deploy -a myapp --mfa-method webauthn
+```
+
+## Testing MFA Status
+
+Check your MFA enrollment and verification status:
+
+```bash
+$ rack-gateway test-auth --mfa
+
+✓ Authenticated as developer@company.com
+  Role: deployer
+  MFA enrolled: Yes
+  MFA methods: TOTP, WebAuthn
+  Last MFA verification: 5 minutes ago
+  Step-up window: Active (expires in 5 minutes)
+```
+
+## Scripting and CI/CD
+
+For automated workflows, you have several options:
+
+### API Tokens (Recommended)
+
+API tokens bypass MFA entirely and are the recommended approach for CI/CD:
+
+```bash
+export RACK_GATEWAY_API_TOKEN="rgw_token_..."
+rack-gateway deploy -a myapp
+```
+
+API tokens have their own permissions and can be scoped appropriately.
+
+### TOTP Code via Flag
+
+If you must use a session with MFA, you can pass the TOTP code:
+
+```bash
+# Generate TOTP code programmatically (requires totp-cli or similar)
+TOTP_CODE=$(totp-cli generate my-totp-secret)
+rack-gateway deploy -a myapp --mfa-code "$TOTP_CODE"
+```
+
+<Aside type="caution" title="Security Warning">
+Embedding TOTP secrets in CI/CD reduces security. Prefer API tokens instead.
 </Aside>
 
-## Overview
+## Troubleshooting
 
-Content coming soon.
+### "WebAuthn not available"
+
+WebAuthn requires:
+- System libraries (Linux only - see [Installation](/user-guide/cli/installation/#webauthn-support-optional))
+- A connected security key
+- CLI built with CGO enabled
+
+If WebAuthn isn't available, the CLI falls back to TOTP.
+
+### "Invalid TOTP code"
+
+TOTP codes are time-sensitive. Check that:
+- Your device clock is synchronized
+- You're using the correct authenticator entry
+- The code hasn't expired (codes change every 30 seconds)
+
+### "No MFA methods enrolled"
+
+You need to enroll at least one MFA method in the web UI:
+
+1. Open the web UI: `rack-gateway web`
+2. Go to Account Security
+3. Enroll TOTP or WebAuthn
+
+### "Step-up required but no interactive terminal"
+
+In non-interactive contexts (cron jobs, CI), use either:
+- API tokens (recommended)
+- The `--mfa-code` flag with a TOTP code
+
+### "Backup code rejected"
+
+Backup codes are one-time use. If rejected:
+- The code may have already been used
+- The code may be expired
+- You may be entering it incorrectly (include hyphens if shown)
+
+Generate new backup codes from the web UI.
+
+## Security Best Practices
+
+1. **Use WebAuthn when possible** - Hardware keys are more secure than TOTP
+2. **Keep backup codes secure** - Store them in a password manager, not on your computer
+3. **Use API tokens for CI/CD** - Don't embed TOTP secrets in automation
+4. **Regenerate backup codes** - After using any, generate a fresh set
+5. **Review MFA sessions** - Check active sessions periodically in the web UI
+
+## Next Steps
+
+- [MFA Setup Guide](/user-guide/mfa/) - Enroll MFA methods
+- [API Tokens](/user-guide/web-ui/api-tokens/) - Create tokens for CI/CD
+- [Security Best Practices](/security/hardening/) - Security recommendations

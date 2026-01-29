@@ -1,14 +1,542 @@
 ---
 title: "Testing"
-description: "Testing guide."
+description: "Testing strategies and test execution for Rack Gateway."
 ---
 
-import { Aside } from '@astrojs/starlight/components';
+import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
 
-<Aside type="caution" title="Coming Soon">
-This page is under construction. Check back soon for complete documentation.
+Rack Gateway uses a comprehensive testing strategy with unit tests, integration tests, and end-to-end tests across both Go and TypeScript codebases.
+
+## Test Overview
+
+| Test Type | Framework | Location | Command |
+|-----------|-----------|----------|---------|
+| Go Unit Tests | Go testing | `*_test.go` files | `task go:test` |
+| Go Integration Tests | Go testing | `internal/integration/` | `task go:test` |
+| Web Unit Tests | Vitest | `web/src/**/*.test.ts` | `task web:test` |
+| Web E2E Tests | Playwright | `web/e2e/` | `task web:e2e` |
+| CLI E2E Tests | Shell scripts | `config/cli-e2e/` | `task go:e2e` |
+
+## Running Tests
+
+### Full Test Suite
+
+```bash
+# Run ALL tests (recommended before committing)
+task ci
+
+# This runs:
+# - Linting (Go + Web)
+# - Go unit and integration tests
+# - Web unit tests
+# - E2E tests (Web + CLI)
+# - Build verification
+```
+
+### Go Tests
+
+```bash
+# Run all Go tests
+task go:test
+
+# Run specific package tests
+go test ./internal/gateway/auth/...
+
+# Run with verbose output
+go test -v ./internal/gateway/rbac/...
+
+# Run specific test by name
+go test -v -run TestRBACPolicy ./internal/gateway/rbac/
+```
+
+### Web Tests
+
+```bash
+# Run all web unit tests
+task web:test
+
+# Run in watch mode (development)
+cd web && bunx vitest
+
+# Run with UI
+cd web && bunx vitest --ui
+
+# Run specific test file
+cd web && bunx vitest src/components/Button.test.tsx
+```
+
+### End-to-End Tests
+
+```bash
+# Run all E2E tests
+task e2e
+
+# Run web E2E only
+task web:e2e
+
+# Run CLI E2E only
+task go:e2e
+
+# Run specific Playwright test
+cd web && bunx playwright test e2e/auth.spec.ts
+```
+
+## Test Architecture
+
+### Go Test Organization
+
+```
+internal/
+├── gateway/
+│   ├── auth/
+│   │   ├── session.go
+│   │   └── session_test.go      # Unit tests alongside source
+│   ├── rbac/
+│   │   ├── policy.go
+│   │   └── policy_test.go
+│   └── proxy/
+│       ├── handler.go
+│       └── handler_test.go
+└── integration/
+    ├── auth_test.go              # Integration tests
+    ├── proxy_test.go
+    └── testutil/                 # Shared test utilities
+```
+
+### Web Test Organization
+
+```
+web/
+├── src/
+│   ├── components/
+│   │   ├── Button.tsx
+│   │   └── Button.test.tsx       # Unit tests alongside source
+│   └── lib/
+│       ├── utils.ts
+│       └── utils.test.ts
+└── e2e/
+    ├── auth.spec.ts              # E2E authentication tests
+    ├── admin.spec.ts             # E2E admin panel tests
+    └── fixtures/                 # Test fixtures
+```
+
+## Writing Tests
+
+### Go Unit Tests
+
+```go
+package auth_test
+
+import (
+    "testing"
+    "github.com/stretchr/testify/assert"
+    "github.com/stretchr/testify/require"
+    "github.com/docspring/rack-gateway/internal/gateway/auth"
+)
+
+func TestSessionManager_CreateSession(t *testing.T) {
+    // Arrange
+    manager := auth.NewSessionManager(testConfig)
+    user := &auth.User{Email: "test@example.com"}
+
+    // Act
+    session, err := manager.CreateSession(user)
+
+    // Assert
+    require.NoError(t, err)
+    assert.NotEmpty(t, session.Token)
+    assert.Equal(t, user.Email, session.UserEmail)
+}
+
+func TestSessionManager_ValidateSession(t *testing.T) {
+    tests := []struct {
+        name    string
+        token   string
+        wantErr bool
+    }{
+        {
+            name:    "valid token",
+            token:   validToken,
+            wantErr: false,
+        },
+        {
+            name:    "expired token",
+            token:   expiredToken,
+            wantErr: true,
+        },
+        {
+            name:    "malformed token",
+            token:   "invalid",
+            wantErr: true,
+        },
+    }
+
+    for _, tt := range tests {
+        t.Run(tt.name, func(t *testing.T) {
+            _, err := manager.ValidateSession(tt.token)
+            if tt.wantErr {
+                assert.Error(t, err)
+            } else {
+                assert.NoError(t, err)
+            }
+        })
+    }
+}
+```
+
+### Go Integration Tests
+
+```go
+// internal/integration/auth_test.go
+package integration_test
+
+import (
+    "net/http"
+    "testing"
+    "github.com/stretchr/testify/suite"
+)
+
+type AuthIntegrationSuite struct {
+    suite.Suite
+    server *httptest.Server
+    client *http.Client
+}
+
+func (s *AuthIntegrationSuite) SetupSuite() {
+    // Start test server with real database
+    s.server = setupTestServer(s.T())
+    s.client = &http.Client{}
+}
+
+func (s *AuthIntegrationSuite) TearDownSuite() {
+    s.server.Close()
+}
+
+func (s *AuthIntegrationSuite) TestOAuthFlow() {
+    // Test complete OAuth authentication flow
+    resp, err := s.client.Get(s.server.URL + "/api/v1/auth/login")
+    s.Require().NoError(err)
+    s.Equal(http.StatusOK, resp.StatusCode)
+}
+
+func TestAuthIntegration(t *testing.T) {
+    suite.Run(t, new(AuthIntegrationSuite))
+}
+```
+
+### Web Unit Tests (Vitest)
+
+```typescript
+// src/components/Button.test.tsx
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/react';
+import { Button } from './Button';
+
+describe('Button', () => {
+  it('renders with correct text', () => {
+    render(<Button>Click me</Button>);
+    expect(screen.getByText('Click me')).toBeInTheDocument();
+  });
+
+  it('calls onClick when clicked', () => {
+    const handleClick = vi.fn();
+    render(<Button onClick={handleClick}>Click me</Button>);
+
+    fireEvent.click(screen.getByText('Click me'));
+
+    expect(handleClick).toHaveBeenCalledOnce();
+  });
+
+  it('is disabled when loading', () => {
+    render(<Button loading>Click me</Button>);
+    expect(screen.getByRole('button')).toBeDisabled();
+  });
+});
+```
+
+### Web E2E Tests (Playwright)
+
+```typescript
+// e2e/auth.spec.ts
+import { test, expect } from '@playwright/test';
+
+test.describe('Authentication', () => {
+  test('should redirect to login when unauthenticated', async ({ page }) => {
+    await page.goto('/');
+    await expect(page).toHaveURL(/.*login/);
+  });
+
+  test('should complete OAuth login flow', async ({ page }) => {
+    await page.goto('/login');
+
+    // Click login button
+    await page.click('[data-testid="login-google"]');
+
+    // Mock OAuth redirects to callback
+    await expect(page).toHaveURL('/');
+    await expect(page.locator('[data-testid="user-menu"]')).toBeVisible();
+  });
+
+  test('should show user email after login', async ({ page }) => {
+    await loginAsUser(page, 'test@example.com');
+
+    await page.click('[data-testid="user-menu"]');
+    await expect(page.getByText('test@example.com')).toBeVisible();
+  });
+});
+```
+
+## Test Utilities
+
+### Go Test Helpers
+
+```go
+// internal/integration/testutil/helpers.go
+package testutil
+
+import (
+    "testing"
+    "database/sql"
+)
+
+// SetupTestDB creates a fresh test database
+func SetupTestDB(t *testing.T) *sql.DB {
+    t.Helper()
+
+    db, err := sql.Open("postgres", testDatabaseURL)
+    if err != nil {
+        t.Fatalf("failed to connect: %v", err)
+    }
+
+    // Run migrations
+    if err := runMigrations(db); err != nil {
+        t.Fatalf("failed to migrate: %v", err)
+    }
+
+    t.Cleanup(func() {
+        db.Close()
+    })
+
+    return db
+}
+
+// CreateTestUser creates a user for testing
+func CreateTestUser(t *testing.T, db *sql.DB, email string) *User {
+    t.Helper()
+    // Implementation
+}
+```
+
+### Web Test Helpers
+
+```typescript
+// web/src/test/helpers.ts
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { render } from '@testing-library/react';
+import { BrowserRouter } from 'react-router-dom';
+
+export function renderWithProviders(ui: React.ReactElement) {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false },
+    },
+  });
+
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <BrowserRouter>
+        {ui}
+      </BrowserRouter>
+    </QueryClientProvider>
+  );
+}
+
+export async function loginAsUser(page: Page, email: string) {
+  // Set up authenticated session cookie
+  await page.context().addCookies([{
+    name: 'session',
+    value: createTestSession(email),
+    domain: 'localhost',
+    path: '/',
+  }]);
+}
+```
+
+## Test Databases
+
+Tests use isolated databases to prevent interference:
+
+| Environment | Database | Port |
+|-------------|----------|------|
+| Development | `gateway_dev` | 55432 |
+| Testing | `gateway_test` | 55432 |
+| E2E | `gateway_e2e` | 55432 |
+
+```bash
+# Reset test database
+task db:reset:test
+
+# Run migrations on test database
+DATABASE_URL=postgres://postgres:postgres@localhost:55432/gateway_test task db:migrate
+```
+
+## Mocking
+
+### Go Mocks
+
+Use interfaces and mock implementations:
+
+```go
+// Define interface
+type SessionStore interface {
+    Get(token string) (*Session, error)
+    Set(session *Session) error
+    Delete(token string) error
+}
+
+// Mock implementation
+type MockSessionStore struct {
+    sessions map[string]*Session
+}
+
+func (m *MockSessionStore) Get(token string) (*Session, error) {
+    if s, ok := m.sessions[token]; ok {
+        return s, nil
+    }
+    return nil, ErrSessionNotFound
+}
+```
+
+### Web Mocks
+
+Use MSW (Mock Service Worker) for API mocking:
+
+```typescript
+// web/src/mocks/handlers.ts
+import { http, HttpResponse } from 'msw';
+
+export const handlers = [
+  http.get('/api/v1/users/me', () => {
+    return HttpResponse.json({
+      email: 'test@example.com',
+      role: 'admin',
+    });
+  }),
+
+  http.get('/api/v1/apps', () => {
+    return HttpResponse.json([
+      { name: 'myapp', status: 'running' },
+    ]);
+  }),
+];
+```
+
+## Code Coverage
+
+### Go Coverage
+
+```bash
+# Generate coverage report
+go test -coverprofile=coverage.out ./...
+
+# View coverage in browser
+go tool cover -html=coverage.out
+
+# Check coverage percentage
+go tool cover -func=coverage.out | grep total
+```
+
+### Web Coverage
+
+```bash
+# Run tests with coverage
+cd web && bunx vitest --coverage
+
+# Coverage report is generated in web/coverage/
+```
+
+## Debugging Tests
+
+### Go Test Debugging
+
+```bash
+# Run with verbose output
+go test -v ./...
+
+# Run with debug logging
+LOG_LEVEL=debug go test -v ./internal/gateway/auth/
+
+# Run single test with detailed output
+go test -v -run TestSpecificFunction ./pkg/...
+```
+
+### Playwright Debugging
+
+```bash
+# Run with headed browser
+cd web && bunx playwright test --headed
+
+# Run with Playwright Inspector
+cd web && bunx playwright test --debug
+
+# Run with trace viewer
+cd web && bunx playwright test --trace on
+```
+
+<Aside type="tip">
+When Playwright tests fail, check the `web/test-results/` directory for screenshots, videos, and trace files.
 </Aside>
 
-## Overview
+## Continuous Integration
 
-Content coming soon.
+Tests run automatically on GitHub Actions:
+
+```yaml
+# .github/workflows/ci.yml
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Run all tests
+        run: task ci
+```
+
+### CI Test Matrix
+
+| Check | Runs On | Blocking |
+|-------|---------|----------|
+| Go lint | Every PR | Yes |
+| Go tests | Every PR | Yes |
+| Web lint | Every PR | Yes |
+| Web tests | Every PR | Yes |
+| E2E tests | Every PR | Yes |
+| Build | Every PR | Yes |
+
+## Best Practices
+
+### Do's
+
+- Write tests alongside code (not after)
+- Use table-driven tests for multiple cases
+- Mock external services, not internal packages
+- Keep tests fast (under 100ms per unit test)
+- Test edge cases and error paths
+- Use meaningful test names that describe behavior
+
+### Don'ts
+
+- Don't test implementation details
+- Don't write flaky tests (no `time.Sleep`)
+- Don't share state between tests
+- Don't ignore test failures
+- Don't skip tests without explanation
+
+## Further Reading
+
+- [Contributing Guidelines](/development/contributing/) - Code standards
+- [Local Setup](/development/local-setup/) - Development environment
+- [API Reference](/development/api-reference/) - API documentation

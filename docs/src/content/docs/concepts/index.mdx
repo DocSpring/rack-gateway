@@ -1,14 +1,95 @@
 ---
-title: "Concepts"
-description: "Learn the fundamental concepts behind authentication, authorization, and security."
+title: "Security Concepts"
+description: "Learn the fundamental concepts behind authentication, authorization, and infrastructure security."
 ---
 
-import { Aside } from '@astrojs/starlight/components';
+import { CardGrid, LinkCard, Aside } from '@astrojs/starlight/components';
 
-<Aside type="caution" title="Coming Soon">
-This page is under construction. Check back soon for complete documentation.
+This section provides educational content on the security concepts that underpin Rack Gateway. Whether you're new to infrastructure security or looking to deepen your understanding, these guides explain the "why" behind the "how."
+
+## Why Understanding Concepts Matters
+
+Security tools are only as effective as the understanding behind their use. Misconfigurations often stem from conceptual gaps—not technical limitations. These guides aim to:
+
+- **Build intuition** about security trade-offs
+- **Explain industry standards** like OAuth 2.0 and RBAC
+- **Connect theory to practice** with Rack Gateway examples
+- **Support compliance** by documenting security rationale
+
+## Core Concepts
+
+<CardGrid>
+  <LinkCard
+    title="Authentication vs Authorization"
+    description="The foundational distinction every security system builds upon."
+    href="/concepts/authentication-vs-authorization/"
+  />
+  <LinkCard
+    title="OAuth 2.0 Explained"
+    description="How modern authentication works, from tokens to PKCE."
+    href="/concepts/oauth-explained/"
+  />
+  <LinkCard
+    title="RBAC Principles"
+    description="Role-based access control design patterns and best practices."
+    href="/concepts/rbac-principles/"
+  />
+  <LinkCard
+    title="Zero Trust Security"
+    description="The security model that assumes breach and verifies continuously."
+    href="/concepts/zero-trust-security/"
+  />
+</CardGrid>
+
+## Security Mechanisms
+
+<CardGrid>
+  <LinkCard
+    title="Multi-Factor Authentication"
+    description="Why passwords aren't enough and how MFA protects accounts."
+    href="/concepts/mfa-security/"
+  />
+  <LinkCard
+    title="Audit Logging"
+    description="Building tamper-evident records for compliance and forensics."
+    href="/concepts/audit-logging/"
+  />
+  <LinkCard
+    title="Infrastructure Gateways"
+    description="The gateway pattern for securing internal services."
+    href="/concepts/infrastructure-gateways/"
+  />
+</CardGrid>
+
+## Reading Order
+
+For those new to infrastructure security, we recommend this order:
+
+1. **Authentication vs Authorization** - Start with the fundamentals
+2. **OAuth 2.0 Explained** - Understand modern authentication
+3. **Zero Trust Security** - Learn the overarching security philosophy
+4. **RBAC Principles** - Dive into access control design
+5. **MFA Security** - Add defense in depth
+6. **Audit Logging** - Enable accountability and compliance
+7. **Infrastructure Gateways** - Apply these concepts to Rack Gateway
+
+<Aside type="tip">
+Each concept page includes practical examples showing how Rack Gateway implements the concept. Use these as templates for evaluating your security posture.
 </Aside>
 
-## Overview
+## How These Concepts Apply to Rack Gateway
 
-Content coming soon.
+| Concept | Rack Gateway Implementation |
+|---------|----------------------------|
+| Authentication | Google OAuth with session tokens |
+| Authorization | Role-based access control (RBAC) |
+| Zero Trust | Every request authenticated and authorized |
+| MFA | TOTP, WebAuthn, YubiKey support |
+| Audit Logging | Immutable logs with S3 WORM anchoring |
+| Gateway Pattern | Single entry point to Convox rack |
+
+## Further Reading
+
+- [Security Hardening Guide](/security/hardening/) - Practical security configuration
+- [RBAC Roles Reference](/security/rbac/roles/) - Rack Gateway role definitions
+- [SOC 2 Compliance](/security/compliance/soc2/) - Meeting audit requirements

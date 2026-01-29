@@ -1,14 +1,433 @@
 ---
 title: "Audit Trail"
-description: "Immutable audit logs."
+description: "Immutable audit logging in Rack Gateway."
 ---
 
-import { Aside } from '@astrojs/starlight/components';
+import { Aside, Steps, Tabs, TabItem } from '@astrojs/starlight/components';
 
-<Aside type="caution" title="Coming Soon">
-This page is under construction. Check back soon for complete documentation.
+Rack Gateway maintains a complete audit trail of all actions, providing the evidence needed for compliance audits and security investigations.
+
+## Audit Architecture
+
+```mermaid
+graph LR
+    subgraph "Request Flow"
+        Request[API Request]
+        Auth[Authentication]
+        RBAC[RBAC Check]
+        Action[Execute Action]
+    end
+
+    subgraph "Audit Pipeline"
+        Logger[Audit Logger]
+        Redact[Secret Redaction]
+        DB[(PostgreSQL)]
+        Stdout[CloudWatch]
+    end
+
+    subgraph "Long-term Storage"
+        S3[S3 WORM Bucket]
+        KMS[AWS KMS]
+    end
+
+    Request --> Auth
+    Auth --> Logger
+    RBAC --> Logger
+    Action --> Logger
+    Logger --> Redact
+    Redact --> DB
+    Redact --> Stdout
+    DB --> S3
+    S3 --> KMS
+```
+
+## Audit Log Entry
+
+Every API request generates an audit log entry:
+
+```json
+{
+  "ts": "2024-01-15T10:30:00Z",
+  "user_email": "developer@example.com",
+  "user_name": "Alice Developer",
+  "api_token_name": "",
+  "action_type": "convox",
+  "action": "deploy",
+  "resource": "myapp",
+  "resource_type": "app",
+  "command": "releases promote RABCDEF",
+  "status": "success",
+  "rbac_decision": "allow",
+  "http_status": 200,
+  "latency_ms": 1250,
+  "ip_address": "192.168.1.100",
+  "user_agent": "rack-gateway/1.0.0",
+  "request_id": "req-uuid-1234"
+}
+```
+
+### Entry Fields
+
+| Field | Description | Example |
+|-------|-------------|---------|
+| `ts` | Timestamp (UTC, RFC3339) | `2024-01-15T10:30:00Z` |
+| `user_email` | User's email address | `alice@example.com` |
+| `user_name` | User's display name | `Alice Developer` |
+| `api_token_name` | Token name (if used) | `ci-deploy` |
+| `action_type` | Category: convox, gateway | `convox` |
+| `action` | Specific action | `deploy`, `env:set` |
+| `resource` | Target resource | `myapp` |
+| `resource_type` | Resource category | `app`, `build`, `release` |
+| `command` | Full command executed | `releases promote RABCDEF` |
+| `status` | Outcome | `success`, `denied`, `error` |
+| `rbac_decision` | Access decision | `allow`, `deny` |
+| `http_status` | HTTP response code | `200`, `403`, `500` |
+| `latency_ms` | Request duration | `1250` |
+| `ip_address` | Client IP | `192.168.1.100` |
+| `user_agent` | Client identifier | `rack-gateway/1.0.0` |
+| `request_id` | Unique request ID | `req-uuid-1234` |
+
+## Secret Redaction
+
+Sensitive data is automatically redacted before logging:
+
+### Redacted Patterns
+
+| Pattern | Example | Redacted As |
+|---------|---------|-------------|
+| API keys | `API_KEY=secret123` | `API_KEY=[REDACTED]` |
+| Passwords | `PASSWORD=hunter2` | `PASSWORD=[REDACTED]` |
+| Tokens | `TOKEN=abc123def` | `TOKEN=[REDACTED]` |
+| Private keys | `-----BEGIN PRIVATE KEY-----` | `[REDACTED_PRIVATE_KEY]` |
+| AWS credentials | `AKIAIOSFODNN7EXAMPLE` | `[REDACTED_AWS_KEY]` |
+| Database URLs | `postgres://user:pass@host` | `postgres://[REDACTED]@host` |
+
+### Redaction Rules
+
+```go
+// Built-in redaction patterns
+var redactPatterns = []string{
+    `(?i)(password|passwd|pwd|secret|token|api[_-]?key|auth[_-]?key)=([^\s&]+)`,
+    `(?i)(bearer|basic)\s+[a-zA-Z0-9+/=._-]+`,
+    `-----BEGIN\s+(RSA|EC|DSA|OPENSSH)?\s*PRIVATE\s+KEY-----`,
+    `AKIA[0-9A-Z]{16}`,
+    `(?i)postgres://[^:]+:([^@]+)@`,
+}
+```
+
+<Aside type="tip">
+Redaction happens before any logging, including stdout and database storage. Secrets never appear in logs.
 </Aside>
 
-## Overview
+## Storage Layers
 
-Content coming soon.
+### PostgreSQL (Primary)
+
+Audit logs are stored in PostgreSQL for fast querying:
+
+```sql
+CREATE TABLE audit_logs (
+    id BIGSERIAL PRIMARY KEY,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    user_id BIGINT REFERENCES users(id),
+    user_email TEXT NOT NULL,
+    user_name TEXT,
+    api_token_id BIGINT REFERENCES api_tokens(id),
+    api_token_name TEXT,
+    action_type TEXT NOT NULL,
+    action TEXT NOT NULL,
+    resource TEXT,
+    resource_type TEXT,
+    command TEXT,
+    status TEXT NOT NULL,
+    rbac_decision TEXT,
+    http_status INTEGER,
+    response_time_ms INTEGER,
+    ip_address TEXT,
+    user_agent TEXT,
+    request_id TEXT,
+    metadata JSONB
+);
+```
+
+### CloudWatch (Stream)
+
+Logs are also written to stdout in structured JSON format for CloudWatch ingestion:
+
+- Real-time streaming
+- CloudWatch Logs Insights queries
+- Integration with CloudWatch Alarms
+- Cross-account log aggregation
+
+### S3 WORM (Archival)
+
+For compliance requirements, logs can be anchored to S3 with Object Lock:
+
+```mermaid
+graph LR
+    DB[(PostgreSQL)] -->|Batch Export| Anchor[Anchor Job]
+    Anchor -->|Upload + SHA256| S3[S3 WORM Bucket]
+    S3 -->|7 Year Retention| Archive[Immutable Archive]
+```
+
+See [Data Retention](/security/compliance/data-retention/) for S3 WORM configuration.
+
+## Querying Audit Logs
+
+### Web UI
+
+1. Navigate to **Audit Logs** in the sidebar
+2. Use filters to narrow results:
+   - User
+   - Date range
+   - Action type
+   - RBAC decision (allow/deny)
+3. Click entries to view full details
+4. Export for compliance reports
+
+### CLI
+
+```bash
+# Search by user
+rack-gateway audit search --user alice@example.com --days 30
+
+# Search by action
+rack-gateway audit search --action deploy --days 7
+
+# Search by decision
+rack-gateway audit search --decision deny --days 90
+
+# Export to JSON
+rack-gateway audit search --from "2024-01-01" --to "2024-03-31" --format json > audit.json
+```
+
+### SQL Queries
+
+For advanced queries, access the database directly:
+
+<Tabs>
+<TabItem label="Recent Activity">
+
+```sql
+SELECT
+    created_at,
+    user_email,
+    action,
+    resource,
+    status,
+    rbac_decision
+FROM audit_logs
+WHERE created_at > NOW() - INTERVAL '7 days'
+ORDER BY created_at DESC
+LIMIT 100;
+```
+
+</TabItem>
+<TabItem label="Denied Requests">
+
+```sql
+SELECT
+    created_at,
+    user_email,
+    action,
+    resource,
+    ip_address
+FROM audit_logs
+WHERE rbac_decision = 'deny'
+  AND created_at > NOW() - INTERVAL '30 days'
+ORDER BY created_at DESC;
+```
+
+</TabItem>
+<TabItem label="User Activity Summary">
+
+```sql
+SELECT
+    user_email,
+    COUNT(*) as total_actions,
+    COUNT(*) FILTER (WHERE status = 'success') as successful,
+    COUNT(*) FILTER (WHERE rbac_decision = 'deny') as denied,
+    MAX(created_at) as last_activity
+FROM audit_logs
+WHERE created_at > NOW() - INTERVAL '30 days'
+GROUP BY user_email
+ORDER BY total_actions DESC;
+```
+
+</TabItem>
+<TabItem label="Deploy Activity">
+
+```sql
+SELECT
+    DATE_TRUNC('day', created_at) as day,
+    COUNT(*) as deploys,
+    COUNT(DISTINCT user_email) as deployers
+FROM audit_logs
+WHERE action IN ('deploy', 'promote')
+  AND status = 'success'
+  AND created_at > NOW() - INTERVAL '30 days'
+GROUP BY DATE_TRUNC('day', created_at)
+ORDER BY day DESC;
+```
+
+</TabItem>
+</Tabs>
+
+## What Gets Logged
+
+### Always Logged
+
+| Category | Actions |
+|----------|---------|
+| **Authentication** | Login, logout, MFA verification |
+| **RBAC Decisions** | Allow/deny for every request |
+| **Deployments** | Build, promote, rollback |
+| **Environment** | Get, set, unset variables |
+| **User Management** | Create, update, delete, lock |
+| **Token Management** | Create, delete tokens |
+| **Settings** | Configuration changes |
+
+### Logged with Redaction
+
+| Category | What's Redacted |
+|----------|-----------------|
+| **Environment Variables** | Values |
+| **API Tokens** | Token strings |
+| **Build Logs** | Secrets in output |
+| **Request Bodies** | Sensitive fields |
+
+### Not Logged
+
+| Category | Reason |
+|----------|--------|
+| **Health Checks** | Too frequent, not useful |
+| **Static Assets** | No security value |
+| **Internal Metrics** | System-level only |
+
+## Notifications
+
+Audit events can trigger notifications:
+
+### Slack Integration
+
+Configure Slack notifications for security events:
+
+```bash
+# Environment variable
+SLACK_WEBHOOK_URL=https://hooks.slack.com/services/T.../B.../...
+```
+
+Events that trigger notifications:
+- Failed login attempts
+- RBAC denials
+- User account locks
+- Admin actions
+
+### Email Alerts
+
+Email notifications for critical events:
+
+```bash
+# Environment variables
+POSTMARK_API_KEY=your-api-key
+NOTIFICATION_EMAIL=security@example.com
+```
+
+## Log Integrity
+
+### Tamper Detection
+
+Audit logs include integrity measures:
+
+1. **Request ID**: Unique, non-sequential identifier
+2. **Timestamps**: Server-generated, not client-provided
+3. **User context**: Extracted from verified session/token
+
+### S3 WORM Protection
+
+For immutable storage:
+
+- Object Lock in Compliance mode
+- Minimum 7-year retention
+- Legal hold capability
+- SHA-256 checksums stored
+
+## Compliance Use Cases
+
+### SOC 2 Audits
+
+Evidence for Common Criteria:
+
+| Criterion | Evidence |
+|-----------|----------|
+| CC6.1 | Access logs showing authentication |
+| CC6.2 | RBAC decision logs |
+| CC6.3 | Session management logs |
+| CC7.1 | Configuration change logs |
+| CC7.2 | Deploy and change logs |
+
+### Security Investigations
+
+For incident response:
+
+<Steps>
+
+1. **Identify timeframe**
+
+   When did the incident occur?
+
+2. **Find affected users**
+
+   ```sql
+   SELECT DISTINCT user_email
+   FROM audit_logs
+   WHERE created_at BETWEEN '2024-01-15 00:00:00' AND '2024-01-16 00:00:00';
+   ```
+
+3. **Trace actions**
+
+   ```sql
+   SELECT *
+   FROM audit_logs
+   WHERE user_email = 'suspect@example.com'
+   ORDER BY created_at;
+   ```
+
+4. **Check for anomalies**
+
+   Unusual times, IPs, or action patterns
+
+5. **Export evidence**
+
+   Full logs with request IDs for forensics
+
+</Steps>
+
+## Best Practices
+
+### Log Retention
+
+- **Hot storage (PostgreSQL)**: 90 days for fast queries
+- **Cold storage (S3)**: 7+ years for compliance
+- **Real-time (CloudWatch)**: 30 days for monitoring
+
+### Monitoring
+
+Set up alerts for:
+- Multiple failed logins
+- High rate of RBAC denials
+- Admin actions outside business hours
+- Unusual deployment patterns
+
+### Regular Review
+
+- Daily: Security team reviews failed logins
+- Weekly: Review admin actions
+- Monthly: Full access review
+- Quarterly: Compliance report generation
+
+## Next Steps
+
+- [Data Retention](/security/compliance/data-retention/) - Configure retention policies
+- [SOC 2](/security/compliance/soc2/) - SOC 2 control mapping
+- [Hardening](/security/hardening/) - Security hardening guide

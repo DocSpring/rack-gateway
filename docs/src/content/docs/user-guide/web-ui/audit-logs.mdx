@@ -1,14 +1,186 @@
 ---
 title: "Audit Logs"
-description: "Viewing and searching audit logs."
+description: "Viewing audit logs in the web interface."
 ---
 
-import { Aside } from '@astrojs/starlight/components';
+import { Aside, Steps } from '@astrojs/starlight/components';
 
-<Aside type="caution" title="Coming Soon">
-This page is under construction. Check back soon for complete documentation.
+The Audit Logs section provides a complete record of all gateway activity for security monitoring and compliance.
+
+<Aside type="note">
+Audit log viewing is only available to administrators.
 </Aside>
 
-## Overview
+## Viewing Logs
 
-Content coming soon.
+Navigate to **Audit Logs** in the sidebar to see the activity log:
+
+| Column | Description |
+|--------|-------------|
+| **Timestamp** | When the event occurred |
+| **User** | Who performed the action |
+| **Action** | What was done |
+| **Resource** | What was affected |
+| **Status** | Success or failure |
+| **IP Address** | Origin of the request |
+
+## Filtering Logs
+
+Use the filter panel to narrow results:
+
+### By User
+```
+Filter by email: alice@example.com
+```
+
+### By Action Type
+- Authentication events
+- User management
+- API token operations
+- Convox proxy requests
+- Settings changes
+
+### By Date Range
+- Last hour
+- Last 24 hours
+- Last 7 days
+- Custom range
+
+### By Status
+- Success (2xx)
+- Client errors (4xx)
+- Server errors (5xx)
+
+## Log Details
+
+Click any log entry to see full details:
+
+```json
+{
+  "timestamp": "2024-01-15T14:30:00.123Z",
+  "user": "alice@example.com",
+  "action": "convox.deploy",
+  "resource": "apps/myapp",
+  "request": {
+    "method": "POST",
+    "path": "/api/v1/convox/apps/myapp/releases",
+    "ip": "192.168.1.100",
+    "user_agent": "rack-gateway-cli/1.2.0"
+  },
+  "response": {
+    "status": 200,
+    "duration_ms": 1250
+  }
+}
+```
+
+## Common Event Types
+
+### Authentication
+
+| Event | Description |
+|-------|-------------|
+| `auth.login.success` | User logged in |
+| `auth.login.failure` | Failed login attempt |
+| `auth.logout` | User logged out |
+
+### User Management
+
+| Event | Description |
+|-------|-------------|
+| `user.created` | New user added |
+| `user.role.changed` | Role was updated |
+| `user.deleted` | User was removed |
+
+### Convox Operations
+
+| Event | Description |
+|-------|-------------|
+| `convox.app.create` | Application created |
+| `convox.build.create` | Build started |
+| `convox.release.promote` | Release deployed |
+| `convox.process.exec` | Command executed |
+
+## Exporting Logs
+
+<Steps>
+
+1. Apply desired filters
+
+2. Click **Export**
+
+3. Select format:
+   - CSV
+   - JSON
+
+4. Choose date range
+
+5. Download file
+
+</Steps>
+
+<Aside type="tip">
+Exports include all fields, not just the columns visible in the UI.
+</Aside>
+
+## Compliance Features
+
+### Tamper Detection
+
+Logs include cryptographic chain hashes. Any tampering is detectable:
+
+```
+Chain verification: ✓ Valid
+Entries: 1,234,567
+First entry: 2024-01-01T00:00:00Z
+Last entry: 2024-01-15T14:30:00Z
+```
+
+### Retention
+
+Logs are retained according to your configuration:
+- Default: 400 days (SOC 2 compliance)
+- Financial: 7 years (SOX/FINRA)
+
+### WORM Anchors
+
+If configured, hourly anchors are written to S3 Object Lock storage for immutability.
+
+## Search Tips
+
+### Find Specific User Activity
+```
+user:alice@example.com action:convox.*
+```
+
+### Find Failed Operations
+```
+status:>=400
+```
+
+### Find Sensitive Operations
+```
+action:user.* OR action:token.* OR action:settings.*
+```
+
+## Real-Time Monitoring
+
+For live monitoring:
+
+1. Set filter to "Last 5 minutes"
+2. Enable **Auto-refresh**
+3. Watch for new entries
+
+## Alerting
+
+Set up alerts for suspicious activity:
+
+1. Go to **Settings** > **Alerts**
+2. Configure conditions (e.g., failed logins)
+3. Set notification channel (email, Slack)
+
+## Related
+
+- [Audit Events Reference](/reference/audit-events/) - All event types
+- [Compliance Documentation](/security/compliance/) - Compliance features
+- [Monitoring](/operations/monitoring/) - Operational monitoring

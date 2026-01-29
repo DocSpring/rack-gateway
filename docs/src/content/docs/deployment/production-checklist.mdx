@@ -1,14 +1,352 @@
 ---
 title: "Production Checklist"
-description: "Go-live checklist."
+description: "Go-live checklist for production deployments."
 ---
 
-import { Aside } from '@astrojs/starlight/components';
+import { Aside, Steps } from '@astrojs/starlight/components';
 
-<Aside type="caution" title="Coming Soon">
-This page is under construction. Check back soon for complete documentation.
+Use this checklist before deploying Rack Gateway to production. Each item addresses a security or operational requirement.
+
+## Pre-Deployment
+
+### Security Fundamentals
+
+- [ ] **APP_SECRET_KEY generated securely**
+  ```bash
+  openssl rand -base64 32
+  ```
+  Never reuse across environments. Store securely.
+
+- [ ] **HTTPS enabled with valid certificates**
+  - Let's Encrypt or organization CA
+  - TLS 1.2+ only
+  - HSTS enabled
+
+- [ ] **Domain configured correctly**
+  - `DOMAIN` set to production hostname
+  - DNS records configured
+  - SSL certificate covers domain
+
+### Authentication
+
+- [ ] **Google OAuth configured**
+  - Production OAuth client created
+  - Redirect URIs point to production domain
+  - `GOOGLE_ALLOWED_DOMAIN` restricts to your organization
+
+- [ ] **Admin users specified**
+  - `ADMIN_USERS` contains verified admin emails
+  - At least 2 admins for redundancy
+
+- [ ] **Session timeout configured**
+  - `RGW_SETTING_SESSION_TIMEOUT_MINUTES` set appropriately
+  - Default: 5 minutes for sensitive environments
+
+### Database
+
+- [ ] **PostgreSQL properly configured**
+  - Production-grade instance (not Docker)
+  - Encryption at rest enabled
+  - SSL connections required
+
+- [ ] **Database backups configured**
+  - Automated daily backups
+  - Point-in-time recovery enabled
+  - Backup retention meets compliance requirements
+
+- [ ] **Connection pool sized correctly**
+  - `DB_MAX_OPEN_CONNS` appropriate for load
+  - Monitor connection usage
+
+### Infrastructure
+
+- [ ] **Resource limits configured**
+  - Memory limits prevent OOM kills
+  - CPU limits ensure fair sharing
+  - At least 2 instances for high availability
+
+- [ ] **Health checks enabled**
+  - `/api/v1/health` for liveness
+  - `/api/v1/health/ready` for readiness
+  - Appropriate intervals and thresholds
+
+## Security Hardening
+
+### Network Security
+
+- [ ] **Private network deployment** (Recommended)
+  - Gateway accessible only via Tailscale/VPN
+  - Convox API not exposed publicly
+  - See [Private Network Deployment](/deployment/private-network/)
+
+- [ ] **Firewall rules configured**
+  - Only required ports open
+  - Database accessible only from gateway
+  - No unnecessary public endpoints
+
+### Access Control
+
+- [ ] **MFA configured**
+  - MFA enrollment required for all users
+  - Step-up MFA for sensitive actions
+  - Backup codes generated and stored securely
+
+- [ ] **RBAC policies reviewed**
+  - Least privilege principle applied
+  - No unnecessary admin accounts
+  - Roles assigned appropriately
+
+- [ ] **API tokens managed**
+  - Tokens have appropriate roles
+  - Token rotation schedule established
+  - Unused tokens deleted
+
+### Audit Logging
+
+- [ ] **Audit logging enabled**
+  - All actions logged with user attribution
+  - Sensitive data automatically redacted
+  - Log retention set (`LOG_RETENTION_DAYS`)
+
+- [ ] **Audit anchoring configured** (Recommended)
+  - S3 WORM bucket created
+  - `AUDIT_ANCHOR_BUCKET` and `AUDIT_ANCHOR_CHAIN_ID` set
+  - See [S3 WORM Storage](/deployment/terraform/s3-worm-storage/)
+
+- [ ] **HMAC secret configured**
+  - `AUDIT_HMAC_SECRET` set to secure random value
+  - Never changes after initial deployment
+  - Documented for recovery
+
+## Monitoring and Operations
+
+### Monitoring
+
+- [ ] **Error tracking enabled**
+  - `SENTRY_DSN` configured for backend
+  - `SENTRY_JS_DSN` configured for frontend
+  - Alerts configured for errors
+
+- [ ] **Metrics collection enabled**
+  - Health endpoint monitoring
+  - Database metrics tracked
+  - Alert thresholds configured
+
+- [ ] **Log aggregation configured**
+  - Logs shipped to centralized system
+  - Log retention meets requirements
+  - Searchable for incident response
+
+### Operational Readiness
+
+- [ ] **Runbooks documented**
+  - Deployment procedures
+  - Rollback procedures
+  - Incident response playbooks
+
+- [ ] **On-call rotation established**
+  - Escalation procedures defined
+  - Contact information current
+  - Access credentials available
+
+- [ ] **Disaster recovery tested**
+  - Database restoration tested
+  - Failover procedures documented
+  - Recovery time objectives defined
+
+## Integration Verification
+
+### Convox Connectivity
+
+- [ ] **Rack connection verified**
+  - `RACK_TOKEN` valid and not expired
+  - `RACK_HOST` points to correct rack
+  - Health check passes through gateway
+
+- [ ] **Proxy functionality tested**
+  - `convox apps` returns expected results
+  - Build and deploy operations work
+  - Environment variable access works
+
+### Notifications
+
+- [ ] **Email notifications configured** (Optional)
+  - `POSTMARK_API_TOKEN` set
+  - `POSTMARK_FROM_EMAIL` verified in Postmark
+  - Test email sent successfully
+
+- [ ] **Slack notifications configured** (Optional)
+  - Slack app installed
+  - Channels configured for events
+  - Test notification sent
+
+### CI/CD Integration
+
+- [ ] **Deploy approvals configured** (If using)
+  - CircleCI token configured
+  - Approval job names match
+  - GitHub integration tested
+
+- [ ] **CI/CD tokens created**
+  - API tokens with `cicd` role
+  - Tokens stored securely in CI system
+  - Test deployment successful
+
+## Post-Deployment Verification
+
+<Steps>
+
+1. **Verify health endpoints**
+   ```bash
+   curl https://gateway.example.com/api/v1/health
+   curl https://gateway.example.com/api/v1/health/ready
+   ```
+
+2. **Test user login**
+   - Open web UI
+   - Sign in with Google
+   - Verify correct roles assigned
+
+3. **Test MFA enrollment**
+   - Enroll at least one MFA method
+   - Verify step-up MFA works
+
+4. **Test Convox operations**
+   ```bash
+   rack-gateway convox apps
+   rack-gateway convox ps -a myapp
+   ```
+
+5. **Verify audit logging**
+   - Check recent audit events in web UI
+   - Verify events have correct user attribution
+
+6. **Test notifications**
+   - Trigger a security event
+   - Verify email/Slack notification received
+
+7. **Test deploy workflow** (If using)
+   - Create test approval request
+   - Approve and verify CI auto-approval
+
+</Steps>
+
+## Compliance Checklist
+
+### SOC 2 Type II
+
+- [ ] Audit logging enabled with retention
+- [ ] MFA enforced for all users
+- [ ] Access control via RBAC
+- [ ] Change management (deploy approvals)
+- [ ] Monitoring and alerting configured
+- [ ] Incident response procedures documented
+
+### Data Protection
+
+- [ ] Encryption at rest (database, S3)
+- [ ] Encryption in transit (TLS)
+- [ ] PII handling documented
+- [ ] Data retention policies configured
+- [ ] Access logging enabled
+
+### Security Best Practices
+
+- [ ] Secrets stored securely (not in git)
+- [ ] Least privilege principle applied
+- [ ] Regular security reviews scheduled
+- [ ] Dependency updates monitored
+- [ ] Penetration testing planned
+
+## Environment-Specific Settings
+
+### Production
+
+```bash
+# Required
+APP_SECRET_KEY=$(openssl rand -base64 32)
+DOMAIN=gateway.example.com
+GOOGLE_CLIENT_ID=xxx
+GOOGLE_CLIENT_SECRET=xxx
+GOOGLE_ALLOWED_DOMAIN=example.com
+RACK_TOKEN=xxx
+ADMIN_USERS=admin1@example.com,admin2@example.com
+
+# Recommended
+LOG_RETENTION_DAYS=400
+RACK_ALIAS=production
+RACK_DISPLAY_NAME="Production"
+AUDIT_HMAC_SECRET=$(openssl rand -hex 32)
+
+# If using audit anchoring
+AUDIT_ANCHOR_BUCKET=audit-anchors-prod
+AUDIT_ANCHOR_CHAIN_ID=production
+
+# If using email
+POSTMARK_API_TOKEN=xxx
+POSTMARK_FROM_EMAIL=gateway@example.com
+
+# If using Slack
+SLACK_CLIENT_ID=xxx
+SLACK_CLIENT_SECRET=xxx
+
+# If using Sentry
+SENTRY_DSN=https://xxx@sentry.io/xxx
+SENTRY_JS_DSN=https://xxx@sentry.io/xxx
+SENTRY_ENVIRONMENT=production
+```
+
+### Staging
+
+```bash
+# Similar to production but with staging-specific values
+APP_SECRET_KEY=$(openssl rand -base64 32)  # Different from prod!
+DOMAIN=gateway-staging.example.com
+RACK_ALIAS=staging
+RACK_DISPLAY_NAME="Staging"
+LOG_RETENTION_DAYS=90  # Shorter for staging
+```
+
+## Common Mistakes to Avoid
+
+<Aside type="danger">
+
+**Security Anti-Patterns:**
+
+- Using the same `APP_SECRET_KEY` across environments
+- Storing secrets in git or environment files
+- Running with `DEV_MODE=true` in production
+- Using overly permissive RBAC roles
+- Skipping MFA for "convenience"
+- Not rotating API tokens regularly
+
 </Aside>
 
-## Overview
+<Aside type="caution">
 
-Content coming soon.
+**Operational Anti-Patterns:**
+
+- Single admin account (no redundancy)
+- No backup verification
+- Missing monitoring and alerting
+- No documented runbooks
+- Untested disaster recovery
+- Missing audit log retention
+
+</Aside>
+
+## Final Sign-Off
+
+Before going live, ensure these stakeholders have reviewed:
+
+- [ ] **Security team**: Security hardening complete
+- [ ] **Operations team**: Monitoring and runbooks ready
+- [ ] **Compliance team**: Audit requirements met
+- [ ] **Development team**: Integration testing complete
+- [ ] **Management**: Go-live approval obtained
+
+## Next Steps
+
+- [Security Hardening](/security/hardening/) - Additional security measures
+- [Monitoring](/operations/monitoring/) - Observability setup
+- [Troubleshooting](/operations/troubleshooting/) - Common issues

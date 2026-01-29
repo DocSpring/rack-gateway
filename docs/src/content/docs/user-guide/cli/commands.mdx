@@ -1,14 +1,431 @@
 ---
 title: "CLI Commands"
-description: "Complete command reference."
+description: "Complete command reference for the rack-gateway CLI."
 ---
 
 import { Aside } from '@astrojs/starlight/components';
 
-<Aside type="caution" title="Coming Soon">
-This page is under construction. Check back soon for complete documentation.
-</Aside>
+This page documents all available commands in the `rack-gateway` CLI.
 
-## Overview
+## Global Flags
 
-Content coming soon.
+These flags work with any command:
+
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--rack` | `-r` | Override the current rack |
+| `--config` | | Override config directory |
+| `--api-token` | | Use API token for authentication |
+| `--mfa-code` | | Provide MFA code for step-up auth |
+| `--mfa-method` | | Specify MFA method (totp/webauthn) |
+| `--help` | `-h` | Show help for a command |
+
+## Authentication Commands
+
+### login
+
+Authenticate with a gateway via OAuth.
+
+```bash
+rack-gateway login <rack-alias> <gateway-url>
+```
+
+**Arguments:**
+- `rack-alias` - A name you choose for this rack (e.g., `production`, `staging`)
+- `gateway-url` - The gateway's URL (e.g., `https://gateway.example.com`)
+
+**Example:**
+```bash
+rack-gateway login production https://gateway.example.com
+```
+
+### logout
+
+Revoke your session and remove local credentials.
+
+```bash
+rack-gateway logout [flags]
+```
+
+**Flags:**
+- `--rack, -r` - Logout from a specific rack (default: current rack)
+
+**Example:**
+```bash
+rack-gateway logout
+rack-gateway logout -r staging
+```
+
+### test-auth
+
+Test your authentication status.
+
+```bash
+rack-gateway test-auth [flags]
+```
+
+**Flags:**
+- `--mfa` - Also verify MFA status
+
+**Example:**
+```bash
+rack-gateway test-auth
+rack-gateway test-auth --mfa
+```
+
+## Rack Management Commands
+
+### rack
+
+Show current rack configuration.
+
+```bash
+rack-gateway rack
+```
+
+**Output:**
+```
+Current rack: production
+URL: https://gateway.example.com
+User: developer@company.com
+Role: deployer
+```
+
+### racks
+
+List all configured racks.
+
+```bash
+rack-gateway racks
+```
+
+**Output:**
+```
+  RACK        URL                               USER
+* production  https://gateway-prod.example.com  developer@company.com
+  staging     https://gateway-staging.example.com  developer@company.com
+```
+
+### switch
+
+Switch to a different rack.
+
+```bash
+rack-gateway switch <rack-alias>
+```
+
+**Example:**
+```bash
+rack-gateway switch staging
+```
+
+## Convox Commands
+
+These commands are proxied to the Convox rack API. They work the same as the native `convox` CLI commands.
+
+### apps
+
+List applications.
+
+```bash
+rack-gateway apps
+```
+
+### build
+
+Create a new build.
+
+```bash
+rack-gateway build [flags]
+```
+
+**Flags:**
+- `-a, --app` - Application name
+- `-d, --description` - Build description
+- `--manifest` - Path to convox.yml (default: `convox.yml`)
+
+**Example:**
+```bash
+rack-gateway build -a myapp -d "Deploy v1.2.3"
+```
+
+### builds
+
+List builds for an application.
+
+```bash
+rack-gateway builds -a <app>
+```
+
+### deploy
+
+Deploy an application (build + promote).
+
+```bash
+rack-gateway deploy [flags]
+```
+
+**Flags:**
+- `-a, --app` - Application name
+- `-d, --description` - Deploy description
+- `--manifest` - Path to convox.yml
+
+**Example:**
+```bash
+rack-gateway deploy -a myapp
+```
+
+### env
+
+Manage environment variables.
+
+```bash
+rack-gateway env [command] -a <app>
+```
+
+**Subcommands:**
+- `rack-gateway env -a <app>` - List environment variables
+- `rack-gateway env set VAR=value -a <app>` - Set a variable
+- `rack-gateway env unset VAR -a <app>` - Remove a variable
+
+**Example:**
+```bash
+rack-gateway env -a myapp
+rack-gateway env set DATABASE_URL=postgres://... -a myapp
+rack-gateway env unset DEBUG -a myapp
+```
+
+### exec
+
+Execute a command in a running process.
+
+```bash
+rack-gateway exec <process> <command> -a <app>
+```
+
+**Example:**
+```bash
+rack-gateway exec web "rails console" -a myapp
+rack-gateway exec web bash -a myapp
+```
+
+### logs
+
+View application logs.
+
+```bash
+rack-gateway logs -a <app> [flags]
+```
+
+**Flags:**
+- `-f, --follow` - Stream logs in real-time
+- `--since` - Show logs since timestamp (e.g., `1h`, `30m`)
+- `--filter` - Filter logs by process type
+
+**Example:**
+```bash
+rack-gateway logs -a myapp -f
+rack-gateway logs -a myapp --since 1h --filter web
+```
+
+### ps
+
+List application processes.
+
+```bash
+rack-gateway ps -a <app>
+```
+
+### releases
+
+List releases for an application.
+
+```bash
+rack-gateway releases -a <app>
+```
+
+### resources
+
+List resources (databases, Redis, etc.).
+
+```bash
+rack-gateway resources
+```
+
+### restart
+
+Restart an application.
+
+```bash
+rack-gateway restart -a <app>
+```
+
+### run
+
+Run a one-off process.
+
+```bash
+rack-gateway run <process> <command> -a <app>
+```
+
+**Example:**
+```bash
+rack-gateway run web "rake db:migrate" -a myapp
+```
+
+### scale
+
+Scale application processes.
+
+```bash
+rack-gateway scale <process>=<count> -a <app> [flags]
+```
+
+**Flags:**
+- `--cpu` - CPU units
+- `--memory` - Memory in MB
+
+**Example:**
+```bash
+rack-gateway scale web=3 -a myapp
+rack-gateway scale worker=2 --memory 512 -a myapp
+```
+
+## Gateway-Specific Commands
+
+### api-token
+
+Manage API tokens.
+
+```bash
+rack-gateway api-token [command]
+```
+
+**Subcommands:**
+- `list` - List your API tokens
+- `create` - Create a new token
+- `delete` - Delete a token
+
+**Example:**
+```bash
+rack-gateway api-token list
+rack-gateway api-token create --name "CI/CD" --role deployer
+rack-gateway api-token delete <token-id>
+```
+
+### deploy-approval
+
+Manage deploy approval requests.
+
+```bash
+rack-gateway deploy-approval [command]
+```
+
+**Subcommands:**
+- `list` - List pending approvals
+- `approve` - Approve a request
+- `reject` - Reject a request
+- `status` - Check approval status
+
+**Example:**
+```bash
+rack-gateway deploy-approval list
+rack-gateway deploy-approval approve <request-id>
+rack-gateway deploy-approval status <request-id>
+```
+
+### gateway
+
+Show gateway server information.
+
+```bash
+rack-gateway gateway
+```
+
+**Output:**
+```
+Gateway URL: https://gateway.example.com
+Gateway Version: v0.1.0
+Rack Alias: production
+```
+
+### version
+
+Show version information.
+
+```bash
+rack-gateway version
+```
+
+**Output:**
+```
+CLI version:     v0.1.0
+Gateway version: v0.1.0
+Rack version:    3.18.4
+```
+
+### web
+
+Open the gateway web UI in your browser.
+
+```bash
+rack-gateway web
+```
+
+### completion
+
+Generate shell completion scripts.
+
+```bash
+rack-gateway completion <shell>
+```
+
+**Supported shells:** `bash`, `zsh`, `fish`, `powershell`
+
+**Example:**
+```bash
+rack-gateway completion bash > /etc/bash_completion.d/rack-gateway
+source <(rack-gateway completion zsh)
+```
+
+## Examples
+
+### Common Workflows
+
+**Deploy to production:**
+```bash
+rack-gateway deploy -a myapp -r production
+```
+
+**Check logs across environments:**
+```bash
+rack-gateway logs -a myapp -r staging --since 1h
+rack-gateway logs -a myapp -r production -f
+```
+
+**Scale for high traffic:**
+```bash
+rack-gateway scale web=5 -a myapp -r production
+```
+
+**Run migrations:**
+```bash
+rack-gateway run web "rake db:migrate" -a myapp -r production
+```
+
+**Emergency rollback:**
+```bash
+rack-gateway releases -a myapp -r production
+# Note the previous release ID
+rack-gateway run web "convox releases rollback <release-id>" -a myapp -r production
+```
+
+## Getting Help
+
+For any command, add `--help` to see available options:
+
+```bash
+rack-gateway --help
+rack-gateway deploy --help
+rack-gateway env --help
+```

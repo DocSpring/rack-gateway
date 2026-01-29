@@ -47,15 +47,22 @@ Rack Gateway is an open-source, self-hosted authentication and authorization pro
 
 Rack Gateway acts as a transparent proxy between your developers and the Convox API:
 
-```
-Developer → rack-gateway CLI → Rack Gateway → Convox API
-                                    │
-                              ┌─────┴─────┐
-                              │           │
-                        ┌─────▼───┐ ┌─────▼─────┐
-                        │  Auth   │ │   Audit   │
-                        │ + RBAC  │ │    Log    │
-                        └─────────┘ └───────────┘
+```mermaid
+flowchart LR
+    Dev[Developer]
+    CLI[rack-gateway CLI]
+    Gateway[Rack Gateway]
+    Convox[Convox API]
+
+    Dev --> CLI --> Gateway --> Convox
+
+    subgraph GatewayFeatures["Gateway Features"]
+        Auth["Auth + RBAC"]
+        Audit["Audit Log"]
+    end
+
+    Gateway --- Auth
+    Gateway --- Audit
 ```
 
 Users install the `rack-gateway` CLI, which handles authentication and wraps Convox commands.

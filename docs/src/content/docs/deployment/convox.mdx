@@ -1,14 +1,471 @@
 ---
 title: "Convox Deployment"
-description: "Deploy on Convox."
+description: "Deploy Rack Gateway on Convox."
 ---
 
-import { Aside } from '@astrojs/starlight/components';
+import { Aside, Steps, Tabs, TabItem } from '@astrojs/starlight/components';
 
-<Aside type="caution" title="Coming Soon">
-This page is under construction. Check back soon for complete documentation.
-</Aside>
+This guide covers deploying Rack Gateway on Convox, the recommended method for production deployments.
 
 ## Overview
 
-Content coming soon.
+Rack Gateway deploys as a Convox application alongside your Convox rack. The deployment includes:
+
+- **Gateway service** - API server and proxy (port 8080)
+- **Web service** - Static SPA served by nginx (port 80)
+
+```mermaid
+graph LR
+    subgraph "Convox Rack"
+        Web[Web Service<br/>nginx SPA]
+        Gateway[Gateway Service<br/>Go API]
+        Convox[Convox API]
+    end
+
+    Users -->|HTTPS| Web
+    Web -->|/api/v1/*| Gateway
+    Gateway -->|Proxy| Convox
+```
+
+## Prerequisites
+
+- Convox CLI, authenticated against your rack
+- A Convox API token for the rack you want to protect
+- Google OAuth client configured (see [OAuth Setup](/configuration/oauth-setup/))
+- PostgreSQL database (can be provisioned via Convox resources)
+
+## Deployment Steps
+
+<Steps>
+
+1. **Clone the repository**
+
+   ```bash
+   git clone https://github.com/docspring/rack-gateway.git
+   cd rack-gateway
+   ```
+
+2. **Create the application**
+
+   ```bash
+   convox apps create rack-gateway
+   ```
+
+3. **Configure Google OAuth**
+
+   In Google Cloud Console, create an OAuth client:
+
+   - **Application type**: Web application
+   - **Authorized JavaScript origins**: `https://$WEB_DOMAIN`
+   - **Authorized redirect URIs**:
+     - `https://$DOMAIN/api/v1/auth/web/callback`
+     - `https://$DOMAIN/api/v1/auth/cli/callback`
+
+4. **Generate APP_SECRET_KEY**
+
+   ```bash
+   openssl rand -base64 32
+   ```
+
+5. **Set environment variables**
+
+   ```bash
+   convox env set \
+     RACK_TOKEN=your-convox-rack-token \
+     DOMAIN=gateway.example.com \
+     GOOGLE_ALLOWED_DOMAIN=example.com \
+     APP_SECRET_KEY=$(openssl rand -base64 32) \
+     GOOGLE_CLIENT_ID=your-client-id \
+     GOOGLE_CLIENT_SECRET=your-client-secret \
+     ADMIN_USERS=admin@example.com \
+     LOG_RETENTION_DAYS=400
+   ```
+
+6. **Deploy**
+
+   ```bash
+   convox deploy -a rack-gateway
+   ```
+
+7. **Verify**
+
+   ```bash
+   curl -s https://$DOMAIN/api/v1/health
+   ```
+
+</Steps>
+
+## Environment Variables
+
+### Required
+
+| Variable | Description |
+|----------|-------------|
+| `RACK_TOKEN` | Convox rack API token |
+| `DOMAIN` | Gateway API domain |
+| `GOOGLE_CLIENT_ID` | OAuth client ID |
+| `GOOGLE_CLIENT_SECRET` | OAuth client secret |
+| `GOOGLE_ALLOWED_DOMAIN` | Allowed email domain |
+| `APP_SECRET_KEY` | 256-bit secret for sessions |
+| `ADMIN_USERS` | Comma-separated admin emails |
+
+### Recommended
+
+| Variable | Description | Recommended Value |
+|----------|-------------|-------------------|
+| `LOG_RETENTION_DAYS` | CloudWatch log retention | `400` (annual audit + buffer) |
+| `RACK_ALIAS` | Short rack identifier | `staging`, `us`, `eu` |
+| `RACK_DISPLAY_NAME` | Human-readable name | `Staging`, `US Production` |
+
+### Optional
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `WEB_DOMAIN` | - | Separate domain for web UI |
+| `POSTMARK_API_TOKEN` | - | Email notifications |
+| `SLACK_CLIENT_ID` | - | Slack integration |
+| `SLACK_CLIENT_SECRET` | - | Slack integration |
+
+<Aside type="tip">
+For the complete list, see [Environment Variables](/configuration/environment-variables/).
+</Aside>
+
+## Domain Configuration
+
+The gateway supports two domain configurations:
+
+<Tabs>
+<TabItem label="Single Domain">
+
+Both API and web UI on the same domain:
+
+```bash
+convox env set DOMAIN=gateway.example.com
+```
+
+- API: `https://gateway.example.com/api/v1/`
+- Web UI: `https://gateway.example.com/`
+
+</TabItem>
+<TabItem label="Separate Domains">
+
+Separate domains for API and web UI:
+
+```bash
+convox env set \
+  DOMAIN=gateway.example.com \
+  WEB_DOMAIN=portal.example.com
+```
+
+- API: `https://gateway.example.com/api/v1/`
+- Web UI: `https://portal.example.com/`
+
+</TabItem>
+</Tabs>
+
+## Database Configuration
+
+### Using Convox PostgreSQL Resource
+
+Create a PostgreSQL resource in your rack:
+
+```bash
+convox resources create postgres --name gateway-db
+```
+
+Link it to the app:
+
+```bash
+convox resources link gateway-db -a rack-gateway
+```
+
+Convox automatically sets `DATABASE_URL`.
+
+### Using External PostgreSQL
+
+For RDS or other external databases:
+
+```bash
+convox env set DATABASE_URL=postgres://user:pass@host:5432/rack_gateway
+```
+
+<Aside type="note">
+External databases give you more control over backups, scaling, and maintenance windows.
+</Aside>
+
+## WebAuthn/FIDO2 Support
+
+WebAuthn is automatically enabled when `DOMAIN` is set. The gateway configures:
+
+- **Relying Party ID**: Derived from `DOMAIN`
+- **Display Name**: "Rack Gateway (Rack Name)"
+
+No additional configuration needed.
+
+## Convox Manifest
+
+The repository includes a ready-to-use `convox.yml`:
+
+```yaml
+environment:
+  - PORT=8080
+  - DOMAIN
+  - WEB_DOMAIN
+  - APP_SECRET_KEY
+  - GOOGLE_CLIENT_ID
+  - GOOGLE_CLIENT_SECRET
+  - GOOGLE_ALLOWED_DOMAIN
+  - RACK_TOKEN
+  - ADMIN_USERS
+  - LOG_RETENTION_DAYS
+
+services:
+  gateway:
+    build:
+      path: .
+      manifest: Dockerfile.gateway
+    port: 8080
+    health: /api/v1/health
+    scale:
+      count: 2
+      memory: 512
+      cpu: 256
+    environment:
+      - PORT=8080
+
+  web:
+    build:
+      path: web
+    port: 80
+    health: /health
+    scale:
+      count: 2
+      memory: 128
+      cpu: 128
+    environment:
+      - GATEWAY_URL=http://gateway.rack-gateway.svc.cluster.local:8080
+```
+
+## Scaling
+
+### Horizontal Scaling
+
+Increase instance count:
+
+```yaml
+services:
+  gateway:
+    scale:
+      count: 4  # Increase from 2
+```
+
+### Vertical Scaling
+
+Increase resources:
+
+```yaml
+services:
+  gateway:
+    scale:
+      memory: 1024  # MB
+      cpu: 512      # millicores
+```
+
+### Resource Guidelines
+
+| Load | Gateway Instances | Memory | CPU |
+|------|-------------------|--------|-----|
+| Low (&lt;100 users) | 2 | 256MB | 128m |
+| Medium (&lt;1000 users) | 2-4 | 512MB | 256m |
+| High (&gt;1000 users) | 4+ | 1024MB | 512m |
+
+## High Availability
+
+For production deployments:
+
+```yaml
+services:
+  gateway:
+    scale:
+      count: 3       # Minimum for HA
+      memory: 512
+      cpu: 256
+    deployment:
+      minimum: 2     # Keep 2 running during deploys
+```
+
+## CI/CD Integration
+
+### Deploy from CI
+
+```bash
+# In your CI pipeline
+convox apps create rack-gateway || true
+convox env set \
+  RACK_TOKEN=$RACK_TOKEN \
+  DOMAIN=$GATEWAY_DOMAIN \
+  # ... other variables
+convox deploy -a rack-gateway
+```
+
+### Using the Gateway for Deployments
+
+After deploying the gateway, use gateway-issued API tokens for your app deployments:
+
+```bash
+# Deploy other apps through the gateway
+RACK_URL=https://gateway.example.com convox deploy -a myapp
+```
+
+This gives you:
+
+- RBAC-controlled deployments
+- Audit logging
+- Deploy approval workflows
+
+## Monitoring
+
+### Health Endpoints
+
+| Endpoint | Purpose |
+|----------|---------|
+| `/api/v1/health` | Basic liveness check |
+| `/api/v1/health/ready` | Readiness with DB check |
+
+### Logs
+
+View logs:
+
+```bash
+convox logs -a rack-gateway
+```
+
+Filter for errors:
+
+```bash
+convox logs -a rack-gateway --filter ERROR
+```
+
+### Sentry Integration
+
+Enable error tracking:
+
+```bash
+convox env set \
+  SENTRY_DSN=https://key@sentry.io/project \
+  SENTRY_ENVIRONMENT=production
+```
+
+For frontend errors:
+
+```bash
+convox env set SENTRY_JS_DSN=https://key@sentry.io/project
+```
+
+## Updates
+
+### Rolling Updates
+
+Convox performs rolling updates by default. With `minimum: 2`, at least 2 instances stay healthy during deploys.
+
+### Update Process
+
+<Steps>
+
+1. **Pull latest changes**
+
+   ```bash
+   git pull origin main
+   ```
+
+2. **Review release notes**
+
+   Check for breaking changes or new required variables.
+
+3. **Deploy**
+
+   ```bash
+   convox deploy -a rack-gateway
+   ```
+
+4. **Verify**
+
+   ```bash
+   curl https://$DOMAIN/api/v1/health
+   ```
+
+</Steps>
+
+### Rollback
+
+If issues occur:
+
+```bash
+# List releases
+convox releases -a rack-gateway
+
+# Rollback to previous
+convox releases rollback RXXXXXXXXXX -a rack-gateway
+```
+
+## Troubleshooting
+
+### Deployment Fails
+
+Check build logs:
+
+```bash
+convox builds -a rack-gateway
+convox logs -a rack-gateway --filter build
+```
+
+### Container Crashes
+
+Check recent logs:
+
+```bash
+convox logs -a rack-gateway --since 10m
+```
+
+Common issues:
+
+| Error | Cause | Solution |
+|-------|-------|----------|
+| `database connection failed` | Wrong `DATABASE_URL` | Verify connection string |
+| `APP_SECRET_KEY required` | Missing secret | Set `APP_SECRET_KEY` |
+| `OAuth configuration missing` | Missing Google credentials | Set `GOOGLE_CLIENT_*` |
+
+### Memory Issues
+
+If containers are OOMKilled:
+
+```yaml
+services:
+  gateway:
+    scale:
+      memory: 1024  # Increase memory
+```
+
+### Database Migrations
+
+Migrations run automatically on startup. To run manually:
+
+```bash
+convox run gateway -- rack-gateway migrate -a rack-gateway
+```
+
+## Security Hardening
+
+For production deployments:
+
+1. **Use private networking** - See [Private Network Deployment](/deployment/private-network/)
+2. **Enable audit anchoring** - See [S3 WORM Storage](/deployment/terraform/s3-worm-storage/)
+3. **Enforce MFA** - Configure MFA policies in admin settings
+4. **Review the checklist** - See [Production Checklist](/deployment/production-checklist/)
+
+## Next Steps
+
+- [Database Setup](/deployment/database-setup/) - PostgreSQL configuration
+- [Private Network](/deployment/private-network/) - Tailscale/VPN setup
+- [Production Checklist](/deployment/production-checklist/) - Go-live preparation
+- [Terraform](/deployment/terraform/) - Infrastructure as code

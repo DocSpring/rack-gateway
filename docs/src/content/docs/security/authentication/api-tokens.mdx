@@ -1,14 +1,356 @@
 ---
 title: "API Tokens"
-description: "API token security."
+description: "API token security and management in Rack Gateway."
 ---
 
-import { Aside } from '@astrojs/starlight/components';
+import { Aside, Steps, Tabs, TabItem } from '@astrojs/starlight/components';
 
-<Aside type="caution" title="Coming Soon">
-This page is under construction. Check back soon for complete documentation.
+API tokens provide authentication for automated systems like CI/CD pipelines, scripts, and integrations. Unlike sessions, tokens are long-lived and don't require interactive login.
+
+## Token vs Session Authentication
+
+| Aspect | API Tokens | Sessions |
+|--------|-----------|----------|
+| **Use Case** | Automation, CI/CD | Human users |
+| **Creation** | Admin/user creates | OAuth flow |
+| **Lifetime** | Until deleted | Idle timeout |
+| **MFA** | Not applicable | Supported |
+| **CSRF** | Not required | Required |
+| **Revocation** | Manual delete | Logout/admin |
+
+## Token Anatomy
+
+Each API token consists of:
+
+```
+Format: rgwt_[role]_[random]
+
+Example: rgwt_cicd_kX7mN2pQ9rT4wY8zA1bC3dE5fG
+         ^^^^  ^^^^  ^^^^^^^^^^^^^^^^^^^^^^^^^^
+         prefix role  random component
+```
+
+| Component | Description |
+|-----------|-------------|
+| `rgwt_` | Rack Gateway Token prefix |
+| Role code | Short role identifier (viewer, ops, deployer, cicd, admin) |
+| Random | 32 bytes, base64url encoded |
+
+### Token Storage
+
+Like session tokens, API tokens are hashed before storage:
+
+```
+Client has:  rgwt_cicd_kX7mN2pQ9rT4wY8...
+Database:    SHA-256 hash of full token
+```
+
+<Aside type="caution" title="One-Time Display">
+The full token is only shown once at creation time. It cannot be recovered. Store it securely immediately.
 </Aside>
 
-## Overview
+## Token Roles
 
-Content coming soon.
+API tokens are assigned a role that determines their permissions:
+
+| Role | Use Case | Permissions |
+|------|----------|-------------|
+| `viewer` | Monitoring | Read-only access |
+| `ops` | Emergency scripts | Restart, exec, view env |
+| `deployer` | Deploy automation | Full deploy capabilities |
+| `cicd` | CI/CD pipelines | Minimal deploy + approval |
+| `admin` | Full automation | All operations |
+
+<Aside type="tip" title="Recommended: CI/CD Role">
+For CI/CD pipelines, use the dedicated `cicd` role instead of `deployer`. It has minimal permissions and integrates with deploy approvals for additional security.
+</Aside>
+
+See [Roles](/security/rbac/roles/) for detailed permission lists.
+
+## Creating Tokens
+
+### Web UI
+
+<Steps>
+
+1. Navigate to **API Tokens** in the sidebar
+2. Click **Create Token**
+3. Enter a descriptive name (e.g., `ci-production-deploy`)
+4. Select the appropriate role
+5. Click **Create**
+6. **Copy the token immediately** - it won't be shown again
+
+</Steps>
+
+### CLI
+
+```bash
+# Create a CI/CD token
+rack-gateway api-token create --name "GitHub Actions" --role cicd
+
+# Create a viewer token for monitoring
+rack-gateway api-token create --name "Datadog Monitor" --role viewer
+```
+
+## Using Tokens
+
+### CLI Usage
+
+```bash
+# Set token as environment variable
+export RACK_GATEWAY_TOKEN=rgwt_cicd_kX7mN2pQ9rT4...
+
+# Or use --token flag
+rack-gateway apps --token rgwt_cicd_kX7mN2pQ9rT4...
+```
+
+### HTTP API Usage
+
+Include the token in the `Authorization` header:
+
+```bash
+curl -H "Authorization: Bearer rgwt_cicd_kX7mN2pQ9rT4..." \
+  https://gateway.example.com/apps
+```
+
+### CI/CD Integration
+
+<Tabs>
+<TabItem label="GitHub Actions">
+
+```yaml
+name: Deploy
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy
+        env:
+          RACK_GATEWAY_TOKEN: ${{ secrets.RACK_GATEWAY_TOKEN }}
+        run: |
+          rack-gateway deploy -a myapp
+```
+
+Store the token in GitHub Secrets (Settings → Secrets and variables → Actions).
+
+</TabItem>
+<TabItem label="CircleCI">
+
+```yaml
+version: 2.1
+
+jobs:
+  deploy:
+    docker:
+      - image: cimg/base:current
+    steps:
+      - checkout
+      - run:
+          name: Deploy
+          command: rack-gateway deploy -a myapp
+          environment:
+            RACK_GATEWAY_TOKEN: ${RACK_GATEWAY_TOKEN}
+```
+
+Store the token in CircleCI Environment Variables (Project Settings → Environment Variables).
+
+</TabItem>
+<TabItem label="GitLab CI">
+
+```yaml
+deploy:
+  stage: deploy
+  script:
+    - rack-gateway deploy -a myapp
+  variables:
+    RACK_GATEWAY_TOKEN: $RACK_GATEWAY_TOKEN
+```
+
+Store the token in GitLab CI/CD Variables (Settings → CI/CD → Variables).
+
+</TabItem>
+</Tabs>
+
+## Token Management
+
+### Listing Tokens
+
+Users can see their own tokens:
+
+```bash
+rack-gateway api-tokens list
+```
+
+Admins can see all tokens:
+
+```bash
+rack-gateway api-tokens list --all
+```
+
+### Revoking Tokens
+
+```bash
+# Revoke by ID
+rack-gateway api-token delete <token-id>
+```
+
+Or through the web UI: API Tokens → Select Token → Delete
+
+### Token Metadata
+
+Each token tracks:
+
+| Field | Description |
+|-------|-------------|
+| `name` | Descriptive identifier |
+| `role` | Assigned role |
+| `created_by` | User who created the token |
+| `created_at` | Creation timestamp |
+| `last_used_at` | Last successful use |
+| `use_count` | Total number of uses |
+
+## Security Best Practices
+
+### Token Naming
+
+Use descriptive names that indicate:
+- Purpose: `ci-production-deploy`
+- Environment: `staging-monitoring`
+- System: `github-actions-main`
+
+Bad examples: `token1`, `test`, `my-token`
+
+### Role Selection
+
+Always use the minimum required role:
+
+| System | Recommended Role | Reason |
+|--------|------------------|--------|
+| CI/CD deploy | `cicd` | Minimal scope + approvals |
+| Monitoring | `viewer` | Read-only sufficient |
+| Health checks | `viewer` | Read-only sufficient |
+| Emergency restart | `ops` | Only restart, no deploy |
+| Admin automation | `admin` | Full access needed |
+
+### Token Rotation
+
+Rotate tokens periodically:
+
+<Steps>
+
+1. Create new token with same role
+2. Update all systems using old token
+3. Verify systems work with new token
+4. Delete old token
+
+</Steps>
+
+Recommended rotation frequency:
+- **Production tokens**: Quarterly
+- **CI/CD tokens**: Every 6 months
+- **Development tokens**: Annually
+
+### Monitoring Usage
+
+Review token usage regularly:
+
+- Tokens not used in 90+ days should be reviewed
+- Unexpected usage patterns may indicate compromise
+- Failed authentication attempts are logged
+
+## Token Security Considerations
+
+### Storage
+
+- **Never commit tokens to git**
+- Use secrets management (AWS Secrets Manager, Vault, etc.)
+- Environment variables are preferred over config files
+- CI/CD systems have secure secret storage
+
+### Exposure
+
+If a token is exposed:
+
+<Steps>
+
+1. **Delete immediately**
+
+   Web UI → API Tokens → Delete token
+
+2. **Review audit logs**
+
+   Check what actions were taken with the token
+
+3. **Create replacement**
+
+   Generate new token with same role
+
+4. **Update systems**
+
+   Deploy new token to affected systems
+
+5. **Investigate**
+
+   Determine how exposure occurred
+
+</Steps>
+
+### Network Security
+
+- Tokens should only be used over HTTPS
+- Consider IP allowlisting for sensitive tokens
+- Use private network access where possible
+
+## Audit Logging
+
+All token usage is logged:
+
+```json
+{
+  "timestamp": "2024-01-15T10:30:00Z",
+  "api_token_id": 42,
+  "api_token_name": "ci-production-deploy",
+  "method": "POST",
+  "path": "/apps/myapp/builds",
+  "status_code": 200,
+  "rbac_decision": "allow"
+}
+```
+
+Token-based requests are distinguishable from session-based requests in audit logs.
+
+## Differences from Sessions
+
+### No MFA
+
+API tokens don't support MFA because:
+- Automation can't complete interactive MFA
+- Token role determines permissions
+- Audit logging provides accountability
+
+For sensitive operations requiring human approval, use [Deploy Approvals](/integrations/deploy-approvals/).
+
+### No Expiration
+
+Tokens don't expire automatically:
+- Useful for long-running automation
+- Manual rotation/deletion required
+- Regular review process recommended
+
+### No CSRF
+
+Tokens are passed in headers, not cookies:
+- Not vulnerable to CSRF attacks
+- No CSRF token required
+- Bearer token auth is inherently CSRF-safe
+
+## Next Steps
+
+- [Roles](/security/rbac/roles/) - Role definitions for tokens
+- [Deploy Approvals](/integrations/deploy-approvals/) - Human approval for CI/CD
+- [Audit Trail](/security/compliance/audit-trail/) - Token activity logging

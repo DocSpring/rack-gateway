@@ -1,14 +1,168 @@
 ---
 title: "API Tokens"
-description: "Creating and managing API tokens."
+description: "Managing API tokens in the web interface."
 ---
 
-import { Aside } from '@astrojs/starlight/components';
+import { Aside, Steps } from '@astrojs/starlight/components';
 
-<Aside type="caution" title="Coming Soon">
-This page is under construction. Check back soon for complete documentation.
+API tokens provide programmatic access to the gateway for CI/CD pipelines and automation. Administrators can create and manage tokens through the web interface.
+
+<Aside type="note">
+API token management is only available to administrators.
 </Aside>
 
-## Overview
+## Viewing Tokens
 
-Content coming soon.
+Navigate to **API Tokens** in the sidebar to see all tokens:
+
+| Column | Description |
+|--------|-------------|
+| **Name** | Descriptive name for the token |
+| **Prefix** | First characters of the token (for identification) |
+| **Role** | Permissions assigned to the token |
+| **Created By** | Administrator who created it |
+| **Created** | When the token was created |
+| **Last Used** | Most recent API call using this token |
+
+## Creating a Token
+
+<Steps>
+
+1. Click **Create Token** in the top-right
+
+2. Enter a descriptive name
+   - Example: "CI/CD Pipeline - Staging"
+   - Example: "GitHub Actions - Production"
+
+3. Select a role:
+   - **Deployer** - For CI/CD deployments
+   - **Ops** - For operational scripts
+   - **Viewer** - For monitoring/read-only access
+
+4. Click **Create**
+
+5. **Copy the token immediately**
+   - The full token is only shown once
+   - Store it securely (e.g., CI secrets)
+
+</Steps>
+
+<Aside type="danger">
+The token value is only displayed once at creation. If you lose it, you'll need to create a new token.
+</Aside>
+
+## Token Format
+
+Tokens follow the format: `rg_<role>_<random>`
+
+Examples:
+- `rg_deployer_a1b2c3d4e5f6...`
+- `rg_ops_x7y8z9...`
+- `rg_viewer_...`
+
+The prefix helps identify the token's purpose in logs.
+
+## Using Tokens
+
+### In CI/CD Pipelines
+
+```yaml
+# GitHub Actions example
+env:
+  RACK_GATEWAY_TOKEN: ${{ secrets.RACK_GATEWAY_TOKEN }}
+
+steps:
+  - name: Deploy
+    run: |
+      rack-gateway convox deploy -a myapp
+```
+
+### Direct API Calls
+
+```bash
+curl -H "Authorization: Bearer rg_deployer_a1b2c3..." \
+  https://gateway.example.com/api/v1/convox/apps
+```
+
+## Revoking Tokens
+
+<Steps>
+
+1. Find the token in the list
+
+2. Click **Revoke**
+
+3. Confirm the action
+
+</Steps>
+
+Revoked tokens:
+- Are immediately invalidated
+- Cannot be restored
+- Remain in audit history
+
+<Aside type="tip">
+Rotate tokens periodically. Create a new token before revoking the old one to avoid service interruption.
+</Aside>
+
+## Token Best Practices
+
+### Naming Conventions
+
+Use descriptive names that identify:
+- The system using the token
+- The environment (staging, production)
+- The purpose
+
+Examples:
+- "CircleCI - Production Deploys"
+- "GitHub Actions - Staging"
+- "Monitoring Service - Read Only"
+
+### Minimum Permissions
+
+Grant only the permissions needed:
+
+| Use Case | Recommended Role |
+|----------|------------------|
+| CI/CD deployments | Deployer |
+| Monitoring scripts | Viewer |
+| Ops automation | Ops |
+
+### Rotation Schedule
+
+- Rotate tokens every 90 days
+- Rotate immediately if compromised
+- Create new token before revoking old
+
+## Audit Trail
+
+All token usage is logged:
+- Which token was used
+- What action was performed
+- When it occurred
+- IP address
+
+View in **Audit Logs** filtered by token.
+
+## Troubleshooting
+
+### Token Not Working
+
+1. Verify the token is not revoked
+2. Check the role has required permissions
+3. Ensure proper `Authorization: Bearer` header format
+4. Check token hasn't been rotated
+
+### Token Audit
+
+To see token usage:
+1. Go to **Audit Logs**
+2. Filter by the token prefix
+3. Review recent activity
+
+## Related
+
+- [API Reference](/development/api-reference/) - API documentation
+- [RBAC Permissions](/reference/rbac-permissions/) - Permission details
+- [CircleCI Integration](/integrations/deploy-approvals/circleci/) - CI/CD setup

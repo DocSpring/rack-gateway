@@ -1,14 +1,344 @@
 ---
 title: "Contributing"
-description: "Contribution guide."
+description: "Guidelines for contributing to Rack Gateway."
 ---
 
-import { Aside } from '@astrojs/starlight/components';
+import { Aside, Steps } from '@astrojs/starlight/components';
 
-<Aside type="caution" title="Coming Soon">
-This page is under construction. Check back soon for complete documentation.
+Thank you for your interest in contributing to Rack Gateway! This guide covers everything you need to know to submit quality contributions.
+
+## Getting Started
+
+<Steps>
+
+1. **Fork the repository**
+
+   Fork [docspring/rack-gateway](https://github.com/docspring/rack-gateway) on GitHub.
+
+2. **Clone your fork**
+
+   ```bash
+   git clone https://github.com/YOUR_USERNAME/rack-gateway.git
+   cd rack-gateway
+   ```
+
+3. **Set up development environment**
+
+   Follow the [Local Setup](/development/local-setup/) guide.
+
+4. **Create a branch**
+
+   ```bash
+   git checkout -b feature/your-feature-name
+   ```
+
+</Steps>
+
+## Development Workflow
+
+### Before You Code
+
+1. **Check existing issues** - See if your feature/bug is already being worked on
+2. **Open an issue** - For significant changes, discuss the approach first
+3. **Keep scope small** - Focused PRs are easier to review
+
+### While Coding
+
+```bash
+# Make your changes, then verify:
+
+# 1. Run linting (with auto-fix)
+task lint:fix
+
+# 2. Run tests
+task go:test
+task web:test
+
+# 3. Run full CI suite
+task ci
+```
+
+### Before Submitting
+
+1. **All tests pass** - `task ci` must complete successfully
+2. **Code is formatted** - Run `task lint:fix`
+3. **Commit messages are clear** - Follow commit conventions below
+4. **Documentation is updated** - For new features or changes
+
+## Code Standards
+
+### Go Code
+
+#### Style
+
+- Follow [Effective Go](https://go.dev/doc/effective_go) guidelines
+- Use `gofmt` and `goimports` (handled by `task lint:fix`)
+- Maximum line length: 120 characters
+- Maximum function length: 100 lines
+
+#### Naming
+
+```go
+// Good: Clear, descriptive names
+func CreateUserSession(user *User) (*Session, error)
+func ValidateAPIToken(token string) (*Token, error)
+
+// Bad: Unclear abbreviations
+func CrtUsrSess(u *User) (*Session, error)
+```
+
+#### Error Handling
+
+```go
+// Good: Wrap errors with context
+if err := db.Query(query); err != nil {
+    return fmt.Errorf("failed to fetch user %s: %w", userID, err)
+}
+
+// Bad: Generic error messages
+if err := db.Query(query); err != nil {
+    return err
+}
+```
+
+#### Comments
+
+```go
+// Good: Explain WHY, not WHAT
+// UseRoundRobin distributes load across servers to prevent
+// any single server from being overwhelmed during peak traffic.
+func UseRoundRobin() LoadBalancer { ... }
+
+// Bad: Restating the code
+// GetUser gets a user
+func GetUser(id string) *User { ... }
+```
+
+### TypeScript/React Code
+
+#### Style
+
+- Use Biome for formatting and linting
+- Prefer functional components with hooks
+- Use TypeScript strict mode
+
+#### Component Structure
+
+```typescript
+// Good: Clear component organization
+interface Props {
+  user: User;
+  onLogout: () => void;
+}
+
+export function UserMenu({ user, onLogout }: Props) {
+  const [isOpen, setIsOpen] = useState(false);
+
+  return (
+    <div className="user-menu">
+      {/* Component content */}
+    </div>
+  );
+}
+```
+
+#### Error Handling
+
+```typescript
+// Good: Use React Query for data fetching with error handling
+const { data, error, isLoading } = useQuery({
+  queryKey: ['user', userId],
+  queryFn: () => fetchUser(userId),
+});
+
+if (error) {
+  return <ErrorMessage error={error} />;
+}
+```
+
+### File Limits
+
+<Aside type="caution" title="Strictly Enforced">
+These limits are enforced by CI and must be followed.
 </Aside>
 
-## Overview
+| File Type | Max Lines |
+|-----------|-----------|
+| Go code files | 500 lines |
+| Go test files | 1000 lines |
+| TypeScript/TSX code | 500 lines |
+| TypeScript test files | 1000 lines |
 
-Content coming soon.
+If a file approaches these limits, refactor into smaller modules.
+
+## Commit Conventions
+
+### Format
+
+```
+type(scope): short description
+
+Longer description if needed.
+```
+
+### Types
+
+| Type | Description |
+|------|-------------|
+| `feat` | New feature |
+| `fix` | Bug fix |
+| `docs` | Documentation only |
+| `style` | Formatting, no code change |
+| `refactor` | Code restructuring |
+| `test` | Adding/updating tests |
+| `chore` | Maintenance tasks |
+
+### Examples
+
+```bash
+feat(auth): add WebAuthn support for passwordless login
+
+fix(proxy): handle timeout errors gracefully
+
+docs(readme): update installation instructions
+
+refactor(rbac): extract permission checking to separate module
+```
+
+## Pull Request Guidelines
+
+### PR Title
+
+Use the same format as commit messages:
+
+```
+feat(auth): add WebAuthn support
+```
+
+### PR Description
+
+Include:
+
+1. **Summary** - What does this PR do?
+2. **Motivation** - Why is this change needed?
+3. **Testing** - How was this tested?
+4. **Screenshots** - For UI changes
+
+### PR Template
+
+```markdown
+## Summary
+Brief description of what this PR does.
+
+## Motivation
+Why is this change needed?
+
+## Changes
+- Change 1
+- Change 2
+
+## Testing
+- [ ] Unit tests added/updated
+- [ ] Integration tests pass
+- [ ] E2E tests pass
+- [ ] Manual testing completed
+
+## Screenshots (if applicable)
+```
+
+### Review Process
+
+1. **Automated checks** - CI must pass
+2. **Code review** - At least one maintainer approval
+3. **Documentation** - Updates if needed
+4. **Merge** - Squash and merge with clean commit message
+
+## Security Guidelines
+
+### Reporting Vulnerabilities
+
+<Aside type="danger">
+Do NOT open public issues for security vulnerabilities.
+</Aside>
+
+Email security concerns to: security@docspring.com
+
+### Secure Coding Practices
+
+1. **Input Validation**
+   - Validate all user input
+   - Use parameterized queries (never string concatenation)
+   - Sanitize output for XSS prevention
+
+2. **Authentication**
+   - Never log sensitive data (tokens, passwords)
+   - Use constant-time comparison for secrets
+   - Implement rate limiting on auth endpoints
+
+3. **Dependencies**
+   - Keep dependencies updated
+   - Review security advisories
+   - Run `govulncheck` and `npm audit`
+
+## Testing Requirements
+
+### Coverage Expectations
+
+- New features must include tests
+- Bug fixes should include regression tests
+- Aim for meaningful coverage, not just line coverage
+
+### Test Types
+
+| Change Type | Required Tests |
+|-------------|----------------|
+| New API endpoint | Unit + Integration + E2E |
+| Bug fix | Regression test |
+| UI component | Unit test + E2E (if user-facing) |
+| Refactoring | Existing tests must pass |
+
+## Documentation
+
+### When to Update Docs
+
+- New features
+- Changed behavior
+- New configuration options
+- API changes
+
+### Documentation Location
+
+| Content | Location |
+|---------|----------|
+| API docs | OpenAPI spec in Go handlers |
+| User guides | `docs/src/content/docs/` |
+| Code docs | Inline comments |
+| Architecture | `docs/src/content/docs/concepts/` |
+
+## Getting Help
+
+### Resources
+
+- [Development Guide](/development/)
+- [Testing Guide](/development/testing/)
+- [API Reference](/development/api-reference/)
+
+### Communication
+
+- **GitHub Issues** - Bug reports, feature requests
+- **GitHub Discussions** - Questions, ideas
+- **Pull Requests** - Code review, feedback
+
+## License
+
+By contributing, you agree that your contributions will be licensed under the project's license.
+
+## Recognition
+
+Contributors are recognized in:
+
+- GitHub contributors list
+- Release notes for significant contributions
+- Project documentation
+
+Thank you for contributing to Rack Gateway!

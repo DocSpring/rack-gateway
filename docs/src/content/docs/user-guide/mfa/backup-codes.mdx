@@ -1,14 +1,279 @@
 ---
 title: "Backup Codes"
-description: "Using backup codes for recovery."
+description: "Using backup codes for account recovery."
 ---
 
-import { Aside } from '@astrojs/starlight/components';
+import { Aside, Steps } from '@astrojs/starlight/components';
 
-<Aside type="caution" title="Coming Soon">
-This page is under construction. Check back soon for complete documentation.
+Backup codes provide emergency access when your primary MFA methods are unavailable.
+
+## What Are Backup Codes?
+
+Backup codes are:
+
+- **One-time use** - Each code works exactly once
+- **Pre-generated** - Created when you set up MFA
+- **Last resort** - Use only when other methods fail
+- **10 codes** - You receive 10 codes at setup
+
+<Aside type="danger">
+Backup codes are your emergency recovery option. Store them securely and never share them.
 </Aside>
 
-## Overview
+## Getting Backup Codes
 
-Content coming soon.
+### During MFA Setup
+
+When you first enable MFA:
+
+<Steps>
+
+1. Complete TOTP or WebAuthn setup
+
+2. Backup codes are displayed automatically
+
+3. **Download or print** the codes immediately
+
+4. Store them in a secure location
+
+</Steps>
+
+### From MFA Settings
+
+If you need to view or regenerate codes:
+
+<Steps>
+
+1. Navigate to **MFA** in the web interface
+
+2. Scroll to **Backup Codes**
+
+3. Click **View Backup Codes**
+
+4. Enter your MFA code to verify
+
+5. Remaining codes are displayed
+
+</Steps>
+
+## Storing Backup Codes
+
+### Recommended Storage
+
+| Method | Security | Accessibility |
+|--------|----------|---------------|
+| Password manager | High | Good |
+| Printed in a safe | High | Lower |
+| Encrypted file | High | Good |
+| Bank safe deposit | Very high | Low |
+
+### Storage Tips
+
+- **Password manager**: Store in a secure note (1Password, Bitwarden)
+- **Physical copy**: Print and store in a fireproof safe
+- **Multiple locations**: Keep copies in different secure places
+- **Encrypt**: If storing digitally outside a password manager
+
+<Aside type="caution">
+Never store backup codes in plain text on your computer, in email, or in cloud storage without encryption.
+</Aside>
+
+### What NOT to Do
+
+- ❌ Save as plain text file on desktop
+- ❌ Email to yourself
+- ❌ Store in browser bookmarks
+- ❌ Take a screenshot on your phone
+- ❌ Keep only on the device you're protecting
+
+## Using a Backup Code
+
+### Web Interface
+
+<Steps>
+
+1. At the MFA prompt, click **Use a backup code**
+
+2. Enter one of your unused backup codes
+
+3. Complete login
+
+</Steps>
+
+### CLI
+
+```bash
+rack-gateway login
+```
+
+When prompted for MFA:
+
+```
+MFA verification required
+Enter TOTP code (or backup code): xxxxxxxx
+```
+
+Enter a backup code instead of a TOTP code.
+
+### After Using a Code
+
+Once used:
+- The code is permanently invalidated
+- You cannot reuse it
+- Consider regenerating if running low
+
+## Regenerating Codes
+
+### When to Regenerate
+
+- You've used several codes
+- You suspect codes were compromised
+- You lost access to stored codes
+- Regular security hygiene (every 6-12 months)
+
+### How to Regenerate
+
+<Steps>
+
+1. Navigate to **MFA** settings
+
+2. Click **Regenerate Backup Codes**
+
+3. Verify with your current MFA method
+
+4. **All previous codes are invalidated**
+
+5. Save the new codes securely
+
+</Steps>
+
+<Aside type="note">
+Regenerating codes invalidates ALL previous codes immediately. Make sure you save the new codes before closing the window.
+</Aside>
+
+## Managing Backup Codes
+
+### Checking Remaining Codes
+
+In **MFA** settings, you can see:
+
+| Status | Codes Used | Codes Remaining |
+|--------|------------|-----------------|
+| Healthy | 2 | 8 |
+| Low | 7 | 3 |
+| Critical | 9 | 1 |
+
+### Low Code Warnings
+
+When you're running low on codes:
+- A warning appears in MFA settings
+- Consider regenerating soon
+- Don't wait until you have zero left
+
+## Security Considerations
+
+### Code Compromise
+
+If you believe backup codes were compromised:
+
+<Steps>
+
+1. Regenerate codes immediately
+
+2. Check for unauthorized sessions
+
+3. Consider regenerating API tokens
+
+4. Review audit logs for suspicious activity
+
+</Steps>
+
+### Physical Access
+
+If someone gains physical access to your backup codes:
+- They still need your password and OAuth
+- Codes alone don't grant access
+- But regenerate them as a precaution
+
+### Audit Trail
+
+All backup code usage is logged:
+
+```json
+{
+  "action": "mfa.backup_code.used",
+  "user": "alice@example.com",
+  "timestamp": "2024-01-20T10:30:00Z",
+  "remaining_codes": 7
+}
+```
+
+Administrators can see when backup codes are used but not which specific code.
+
+## Troubleshooting
+
+### Code Not Working
+
+**Already used:**
+- Each code works exactly once
+- Cross off used codes from your list
+- Try a different unused code
+
+**Typo:**
+- Codes are case-sensitive
+- Enter exactly as shown
+- No spaces or dashes needed
+
+**All codes invalid:**
+- Codes were regenerated (all previous codes invalidated)
+- Contact an administrator for MFA reset
+
+### Lost All Codes
+
+If you've lost both your MFA device AND backup codes:
+
+1. **Contact an administrator** - They can reset your MFA
+2. **Verify your identity** - May require additional verification
+3. **Re-enroll in MFA** - Set up new methods
+4. **Save new backup codes** - Store properly this time
+
+<Aside type="danger">
+Without backup codes or a working MFA method, only an administrator can restore access. This may require identity verification.
+</Aside>
+
+### Administrator MFA Reset
+
+Administrators can reset user MFA:
+
+1. Navigate to **Users**
+2. Find the locked-out user
+3. Click **Reset MFA**
+4. User must re-enroll on next login
+
+This is logged in the audit trail for security.
+
+## Best Practices
+
+### Regular Review
+
+- Check remaining codes monthly
+- Regenerate before running out
+- Verify storage location is still accessible
+
+### Multiple Storage
+
+- Keep codes in at least 2 locations
+- Use different security mechanisms
+- Example: Password manager + printed copy in safe
+
+### Emergency Planning
+
+- Document your backup code location
+- Share location (not codes) with trusted person
+- Include in personal security documentation
+
+## Related
+
+- [MFA Overview](/user-guide/mfa/) - All MFA options
+- [TOTP Setup](/user-guide/mfa/totp-setup/) - Primary MFA method
+- [WebAuthn](/user-guide/mfa/webauthn/) - Hardware security keys

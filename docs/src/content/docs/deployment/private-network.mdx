@@ -23,32 +23,21 @@ With a fully private deployment:
 
 ## Architecture Overview
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                         Your Private Network                         │
-│                           (Tailscale/VPN)                           │
-│                                                                      │
-│  ┌──────────────┐     ┌──────────────┐     ┌──────────────────────┐│
-│  │  Developer   │────▶│ Rack Gateway │────▶│    Convox Rack       ││
-│  │  Machine     │     │              │     │    (private API)     ││
-│  └──────────────┘     └──────────────┘     └──────────────────────┘│
-│         │                                                           │
-│         │ Tailscale                                                 │
-│         ▼                                                           │
-│  ┌──────────────┐                                                   │
-│  │   Web UI     │                                                   │
-│  │  (browser)   │                                                   │
-│  └──────────────┘                                                   │
-└─────────────────────────────────────────────────────────────────────┘
-                              │
-                              │ No public
-                              │ internet access
-                              ▼
-                    ┌──────────────────┐
-                    │   Public         │
-                    │   Internet       │
-                    │   (blocked)      │
-                    └──────────────────┘
+```mermaid
+flowchart TB
+    subgraph PrivateNetwork["Your Private Network (Tailscale/VPN)"]
+        Dev["Developer Machine"]
+        Gateway["Rack Gateway"]
+        Convox["Convox Rack<br/>(private API)"]
+        WebUI["Web UI (browser)"]
+
+        Dev --> Gateway --> Convox
+        Dev -.->|Tailscale| WebUI
+    end
+
+    Internet["Public Internet<br/>(blocked)"]
+
+    PrivateNetwork -.-x|No public access| Internet
 ```
 
 ## The `private_api` Feature

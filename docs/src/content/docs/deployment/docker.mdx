@@ -1,14 +1,363 @@
 ---
 title: "Docker Deployment"
-description: "Deploy with Docker."
+description: "Deploy Rack Gateway with Docker."
 ---
 
-import { Aside } from '@astrojs/starlight/components';
+import { Aside, Steps, Tabs, TabItem } from '@astrojs/starlight/components';
 
-<Aside type="caution" title="Coming Soon">
-This page is under construction. Check back soon for complete documentation.
+This guide covers deploying Rack Gateway using Docker, suitable for development, testing, and simple production deployments.
+
+## Docker Image
+
+The official Docker image is available on Docker Hub:
+
+```bash
+docker pull docspringcom/rack-gateway:latest
+```
+
+### Image Tags
+
+| Tag | Description |
+|-----|-------------|
+| `latest` | Most recent release |
+| `v0.x.x` | Specific version (recommended for production) |
+
+## Quick Start
+
+### 1. Create a Docker Network
+
+```bash
+docker network create rack-gateway-net
+```
+
+### 2. Start PostgreSQL
+
+```bash
+docker run -d \
+  --name postgres \
+  --network rack-gateway-net \
+  -e POSTGRES_USER=rack_gateway \
+  -e POSTGRES_PASSWORD=your-secure-password \
+  -e POSTGRES_DB=rack_gateway \
+  -v pgdata:/var/lib/postgresql/data \
+  postgres:16
+```
+
+### 3. Start Rack Gateway
+
+```bash
+docker run -d \
+  --name rack-gateway \
+  --network rack-gateway-net \
+  -p 8080:8080 \
+  -e DATABASE_URL=postgres://rack_gateway:your-secure-password@postgres:5432/rack_gateway \
+  -e DOMAIN=gateway.example.com \
+  -e APP_SECRET_KEY=$(openssl rand -base64 32) \
+  -e GOOGLE_CLIENT_ID=your-client-id \
+  -e GOOGLE_CLIENT_SECRET=your-client-secret \
+  -e GOOGLE_ALLOWED_DOMAIN=example.com \
+  -e RACK_TOKEN=your-convox-rack-token \
+  -e RACK_HOST=https://your-rack.convox.cloud \
+  -e ADMIN_USERS=admin@example.com \
+  docspringcom/rack-gateway:latest
+```
+
+### 4. Verify
+
+```bash
+curl http://localhost:8080/api/v1/health
+```
+
+## Docker Compose
+
+For a complete development environment, use Docker Compose:
+
+```yaml
+# docker-compose.yml
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: rack_gateway
+      POSTGRES_PASSWORD: development
+      POSTGRES_DB: rack_gateway
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rack_gateway"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  gateway:
+    image: docspringcom/rack-gateway:latest
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    environment:
+      DATABASE_URL: postgres://rack_gateway:development@postgres:5432/rack_gateway
+      DOMAIN: localhost:8080
+      DEV_MODE: "true"
+      APP_SECRET_KEY: dev-secret-key-32-bytes-minimum!!
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      GOOGLE_ALLOWED_DOMAIN: ${GOOGLE_ALLOWED_DOMAIN}
+      RACK_TOKEN: ${RACK_TOKEN}
+      RACK_HOST: ${RACK_HOST}
+      ADMIN_USERS: ${ADMIN_USERS}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/v1/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:
+```
+
+Start with:
+
+```bash
+docker compose up -d
+```
+
+## Environment Variables
+
+### Required Variables
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `DATABASE_URL` | PostgreSQL connection string | `postgres://user:pass@host:5432/db` |
+| `DOMAIN` | Gateway domain | `gateway.example.com` |
+| `APP_SECRET_KEY` | 256-bit secret for sessions | `openssl rand -base64 32` |
+| `GOOGLE_CLIENT_ID` | OAuth client ID | From Google Cloud Console |
+| `GOOGLE_CLIENT_SECRET` | OAuth client secret | From Google Cloud Console |
+| `GOOGLE_ALLOWED_DOMAIN` | Allowed email domain | `example.com` |
+| `RACK_TOKEN` | Convox rack API token | From Convox |
+| `RACK_HOST` | Convox rack URL | `https://rack.convox.cloud` |
+
+### Optional Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PORT` | `8080` | HTTP listen port |
+| `DEV_MODE` | `false` | Enable development mode |
+| `ADMIN_USERS` | - | Comma-separated admin emails |
+| `LOG_RETENTION_DAYS` | - | CloudWatch log retention |
+| `RACK_ALIAS` | - | Short rack name (e.g., `staging`) |
+
+See [Environment Variables](/configuration/environment-variables/) for the complete list.
+
+## Database Migrations
+
+Migrations run automatically on startup. To run them manually:
+
+```bash
+docker exec rack-gateway rack-gateway migrate
+```
+
+## Health Checks
+
+The gateway exposes health endpoints:
+
+| Endpoint | Purpose |
+|----------|---------|
+| `/api/v1/health` | Basic health check |
+| `/api/v1/health/ready` | Readiness (includes DB check) |
+
+Example health check configuration:
+
+```yaml
+healthcheck:
+  test: ["CMD", "curl", "-f", "http://localhost:8080/api/v1/health"]
+  interval: 30s
+  timeout: 10s
+  retries: 3
+  start_period: 10s
+```
+
+## Production Considerations
+
+### Use Specific Version Tags
+
+```bash
+docker pull docspringcom/rack-gateway:v0.1.0
+```
+
+### Configure Resource Limits
+
+```yaml
+services:
+  gateway:
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+```
+
+### Enable TLS
+
+For production, run behind a reverse proxy with TLS:
+
+<Tabs>
+<TabItem label="nginx">
+
+```nginx
+server {
+    listen 443 ssl http2;
+    server_name gateway.example.com;
+
+    ssl_certificate /etc/nginx/ssl/cert.pem;
+    ssl_certificate_key /etc/nginx/ssl/key.pem;
+
+    location / {
+        proxy_pass http://gateway:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+</TabItem>
+<TabItem label="Traefik">
+
+```yaml
+services:
+  traefik:
+    image: traefik:v3.0
+    command:
+      - "--providers.docker=true"
+      - "--entrypoints.websecure.address=:443"
+      - "--certificatesresolvers.letsencrypt.acme.email=admin@example.com"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/acme/acme.json"
+      - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web"
+    ports:
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - acme:/acme
+
+  gateway:
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.gateway.rule=Host(`gateway.example.com`)"
+      - "traefik.http.routers.gateway.tls.certresolver=letsencrypt"
+```
+
+</TabItem>
+<TabItem label="Caddy">
+
+```
+# Caddyfile
+gateway.example.com {
+    reverse_proxy gateway:8080
+}
+```
+
+</TabItem>
+</Tabs>
+
+### Database Backups
+
+Configure regular PostgreSQL backups:
+
+```bash
+# Add to cron
+0 * * * * docker exec postgres pg_dump -U rack_gateway rack_gateway | gzip > /backups/gateway-$(date +\%Y\%m\%d\%H).sql.gz
+```
+
+### Logging
+
+Configure Docker logging driver for production:
+
+```yaml
+services:
+  gateway:
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+```
+
+Or use a centralized logging solution:
+
+```yaml
+services:
+  gateway:
+    logging:
+      driver: "awslogs"
+      options:
+        awslogs-group: "rack-gateway"
+        awslogs-region: "us-east-1"
+        awslogs-stream: "gateway"
+```
+
+## Development Mode
+
+For local development, use `DEV_MODE=true`:
+
+```bash
+docker run -d \
+  -e DEV_MODE=true \
+  -e COOKIE_SECURE=false \
+  # ... other variables
+  docspringcom/rack-gateway:latest
+```
+
+Development mode enables:
+
+- Non-secure cookies (for HTTP)
+- Email logging instead of sending
+- Relaxed security checks
+
+<Aside type="caution">
+Never use `DEV_MODE=true` in production.
 </Aside>
 
-## Overview
+## Troubleshooting
 
-Content coming soon.
+### Container won't start
+
+Check logs:
+
+```bash
+docker logs rack-gateway
+```
+
+Common issues:
+
+| Error | Cause | Solution |
+|-------|-------|----------|
+| `database connection failed` | PostgreSQL not reachable | Check `DATABASE_URL` and network |
+| `APP_SECRET_KEY required` | Missing secret | Generate with `openssl rand -base64 32` |
+| `OAuth client not configured` | Missing Google credentials | Set `GOOGLE_CLIENT_*` variables |
+
+### Database connection issues
+
+Verify PostgreSQL is accessible:
+
+```bash
+docker exec -it postgres psql -U rack_gateway -d rack_gateway -c "SELECT 1"
+```
+
+### Check running containers
+
+```bash
+docker ps -a
+docker network inspect rack-gateway-net
+```
+
+## Next Steps
+
+- [Convox Deployment](/deployment/convox/) - Production deployment on Convox
+- [Database Setup](/deployment/database-setup/) - PostgreSQL configuration
+- [Production Checklist](/deployment/production-checklist/) - Security hardening

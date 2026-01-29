@@ -1,14 +1,521 @@
 ---
 title: "API Reference"
-description: "OpenAPI spec."
+description: "Rack Gateway REST API documentation."
 ---
 
-import { Aside } from '@astrojs/starlight/components';
+import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
 
-<Aside type="caution" title="Coming Soon">
-This page is under construction. Check back soon for complete documentation.
+Rack Gateway provides a REST API for authentication, user management, and proxying Convox commands. The API uses JSON for request and response bodies.
+
+## Base URL
+
+| Environment | Base URL |
+|-------------|----------|
+| Development | `http://localhost:8447/api/v1` |
+| Production | `https://gateway.example.com/api/v1` |
+
+## Authentication
+
+Most endpoints require authentication via session token or API token.
+
+### Session Authentication
+
+For interactive users (Web UI, CLI):
+
+```bash
+# Session token is stored in cookie after OAuth login
+curl -b "session=YOUR_SESSION_TOKEN" \
+  https://gateway.example.com/api/v1/users/me
+```
+
+### API Token Authentication
+
+For programmatic access (CI/CD):
+
+```bash
+curl -H "Authorization: Bearer YOUR_API_TOKEN" \
+  https://gateway.example.com/api/v1/convox/apps
+```
+
+## Endpoints
+
+### Health
+
+#### GET /health
+
+Check if the gateway is running.
+
+**Authentication:** None required
+
+**Response:**
+```json
+{
+  "status": "ok"
+}
+```
+
+#### GET /health/ready
+
+Check if the gateway and all dependencies are ready.
+
+**Authentication:** None required
+
+**Response:**
+```json
+{
+  "status": "ready",
+  "database": "connected"
+}
+```
+
+### Authentication
+
+#### GET /auth/login
+
+Initiate OAuth login flow.
+
+**Authentication:** None required
+
+**Query Parameters:**
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `redirect` | string | URL to redirect after login |
+
+**Response:** Redirects to Google OAuth
+
+#### GET /auth/callback
+
+OAuth callback endpoint (called by Google).
+
+**Authentication:** None required
+
+**Response:** Redirects to application with session cookie set
+
+#### POST /auth/logout
+
+End current session.
+
+**Authentication:** Session required
+
+**Response:**
+```json
+{
+  "message": "logged out"
+}
+```
+
+### Users
+
+#### GET /users/me
+
+Get current authenticated user.
+
+**Authentication:** Session or API token required
+
+**Response:**
+```json
+{
+  "id": "usr_abc123",
+  "email": "alice@example.com",
+  "name": "Alice Smith",
+  "role": "admin",
+  "mfa_enabled": true,
+  "created_at": "2024-01-15T10:30:00Z"
+}
+```
+
+#### GET /admin/users
+
+List all users (admin only).
+
+**Authentication:** Admin session required
+
+**Query Parameters:**
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `limit` | int | Max results (default: 50) |
+| `offset` | int | Pagination offset |
+| `search` | string | Filter by email |
+
+**Response:**
+```json
+{
+  "users": [
+    {
+      "id": "usr_abc123",
+      "email": "alice@example.com",
+      "role": "admin",
+      "mfa_enabled": true
+    }
+  ],
+  "total": 25
+}
+```
+
+#### PUT /admin/users/:id/role
+
+Update user's role (admin only).
+
+**Authentication:** Admin session required
+
+**Request:**
+```json
+{
+  "role": "deployer"
+}
+```
+
+**Response:**
+```json
+{
+  "id": "usr_abc123",
+  "email": "alice@example.com",
+  "role": "deployer"
+}
+```
+
+### API Tokens
+
+#### GET /admin/tokens
+
+List API tokens (admin only).
+
+**Authentication:** Admin session required
+
+**Response:**
+```json
+{
+  "tokens": [
+    {
+      "id": "tok_xyz789",
+      "name": "CI/CD Pipeline",
+      "prefix": "rg_ci_",
+      "role": "deployer",
+      "created_at": "2024-01-10T08:00:00Z",
+      "last_used_at": "2024-01-15T14:30:00Z"
+    }
+  ]
+}
+```
+
+#### POST /admin/tokens
+
+Create new API token (admin only).
+
+**Authentication:** Admin session required
+
+**Request:**
+```json
+{
+  "name": "CI/CD Pipeline",
+  "role": "deployer"
+}
+```
+
+**Response:**
+```json
+{
+  "id": "tok_xyz789",
+  "name": "CI/CD Pipeline",
+  "token": "rg_ci_abc123xyz...",
+  "role": "deployer"
+}
+```
+
+<Aside type="caution">
+The full token value is only returned once at creation time. Store it securely.
 </Aside>
 
-## Overview
+#### DELETE /admin/tokens/:id
 
-Content coming soon.
+Revoke an API token (admin only).
+
+**Authentication:** Admin session required
+
+**Response:**
+```json
+{
+  "message": "token revoked"
+}
+```
+
+### MFA
+
+#### GET /mfa/methods
+
+List user's MFA methods.
+
+**Authentication:** Session required
+
+**Response:**
+```json
+{
+  "methods": [
+    {
+      "id": "mfa_abc123",
+      "type": "totp",
+      "name": "Authenticator App",
+      "created_at": "2024-01-10T08:00:00Z"
+    }
+  ]
+}
+```
+
+#### POST /mfa/totp/enroll
+
+Start TOTP enrollment.
+
+**Authentication:** Session required
+
+**Response:**
+```json
+{
+  "secret": "JBSWY3DPEHPK3PXP",
+  "qr_code": "data:image/png;base64,..."
+}
+```
+
+#### POST /mfa/totp/verify
+
+Verify TOTP code.
+
+**Authentication:** Session required
+
+**Request:**
+```json
+{
+  "code": "123456"
+}
+```
+
+**Response:**
+```json
+{
+  "verified": true
+}
+```
+
+### Convox Proxy
+
+All Convox API endpoints are proxied through `/convox/*`. The gateway adds authentication and audit logging.
+
+#### GET /convox/apps
+
+List applications.
+
+**Authentication:** Session or API token required
+**Permission:** `apps:list`
+
+**Response:** Proxied from Convox API
+
+#### GET /convox/apps/:app
+
+Get application details.
+
+**Authentication:** Session or API token required
+**Permission:** `apps:read`
+
+#### POST /convox/apps/:app/releases
+
+Create a new release.
+
+**Authentication:** Session or API token required
+**Permission:** `releases:create`
+
+<Aside type="note">
+The Convox proxy endpoints mirror the Convox API. See [Convox API documentation](https://docs.convox.com/reference/api) for complete endpoint details.
+</Aside>
+
+### Audit Logs
+
+#### GET /admin/audit
+
+Query audit logs (admin only).
+
+**Authentication:** Admin session required
+
+**Query Parameters:**
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `limit` | int | Max results (default: 100) |
+| `offset` | int | Pagination offset |
+| `user` | string | Filter by user email |
+| `action` | string | Filter by action type |
+| `from` | string | Start time (ISO 8601) |
+| `to` | string | End time (ISO 8601) |
+
+**Response:**
+```json
+{
+  "logs": [
+    {
+      "id": "log_abc123",
+      "timestamp": "2024-01-15T14:30:00Z",
+      "user": "alice@example.com",
+      "action": "convox.deploy",
+      "resource": "apps/myapp",
+      "ip_address": "192.168.1.100",
+      "user_agent": "rack-gateway-cli/1.0.0"
+    }
+  ],
+  "total": 1500
+}
+```
+
+### Settings
+
+#### GET /admin/settings
+
+Get gateway settings (admin only).
+
+**Authentication:** Admin session required
+
+**Response:**
+```json
+{
+  "mfa_required_for_sensitive_actions": true,
+  "session_timeout_minutes": 480,
+  "deploy_approval_required": true
+}
+```
+
+#### PUT /admin/settings
+
+Update gateway settings (admin only).
+
+**Authentication:** Admin session required
+
+**Request:**
+```json
+{
+  "mfa_required_for_sensitive_actions": true
+}
+```
+
+## Error Responses
+
+All errors follow a consistent format:
+
+```json
+{
+  "error": {
+    "code": "unauthorized",
+    "message": "Invalid or expired session"
+  }
+}
+```
+
+### HTTP Status Codes
+
+| Status | Meaning |
+|--------|---------|
+| 200 | Success |
+| 201 | Created |
+| 400 | Bad Request - Invalid input |
+| 401 | Unauthorized - Authentication required |
+| 403 | Forbidden - Insufficient permissions |
+| 404 | Not Found |
+| 429 | Too Many Requests - Rate limited |
+| 500 | Internal Server Error |
+
+### Error Codes
+
+| Code | Description |
+|------|-------------|
+| `unauthorized` | Authentication required or invalid |
+| `forbidden` | User lacks required permission |
+| `not_found` | Resource doesn't exist |
+| `validation_error` | Invalid request data |
+| `mfa_required` | MFA verification needed |
+| `rate_limited` | Too many requests |
+
+## Rate Limiting
+
+API requests are rate limited per token/session:
+
+| Endpoint Type | Limit |
+|---------------|-------|
+| Authentication | 10/minute |
+| API calls | 1000/hour |
+| Convox proxy | 500/minute |
+
+Rate limit headers are included in responses:
+
+```
+X-RateLimit-Limit: 1000
+X-RateLimit-Remaining: 950
+X-RateLimit-Reset: 1705330800
+```
+
+## OpenAPI Specification
+
+The complete OpenAPI specification is available at:
+
+```
+GET /api/v1/openapi.yaml
+```
+
+### Viewing in Swagger UI
+
+<Tabs>
+<TabItem label="Local Development">
+
+```bash
+# Start the gateway
+task dev
+
+# Open Swagger UI (if enabled)
+open http://localhost:8447/api/v1/docs
+```
+
+</TabItem>
+<TabItem label="Production">
+
+Contact your administrator for API documentation access.
+
+</TabItem>
+</Tabs>
+
+### Generating Client Libraries
+
+Use the OpenAPI spec to generate client libraries:
+
+```bash
+# TypeScript/JavaScript
+npx openapi-generator-cli generate \
+  -i http://localhost:8447/api/v1/openapi.yaml \
+  -g typescript-fetch \
+  -o ./client
+
+# Go
+openapi-generator-cli generate \
+  -i http://localhost:8447/api/v1/openapi.yaml \
+  -g go \
+  -o ./client
+```
+
+## SDK
+
+The web frontend uses an auto-generated TypeScript client:
+
+```typescript
+import { api } from '@/api/client';
+
+// Get current user
+const user = await api.users.getMe();
+
+// List applications (via Convox proxy)
+const apps = await api.convox.listApps();
+
+// Create API token (admin)
+const token = await api.admin.createToken({
+  name: 'CI Pipeline',
+  role: 'deployer',
+});
+```
+
+## Further Reading
+
+- [CLI Commands](/reference/cli-commands/) - CLI usage reference
+- [RBAC Permissions](/reference/rbac-permissions/) - Available permissions
+- [Audit Events](/reference/audit-events/) - Audit log event types

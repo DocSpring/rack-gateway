@@ -1,14 +1,178 @@
 ---
 title: "Web UI Overview"
-description: "Introduction to the web admin interface."
+description: "Introduction to the Rack Gateway web admin interface."
 ---
 
-import { Aside } from '@astrojs/starlight/components';
+import { Aside, Card, CardGrid } from '@astrojs/starlight/components';
 
-<Aside type="caution" title="Coming Soon">
-This page is under construction. Check back soon for complete documentation.
+The Rack Gateway web interface provides a graphical way to manage users, view audit logs, create API tokens, and configure security settings.
+
+## Accessing the Web UI
+
+### From the CLI
+
+The easiest way to open the web UI:
+
+```bash
+rack-gateway web
+```
+
+This opens your default browser to the gateway's web interface.
+
+### Direct URL
+
+Navigate directly to your gateway URL in a browser:
+
+```
+https://gateway.example.com
+```
+
+You'll be redirected to sign in with Google OAuth if not already authenticated.
+
+## Main Features
+
+<CardGrid>
+  <Card title="Dashboard" icon="rocket">
+    Overview of gateway status, recent activity, and quick actions.
+  </Card>
+  <Card title="Users" icon="star">
+    Manage user accounts, roles, and access permissions.
+  </Card>
+  <Card title="API Tokens" icon="seti:lock">
+    Create and manage tokens for CI/CD and automation.
+  </Card>
+  <Card title="Audit Logs" icon="document">
+    View complete history of all gateway activity.
+  </Card>
+  <Card title="Account Security" icon="setting">
+    Manage your MFA methods and active sessions.
+  </Card>
+  <Card title="Settings" icon="setting">
+    Configure gateway-wide security and session options.
+  </Card>
+</CardGrid>
+
+## Navigation
+
+The web UI has a sidebar navigation with these sections:
+
+| Section | Description | Who Can Access |
+|---------|-------------|----------------|
+| **Dashboard** | Overview and status | All users |
+| **Users** | User management | Admins only |
+| **API Tokens** | Token management | All users (own tokens), Admins (all) |
+| **Audit Logs** | Activity history | Admins only |
+| **Account** | Your profile and security | All users |
+| **Settings** | Gateway configuration | Admins only |
+
+## Role-Based Views
+
+What you see depends on your role:
+
+### Viewers, Ops, Deployers
+
+- Dashboard (read-only)
+- Account Security (manage your MFA)
+- API Tokens (create your own tokens)
+
+### Admins
+
+All of the above, plus:
+- User Management
+- Audit Logs
+- Gateway Settings
+- All API Tokens
+
+## Quick Tour
+
+### 1. Dashboard
+
+The dashboard shows:
+- Gateway health status
+- Your current role and permissions
+- Recent activity summary
+- Quick links to common actions
+
+### 2. Account Security
+
+Manage your own security settings:
+- Enroll MFA methods (TOTP, WebAuthn)
+- View and manage trusted devices
+- Generate backup codes
+- View your active sessions
+
+### 3. Users (Admin)
+
+Manage all gateway users:
+- View all users and their roles
+- Create new users
+- Change user roles
+- Lock/unlock accounts
+
+### 4. API Tokens
+
+Create tokens for automation:
+- Generate new tokens
+- Set token roles and permissions
+- View token usage
+- Revoke tokens
+
+### 5. Audit Logs (Admin)
+
+Complete activity history:
+- Search and filter logs
+- View request details
+- Export for compliance
+- Automatic secret redaction
+
+### 6. Settings (Admin)
+
+Configure gateway behavior:
+- Session timeout duration
+- MFA enforcement policies
+- Protected environment variables
+- Security notifications
+
+## Authentication
+
+### Signing In
+
+1. Navigate to the gateway URL
+2. Click "Sign in with Google"
+3. Complete OAuth flow with your Google Workspace account
+4. If MFA is enabled, complete verification
+
+### Session Duration
+
+Web sessions have a configurable inactivity timeout (default: 5 minutes). After timeout:
+- You'll be redirected to sign in again
+- Your work in progress may be lost
+
+<Aside type="tip" title="Stay Signed In">
+The session timeout resets with each action. Keep the tab active to stay signed in.
 </Aside>
 
-## Overview
+### Signing Out
 
-Content coming soon.
+Click your email in the top-right corner and select "Sign Out" to end your session.
+
+## Mobile Support
+
+The web UI is responsive and works on mobile devices, though some admin features are optimized for desktop screens.
+
+## Keyboard Shortcuts
+
+| Shortcut | Action |
+|----------|--------|
+| `/` | Focus search |
+| `?` | Show keyboard shortcuts |
+| `g` then `u` | Go to Users |
+| `g` then `t` | Go to API Tokens |
+| `g` then `a` | Go to Audit Logs |
+
+## Next Steps
+
+- [Dashboard](/user-guide/web-ui/dashboard/) - Explore the dashboard
+- [User Management](/user-guide/web-ui/user-management/) - Manage users (admins)
+- [API Tokens](/user-guide/web-ui/api-tokens/) - Create tokens for CI/CD
+- [Audit Logs](/user-guide/web-ui/audit-logs/) - View activity history

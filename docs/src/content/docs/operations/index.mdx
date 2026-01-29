@@ -1,14 +1,113 @@
 ---
 title: "Operations"
-description: "Operational procedures."
+description: "Day-to-day operations, monitoring, maintenance, and troubleshooting."
 ---
 
-import { Aside } from '@astrojs/starlight/components';
+import { CardGrid, LinkCard, Aside } from '@astrojs/starlight/components';
 
-<Aside type="caution" title="Coming Soon">
-This page is under construction. Check back soon for complete documentation.
+This section covers the operational aspects of running Rack Gateway in production, including monitoring, maintenance, upgrades, and troubleshooting.
+
+## Operational Areas
+
+<CardGrid>
+  <LinkCard
+    title="Monitoring"
+    description="Health checks, metrics, and error tracking with Sentry."
+    href="/operations/monitoring/"
+  />
+  <LinkCard
+    title="Database Maintenance"
+    description="Migrations, backups, and data management."
+    href="/operations/database-maintenance/"
+  />
+  <LinkCard
+    title="Troubleshooting"
+    description="Common issues and how to resolve them."
+    href="/operations/troubleshooting/"
+  />
+  <LinkCard
+    title="Upgrades"
+    description="Upgrading Rack Gateway to new versions."
+    href="/operations/upgrades/"
+  />
+</CardGrid>
+
+## Quick Reference
+
+### Health Endpoints
+
+| Endpoint | Purpose | Expected Response |
+|----------|---------|-------------------|
+| `/api/v1/health` | Liveness check | `{"status": "ok"}` |
+| `/api/v1/health/ready` | Readiness check | `{"status": "ready", "database": "connected"}` |
+
+### Common Commands
+
+```bash
+# Check gateway health
+curl https://gateway.example.com/api/v1/health
+
+# View recent audit logs (admin)
+rack-gateway admin audit list --limit 50
+
+# Check database connectivity
+rack-gateway migrate --dry-run
+```
+
+### Log Locations
+
+| Deployment | Log Location |
+|------------|--------------|
+| Docker | `docker logs rack-gateway` |
+| Convox | `convox logs -a rack-gateway` |
+| Kubernetes | `kubectl logs -l app=rack-gateway` |
+
+## Operational Runbooks
+
+### Daily Checks
+
+1. Verify health endpoints respond correctly
+2. Check error tracking (Sentry) for new issues
+3. Review audit logs for unusual activity
+
+### Weekly Tasks
+
+1. Review user access patterns
+2. Check for unused API tokens
+3. Verify backup integrity
+
+### Monthly Tasks
+
+1. Rotate API tokens as needed
+2. Review RBAC role assignments
+3. Check for available updates
+
+<Aside type="tip">
+Automate these checks where possible. Use monitoring tools to alert on health endpoint failures and error spikes.
 </Aside>
 
-## Overview
+## Emergency Procedures
 
-Content coming soon.
+### Gateway Unreachable
+
+1. Check health endpoints
+2. Verify database connectivity
+3. Check container/pod status
+4. Review recent deployments or changes
+
+### Suspected Security Incident
+
+1. **Do not** modify audit logs
+2. Check audit log for suspicious activity
+3. Review active sessions and API tokens
+4. Contact security team
+5. Preserve evidence for forensics
+
+### Database Issues
+
+1. Check database connectivity from gateway
+2. Verify database is accepting connections
+3. Check for blocking queries or locks
+4. Review recent migrations
+
+See [Troubleshooting](/operations/troubleshooting/) for detailed procedures.

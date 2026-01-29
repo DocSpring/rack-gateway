@@ -1,14 +1,433 @@
 ---
 title: "Local Setup"
-description: "Development environment setup."
+description: "Set up your Rack Gateway development environment."
 ---
 
-import { Aside } from '@astrojs/starlight/components';
+import { Aside, Steps, Tabs, TabItem } from '@astrojs/starlight/components';
 
-<Aside type="caution" title="Coming Soon">
-This page is under construction. Check back soon for complete documentation.
+This guide walks you through setting up a complete development environment for Rack Gateway.
+
+## Prerequisites
+
+Before starting, ensure you have these tools installed:
+
+| Tool | Version | Purpose |
+|------|---------|---------|
+| **Go** | 1.22+ | Backend development |
+| **Docker** | Latest | Container runtime |
+| **Node.js** | 20+ | Web frontend tooling |
+| **Bun** | 1.3+ | Package manager and runtime |
+| **Task** | 3.0+ | Task runner |
+| **mise** | Latest | Environment variable management |
+
+### Installing Prerequisites
+
+<Tabs>
+<TabItem label="macOS">
+
+```bash
+# Install Homebrew if not already installed
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+# Install Go
+brew install go
+
+# Install Docker Desktop
+brew install --cask docker
+
+# Install Node.js
+brew install node
+
+# Install Bun
+curl -fsSL https://bun.sh/install | bash
+
+# Install Task
+brew install go-task
+
+# Install mise
+brew install mise
+```
+
+</TabItem>
+<TabItem label="Linux">
+
+```bash
+# Install Go (Ubuntu/Debian)
+sudo add-apt-repository ppa:longsleep/golang-backports
+sudo apt update
+sudo apt install golang-go
+
+# Install Docker
+curl -fsSL https://get.docker.com | sh
+sudo usermod -aG docker $USER
+
+# Install Node.js via nvm
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash
+nvm install 20
+
+# Install Bun
+curl -fsSL https://bun.sh/install | bash
+
+# Install Task
+sh -c "$(curl --location https://taskfile.dev/install.sh)" -- -d
+
+# Install mise
+curl https://mise.run | sh
+```
+
+</TabItem>
+</Tabs>
+
+## Quick Start
+
+<Steps>
+
+1. **Clone the repository**
+
+   ```bash
+   git clone https://github.com/docspring/rack-gateway.git
+   cd rack-gateway
+   ```
+
+2. **Install dependencies**
+
+   ```bash
+   # Go dependencies
+   go mod download
+
+   # Web dependencies
+   cd web && bun install && cd ..
+
+   # Mock OAuth dependencies
+   cd mock-oauth && bun install && cd ..
+   ```
+
+3. **Configure environment**
+
+   ```bash
+   # Create local configuration
+   cp mise.local.toml.example mise.local.toml
+
+   # Edit with your Google OAuth credentials (optional for mock mode)
+   # See "Google OAuth Setup" section below
+   ```
+
+4. **Start development environment**
+
+   ```bash
+   task dev
+   ```
+
+5. **Verify services are running**
+
+   ```bash
+   # Gateway health
+   curl http://localhost:8447/api/v1/health
+   # Expected: {"status":"ok"}
+
+   # Open Web UI
+   open http://localhost:5223
+   ```
+
+</Steps>
+
+## Configuration
+
+### Environment Variables
+
+Rack Gateway uses `mise` for environment variable management. Configuration is layered:
+
+| File | Purpose | Git Status |
+|------|---------|------------|
+| `mise.toml` | Default configuration | Checked in |
+| `mise.local.toml` | Local overrides | Gitignored |
+
+Create your local configuration:
+
+```bash
+cp mise.local.toml.example mise.local.toml
+```
+
+### Key Configuration Options
+
+```toml
+# mise.local.toml
+[env]
+# Google OAuth (optional - mock OAuth works by default)
+GOOGLE_CLIENT_ID = "your-client-id.apps.googleusercontent.com"
+GOOGLE_CLIENT_SECRET = "your-client-secret"
+GOOGLE_ALLOWED_DOMAIN = "yourdomain.com"
+
+# Debug logging
+LOG_LEVEL = "debug"
+
+# Custom session secret (optional)
+APP_SECRET_KEY = "your-local-session-secret"
+```
+
+<Aside type="tip">
+For most development, you don't need real Google OAuth credentials. The mock OAuth server (`mock-oauth/`) simulates the OAuth flow.
 </Aside>
 
-## Overview
+### Database Configuration
 
-Content coming soon.
+The development environment uses PostgreSQL in Docker. Connection details:
+
+| Setting | Value |
+|---------|-------|
+| Host | `localhost` |
+| Port | `55432` |
+| Database | `gateway_dev` |
+| User | `postgres` |
+| Password | `postgres` |
+
+```bash
+# Connect to development database
+docker exec -it rack-gateway-postgres-1 psql -U postgres -d gateway_dev
+
+# Run migrations manually
+task db:migrate
+```
+
+## Google OAuth Setup (Optional)
+
+For testing with real Google OAuth (instead of mock):
+
+<Steps>
+
+1. **Create Google Cloud Project**
+
+   - Go to [Google Cloud Console](https://console.cloud.google.com/)
+   - Create a new project or select existing
+
+2. **Enable Google+ API**
+
+   - Navigate to "APIs & Services" → "Library"
+   - Search for "Google+ API"
+   - Click "Enable"
+
+3. **Configure OAuth Consent Screen**
+
+   - Go to "APIs & Services" → "OAuth consent screen"
+   - Choose "Internal" for Google Workspace users
+   - Fill required fields:
+     - App name: "Rack Gateway (Dev)"
+     - Support email: your email
+   - Add scopes: `openid`, `email`, `profile`
+
+4. **Create OAuth Credentials**
+
+   - Go to "APIs & Services" → "Credentials"
+   - Click "+ CREATE CREDENTIALS" → "OAuth client ID"
+   - Choose "Web application"
+   - Add redirect URI: `http://localhost:8447/api/v1/auth/cli/callback`
+   - Save credentials
+
+5. **Update Configuration**
+
+   ```toml
+   # mise.local.toml
+   [env]
+   GOOGLE_CLIENT_ID = "your-client-id.apps.googleusercontent.com"
+   GOOGLE_CLIENT_SECRET = "your-client-secret"
+   GOOGLE_ALLOWED_DOMAIN = "yourdomain.com"
+
+   # Disable mock OAuth
+   MOCK_OAUTH_ENABLED = "false"
+   ```
+
+</Steps>
+
+## Development Workflows
+
+### Starting the Full Stack
+
+```bash
+# Start all services (Gateway, Web UI, Mock OAuth, Mock Convox)
+task dev
+
+# View logs
+task dev:logs
+
+# Stop all services
+task dev:down
+```
+
+### Running Components Individually
+
+For debugging specific components:
+
+```bash
+# Build all binaries
+task build
+
+# Run gateway server directly
+./bin/rack-gateway-api
+
+# Run CLI commands
+./bin/rack-gateway login local http://localhost:8447
+./bin/rack-gateway convox apps
+```
+
+### Testing the Authentication Flow
+
+<Steps>
+
+1. **Start development environment**
+
+   ```bash
+   task dev
+   ```
+
+2. **Login via Web UI**
+
+   - Open `http://localhost:5223`
+   - Click "Login with Google"
+   - Complete OAuth flow (mock OAuth auto-approves)
+
+3. **Login via CLI**
+
+   ```bash
+   # Build CLI
+   task go:build:cli
+
+   # Login to local gateway
+   ./bin/rack-gateway login local http://localhost:8447
+
+   # Browser opens for OAuth, then CLI stores token
+   ```
+
+4. **Test proxied commands**
+
+   ```bash
+   ./bin/rack-gateway convox rack
+   ./bin/rack-gateway convox apps
+   ./bin/rack-gateway convox ps -a myapp
+   ```
+
+</Steps>
+
+### Working with the Web UI
+
+```bash
+# Start just the web dev server (assumes gateway is running)
+cd web && bun run dev
+
+# Run web tests
+task web:test
+
+# Run E2E tests
+task web:e2e
+```
+
+### Database Operations
+
+```bash
+# Run migrations
+task db:migrate
+
+# Reset database (deletes all data)
+task db:reset
+
+# Access psql
+docker exec -it rack-gateway-postgres-1 psql -U postgres -d gateway_dev
+```
+
+## Troubleshooting
+
+### Port Conflicts
+
+If ports are already in use:
+
+```bash
+# Find process using a port
+lsof -i :8447
+
+# Kill process
+kill -9 <PID>
+
+# Or change ports in mise.local.toml
+```
+
+### Docker Issues
+
+```bash
+# Restart Docker containers
+task docker:down
+task docker:up
+
+# Rebuild images
+task docker:reset
+
+# Check container logs
+docker logs rack-gateway-postgres-1
+```
+
+### OAuth Errors
+
+- **"redirect_uri mismatch"**: Ensure the redirect URI in Google Cloud Console exactly matches `http://localhost:8447/api/v1/auth/cli/callback`
+- **"Invalid client"**: Verify `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` in `mise.local.toml`
+
+### CLI Configuration Issues
+
+The CLI stores configuration in different locations:
+
+| Environment | Location |
+|-------------|----------|
+| Development | `./config/cli/` |
+| Production | `~/.config/rack-gateway/` |
+
+In development, set:
+```bash
+export GATEWAY_CLI_CONFIG_DIR=./config/cli
+```
+
+### Database Connection Issues
+
+```bash
+# Verify PostgreSQL is running
+docker ps | grep postgres
+
+# Test connection
+docker exec -it rack-gateway-postgres-1 psql -U postgres -c "SELECT 1"
+
+# Check database exists
+docker exec -it rack-gateway-postgres-1 psql -U postgres -c "\l"
+```
+
+## IDE Setup
+
+### VS Code
+
+Recommended extensions:
+
+- **Go** - Go language support
+- **ESLint** - JavaScript/TypeScript linting
+- **Prettier** - Code formatting
+- **Docker** - Docker support
+
+Settings (`.vscode/settings.json`):
+
+```json
+{
+  "go.lintTool": "golangci-lint",
+  "go.lintFlags": ["--fast"],
+  "editor.formatOnSave": true,
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "[go]": {
+    "editor.defaultFormatter": "golang.go"
+  }
+}
+```
+
+### GoLand / IntelliJ
+
+- Enable "Go Modules" integration
+- Configure golangci-lint as external tool
+- Set up Biome for TypeScript
+
+## Next Steps
+
+- [Run the test suite](/development/testing/)
+- [Review contribution guidelines](/development/contributing/)
+- [Explore the API](/development/api-reference/)

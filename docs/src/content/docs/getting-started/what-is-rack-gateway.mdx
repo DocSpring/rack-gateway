@@ -41,18 +41,21 @@ Rack Gateway sits between your users and the Convox rack, providing:
 
 Rack Gateway is a transparent proxy that speaks the Convox API protocol:
 
-```
-┌─────────────┐      ┌──────────────┐      ┌─────────────┐
-│  Developer  │─────▶│ Rack Gateway │─────▶│ Convox Rack │
-│  (convox)   │      │              │      │   (API)     │
-└─────────────┘      └──────────────┘      └─────────────┘
-                           │
-                     ┌─────┴─────┐
-                     │           │
-               ┌─────▼───┐ ┌─────▼─────┐
-               │  RBAC   │ │   Audit   │
-               │ Check   │ │    Log    │
-               └─────────┘ └───────────┘
+```mermaid
+flowchart LR
+    Dev["Developer (convox)"]
+    Gateway[Rack Gateway]
+    Convox["Convox Rack (API)"]
+
+    Dev --> Gateway --> Convox
+
+    subgraph Features["Gateway Features"]
+        RBAC["RBAC Check"]
+        Audit["Audit Log"]
+    end
+
+    Gateway --- RBAC
+    Gateway --- Audit
 ```
 
 1. **User runs a command**: `convox apps` or `rack-gateway convox apps`

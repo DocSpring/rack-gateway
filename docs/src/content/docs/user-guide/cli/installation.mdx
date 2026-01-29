@@ -1,14 +1,234 @@
 ---
 title: "CLI Installation"
-description: "How to install the rack-gateway CLI."
+description: "How to install the rack-gateway CLI on macOS, Linux, and Windows."
 ---
 
-import { Aside } from '@astrojs/starlight/components';
+import { Aside, Tabs, TabItem, Steps } from '@astrojs/starlight/components';
 
-<Aside type="caution" title="Coming Soon">
-This page is under construction. Check back soon for complete documentation.
+The `rack-gateway` CLI is distributed as a single binary. Choose the installation method that works best for your platform.
+
+## Download from GitHub Releases
+
+<Tabs>
+  <TabItem label="macOS">
+    ```bash
+    # For Apple Silicon (M1/M2/M3)
+    curl -L https://github.com/docspring/rack-gateway/releases/latest/download/rack-gateway-darwin-arm64 -o rack-gateway
+    chmod +x rack-gateway
+    sudo mv rack-gateway /usr/local/bin/
+
+    # For Intel Macs
+    curl -L https://github.com/docspring/rack-gateway/releases/latest/download/rack-gateway-darwin-amd64 -o rack-gateway
+    chmod +x rack-gateway
+    sudo mv rack-gateway /usr/local/bin/
+    ```
+  </TabItem>
+  <TabItem label="Linux">
+    ```bash
+    # For x86_64
+    curl -L https://github.com/docspring/rack-gateway/releases/latest/download/rack-gateway-linux-amd64 -o rack-gateway
+    chmod +x rack-gateway
+    sudo mv rack-gateway /usr/local/bin/
+
+    # For ARM64
+    curl -L https://github.com/docspring/rack-gateway/releases/latest/download/rack-gateway-linux-arm64 -o rack-gateway
+    chmod +x rack-gateway
+    sudo mv rack-gateway /usr/local/bin/
+    ```
+  </TabItem>
+  <TabItem label="Windows">
+    ```powershell
+    # Download the Windows binary
+    Invoke-WebRequest -Uri "https://github.com/docspring/rack-gateway/releases/latest/download/rack-gateway-windows-amd64.exe" -OutFile "rack-gateway.exe"
+
+    # Move to a directory in your PATH, or add the current directory to PATH
+    Move-Item rack-gateway.exe C:\Users\YourName\bin\
+    ```
+  </TabItem>
+</Tabs>
+
+## Verify Installation
+
+```bash
+rack-gateway version
+```
+
+You should see output like:
+
+```
+CLI version:     v0.1.0
+Gateway version: (not connected)
+Rack version:    (not connected)
+```
+
+## Shell Completion
+
+The CLI supports shell completion for bash, zsh, fish, and PowerShell.
+
+<Tabs>
+  <TabItem label="Bash">
+    ```bash
+    # Add to ~/.bashrc
+    source <(rack-gateway completion bash)
+
+    # Or generate a file
+    rack-gateway completion bash > /etc/bash_completion.d/rack-gateway
+    ```
+  </TabItem>
+  <TabItem label="Zsh">
+    ```bash
+    # Add to ~/.zshrc
+    source <(rack-gateway completion zsh)
+
+    # Or add to your fpath
+    rack-gateway completion zsh > "${fpath[1]}/_rack-gateway"
+    ```
+  </TabItem>
+  <TabItem label="Fish">
+    ```bash
+    rack-gateway completion fish | source
+
+    # Or save to completions directory
+    rack-gateway completion fish > ~/.config/fish/completions/rack-gateway.fish
+    ```
+  </TabItem>
+  <TabItem label="PowerShell">
+    ```powershell
+    # Add to your PowerShell profile
+    rack-gateway completion powershell | Out-String | Invoke-Expression
+    ```
+  </TabItem>
+</Tabs>
+
+## Recommended Alias
+
+Set up a short alias for convenience:
+
+```bash
+# Add to ~/.bashrc, ~/.zshrc, or equivalent
+alias cg="rack-gateway"
+```
+
+Now you can use:
+```bash
+cg apps
+cg deploy
+cg logs -a myapp
+```
+
+## WebAuthn Support (Optional)
+
+For hardware security key (WebAuthn/FIDO2) support in the CLI, you may need additional system libraries on Linux:
+
+<Tabs>
+  <TabItem label="macOS">
+    No additional dependencies required. macOS includes libfido2 support.
+  </TabItem>
+  <TabItem label="Ubuntu/Debian">
+    ```bash
+    sudo apt-get install libfido2-dev libudev-dev libusb-1.0-0-dev
+    ```
+  </TabItem>
+  <TabItem label="Fedora/RHEL">
+    ```bash
+    sudo dnf install libfido2-devel systemd-devel libusb1-devel
+    ```
+  </TabItem>
+  <TabItem label="Arch Linux">
+    ```bash
+    sudo pacman -S libfido2 libusb
+    ```
+  </TabItem>
+</Tabs>
+
+<Aside type="note" title="WebAuthn is Optional">
+WebAuthn support is optional. If your organization uses TOTP (authenticator apps) for MFA, you don't need these libraries. The CLI will fall back to TOTP automatically if WebAuthn is unavailable.
 </Aside>
 
-## Overview
+## Building from Source
 
-Content coming soon.
+If you prefer to build from source:
+
+<Steps>
+
+1. **Prerequisites**
+   - Go 1.22 or later
+   - Git
+
+2. **Clone and build**
+   ```bash
+   git clone https://github.com/docspring/rack-gateway.git
+   cd rack-gateway
+   go build -o rack-gateway ./cmd/rack-gateway
+   ```
+
+3. **Install**
+   ```bash
+   sudo mv rack-gateway /usr/local/bin/
+   ```
+
+</Steps>
+
+### Building with WebAuthn Support
+
+To build with WebAuthn/FIDO2 support, you need the system libraries installed (see above) and CGO enabled:
+
+```bash
+CGO_ENABLED=1 go build -o rack-gateway ./cmd/rack-gateway
+```
+
+### Building without WebAuthn
+
+To build without WebAuthn support (smaller binary, no CGO):
+
+```bash
+CGO_ENABLED=0 go build -tags nofido -o rack-gateway ./cmd/rack-gateway
+```
+
+## Updating
+
+To update to the latest version, simply re-run the download command for your platform, or rebuild from source with:
+
+```bash
+cd rack-gateway
+git pull
+go build -o rack-gateway ./cmd/rack-gateway
+sudo mv rack-gateway /usr/local/bin/
+```
+
+## Troubleshooting
+
+### "command not found"
+
+Make sure the binary is in your PATH:
+
+```bash
+which rack-gateway
+# Should output: /usr/local/bin/rack-gateway
+```
+
+If not, either move the binary to a directory in your PATH, or add its location:
+
+```bash
+export PATH="$PATH:/path/to/rack-gateway"
+```
+
+### Permission denied
+
+Make sure the binary is executable:
+
+```bash
+chmod +x /usr/local/bin/rack-gateway
+```
+
+### macOS security warning
+
+On macOS, you may see a security warning the first time you run the CLI. Either:
+
+1. Right-click the binary in Finder and select "Open", then click "Open" in the dialog
+2. Or run: `xattr -d com.apple.quarantine /usr/local/bin/rack-gateway`
+
+## Next Steps
+
+- [Authentication](/user-guide/cli/authentication/) - Login to your first gateway
+- [Multi-Rack](/user-guide/cli/multi-rack/) - Configure multiple racks

@@ -3,12 +3,90 @@ title: "User Guide"
 description: "Learn how to use Rack Gateway's CLI and web interface."
 ---
 
-import { Aside } from '@astrojs/starlight/components';
+import { Card, CardGrid } from '@astrojs/starlight/components';
 
-<Aside type="caution" title="Coming Soon">
-This page is under construction. Check back soon for complete documentation.
-</Aside>
+This guide covers day-to-day usage of Rack Gateway from both the command line and web interface.
 
-## Overview
+## Getting Started
 
-Content coming soon.
+If you're new to Rack Gateway, start with these guides:
+
+1. [Install the CLI](/user-guide/cli/installation/) - Download and set up the command-line tool
+2. [Login to your gateway](/user-guide/cli/authentication/) - Authenticate with OAuth
+3. [Explore the Web UI](/user-guide/web-ui/) - Discover the admin interface
+
+## User Guide Sections
+
+<CardGrid>
+  <Card title="CLI Guide" icon="terminal">
+    The `rack-gateway` CLI is your primary interface for running Convox commands through the gateway.
+
+    - [Overview](/user-guide/cli/) - Introduction to the CLI
+    - [Installation](/user-guide/cli/installation/) - Install on macOS, Linux, or Windows
+    - [Authentication](/user-guide/cli/authentication/) - Login and session management
+    - [Multi-Rack](/user-guide/cli/multi-rack/) - Work with multiple environments
+    - [Commands](/user-guide/cli/commands/) - Complete command reference
+    - [MFA Verification](/user-guide/cli/mfa-verification/) - Step-up authentication
+  </Card>
+  <Card title="Web UI Guide" icon="laptop">
+    The web interface provides admin functionality and self-service features.
+
+    - [Overview](/user-guide/web-ui/) - Introduction to the web UI
+    - [Dashboard](/user-guide/web-ui/dashboard/) - Main dashboard features
+    - [User Management](/user-guide/web-ui/user-management/) - Manage users and roles
+    - [API Tokens](/user-guide/web-ui/api-tokens/) - Create tokens for CI/CD
+    - [Audit Logs](/user-guide/web-ui/audit-logs/) - View activity history
+    - [Settings](/user-guide/web-ui/settings/) - Configure gateway options
+  </Card>
+  <Card title="MFA Guide" icon="seti:lock">
+    Multi-factor authentication adds an extra layer of security to your account.
+
+    - [Overview](/user-guide/mfa/) - MFA concepts and options
+    - [TOTP Setup](/user-guide/mfa/totp-setup/) - Authenticator apps
+    - [WebAuthn](/user-guide/mfa/webauthn/) - Security keys
+    - [YubiKey](/user-guide/mfa/yubikey/) - YubiKey OTP
+    - [Trusted Devices](/user-guide/mfa/trusted-devices/) - Remember devices
+    - [Backup Codes](/user-guide/mfa/backup-codes/) - Recovery options
+  </Card>
+</CardGrid>
+
+## Common Tasks
+
+### For Developers
+
+| Task | How To |
+|------|--------|
+| Deploy an app | `rack-gateway deploy -a myapp` |
+| View logs | `rack-gateway logs -a myapp -f` |
+| Run a command | `rack-gateway run web "rake task" -a myapp` |
+| Check status | `rack-gateway ps -a myapp` |
+| Switch environments | `rack-gateway switch staging` |
+
+### For Administrators
+
+| Task | Where |
+|------|-------|
+| Add a user | Web UI → Users → Create User |
+| Change roles | Web UI → Users → Edit User |
+| View audit logs | Web UI → Audit Logs |
+| Create API token | Web UI → API Tokens → Create |
+| Configure MFA | Web UI → Settings → Security |
+
+## Role-Based Access
+
+Your role determines what you can do:
+
+| Role | Capabilities |
+|------|--------------|
+| **Viewer** | Read-only: list apps, view logs, see builds |
+| **Ops** | Viewer + restart apps, manage processes |
+| **Deployer** | Ops + create builds, promote releases |
+| **Admin** | Full access including user management |
+
+See [RBAC Overview](/security/rbac/) for detailed permissions.
+
+## Next Steps
+
+- **New user?** Start with [CLI Installation](/user-guide/cli/installation/)
+- **Admin?** Check out [User Management](/user-guide/web-ui/user-management/)
+- **Setting up MFA?** See [MFA Overview](/user-guide/mfa/)

@@ -1,14 +1,393 @@
 ---
 title: "Troubleshooting"
-description: "Common issues and solutions."
+description: "Common issues and how to resolve them."
 ---
 
-import { Aside } from '@astrojs/starlight/components';
+import { Aside, Steps } from '@astrojs/starlight/components';
 
-<Aside type="caution" title="Coming Soon">
-This page is under construction. Check back soon for complete documentation.
-</Aside>
+This guide covers common issues with Rack Gateway and how to diagnose and resolve them.
 
-## Overview
+## Quick Diagnostics
 
-Content coming soon.
+Run these checks first when troubleshooting:
+
+```bash
+# Check gateway health
+curl https://gateway.example.com/api/v1/health
+
+# Check readiness (includes database)
+curl https://gateway.example.com/api/v1/health/ready
+
+# View recent logs
+convox logs -a rack-gateway --since 10m
+```
+
+## Authentication Issues
+
+### "Login Failed" After OAuth
+
+**Symptoms**: OAuth flow completes but gateway shows error
+
+**Possible causes**:
+
+1. **Domain not allowed**
+   - Check `GOOGLE_ALLOWED_DOMAIN` matches your email domain
+   - Multiple domains: `GOOGLE_ALLOWED_DOMAIN=example.com,other.com`
+
+2. **Redirect URI mismatch**
+   - Google OAuth console must have exact redirect URI
+   - Format: `https://gateway.example.com/api/v1/auth/google/callback`
+
+3. **Session cookie issues**
+   - Ensure `DOMAIN` matches the actual domain
+   - Check TLS is properly configured
+
+**Resolution**:
+
+```bash
+# Verify environment
+convox env -a rack-gateway | grep -E 'DOMAIN|GOOGLE'
+
+# Check logs for specific error
+convox logs -a rack-gateway | grep -i "auth\|oauth\|login"
+```
+
+### "Session Expired" Immediately
+
+**Symptoms**: User logs in but session expires immediately
+
+**Possible causes**:
+
+1. **Clock skew** between servers
+2. **Session timeout** set too low
+3. **APP_SECRET_KEY** changed between restarts
+
+**Resolution**:
+
+```bash
+# Check session timeout setting
+convox env -a rack-gateway | grep SESSION_TIMEOUT
+
+# Verify server time
+date -u
+
+# Ensure APP_SECRET_KEY is persistent
+# (should be set in environment, not generated at runtime)
+```
+
+### CLI Can't Log In
+
+**Symptoms**: `rack-gateway login` fails or hangs
+
+**Steps to diagnose**:
+
+<Steps>
+
+1. **Check gateway is reachable**
+
+   ```bash
+   curl https://gateway.example.com/api/v1/health
+   ```
+
+2. **Verify callback URL is accessible**
+
+   The CLI starts a local server for OAuth callback. Check:
+   - Firewall allows localhost connections
+   - Port 8789 is available
+
+3. **Check for browser issues**
+
+   The CLI opens a browser for OAuth. Ensure:
+   - Default browser is configured
+   - Browser can reach Google OAuth
+
+4. **Try with verbose output**
+
+   ```bash
+   rack-gateway login production https://gateway.example.com --debug
+   ```
+
+</Steps>
+
+## Authorization Issues
+
+### "Forbidden" for Authorized User
+
+**Symptoms**: User has correct role but gets 403 errors
+
+**Possible causes**:
+
+1. **Role not applied yet** - User role changes may require re-login
+2. **Permission mismatch** - Action requires different permission
+3. **MFA required** - Sensitive action needs step-up MFA
+
+**Resolution**:
+
+```bash
+# Check user's current roles
+rack-gateway admin users list | grep user@example.com
+
+# Verify role permissions
+# Check /security/rbac/permissions/ documentation
+
+# If MFA required, enroll and verify
+rack-gateway mfa verify
+```
+
+### API Token Rejected
+
+**Symptoms**: CI/CD pipeline gets authentication errors
+
+**Possible causes**:
+
+1. **Token deleted or expired**
+2. **Token role insufficient**
+3. **Token not passed correctly**
+
+**Resolution**:
+
+```bash
+# Verify token exists
+rack-gateway admin tokens list
+
+# Check token role
+rack-gateway admin tokens info TOKEN_PREFIX
+
+# Test token manually
+curl -H "Authorization: Bearer $TOKEN" \
+  https://gateway.example.com/api/v1/convox/apps
+```
+
+## MFA Issues
+
+### "Invalid Code" for TOTP
+
+**Symptoms**: TOTP code rejected even though it looks correct
+
+**Possible causes**:
+
+1. **Clock skew** - Authenticator app time is wrong
+2. **Wrong account** - Multiple TOTP entries registered
+3. **Code already used** - TOTP codes are single-use
+
+**Resolution**:
+
+1. Check authenticator app time sync
+2. Verify using correct account entry
+3. Wait for next code (30 seconds)
+4. If persistent, re-enroll MFA
+
+### WebAuthn Registration Fails
+
+**Symptoms**: Security key registration doesn't complete
+
+**Possible causes**:
+
+1. **Browser doesn't support WebAuthn**
+2. **Security key not compatible**
+3. **HTTPS required** - WebAuthn only works over HTTPS
+
+**Resolution**:
+
+```bash
+# Check HTTPS is configured
+curl -I https://gateway.example.com | head -1
+
+# Try different browser (Chrome/Firefox recommended)
+# Ensure security key supports FIDO2/WebAuthn
+```
+
+### Lost MFA Device
+
+**Symptoms**: User can't complete MFA, locked out
+
+**Resolution**:
+
+<Steps>
+
+1. **Try backup codes** if available
+
+2. **Admin reset** if no backup codes
+
+   ```bash
+   # Admin removes user's MFA methods
+   rack-gateway admin users mfa-reset user@example.com
+   ```
+
+3. **User re-enrolls** MFA on next login
+
+</Steps>
+
+## Convox Proxy Issues
+
+### "Bad Gateway" Errors
+
+**Symptoms**: 502 errors when accessing Convox through gateway
+
+**Possible causes**:
+
+1. **Convox rack unreachable**
+2. **RACK_HOST incorrect**
+3. **RACK_TOKEN invalid**
+
+**Resolution**:
+
+```bash
+# Verify Convox connectivity
+curl -k https://$RACK_HOST/system
+
+# Check environment
+convox env -a rack-gateway | grep RACK_
+
+# Test with Convox CLI directly
+CONVOX_RACK=production convox apps
+```
+
+### Slow Convox Responses
+
+**Symptoms**: Requests through gateway are slow
+
+**Possible causes**:
+
+1. **Network latency** between gateway and rack
+2. **Large response payloads**
+3. **Database performance issues**
+
+**Resolution**:
+
+```bash
+# Compare direct vs gateway timing
+time curl -k https://$RACK_HOST/apps
+time curl https://gateway.example.com/api/v1/convox/apps
+
+# Check gateway metrics
+# Look for high latency in audit logs
+```
+
+## Database Issues
+
+### Gateway Won't Start - Database Error
+
+**Symptoms**: Gateway fails to start with database connection error
+
+**Resolution**:
+
+<Steps>
+
+1. **Verify database is running**
+
+   ```bash
+   psql $DATABASE_URL -c "SELECT 1"
+   ```
+
+2. **Check connection string**
+
+   ```bash
+   convox env -a rack-gateway | grep DATABASE
+   ```
+
+3. **Verify network connectivity**
+
+   ```bash
+   nc -zv $PGHOST $PGPORT
+   ```
+
+4. **Check security groups** (AWS)
+
+   - Gateway security group must allow outbound to RDS
+   - RDS security group must allow inbound from Gateway
+
+</Steps>
+
+### Migration Failures
+
+**Symptoms**: `rack-gateway migrate` fails with error
+
+**Possible causes**:
+
+1. **Database connection issue**
+2. **Permission error**
+3. **Constraint violation**
+
+**Resolution**:
+
+```bash
+# Check migration status
+psql $DATABASE_URL -c "SELECT * FROM schema_migrations"
+
+# Run migration with verbose output
+rack-gateway migrate --verbose
+
+# If stuck, check for locks
+psql $DATABASE_URL -c "SELECT * FROM pg_locks WHERE NOT granted"
+```
+
+## Performance Issues
+
+### High Memory Usage
+
+**Symptoms**: Gateway using excessive memory
+
+**Possible causes**:
+
+1. **Large audit log queries**
+2. **Too many concurrent connections**
+3. **Memory leak (report as bug)**
+
+**Resolution**:
+
+```bash
+# Check current resource usage
+convox ps -a rack-gateway
+
+# Scale up if needed
+convox scale gateway --memory 1024
+
+# Monitor over time
+watch -n 5 "convox ps -a rack-gateway"
+```
+
+### High Latency
+
+**Symptoms**: Request latency above normal
+
+**Check in order**:
+
+1. **Database latency** - Run `EXPLAIN ANALYZE` on slow queries
+2. **Network latency** - Check connectivity to Convox rack
+3. **CPU saturation** - Scale up if CPU is high
+4. **Connection pool exhaustion** - Increase pool size
+
+## Common Error Messages
+
+| Error | Meaning | Solution |
+|-------|---------|----------|
+| `session not found` | Session expired or invalid | Re-login |
+| `insufficient permissions` | Role doesn't have required permission | Check RBAC |
+| `mfa required` | Action needs MFA verification | Complete MFA |
+| `token invalid` | API token rejected | Verify or recreate token |
+| `domain not allowed` | Email domain not in allowlist | Check `GOOGLE_ALLOWED_DOMAIN` |
+| `database connection failed` | Can't reach PostgreSQL | Check network/credentials |
+
+## Getting Help
+
+If you can't resolve the issue:
+
+1. **Collect diagnostic information**
+   - Gateway version
+   - Error messages
+   - Relevant logs
+   - Steps to reproduce
+
+2. **Check for known issues**
+   - GitHub Issues: https://github.com/docspring/rack-gateway/issues
+
+3. **Report a bug**
+   - Include all diagnostic information
+   - Redact sensitive data (tokens, passwords)
+
+## Further Reading
+
+- [Monitoring](/operations/monitoring/) - Set up proactive alerting
+- [Database Maintenance](/operations/database-maintenance/) - Database troubleshooting
+- [Production Checklist](/deployment/production-checklist/) - Ensure correct configuration
