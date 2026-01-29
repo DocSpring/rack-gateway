@@ -1,0 +1,191 @@
+---
+title: What is Convox?
+description: An introduction to Convox, the open-source PaaS that Rack Gateway secures.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+If you're already familiar with Convox, you can skip to [What is Rack Gateway?](/getting-started/what-is-rack-gateway/).
+
+## Convox Overview
+
+[Convox](https://convox.com) is an open-source Platform-as-a-Service (PaaS) built on Kubernetes. It provides a simple, Heroku-like experience for deploying and managing applications on your own cloud infrastructure.
+
+### Key Features
+
+- **Multi-cloud support**: Deploy to AWS, Google Cloud, Azure, or DigitalOcean
+- **Kubernetes abstraction**: Get the power of K8s without the complexity
+- **Simple CLI**: Deploy with `convox deploy`, view logs with `convox logs`
+- **Self-hosted**: Run entirely on your own infrastructure
+- **Open source**: Full source code available on [GitHub](https://github.com/convox/convox)
+
+## The Rack Concept
+
+In Convox terminology, a **rack** is a single Kubernetes cluster configured for running applications. Think of it as your deployment environment.
+
+```
+Your AWS Account
+├── Production Rack (EKS cluster in us-east-1)
+│   ├── App: api
+│   ├── App: web
+│   └── App: worker
+│
+└── Staging Rack (EKS cluster in us-west-2)
+    ├── App: api
+    ├── App: web
+    └── App: worker
+```
+
+Each rack is independent and self-contained. You typically have separate racks for:
+
+- **Production**: Your live environment
+- **Staging**: Pre-production testing
+
+You can also run a Convox rack locally on your own machine for development.
+
+## How Convox Works
+
+### The Rack API
+
+Every Convox rack runs an API server that handles:
+
+- Application deployments
+- Container orchestration
+- Log aggregation
+- SSL certificate management
+- Resource provisioning (databases, Redis, etc.)
+
+The Convox CLI communicates with this API to execute commands:
+
+```bash
+# List applications
+convox apps
+
+# Deploy an application
+convox deploy
+
+# View logs
+convox logs -a myapp
+
+# Execute a command in a container
+convox run web "rails console"
+```
+
+## Two Ways to Use Convox
+
+### Option 1: Convox Console (Most Common)
+
+Most teams use [Convox Console](https://docs.convox.com/management/console-rack-management), an official hosted service that provides:
+
+- **Multiple authentication providers** (GitHub, Google, SAML)
+- **Role-based access control** with [custom roles](https://docs.convox.com/management/rbac)
+- **Team management** and audit logging
+- **Multi-rack management** from a single interface
+
+With Console, your racks connect to Convox's hosted control plane, which handles authentication and authorization for you.
+
+### Option 2: Self-Hosted Racks (Without Console)
+
+Some teams choose to run Convox racks entirely on their own infrastructure, without connecting to Convox Console. This is less common but offers maximum control and isolation.
+
+Self-hosted racks authenticate using HTTP Basic Authentication:
+
+```
+https://convox:<rack-token>@api.your-rack.example.com
+```
+
+Even without Console, self-hosted racks support creating individual user credentials via the [rack access commands](https://docs.convox.com/reference/cli/rack):
+
+```bash
+# Generate temporary credentials with limited permissions
+convox rack access --role read --duration-in-hours 8
+
+# Rotate the access key (invalidates all generated credentials)
+convox rack access key rotate
+```
+
+These commands provide basic user separation, but lack:
+- OAuth/SSO integration
+- Fine-grained RBAC
+- Complete audit trails
+- MFA enforcement
+
+## The Problem: Self-Hosted Without Console
+
+<Aside type="note" title="This Applies to Self-Hosted Racks">
+The following challenges apply specifically to self-hosted racks that don't use Convox Console. If you're using Console, you already have RBAC and audit logging.
+</Aside>
+
+When you self-host Convox racks without Console, you face security challenges:
+
+<Aside type="caution" title="Security Issue">
+The rack token is typically stored in Terraform state (either in S3 or in a local state file). Anyone with access to that state file has full, unrestricted access to your entire rack.
+</Aside>
+
+### Challenges with Self-Hosted Rack Tokens
+
+1. **Limited accountability** - `rack access` credentials help, but lack integration with your identity provider
+2. **Basic permissions** - Only `read` and `write` roles, no fine-grained control
+3. **No centralized audit trail** - Actions aren't logged to a searchable, immutable store
+4. **Token rotation is painful** - Every user needs the new token
+5. **Compliance gaps** - SOC 2 requires individual access controls with proper audit trails
+
+## The Solution: Rack Gateway
+
+Rack Gateway solves these challenges for self-hosted racks:
+
+```
+Before:  Developer → Convox Rack (shared token or basic rack access)
+After:   Developer → Rack Gateway → Convox Rack
+                     (OAuth, RBAC, Audit)
+```
+
+Instead of giving developers the rack token directly, Rack Gateway:
+
+1. **Authenticates** users with Google Workspace OAuth (your existing identity provider)
+2. **Authorizes** requests based on user roles (viewer, ops, deployer, admin)
+3. **Audits** every action with user attribution and automatic secret redaction
+4. **Proxies** requests to the rack using the real token (which users never see)
+
+This gives self-hosted rack users the same security controls that Console users enjoy, while keeping everything on your own infrastructure.
+
+Learn more in [What is Rack Gateway?](/getting-started/what-is-rack-gateway/).
+
+## Convox Console vs Rack Gateway
+
+Both Convox Console and Rack Gateway provide security controls for Convox racks. Here's how they compare:
+
+| Feature | Convox Console | Rack Gateway |
+|---------|---------------|--------------|
+| OAuth SSO | Yes (multiple providers) | Yes (Google Workspace) |
+| RBAC | Yes (custom roles) | Yes (4 built-in roles) |
+| Audit logging | Yes | Yes (with S3 WORM anchoring) |
+| MFA | Limited | Yes (TOTP, WebAuthn, YubiKey) |
+| Deploy approvals | Via workflows | Yes (built-in) |
+| Multi-rack | Yes (central management) | Yes (CLI wrapper) |
+| Pricing | Subscription | Free (open source) |
+| Hosting | Convox-hosted control plane | Fully self-hosted |
+| Data residency | Convox infrastructure | Your infrastructure only |
+
+### When to Choose Console
+
+- You want official Convox support
+- You need multiple authentication providers (GitHub, SAML)
+- You prefer managed infrastructure
+- You need custom roles beyond the 4 built-in ones
+
+### When to Choose Rack Gateway
+
+- You need all infrastructure on your own systems (data residency requirements)
+- You're already using Google Workspace for identity
+- You want comprehensive MFA options
+- You need immutable audit logs with cryptographic anchoring for compliance
+- You prefer open source with full control
+
+Rack Gateway is designed as an open-source alternative for teams that need or prefer fully self-hosted infrastructure. If you need official support or more authentication providers, consider [Convox Console](https://docs.convox.com/management/console-rack-management).
+
+## Further Reading
+
+- [Convox Documentation](https://docs.convox.com)
+- [Convox GitHub Repository](https://github.com/convox/convox)
+- [What is Rack Gateway?](/getting-started/what-is-rack-gateway/)

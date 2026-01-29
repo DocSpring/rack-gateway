@@ -1,0 +1,240 @@
+---
+title: Environment Variables
+description: Complete reference of all environment variables for Rack Gateway.
+---
+
+import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
+
+This page provides a complete reference of all environment variables used by Rack Gateway.
+
+## Core Server
+
+### Required for Production
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `APP_SECRET_KEY` | (auto in dev) | Secret for session tokens and CSRF protection. Generate with: `openssl rand -hex 32` |
+| `GOOGLE_CLIENT_ID` | - | OAuth client ID from Google Cloud Console |
+| `GOOGLE_CLIENT_SECRET` | - | OAuth client secret from Google Cloud Console |
+| `GOOGLE_ALLOWED_DOMAIN` | - | Allowed email domain (e.g., `company.com`) |
+
+### Optional Server Settings
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PORT` | `8080` | TCP port the API listens on |
+| `DEV_MODE` | `false` | Enables development-friendly behavior |
+| `GOOGLE_OAUTH_BASE_URL` | `https://accounts.google.com` | OAuth issuer URL (override for mock) |
+| `ADMIN_USERS` | - | Comma-separated emails to bootstrap as admins |
+
+### Monitoring (Sentry)
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `SENTRY_DSN` | - | Enables Sentry error reporting for backend |
+| `SENTRY_ENVIRONMENT` | auto | Environment tag (`development` or `production`) |
+| `SENTRY_RELEASE` | - | Release identifier for Sentry |
+| `SENTRY_JS_DSN` | - | Sentry DSN for browser error reporting |
+| `SENTRY_JS_TRACES_SAMPLE_RATE` | `0` | Browser performance tracing sample rate (0-1) |
+| `ENABLE_SENTRY_TEST_BUTTONS` | `false` | Show Sentry test buttons in admin UI |
+
+## Rack Connectivity
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `RACK_HOST` | - | Convox rack API URL |
+| `RACK_TOKEN` | - | Convox rack API token (Basic Auth password) |
+| `RACK_USERNAME` | `convox` | Basic Auth username for the rack |
+| `RACK_ALIAS` | - | Short identifier for CLI (e.g., `staging`, `us`) |
+| `RACK_DISPLAY_NAME` | `RACK_ALIAS` | Human-readable name for notifications |
+
+<Aside type="tip" title="Rack Display Name">
+Use `RACK_DISPLAY_NAME` for user-facing names in emails and Slack messages. For example, set `RACK_ALIAS=us` and `RACK_DISPLAY_NAME=US Production`.
+</Aside>
+
+## Database
+
+### Connection
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DATABASE_URL` | - | Full PostgreSQL connection string |
+| `PGHOST` | - | PostgreSQL host (alternative to DATABASE_URL) |
+| `PGPORT` | `5432` | PostgreSQL port |
+| `PGUSER` | - | PostgreSQL user |
+| `PGPASSWORD` | - | PostgreSQL password |
+| `PGDATABASE` | - | PostgreSQL database name |
+
+<Aside type="note">
+Use either `DATABASE_URL` or the individual `PG*` variables, not both.
+</Aside>
+
+### Connection Pool
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DB_MAX_OPEN_CONNS` | `25` | Maximum concurrent connections |
+| `DB_MAX_IDLE_CONNS` | `5` | Maximum idle connections in pool |
+| `DB_CONN_MAX_LIFETIME` | `30m` | Maximum connection lifetime |
+| `DB_CONN_MAX_IDLE_TIME` | `10m` | Maximum idle time before closing |
+
+## Sessions and Cookies
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `COOKIE_SECURE` | `true` | Set `Secure` attribute on cookies |
+| `RGW_SETTING_SESSION_TIMEOUT_MINUTES` | `5` | Inactivity timeout for browser sessions |
+
+<Aside type="caution" title="Cookie Security">
+`COOKIE_SECURE` is automatically disabled when `DEV_MODE=true`. Always use `true` in production with HTTPS.
+</Aside>
+
+## MFA Settings
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `RGW_SETTING_REQUIRE_ALL_USERS` | `false` | Require MFA for all users |
+| `RGW_SETTING_STEP_UP_WINDOW_MINUTES` | `10` | Time window for step-up authentication |
+
+## Audit Logging
+
+### HMAC Chain
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `AUDIT_HMAC_SECRET` | (dev only) | HMAC-SHA256 secret for audit log chain. Generate with: `openssl rand -hex 32` |
+
+<Aside type="danger" title="Critical Security Setting">
+**Never change `AUDIT_HMAC_SECRET` in production** - it will break the cryptographic chain of your audit logs. Only rotate during planned maintenance with proper documentation.
+</Aside>
+
+### S3 WORM Storage
+
+For tamper-evident audit log anchoring with S3 Object Lock:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `AUDIT_ANCHOR_BUCKET` | - | S3 bucket name for WORM anchors |
+| `AUDIT_ANCHOR_CHAIN_ID` | - | Chain identifier (typically rack alias) |
+| `AUDIT_ANCHOR_RETENTION_DAYS` | `400` | Object Lock retention period |
+| `AUDIT_ANCHOR_INTERVAL_MINUTES` | `60` | How often to write anchors |
+| `AWS_ENDPOINT_URL_S3` | - | Custom S3 endpoint (for MinIO) |
+| `AWS_ACCESS_KEY_ID` | - | AWS access key |
+| `AWS_SECRET_ACCESS_KEY` | - | AWS secret key |
+| `AWS_REGION` | `us-east-1` | AWS region |
+
+### CloudWatch
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `LOG_RETENTION_DAYS` | - | CloudWatch log retention (recommended: `400` for SOC 2) |
+
+## Email (Postmark)
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `POSTMARK_API_TOKEN` | - | Postmark API token (enables email) |
+| `POSTMARK_FROM` | `no-reply@{domain}` | Sender email address |
+| `POSTMARK_STREAM` | `outbound` | Postmark message stream |
+| `POSTMARK_API_BASE` | `https://api.postmarkapp.com` | Postmark API URL |
+| `DEV_EMAIL_LOG` | `false` | Log emails to stdout instead of sending |
+
+## CLI Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `GATEWAY_RACK` | - | Default rack for CLI commands |
+| `GATEWAY_CLI_CONFIG_DIR` | `~/.config/rack-gateway` | CLI configuration directory |
+
+## Development Ports
+
+These are defined in `mise.toml` for local development:
+
+<Tabs>
+  <TabItem label="Dev Stack">
+    | Variable | Default | Description |
+    |----------|---------|-------------|
+    | `GATEWAY_PORT` | `8447` | Gateway API |
+    | `WEB_PORT` | `5223` | Vite dev server |
+    | `MOCK_OAUTH_PORT` | `3345` | Mock OAuth server |
+    | `MOCK_CONVOX_PORT` | `5443` | Mock Convox API |
+  </TabItem>
+  <TabItem label="Test Stack">
+    | Variable | Default | Description |
+    |----------|---------|-------------|
+    | `TEST_GATEWAY_PORT` | `9447` | Test Gateway API |
+    | `TEST_MOCK_OAUTH_PORT` | `9345` | Test Mock OAuth |
+    | `TEST_MOCK_CONVOX_PORT` | `6443` | Test Mock Convox |
+  </TabItem>
+</Tabs>
+
+## Database Settings
+
+These are stored in the database `settings` table:
+
+| Key | Description |
+|-----|-------------|
+| `session_timeout_minutes` | Browser session inactivity timeout |
+| `require_mfa_all_users` | Require MFA for all users |
+| `step_up_window_minutes` | MFA step-up authentication window |
+| `protected_env_vars` | JSON array of protected variable names |
+| `allow_destructive_actions` | Allow destructive API operations |
+
+<Aside type="tip" title="Protected Env Vars">
+Seed protected variables on first boot with `DB_SEED_PROTECTED_ENV_VARS` (comma-separated). Example: `DATABASE_URL,RACK_TOKEN,APP_SECRET_KEY`
+</Aside>
+
+## Development/Testing
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `TEST_DATABASE_URL` | - | Override database URL for tests |
+| `WEB_E2E_SHARDS` | `7` (local), `1` (CI) | Playwright test parallelism |
+| `FORCE_CSP_IN_DEV` | `false` | Enable production CSP in dev mode |
+
+## Example Configurations
+
+<Tabs>
+  <TabItem label="Development">
+    ```toml
+    # mise.local.toml - Development with mock services
+    [env]
+    DEV_MODE = "true"
+    DATABASE_URL = "postgres://postgres:postgres@localhost:55432/gateway_dev"
+    ```
+  </TabItem>
+  <TabItem label="Staging">
+    ```toml
+    # mise.local.toml - Staging environment
+    [env]
+    GOOGLE_CLIENT_ID = "your-staging-client-id"
+    GOOGLE_CLIENT_SECRET = "your-staging-secret"
+    GOOGLE_ALLOWED_DOMAIN = "company.com"
+    DATABASE_URL = "postgres://user:pass@staging-db:5432/rack_gateway"
+    APP_SECRET_KEY = "your-staging-secret-key"
+    RACK_HOST = "https://api.staging.convox.cloud"
+    RACK_TOKEN = "staging-rack-token"
+    RACK_ALIAS = "staging"
+    ```
+  </TabItem>
+  <TabItem label="Production">
+    ```toml
+    # mise.local.toml - Production environment
+    [env]
+    GOOGLE_CLIENT_ID = "your-prod-client-id"
+    GOOGLE_CLIENT_SECRET = "your-prod-secret"
+    GOOGLE_ALLOWED_DOMAIN = "company.com"
+    DATABASE_URL = "postgres://user:pass@prod-db:5432/rack_gateway?sslmode=require"
+    APP_SECRET_KEY = "your-prod-secret-key-32-bytes"
+    AUDIT_HMAC_SECRET = "your-audit-hmac-secret-32-bytes"
+    COOKIE_SECURE = "true"
+    RACK_HOST = "https://api.prod.convox.cloud"
+    RACK_TOKEN = "production-rack-token"
+    RACK_ALIAS = "production"
+    RACK_DISPLAY_NAME = "Production"
+    POSTMARK_API_TOKEN = "your-postmark-token"
+    POSTMARK_FROM = "no-reply@company.com"
+    LOG_RETENTION_DAYS = "400"
+    ```
+  </TabItem>
+</Tabs>

@@ -1,0 +1,255 @@
+---
+title: System Requirements
+description: Prerequisites and dependencies for running Rack Gateway.
+---
+
+import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
+
+This page covers the requirements for both local development and production deployment.
+
+## Development Requirements
+
+### Required Software
+
+| Software | Minimum Version | Purpose |
+|----------|-----------------|---------|
+| Go | 1.22+ | Gateway server and CLI |
+| Docker | 20.10+ | PostgreSQL and build containers |
+| Docker Compose | 2.0+ | Container orchestration |
+| Bun | 1.3+ | Web frontend build tool |
+| mise | Latest | Environment variable management |
+
+### Optional Software
+
+| Software | Purpose |
+|----------|---------|
+| libfido2 | WebAuthn/FIDO2 support in CLI |
+| Task | Task runner (recommended) |
+
+## Installation
+
+<Tabs>
+  <TabItem label="macOS">
+    ```bash
+    # Install Homebrew if not present
+    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+    # Install required software
+    brew install go
+    brew install --cask docker
+    brew install oven-sh/bun/bun
+    brew install mise
+
+    # Install optional software
+    brew install go-task/tap/go-task
+    brew install libfido2
+    ```
+  </TabItem>
+  <TabItem label="Linux (Ubuntu/Debian)">
+    ```bash
+    # Go
+    wget https://go.dev/dl/go1.22.0.linux-amd64.tar.gz
+    sudo tar -C /usr/local -xzf go1.22.0.linux-amd64.tar.gz
+    echo 'export PATH=$PATH:/usr/local/go/bin' >> ~/.bashrc
+
+    # Docker
+    curl -fsSL https://get.docker.com | sh
+    sudo usermod -aG docker $USER
+
+    # Bun
+    curl -fsSL https://bun.sh/install | bash
+
+    # mise
+    curl https://mise.jdx.dev/install.sh | sh
+
+    # Task runner
+    sh -c "$(curl --location https://taskfile.dev/install.sh)" -- -d -b /usr/local/bin
+
+    # libfido2 (for WebAuthn CLI support)
+    sudo apt-add-repository ppa:yubico/stable
+    sudo apt-get update
+    sudo apt-get install libfido2-dev
+    ```
+  </TabItem>
+  <TabItem label="Automated">
+    If you have the Task runner installed:
+
+    ```bash
+    # Install all development dependencies automatically
+    task dev-setup
+    ```
+
+    Or install Task first:
+
+    ```bash
+    # macOS
+    brew install go-task/tap/go-task && task dev-setup
+
+    # Linux
+    curl -sL https://taskfile.dev/install.sh | sh -s -- -b /usr/local/bin && task dev-setup
+    ```
+  </TabItem>
+</Tabs>
+
+## Production Requirements
+
+### Gateway Server
+
+| Component | Requirement |
+|-----------|-------------|
+| CPU | 1+ vCPU |
+| Memory | 512MB+ RAM |
+| Disk | 100MB for application |
+| OS | Linux (x86_64) |
+
+The gateway is lightweight and can run on small instances. A single instance handles hundreds of requests per second.
+
+### Database
+
+| Component | Requirement |
+|-----------|-------------|
+| PostgreSQL | 14+ |
+| Storage | 1GB+ (grows with audit logs) |
+| Connections | 10+ per gateway instance |
+
+<Aside type="tip" title="Managed PostgreSQL Recommended">
+For production, use a managed PostgreSQL service (RDS, Cloud SQL, etc.) for automatic backups and high availability.
+</Aside>
+
+### Network
+
+| Port | Service | Access |
+|------|---------|--------|
+| 8080 (default) | Gateway API | Internal or VPN |
+| 443 | HTTPS (via load balancer) | Users/CI/CD |
+| 5432 | PostgreSQL | Gateway only |
+
+## Environment Configuration
+
+Rack Gateway uses `mise` for environment variable management. Configuration is stored in:
+
+- `mise.toml` - Project defaults (committed to git)
+- `mise.local.toml` - Local overrides (gitignored)
+
+<Aside type="note" title="No .env Files">
+This project does not use `.env` files. All environment configuration goes through `mise`.
+</Aside>
+
+### Required Environment Variables
+
+For development, the defaults in `mise.toml` work with mock services. For production:
+
+```toml
+# mise.local.toml (production example)
+
+[env]
+# OAuth
+GOOGLE_CLIENT_ID = "your-client-id.apps.googleusercontent.com"
+GOOGLE_CLIENT_SECRET = "your-client-secret"
+GOOGLE_ALLOWED_DOMAIN = "your-company.com"
+
+# Database
+DATABASE_URL = "postgres://user:pass@host:5432/rack_gateway?sslmode=require"
+
+# Security
+APP_SECRET_KEY = "your-32-byte-random-key"
+COOKIE_SECURE = "true"
+
+# Convox Rack
+RACK_HOST = "https://api.rack.convox.cloud"
+RACK_TOKEN = "your-rack-token"
+RACK_ALIAS = "production"
+```
+
+See [Configuration Reference](/configuration/environment-variables/) for all options.
+
+## Convox Rack Requirements
+
+To use Rack Gateway, you need:
+
+1. **Self-hosted Convox rack** - The rack API endpoint
+2. **Rack API token** - Found in Terraform state or Convox Console
+3. **Network access** - Gateway must reach the rack API
+
+### Supported Convox Versions
+
+- Convox v3 (Kubernetes-based) - Fully supported
+- Convox v2 (ECS-based) - Not tested, may work
+
+## Google Workspace Requirements
+
+For OAuth authentication:
+
+1. **Google Cloud Project** with OAuth 2.0 credentials
+2. **Google Workspace domain** for user restriction
+3. **Authorized redirect URI** configured in GCP Console
+
+See [OAuth Setup](/configuration/oauth-setup/) for detailed instructions.
+
+## Hardware Security Keys (Optional)
+
+For WebAuthn/FIDO2 MFA support:
+
+### Supported Devices
+
+- **YubiKey 5 series** (USB-A, USB-C, NFC)
+- **YubiKey Security Key** series
+- **Platform authenticators** (Touch ID, Windows Hello)
+- Any FIDO2-compatible authenticator
+
+### CLI Requirements
+
+The `rack-gateway` CLI requires `libfido2` for WebAuthn support:
+
+<Tabs>
+  <TabItem label="macOS">
+    ```bash
+    brew install libfido2
+    ```
+  </TabItem>
+  <TabItem label="Linux">
+    ```bash
+    # Ubuntu/Debian
+    sudo apt-add-repository ppa:yubico/stable
+    sudo apt-get update
+    sudo apt-get install libfido2-dev
+
+    # Fedora
+    sudo dnf install libfido2-devel
+    ```
+  </TabItem>
+</Tabs>
+
+<Aside type="note">
+Without libfido2, the CLI can still authenticate but won't support WebAuthn MFA. TOTP and YubiKey OTP work without libfido2.
+</Aside>
+
+## Verifying Installation
+
+After installing dependencies:
+
+```bash
+# Check Go version
+go version  # Should show 1.22+
+
+# Check Docker
+docker --version
+docker compose version
+
+# Check Bun
+bun --version  # Should show 1.3+
+
+# Check mise
+mise --version
+
+# Optional: Check libfido2
+pkg-config --modversion libfido2  # macOS/Linux
+```
+
+Then follow the [Quick Start](/getting-started/quick-start/) to verify everything works.
+
+## Next Steps
+
+- [Quick Start](/getting-started/quick-start/) - Get running locally
+- [OAuth Setup](/configuration/oauth-setup/) - Configure Google OAuth for production
+- [Deployment Guide](/deployment/) - Production deployment options

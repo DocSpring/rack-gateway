@@ -1,0 +1,135 @@
+---
+title: Configuration
+description: Configuration options for Rack Gateway, organized by concern.
+---
+
+import { Aside, Card, CardGrid } from '@astrojs/starlight/components';
+
+Rack Gateway is configured primarily through environment variables. This section covers all configuration options grouped by concern.
+
+## Configuration Sources
+
+Rack Gateway uses `mise` for environment variable management:
+
+- **`mise.toml`** - Project defaults (committed to git)
+- **`mise.local.toml`** - Local overrides (gitignored)
+
+<Aside type="note" title="No .env Files">
+This project does not use `.env` files. All environment configuration goes through `mise` for consistency.
+</Aside>
+
+## Quick Reference
+
+<CardGrid>
+  <Card title="Environment Variables" icon="list-format">
+    [Complete reference](/configuration/environment-variables/) of all environment variables.
+  </Card>
+  <Card title="OAuth Setup" icon="star">
+    [Google Workspace OAuth](/configuration/oauth-setup/) configuration guide.
+  </Card>
+  <Card title="Session Management" icon="setting">
+    [Session policies](/configuration/session-management/) and timeout configuration.
+  </Card>
+  <Card title="Security Settings" icon="seti:lock">
+    [MFA and security](/configuration/security-settings/) settings.
+  </Card>
+</CardGrid>
+
+## Essential Configuration
+
+For production deployment, you must configure:
+
+### 1. OAuth Authentication
+
+```toml
+# mise.local.toml
+[env]
+GOOGLE_CLIENT_ID = "your-client-id.apps.googleusercontent.com"
+GOOGLE_CLIENT_SECRET = "your-client-secret"
+GOOGLE_ALLOWED_DOMAIN = "your-company.com"
+```
+
+See [OAuth Setup](/configuration/oauth-setup/) for detailed instructions.
+
+### 2. Database
+
+```toml
+[env]
+DATABASE_URL = "postgres://user:pass@host:5432/rack_gateway?sslmode=require"
+```
+
+Or using individual variables:
+
+```toml
+[env]
+PGHOST = "your-db-host"
+PGPORT = "5432"
+PGUSER = "rack_gateway"
+PGPASSWORD = "your-password"
+PGDATABASE = "rack_gateway"
+```
+
+### 3. Security Keys
+
+```toml
+[env]
+APP_SECRET_KEY = "your-32-byte-random-key"  # Generate with: openssl rand -hex 32
+```
+
+### 4. Convox Rack Connection
+
+```toml
+[env]
+RACK_HOST = "https://api.rack.convox.cloud"
+RACK_TOKEN = "your-rack-api-token"
+RACK_ALIAS = "production"
+```
+
+## Configuration Categories
+
+| Category | Purpose |
+|----------|---------|
+| [Environment Variables](/configuration/environment-variables/) | Complete reference of all options |
+| [OAuth Setup](/configuration/oauth-setup/) | Google Workspace authentication |
+| [Session Management](/configuration/session-management/) | Session timeout and policies |
+| [Security Settings](/configuration/security-settings/) | MFA enforcement, timeouts |
+| [Email Notifications](/configuration/email-notifications/) | Postmark email configuration |
+
+## Development vs Production
+
+### Development Defaults
+
+In development mode (`DEV_MODE=true`), Rack Gateway:
+
+- Uses non-secure cookies (no HTTPS required)
+- Auto-generates `APP_SECRET_KEY` if missing
+- Logs emails to stdout instead of sending
+- Connects to mock services on localhost
+
+### Production Requirements
+
+For production, you must explicitly set:
+
+- `APP_SECRET_KEY` (secure random value)
+- `COOKIE_SECURE=true` (or use HTTPS)
+- OAuth credentials (real Google Workspace)
+- Database URL (real PostgreSQL)
+- Rack credentials (real Convox rack)
+
+## Database-Backed Settings
+
+Some settings can be configured via the web admin UI and stored in the database:
+
+| Setting | Environment Variable | Database Setting |
+|---------|---------------------|------------------|
+| Session timeout | `RGW_SETTING_SESSION_TIMEOUT_MINUTES` | `session_timeout_minutes` |
+| Require MFA | `RGW_SETTING_REQUIRE_ALL_USERS` | `require_mfa_all_users` |
+| Step-up window | `RGW_SETTING_STEP_UP_WINDOW_MINUTES` | `step_up_window_minutes` |
+
+**Precedence**: Database values take priority over environment variables when set.
+
+## Next Steps
+
+- Start with [Environment Variables](/configuration/environment-variables/) for the complete reference
+- See [OAuth Setup](/configuration/oauth-setup/) to configure authentication
+- Review [Production Checklist](/deployment/production-checklist/) before going live

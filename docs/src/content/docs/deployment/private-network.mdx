@@ -1,0 +1,319 @@
+---
+title: Private Network Deployment
+description: Deploy Convox and Rack Gateway on a fully private network using Tailscale or VPN.
+---
+
+import { Aside, Steps, Tabs, TabItem } from '@astrojs/starlight/components';
+
+This guide covers deploying your Convox rack and Rack Gateway on a completely private network, with no public internet exposure.
+
+## Why Go Fully Private?
+
+By default, the Convox API is exposed publicly via nginx ingress with authentication via the rack password. While protected by authentication, this presents security concerns:
+
+- **Discoverable endpoint** - The API is subject to brute force attempts
+- **Token compromise risk** - Any rack token compromise grants API access from anywhere
+- **No network-level access control** - Cannot enforce IP restrictions for sensitive operations
+- **Compliance requirements** - Some organizations require all internal tools to be on private networks
+
+With a fully private deployment:
+- The Convox API is only accessible through your VPN/private network
+- Even if the rack token is compromised, attackers can't reach the API
+- You gain defense-in-depth: network security + authentication + RBAC
+
+## Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                         Your Private Network                         │
+│                           (Tailscale/VPN)                           │
+│                                                                      │
+│  ┌──────────────┐     ┌──────────────┐     ┌──────────────────────┐│
+│  │  Developer   │────▶│ Rack Gateway │────▶│    Convox Rack       ││
+│  │  Machine     │     │              │     │    (private API)     ││
+│  └──────────────┘     └──────────────┘     └──────────────────────┘│
+│         │                                                           │
+│         │ Tailscale                                                 │
+│         ▼                                                           │
+│  ┌──────────────┐                                                   │
+│  │   Web UI     │                                                   │
+│  │  (browser)   │                                                   │
+│  └──────────────┘                                                   │
+└─────────────────────────────────────────────────────────────────────┘
+                              │
+                              │ No public
+                              │ internet access
+                              ▼
+                    ┌──────────────────┐
+                    │   Public         │
+                    │   Internet       │
+                    │   (blocked)      │
+                    └──────────────────┘
+```
+
+## The `private_api` Feature
+
+There's an [open PR (#935)](https://github.com/convox/convox/pull/935) to add a `private_api` parameter to Convox that disables public access to the API entirely.
+
+<Aside type="note" title="Upstream Status">
+This PR is unlikely to be merged upstream since it would prevent Convox's hosted Console from connecting to racks. If you're using Rack Gateway instead of Console, this isn't a concern.
+</Aside>
+
+### Using DocSpring's Fork
+
+DocSpring maintains a [public fork of Convox](https://github.com/DocSpring/convox/tree/docspring) that includes the `private_api` feature along with other improvements:
+
+- **`private_api`** - Disable public nginx ingress for the Convox API
+- **CloudFlare DNS-01 resolver** - Alternative certificate validation method
+- Various bug fixes and enhancements
+
+## Deployment with Tailscale
+
+<Steps>
+
+1. **Set up Tailscale Operator in your cluster**
+
+   Follow the [Tailscale Kubernetes operator guide](https://tailscale.com/kb/1236/kubernetes-operator) to install the operator in your EKS cluster.
+
+2. **Configure your Convox rack with `private_api`**
+
+   Use DocSpring's fork in your Terraform configuration:
+
+   ```hcl
+   module "system" {
+     source  = "github.com/DocSpring/convox//terraform/system/aws?ref=docspring"
+     image   = "docspringcom/convox"
+     release = "docspring-004"
+
+     name   = "production"
+     region = "us-east-1"
+
+     # Private EKS API access (existing Convox feature)
+     private_eks_host      = "https://eks-production.your-tailnet.ts.net"
+     disable_public_access = true
+
+     # Private Convox API access (DocSpring fork feature)
+     private_api = true
+
+     # ... other configuration ...
+   }
+   ```
+
+3. **Create Tailscale ingress for the Convox API**
+
+   ```hcl
+   resource "kubernetes_ingress_v1" "convox_api_tailscale" {
+     metadata {
+       name      = "convox-api"
+       namespace = "rack-system"  # or your rack namespace
+       annotations = {
+         "tailscale.com/expose"   = "true"
+         "tailscale.com/hostname" = "convox-api-production"
+         "tailscale.com/tags"     = "tag:convox-api"
+       }
+     }
+
+     spec {
+       ingress_class_name = "tailscale"
+       rule {
+         host = "convox-api-production.your-tailnet.ts.net"
+         http {
+           path {
+             path      = "/"
+             path_type = "Prefix"
+             backend {
+               service {
+                 name = "api"
+                 port { name = "https" }
+               }
+             }
+           }
+         }
+       }
+       tls {
+         hosts = ["convox-api-production.your-tailnet.ts.net"]
+       }
+     }
+   }
+   ```
+
+4. **Deploy Rack Gateway with Tailscale access**
+
+   Configure Rack Gateway to connect to the private Convox API:
+
+   ```bash
+   # In your Rack Gateway environment
+   RACK_HOST=https://convox-api-production.your-tailnet.ts.net
+   RACK_TOKEN=your-rack-token
+   ```
+
+   And expose Rack Gateway itself via Tailscale:
+
+   ```hcl
+   resource "kubernetes_ingress_v1" "rack_gateway_tailscale" {
+     metadata {
+       name      = "rack-gateway"
+       namespace = "rack-gateway"
+       annotations = {
+         "tailscale.com/expose"   = "true"
+         "tailscale.com/hostname" = "gateway-production"
+         "tailscale.com/tags"     = "tag:rack-gateway"
+       }
+     }
+
+     spec {
+       ingress_class_name = "tailscale"
+       rule {
+         host = "gateway-production.your-tailnet.ts.net"
+         http {
+           path {
+             path      = "/"
+             path_type = "Prefix"
+             backend {
+               service {
+                 name = "rack-gateway"
+                 port { number = 8447 }
+               }
+             }
+           }
+         }
+       }
+       tls {
+         hosts = ["gateway-production.your-tailnet.ts.net"]
+       }
+     }
+   }
+   ```
+
+5. **Configure Tailscale ACLs**
+
+   In your Tailscale admin console, set up ACLs to control who can access what:
+
+   ```json
+   {
+     "acls": [
+       {
+         "action": "accept",
+         "src": ["group:developers"],
+         "dst": ["tag:rack-gateway:443"]
+       },
+       {
+         "action": "accept",
+         "src": ["tag:rack-gateway"],
+         "dst": ["tag:convox-api:443"]
+       }
+     ],
+     "tagOwners": {
+       "tag:convox-api": ["group:infrastructure"],
+       "tag:rack-gateway": ["group:infrastructure"]
+     }
+   }
+   ```
+
+</Steps>
+
+## Verifying the Setup
+
+### Check that public access is disabled
+
+```bash
+# Should timeout or return DNS error
+curl https://api.your-rack-domain.convox.cloud
+# Connection refused or timeout expected
+```
+
+### Verify private access works
+
+```bash
+# Connect to Tailscale first
+tailscale up
+
+# Test Convox API via Tailscale
+curl https://convox-api-production.your-tailnet.ts.net/system
+
+# Test Rack Gateway via Tailscale
+curl https://gateway-production.your-tailnet.ts.net/api/v1/health
+```
+
+### Configure the rack-gateway CLI
+
+```bash
+# Login using the Tailscale hostname
+rack-gateway login production https://gateway-production.your-tailnet.ts.net
+
+# Verify commands work
+rack-gateway convox apps
+```
+
+## Alternative Private Network Options
+
+While we recommend Tailscale for its simplicity, you can achieve private network access with other methods:
+
+<Tabs>
+  <TabItem label="Tailscale">
+    **Pros:**
+    - Zero-config mesh VPN
+    - Works across cloud providers
+    - Built-in ACLs and audit logging
+    - Easy to set up Kubernetes operator
+
+    **Cons:**
+    - Requires Tailscale subscription for teams
+    - External dependency
+  </TabItem>
+  <TabItem label="AWS PrivateLink">
+    **Pros:**
+    - Native AWS service
+    - No external dependencies
+    - Low latency within AWS
+
+    **Cons:**
+    - AWS-only
+    - More complex setup
+    - Additional cost per endpoint
+  </TabItem>
+  <TabItem label="Site-to-Site VPN">
+    **Pros:**
+    - Works with existing corporate VPN
+    - No per-user setup required
+
+    **Cons:**
+    - Complex network configuration
+    - Requires VPN infrastructure
+    - Can be single point of failure
+  </TabItem>
+  <TabItem label="Bastion Host">
+    **Pros:**
+    - Simple concept
+    - Works with any network
+
+    **Cons:**
+    - Additional hop adds latency
+    - Requires SSH key management
+    - Less convenient for CLI usage
+  </TabItem>
+</Tabs>
+
+## Security Benefits
+
+With a fully private deployment, you achieve defense-in-depth:
+
+| Layer | Protection |
+|-------|-----------|
+| **Network** | API only accessible via private network |
+| **Authentication** | Google Workspace OAuth via Rack Gateway |
+| **Authorization** | RBAC controls what each user can do |
+| **Audit** | Every action logged with user attribution |
+| **MFA** | Additional verification for sensitive operations |
+
+Even if an attacker obtains:
+- **Rack token alone** → Can't reach the API (network blocked)
+- **Tailscale access alone** → Can't authenticate (no OAuth session)
+- **OAuth session alone** → Limited by RBAC permissions
+- **All of the above** → Actions are logged and auditable
+
+## Next Steps
+
+- [Terraform Infrastructure](/deployment/terraform/) - Full Terraform setup guide
+- [S3 WORM Storage](/deployment/terraform/s3-worm-storage/) - Immutable audit log storage
+- [Production Checklist](/deployment/production-checklist/) - Pre-launch security review
