@@ -94,7 +94,7 @@ sequenceDiagram
     participant Browser
     participant Google
 
-    CLI->>Gateway: POST /api/v1/auth/cli/login
+    CLI->>Gateway: POST /api/v1/auth/cli/start
     Gateway->>Gateway: Generate state + PKCE
     Gateway-->>CLI: auth_url, state, code_verifier
 
@@ -102,12 +102,12 @@ sequenceDiagram
     Browser->>Google: Authorization request + code_challenge
     Note over Browser,Google: User authenticates
     Google-->>Browser: Redirect to callback
-    Browser->>Gateway: GET /callback?code=...&state=...
-    Gateway-->>Browser: Display success page
+    Browser->>Gateway: GET /api/v1/auth/cli/callback?code=...&state=...
+    Gateway-->>Browser: Redirect to MFA/success page
 
-    CLI->>Gateway: POST /api/v1/auth/cli/callback
-    Note right of CLI: Includes code_verifier
-    Gateway->>Gateway: Validate state
+    CLI->>Gateway: POST /api/v1/auth/cli/complete
+    Note right of CLI: Includes state + code_verifier (polled)
+    Gateway->>Gateway: Validate state + MFA
     Gateway->>Google: Exchange code + verifier
     Google-->>Gateway: ID token
     Gateway->>Gateway: Verify + create session

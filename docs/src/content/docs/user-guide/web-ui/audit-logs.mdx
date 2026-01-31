@@ -8,7 +8,7 @@ import { Aside, Steps } from '@astrojs/starlight/components';
 The Audit Logs section provides a complete record of all gateway activity for security monitoring and compliance.
 
 <Aside type="note">
-Audit log viewing is only available to administrators.
+Audit logs are read-only. If you don’t have access in your environment, ask an admin to review logs on your behalf.
 </Aside>
 
 ## Viewing Logs
@@ -28,28 +28,35 @@ Navigate to **Audit Logs** in the sidebar to see the activity log:
 
 Use the filter panel to narrow results:
 
-### By User
-```
-Filter by email: alice@example.com
-```
+### Search
+Filter by user, resource, or action text.
 
-### By Action Type
-- Authentication events
-- User management
-- API token operations
-- Convox proxy requests
-- Settings changes
+### Action Type
+- Authentication
+- Convox API
+- User Management
+- Token Management
 
-### By Date Range
-- Last hour
-- Last 24 hours
-- Last 7 days
+### Status
+- Success
+- Failed
+- Blocked
+
+### Resource Type
+- App
+- Rack
+- Env
+- Secret
+- Process
+- System
+- API Token
+- User
+- Auth
+- Admin
+
+### Date Range
+- Last 15 minutes, 1 hour, 24 hours, 7 days, 30 days
 - Custom range
-
-### By Status
-- Success (2xx)
-- Client errors (4xx)
-- Server errors (5xx)
 
 ## Log Details
 
@@ -58,48 +65,19 @@ Click any log entry to see full details:
 ```json
 {
   "timestamp": "2024-01-15T14:30:00.123Z",
-  "user": "alice@example.com",
-  "action": "convox.deploy",
-  "resource": "apps/myapp",
-  "request": {
-    "method": "POST",
-    "path": "/api/v1/convox/apps/myapp/releases",
-    "ip": "192.168.1.100",
-    "user_agent": "rack-gateway-cli/1.2.0"
-  },
-  "response": {
-    "status": 200,
-    "duration_ms": 1250
-  }
+  "user_email": "alice@example.com",
+  "action_type": "convox",
+  "action": "deploy.create",
+  "resource_type": "app",
+  "resource": "myapp",
+  "status": "success",
+  "http_status": 200,
+  "response_time_ms": 1250,
+  "ip_address": "192.168.1.100",
+  "user_agent": "rack-gateway-cli/1.2.0",
+  "event_count": 1
 }
 ```
-
-## Common Event Types
-
-### Authentication
-
-| Event | Description |
-|-------|-------------|
-| `auth.login.success` | User logged in |
-| `auth.login.failure` | Failed login attempt |
-| `auth.logout` | User logged out |
-
-### User Management
-
-| Event | Description |
-|-------|-------------|
-| `user.created` | New user added |
-| `user.role.changed` | Role was updated |
-| `user.deleted` | User was removed |
-
-### Convox Operations
-
-| Event | Description |
-|-------|-------------|
-| `convox.app.create` | Application created |
-| `convox.build.create` | Build started |
-| `convox.release.promote` | Release deployed |
-| `convox.process.exec` | Command executed |
 
 ## Exporting Logs
 
@@ -109,13 +87,7 @@ Click any log entry to see full details:
 
 2. Click **Export**
 
-3. Select format:
-   - CSV
-   - JSON
-
-4. Choose date range
-
-5. Download file
+3. Download the CSV file
 
 </Steps>
 
@@ -146,23 +118,6 @@ Logs are retained according to your configuration:
 
 If configured, hourly anchors are written to S3 Object Lock storage for immutability.
 
-## Search Tips
-
-### Find Specific User Activity
-```
-user:alice@example.com action:convox.*
-```
-
-### Find Failed Operations
-```
-status:>=400
-```
-
-### Find Sensitive Operations
-```
-action:user.* OR action:token.* OR action:settings.*
-```
-
 ## Real-Time Monitoring
 
 For live monitoring:
@@ -170,14 +125,6 @@ For live monitoring:
 1. Set filter to "Last 5 minutes"
 2. Enable **Auto-refresh**
 3. Watch for new entries
-
-## Alerting
-
-Set up alerts for suspicious activity:
-
-1. Go to **Settings** > **Alerts**
-2. Configure conditions (e.g., failed logins)
-3. Set notification channel (email, Slack)
 
 ## Related
 

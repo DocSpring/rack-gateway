@@ -61,16 +61,14 @@ rack-gateway logout -r staging
 Test your authentication status.
 
 ```bash
-rack-gateway test-auth [flags]
+rack-gateway test-auth [mfa|otp|webauthn]
 ```
-
-**Flags:**
-- `--mfa` - Also verify MFA status
 
 **Example:**
 ```bash
 rack-gateway test-auth
-rack-gateway test-auth --mfa
+rack-gateway test-auth mfa
+rack-gateway test-auth webauthn
 ```
 
 ## Rack Management Commands
@@ -302,13 +300,15 @@ rack-gateway api-token [command]
 ```
 
 **Subcommands:**
-- `list` - List your API tokens
+- `list` - List API tokens (admin only)
+- `get` - Show a specific token
 - `create` - Create a new token
 - `delete` - Delete a token
 
 **Example:**
 ```bash
 rack-gateway api-token list
+rack-gateway api-token get <token-id>
 rack-gateway api-token create --name "CI/CD" --role deployer
 rack-gateway api-token delete <token-id>
 ```
@@ -324,14 +324,17 @@ rack-gateway deploy-approval [command]
 **Subcommands:**
 - `list` - List pending approvals
 - `approve` - Approve a request
-- `reject` - Reject a request
-- `status` - Check approval status
+- `request` - Create a new approval request
+- `show` - Show request details
+- `wait` - Wait for a request decision
 
 **Example:**
 ```bash
 rack-gateway deploy-approval list
 rack-gateway deploy-approval approve <request-id>
-rack-gateway deploy-approval status <request-id>
+rack-gateway deploy-approval show <request-id>
+rack-gateway deploy-approval request --app myapp --git-commit <sha> --message "Deploy"
+rack-gateway deploy-approval wait <request-id>
 ```
 
 ### gateway
@@ -417,7 +420,7 @@ rack-gateway run web "rake db:migrate" -a myapp -r production
 ```bash
 rack-gateway releases -a myapp -r production
 # Note the previous release ID
-rack-gateway run web "convox releases rollback <release-id>" -a myapp -r production
+rack-gateway releases rollback <release-id> -a myapp -r production
 ```
 
 ## Getting Help

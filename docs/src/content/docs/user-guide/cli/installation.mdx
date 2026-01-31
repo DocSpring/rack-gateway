@@ -159,22 +159,22 @@ If you prefer to build from source:
    ```bash
    git clone https://github.com/docspring/rack-gateway.git
    cd rack-gateway
-   go build -o rack-gateway ./cmd/rack-gateway
+   task go:build:cli
    ```
 
 3. **Install**
    ```bash
-   sudo mv rack-gateway /usr/local/bin/
+   sudo mv bin/rack-gateway /usr/local/bin/
    ```
 
 </Steps>
 
 ### Building with WebAuthn Support
 
-To build with WebAuthn/FIDO2 support, you need the system libraries installed (see above) and CGO enabled:
+To build with WebAuthn/FIDO2 support, use the default CLI build:
 
 ```bash
-CGO_ENABLED=1 go build -o rack-gateway ./cmd/rack-gateway
+task go:build:cli
 ```
 
 ### Building without WebAuthn
@@ -182,7 +182,7 @@ CGO_ENABLED=1 go build -o rack-gateway ./cmd/rack-gateway
 To build without WebAuthn support (smaller binary, no CGO):
 
 ```bash
-CGO_ENABLED=0 go build -tags nofido -o rack-gateway ./cmd/rack-gateway
+task go:build:cli:nofido
 ```
 
 ## Updating
@@ -192,8 +192,8 @@ To update to the latest version, simply re-run the download command for your pla
 ```bash
 cd rack-gateway
 git pull
-go build -o rack-gateway ./cmd/rack-gateway
-sudo mv rack-gateway /usr/local/bin/
+task go:build:cli
+sudo mv bin/rack-gateway /usr/local/bin/
 ```
 
 ## Troubleshooting

@@ -58,7 +58,7 @@ flowchart LR
     Gateway --- Audit
 ```
 
-1. **User runs a command**: `convox apps` or `rack-gateway convox apps`
+1. **User runs a command**: `convox apps` or `rack-gateway apps`
 2. **Gateway authenticates**: Validates the user's session or API token
 3. **Gateway authorizes**: Checks RBAC permissions for the requested action
 4. **Gateway proxies**: Forwards the request to the real Convox rack
@@ -74,15 +74,15 @@ Users interact with Rack Gateway through the `rack-gateway` CLI:
 # Login (opens browser for OAuth)
 rack-gateway login staging https://gateway.example.com
 
-# Run convox commands through the gateway
-rack-gateway convox apps
-rack-gateway convox deploy
-rack-gateway convox logs -a myapp
+# Run Convox commands through the gateway
+rack-gateway apps
+rack-gateway deploy
+rack-gateway logs -a myapp
 
 # Set up a convenient alias
-alias cx="rack-gateway convox"
-cx apps
-cx deploy
+alias cg="rack-gateway"
+cg apps
+cg deploy
 ```
 
 The CLI:
@@ -119,14 +119,15 @@ Developers use the `rack-gateway` CLI to switch between gateways, or configure s
 
 ### Role-Based Access Control
 
-Four built-in roles provide granular control:
+Built-in roles provide granular control:
 
 | Role | Capabilities |
 |------|-------------|
-| **Viewer** | Read-only: list apps, view logs, see releases |
-| **Ops** | Viewer + restart apps, manage processes |
-| **Deployer** | Ops + create builds, promote releases |
+| **Viewer** | Read-only: list apps, view logs, view builds, rack status |
+| **Ops** | Viewer + restart apps, manage processes, view env |
+| **Deployer** | Ops + create builds, promote releases, update env |
 | **Admin** | Full access including user management |
+| **CI/CD** | Automation tokens only (not assignable to human users) |
 
 ### Audit Logging
 

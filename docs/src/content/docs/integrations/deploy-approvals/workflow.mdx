@@ -35,12 +35,12 @@ sequenceDiagram
 
     Note over CI: Workflow continues
 
-    CI->>Gateway: convox build
+    CI->>Gateway: rack-gateway build
     Gateway->>Gateway: Validate manifest
     Gateway->>Convox: Forward build request
     Convox-->>Gateway: Build ID
 
-    CI->>Gateway: convox releases promote
+    CI->>Gateway: rack-gateway releases promote
     Gateway->>Gateway: Check approval
     Gateway->>Convox: Forward promote
     Convox-->>Gateway: Success
@@ -207,13 +207,13 @@ The approval job name must exactly match the job name in your `.circleci/config.
 
 ## Phase 5: Build Validation
 
-When CI calls `convox build`, the gateway validates the manifest.
+When CI calls `rack-gateway build`, the gateway validates the manifest.
 
 ### Manifest Validation
 
 ```mermaid
 graph TD
-    Build[convox build] --> Parse[Parse convox.yml]
+    Build[rack-gateway build] --> Parse[Parse convox.yml]
     Parse --> Extract[Extract image tags]
     Extract --> Validate{Images match pattern?}
     Validate -->|Yes| Forward[Forward to Convox]
@@ -296,11 +296,11 @@ The complete workflow generates audit entries:
 
 | Event | Actor | Details |
 |-------|-------|---------|
-| `deploy-approval-request.create` | CI/CD token | Commit, branch, message |
-| `deploy-approval-request.approved` | Admin user | Notes, MFA method |
+| `deploy_approval_request.create` | CI/CD token | Commit, branch, message |
+| `deploy_approval_request.approve` | Admin user | Notes, MFA method |
 | `build.create` | CI/CD token | Build ID, manifest |
 | `release.promote` | CI/CD token | Release ID |
-| `deploy-approval-request.deployed` | System | Final status |
+| `deploy_approval_request.reject` | Admin user | Notes |
 
 ## Error Handling
 
@@ -335,7 +335,7 @@ Error: Deploy approval has expired (was approved 20 minutes ago)
 
 **Resolution:**
 - Request new approval
-- Increase `DEPLOY_APPROVAL_WINDOW_MINUTES`
+- Increase `RGW_SETTING_DEPLOY_APPROVAL_WINDOW_MINUTES`
 
 </TabItem>
 <TabItem label="Manifest Validation Failed">

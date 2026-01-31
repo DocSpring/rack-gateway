@@ -5,15 +5,7 @@ description: "Setting up authenticator apps for multi-factor authentication."
 
 import { Aside, Steps, Tabs, TabItem } from '@astrojs/starlight/components';
 
-Time-based One-Time Passwords (TOTP) provide a secure second factor using authenticator apps on your mobile device.
-
-## What is TOTP?
-
-TOTP generates 6-digit codes that change every 30 seconds. The codes are computed from a shared secret and the current time, making them:
-
-- **Offline-capable** - Works without internet on your device
-- **Time-limited** - Codes expire automatically
-- **Widely supported** - Works with any authenticator app
+Time-based One-Time Passwords (TOTP) generate a 6-digit code that changes every 30 seconds.
 
 ## Recommended Apps
 
@@ -25,7 +17,7 @@ TOTP generates 6-digit codes that change every 30 seconds. The codes are compute
 | **1Password** | Integrated with password manager |
 | **Authy** | Cloud backup, multi-device sync |
 | **Google Authenticator** | Simple, no account required |
-| **Microsoft Authenticator** | Good for enterprise environments |
+| **Microsoft Authenticator** | Enterprise-friendly |
 
 </TabItem>
 <TabItem label="Android">
@@ -40,149 +32,44 @@ TOTP generates 6-digit codes that change every 30 seconds. The codes are compute
 </TabItem>
 </Tabs>
 
-<Aside type="tip">
-We recommend apps that support encrypted backups (like Authy or 1Password) so you don't lose access if you change phones.
-</Aside>
-
-## Setting Up TOTP
-
-### In the Web UI
+## Setup Steps
 
 <Steps>
 
-1. Log in to the gateway web interface
-
-2. Navigate to **MFA** in the sidebar
-
-3. Click **Add TOTP Authenticator**
-
-4. A QR code will be displayed:
-   - Open your authenticator app
-   - Tap the **+** or **Add Account** button
-   - Scan the QR code
-
-5. Enter the 6-digit code from your app to verify
-
-6. **Save your backup codes** (displayed after verification)
+1. Open **Account Security** in the web UI
+2. Click **Enable MFA**
+3. Choose **Authenticator app**
+4. Scan the QR code with your app
+5. Enter the 6-digit code to confirm
+6. Save the backup codes shown after confirmation
 
 </Steps>
 
 ### Manual Entry
 
-If you can't scan the QR code:
+If you can’t scan the QR code:
 
-<Steps>
-
-1. Click **Can't scan? Enter manually**
-
-2. Copy the secret key displayed
-
-3. In your authenticator app:
-   - Choose **Manual Entry** or **Enter Key**
-   - Set the account name (e.g., "Rack Gateway - work@example.com")
-   - Paste the secret key
-   - Ensure **Time-based** is selected (not counter-based)
-
-4. Enter the verification code
-
-</Steps>
+1. Click **Copy secret for manual entry**
+2. Add a manual TOTP entry in your app using that secret
 
 ## Using TOTP
 
-### Web Login
+### Web UI
 
-When MFA is required:
+Enter the 6-digit code when prompted for MFA. You can also trust the device to reduce prompts.
 
-1. Enter your email and complete Google OAuth
-2. You'll be prompted for your TOTP code
-3. Open your authenticator app
-4. Enter the current 6-digit code
-5. Optionally check **Trust this device** (skips MFA for 30 days)
-
-### CLI Login
-
-When logging in via the CLI:
+### CLI
 
 ```bash
-rack-gateway login
-```
-
-After OAuth completes, you'll be prompted:
-
-```
-MFA verification required
-Enter TOTP code: ******
-```
-
-The CLI will remember your session, so you won't need MFA for subsequent commands until the session expires.
-
-### Step-Up Authentication
-
-For sensitive operations, you may be prompted for MFA even with an active session:
-
-```
-This action requires MFA verification
-Enter TOTP code: ******
+rack-gateway deploy -a myapp --mfa-code 123456
 ```
 
 ## Troubleshooting
 
-### Code Not Working
+- Verify your device time is accurate
+- Wait for the next code if a code is near expiry
+- Ensure you’re using the correct account in your app
 
-If your TOTP codes are rejected:
-
-1. **Check the time** on your device - TOTP requires accurate time
-   - Enable automatic time sync in your device settings
-   - Codes drift if clocks are off by more than 30 seconds
-
-2. **Wait for the next code** - The current code may be about to expire
-
-3. **Use the right account** - Ensure you're using the code for Rack Gateway, not another service
-
-4. **Try manual entry** - If QR scanning failed, the secret may be incorrect
-
-### Lost Authenticator Access
-
-If you lose access to your authenticator app:
-
-1. **Use backup codes** - Enter one of your saved backup codes instead
-2. **Contact an administrator** - They can reset your MFA enrollment
-3. **Use another MFA method** - If you have WebAuthn or YubiKey enrolled
-
-<Aside type="danger">
-If you lose both your authenticator and backup codes, an administrator must reset your MFA. Always keep backup codes in a secure location.
+<Aside type="tip">
+Store backup codes in a secure place before closing the enrollment dialog.
 </Aside>
-
-### Syncing Issues
-
-If codes work on one device but not another:
-
-- Ensure both devices have accurate time
-- Some apps (like Authy) take time to sync new accounts
-- Verify you're looking at the correct account
-
-## Security Considerations
-
-### Protect Your Secret
-
-- Never share your TOTP secret key
-- Don't screenshot QR codes
-- Use apps with encrypted storage
-
-### Backup Strategy
-
-- Store backup codes in a password manager or secure location
-- Consider using an authenticator app with cloud backup
-- Keep backup codes separate from your primary device
-
-### Device Security
-
-- Use device PIN/biometrics
-- Keep your authenticator app updated
-- Remove old accounts when changing phones
-
-## Related
-
-- [MFA Overview](/user-guide/mfa/) - All MFA options
-- [Backup Codes](/user-guide/mfa/backup-codes/) - Recovery options
-- [WebAuthn](/user-guide/mfa/webauthn/) - Hardware security keys

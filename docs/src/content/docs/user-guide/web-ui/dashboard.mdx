@@ -1,93 +1,32 @@
 ---
-title: "Dashboard"
-description: "Overview of the Rack Gateway web dashboard."
+title: "Rack Overview"
+description: "The Rack page shows high-level metadata for the current rack."
 ---
 
-import { Aside, Steps } from '@astrojs/starlight/components';
+import { Aside } from '@astrojs/starlight/components';
 
-The Rack Gateway dashboard provides a web-based interface for managing users, viewing audit logs, and configuring gateway settings.
+The **Rack** page is the landing view of the web UI. It summarizes the connected Convox rack and its current status.
 
-## Accessing the Dashboard
+## What You See
 
-Navigate to your gateway URL in a web browser:
+The rack summary includes:
 
-```
-https://gateway.example.com
-```
+- **Name**
+- **Domain**
+- **Rack Domain**
+- **Provider**
+- **Region**
+- **Type**
+- **Version**
+- **Count** (cluster size)
+- **Status**
 
-If you're not authenticated, you'll be redirected to the login page.
-
-## Dashboard Overview
-
-After logging in, you'll see the main dashboard with navigation to:
-
-- **Users** - Manage user accounts and roles (admin only)
-- **API Tokens** - View and manage API tokens (admin only)
-- **Audit Logs** - View request history and audit trail (admin only)
-- **Settings** - Configure gateway behavior (admin only)
-- **MFA** - Manage your multi-factor authentication methods
+If the gateway cannot load rack metadata, the page shows an error banner with the failure reason.
 
 <Aside type="note">
-Admin-only sections are only visible to users with the Admin role. Other users see a simplified interface with their profile and MFA management.
+There is no separate “dashboard” screen. The Rack page is the default overview.
 </Aside>
 
-## User Profile
+## Next Steps
 
-Click your email in the top-right corner to access:
-
-- **Profile** - View your account details
-- **MFA Settings** - Manage your authentication methods
-- **Logout** - End your session
-
-## Session Information
-
-The dashboard displays your current session status:
-
-| Field | Description |
-|-------|-------------|
-| **Email** | Your authenticated email address |
-| **Role** | Your assigned role (Admin, Deployer, Ops, Viewer) |
-| **MFA Status** | Whether MFA is enabled for your account |
-| **Session Expires** | When your session will automatically expire |
-
-## Quick Actions
-
-Common actions available from the dashboard:
-
-### For Administrators
-
-- Create new users
-- Generate API tokens
-- View recent audit activity
-- Modify gateway settings
-
-### For All Users
-
-- View your profile
-- Enroll MFA methods
-- View your session information
-- Logout
-
-## Navigation
-
-The sidebar provides access to all dashboard sections:
-
-```
-Dashboard
-├── Users          (admin)
-├── API Tokens     (admin)
-├── Audit Logs     (admin)
-├── Settings       (admin)
-└── MFA
-```
-
-## Mobile Support
-
-The dashboard is responsive and works on mobile devices. The sidebar collapses to a hamburger menu on smaller screens.
-
-## Related
-
-- [User Management](/user-guide/web-ui/user-management/) - Managing users
-- [API Tokens](/user-guide/web-ui/api-tokens/) - Managing tokens
-- [Audit Logs](/user-guide/web-ui/audit-logs/) - Viewing logs
-- [Settings](/user-guide/web-ui/settings/) - Configuring the gateway
+Use the sidebar to navigate to Apps, Builds, Releases, and other operational views.

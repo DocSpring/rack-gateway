@@ -92,14 +92,11 @@ curl https://mise.run | sh
 2. **Install dependencies**
 
    ```bash
-   # Go dependencies
-   go mod download
-
-   # Web dependencies
-   cd web && bun install && cd ..
-
-   # Mock OAuth dependencies
-   cd mock-oauth && bun install && cd ..
+   # Install tooling and dependencies
+   task dev-setup
+   task go:deps
+   task web:deps
+   task mock-oauth:deps
    ```
 
 3. **Configure environment**

@@ -1,221 +1,65 @@
 ---
 title: "Settings"
-description: "Configuring gateway settings in the web interface."
+description: "Configuring gateway-wide settings in the web interface."
 ---
 
 import { Aside, Steps } from '@astrojs/starlight/components';
 
-The Settings section allows administrators to configure gateway behavior, security policies, and integrations.
+The Settings page controls **global** gateway behavior. Only admins can edit these values; other users can view them in read-only mode.
 
 <Aside type="note">
-Settings management is only available to administrators.
+Settings can come from the database, environment variables (`RGW_SETTING_*`), or defaults. The UI shows the source and lets admins clear database overrides.
 </Aside>
 
-## Accessing Settings
+## Session Timeout
 
-Navigate to **Settings** in the sidebar to view and modify configuration.
-
-## Security Settings
-
-### Session Timeout
-
-Control how long user sessions remain active:
-
-| Setting | Description |
-|---------|-------------|
-| **Timeout (minutes)** | Session expires after this many minutes of inactivity |
-| **Recommended** | 5-30 minutes for security-sensitive environments |
+Configure the sliding inactivity timeout for browser sessions.
 
 <Steps>
 
-1. Enter the desired timeout in minutes
-
+1. Enter the timeout in minutes
 2. Click **Save**
-
-3. New timeout applies to new sessions
-
-</Steps>
-
-### MFA Requirements
-
-Configure when MFA is required:
-
-| Setting | Description |
-|---------|-------------|
-| **Require MFA for sensitive actions** | Enforce MFA for destructive operations |
-| **Required actions** | Delete apps, promote releases, manage users |
-
-When enabled, users without MFA enrolled will be prompted to set it up before performing sensitive operations.
-
-### Destructive Actions Guard
-
-Control whether destructive operations are allowed:
-
-| Setting | Description |
-|---------|-------------|
-| **Allow destructive actions** | Enable/disable app deletion, process termination |
-| **Default** | Disabled (safer) |
-
-<Aside type="caution">
-When disabled, even administrators cannot delete applications or terminate processes. Enable temporarily when needed.
-</Aside>
-
-## Environment Variables
-
-### Protected Variables
-
-Configure which environment variables are masked in responses:
-
-```
-DATABASE_URL
-RACK_TOKEN
-APP_SECRET_KEY
-AWS_SECRET_ACCESS_KEY
-```
-
-Protected variables:
-- Are masked in API responses
-- Cannot be modified via the gateway
-- Are redacted in audit logs
-
-<Steps>
-
-1. Click **Edit Protected Variables**
-
-2. Add variable names (one per line)
-
-3. Click **Save**
+3. (Optional) Click **Clear** to revert to env/default
 
 </Steps>
 
-### Viewing Environment
+## MFA Requirements
 
-View current gateway environment (with sensitive values masked):
+Global MFA policy for all users:
 
-| Variable | Value |
-|----------|-------|
-| DOMAIN | gateway.example.com |
-| DATABASE_URL | [PROTECTED] |
-| RACK_ALIAS | production |
+- **Require MFA for all users**
+- **Trusted device TTL (days)**
+- **Step-up window (minutes)**
 
-## Notifications
+Changes apply immediately for new logins and step-up checks.
 
-### Email Notifications
+## Destructive Actions
 
-Configure email settings:
-
-| Setting | Description |
-|---------|-------------|
-| **Enabled** | Send email notifications |
-| **From address** | Sender email |
-| **Admin BCC** | CC administrators on notifications |
-
-Events that trigger emails:
-- New user added
-- API token created
-- Deploy approval requested
-
-### Slack Integration
-
-Connect to Slack for notifications:
-
-<Steps>
-
-1. Click **Connect Slack**
-
-2. Authorize the Slack app
-
-3. Select notification channel
-
-4. Choose events to notify
-
-</Steps>
+Control whether destructive Convox operations (like deleting apps) are allowed at all. This is a global safety switch.
 
 ## Deploy Approvals
 
-Configure the deploy approval workflow:
+Enable or disable deploy approvals and set the approval window (minutes) for admin approvals.
 
-| Setting | Description |
-|---------|-------------|
-| **Enabled** | Require approval for deploys |
-| **Approval timeout** | How long approvals remain valid |
-| **Required approvers** | Minimum approvers needed |
+## Default VCS & CI Providers
 
-See [Deploy Approvals](/integrations/deploy-approvals/) for detailed configuration.
+Set the defaults for app-level deploy approvals:
 
-## Sentry Integration
+- **VCS provider** (currently GitHub)
+- **CI provider** (currently CircleCI)
 
-Configure error tracking:
+These defaults are used when an app does not specify its own provider settings.
 
-| Setting | Description |
-|---------|-------------|
-| **Backend DSN** | Sentry project DSN |
-| **Frontend DSN** | Browser error tracking |
-| **Environment** | Environment tag |
-| **Traces sample rate** | Performance monitoring (0-1) |
+## App Settings (Per-App)
 
-### Testing Sentry
+App-specific settings are **not** on this page. Go to **Apps → {app} → Settings** to configure:
 
-When enabled, test buttons appear:
-
-- **Test Backend Error** - Triggers a test exception
-- **Test Frontend Error** - Triggers a browser error
-- **Test Performance** - Sends a test transaction
-
-## Audit Settings
-
-### Retention
-
-Configure log retention:
-
-| Setting | Description |
-|---------|-------------|
-| **Retention days** | How long to keep logs |
-| **Recommended** | 400 days (SOC 2) |
-
-### WORM Anchoring
-
-Configure tamper-evident storage:
-
-| Setting | Description |
-|---------|-------------|
-| **Enabled** | Write anchors to S3 |
-| **Bucket** | S3 bucket name |
-| **Interval** | How often to write anchors |
-| **Retention** | Object Lock retention period |
-
-## Applying Changes
-
-Most settings take effect immediately. Some require:
-
-- **Session timeout**: Affects new sessions only
-- **MFA requirements**: May prompt users on next sensitive action
-- **Protected variables**: Affects new API responses
-
-## Settings History
-
-View recent settings changes:
-
-1. Go to **Audit Logs**
-2. Filter by `action:settings.*`
-3. See who changed what and when
-
-## Exporting Settings
-
-Export current configuration:
-
-<Steps>
-
-1. Click **Export Settings**
-
-2. Download JSON file
-
-3. Use for documentation or disaster recovery
-
-</Steps>
+- VCS/CI deploy settings (repo, branch, approval job name)
+- Protected and secret environment variables
+- Approved deploy commands
+- Service image patterns
 
 ## Related
 
-- [Environment Variables](/reference/environment-variables/) - All configuration options
-- [Production Checklist](/deployment/production-checklist/) - Recommended settings
-- [Monitoring](/operations/monitoring/) - Setting up alerts
+- [Deploy Approvals](/integrations/deploy-approvals/) - CI/CD approval workflow
+- [Account Security](/user-guide/mfa/) - MFA setup and trusted devices

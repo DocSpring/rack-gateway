@@ -156,7 +156,7 @@ graph LR
 | Criterion | Requirement | Gateway Implementation |
 |-----------|-------------|----------------------|
 | C1.1 | Identify confidential data | Environment variable protection |
-| C1.2 | Dispose of confidential data | Token/session cleanup |
+| C1.2 | Dispose of confidential data | Session expiration + token revocation |
 
 **Protection Mechanisms:**
 
@@ -178,29 +178,27 @@ Rack Gateway automatically generates evidence:
 | User access records | Users table | On change |
 | Role assignments | Users table | On change |
 | Token inventory | API tokens table | On change |
-| Session records | Sessions table | On change |
+| Session records | user_sessions table | On change |
 | Configuration changes | Audit database | On change |
 
 ### Evidence Queries
 
 ```bash
-# User access for period
-rack-gateway audit search --from "2024-01-01" --to "2024-03-31" \
-  --format json > access-evidence.json
+# User access for a date range (custom)
+curl -b "session_token=TOKEN" \
+  "https://gateway.example.com/api/v1/audit-logs?range=custom&start=2024-01-01T00:00&end=2024-03-31T23:59"
 
-# RBAC denials (access violations)
-rack-gateway audit search --decision deny --days 90 \
-  --format json > denials.json
-
-# Admin actions
-rack-gateway audit search --role admin --days 90 \
-  --format json > admin-actions.json
+# RBAC denials
+curl -b "session_token=TOKEN" \
+  "https://gateway.example.com/api/v1/audit-logs?status=denied&range=30d"
 
 # User list with roles
-rack-gateway users list --format json > user-inventory.json
+curl -b "session_token=TOKEN" \
+  "https://gateway.example.com/api/v1/users"
 
 # API token inventory
-rack-gateway api-tokens list --all --format json > token-inventory.json
+curl -b "session_token=TOKEN" \
+  "https://gateway.example.com/api/v1/api-tokens"
 ```
 
 ### Reports for Auditors
@@ -264,13 +262,13 @@ A: Admin role is restricted to few users. All admin actions are logged.
 A: All API requests are logged with user, action, resource, decision, and timestamp.
 
 **Q: How long are logs retained?**
-A: 90 days in database, 7+ years in S3 WORM storage.
+A: Retention is operator-managed. Use database policies plus S3 WORM anchors (`AUDIT_ANCHOR_RETENTION_DAYS`) for compliance.
 
 **Q: How are secrets protected in logs?**
 A: Automatic regex-based redaction before logging. Patterns include passwords, tokens, and keys.
 
 **Q: How is the audit log protected from tampering?**
-A: S3 Object Lock in Compliance mode with 7-year retention prevents modification or deletion.
+A: Audit events are cryptographically chained, and optional S3 Object Lock anchors preserve chain integrity.
 
 ## Next Steps
 

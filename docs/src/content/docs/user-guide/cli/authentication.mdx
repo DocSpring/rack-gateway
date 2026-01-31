@@ -56,8 +56,9 @@ sequenceDiagram
 The CLI:
 1. Requests a login URL from the gateway
 2. Opens your browser to Google's OAuth consent page
-3. Receives the authentication result via a local callback server
-4. Stores the session token in your config file
+3. The gateway receives the OAuth callback and stores the auth code
+4. The CLI polls the gateway to complete login
+5. Stores the session token in your config file
 
 ## Session Storage
 
@@ -65,14 +66,18 @@ Session tokens are stored in `~/.config/rack-gateway/config.json`:
 
 ```json
 {
-  "current_rack": "production",
-  "racks": {
+  "current": "production",
+  "gateways": {
     "production": {
       "url": "https://gateway.example.com",
-      "session_token": "rgw_sess_...",
-      "session_id": "550e8400-e29b-41d4-a716-446655440000",
+      "token": "rgw_sess_...",
+      "email": "developer@company.com",
+      "expires_at": "2024-02-15T10:30:00Z",
+      "session_id": 1024,
       "channel": "cli",
-      "user_email": "developer@company.com"
+      "device_id": "8f4c4b8c-...",
+      "device_name": "dev-mbp",
+      "mfa_verified": true
     }
   }
 }
@@ -89,7 +94,7 @@ chmod 600 ~/.config/rack-gateway/config.json
 
 ### Session Duration
 
-CLI sessions are long-lived by default (configured by your gateway administrator). However, sessions can be:
+CLI sessions are long-lived by default (currently 90 days). Sessions can be:
 - **Revoked** by an administrator via the web UI
 - **Expired** after a period of inactivity
 - **Invalidated** if MFA enforcement changes
@@ -192,16 +197,10 @@ rack-gateway login production https://gateway.example.com
 
 ### "OAuth callback failed"
 
-The CLI runs a temporary local server to receive the OAuth callback. Issues can include:
-- **Port conflict**: Another process is using the callback port
-- **Firewall**: Local firewall blocking the callback
-- **Browser security**: Some browsers block localhost redirects
-
-Try:
-```bash
-# Check if the callback port is available
-lsof -i :8085
-```
+The gateway receives the OAuth callback, then the CLI polls until completion. Issues can include:
+- **Gateway not reachable**: DNS/VPN/Tailscale issues
+- **Browser blocked the redirect**: allow the callback URL
+- **Stale login state**: retry `rack-gateway login`
 
 ### "Domain not allowed"
 
@@ -234,7 +233,8 @@ Contact your administrator to adjust your role if needed.
 |----------|-------------|
 | `RACK_GATEWAY_API_TOKEN` | API token for authentication (bypasses OAuth) |
 | `GATEWAY_CLI_CONFIG_DIR` | Override config directory location |
-| `GATEWAY_RACK` | Override current rack for this command |
+| `RACK_GATEWAY_RACK` | Override current rack for this command |
+| `RACK_GATEWAY_URL` | Override gateway URL (used with API token) |
 
 ## Next Steps
 

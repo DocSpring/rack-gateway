@@ -1,263 +1,53 @@
 ---
 title: "WebAuthn"
-description: "Using security keys and platform authenticators for MFA."
+description: "Using security keys and passkeys for MFA."
 ---
 
-import { Aside, Steps, Tabs, TabItem } from '@astrojs/starlight/components';
+import { Aside, Steps } from '@astrojs/starlight/components';
 
-WebAuthn enables passwordless authentication using hardware security keys, platform biometrics, and passkeys.
+WebAuthn (passkeys and security keys) provides phishing-resistant MFA.
 
-## What is WebAuthn?
-
-WebAuthn (Web Authentication) is a W3C standard that allows secure authentication using:
-
-- **Hardware security keys** (YubiKey, Titan, SoloKey)
-- **Platform authenticators** (Touch ID, Face ID, Windows Hello)
-- **Passkeys** (synced across devices via iCloud, Google, or 1Password)
-
-Benefits of WebAuthn:
-
-- **Phishing-resistant** - Cryptographically bound to the origin
-- **No shared secrets** - Private key never leaves the authenticator
-- **Touch-to-authenticate** - Physical presence required
-- **Cross-platform** - Works in all modern browsers
-
-## Supported Authenticators
-
-<Tabs>
-<TabItem label="Security Keys">
-
-| Device | USB | NFC | Bluetooth |
-|--------|-----|-----|-----------|
-| YubiKey 5 Series | ✓ | ✓ | - |
-| YubiKey Bio | ✓ | - | - |
-| Google Titan | ✓ | ✓ | ✓ |
-| SoloKey | ✓ | - | - |
-| Feitian ePass | ✓ | ✓ | - |
-
-</TabItem>
-<TabItem label="Platform">
-
-| Platform | Authenticator |
-|----------|---------------|
-| macOS | Touch ID, Apple Watch |
-| iOS | Face ID, Touch ID, Passkeys |
-| Windows | Windows Hello (PIN, fingerprint, face) |
-| Android | Fingerprint, Face Unlock, Passkeys |
-| Linux | FIDO2 security keys |
-
-</TabItem>
-</Tabs>
-
-## Setting Up WebAuthn
-
-### In the Web UI
+## Setup in the Web UI
 
 <Steps>
 
-1. Log in to the gateway web interface
-
-2. Navigate to **MFA** in the sidebar
-
-3. Click **Add Security Key**
-
-4. Enter a name for this authenticator (e.g., "YubiKey USB-A")
-
-5. When prompted by your browser:
-   - **For security keys**: Insert the key and touch when it blinks
-   - **For platform auth**: Use Touch ID, Face ID, or Windows Hello
-
-6. The key is now registered
+1. Open **Account Security**
+2. Click **Enable MFA** (or **Add Method** if MFA is already enabled)
+3. Choose **Passkey or security key**
+4. Follow your browser prompt to complete enrollment
 
 </Steps>
 
 <Aside type="note">
-You can register multiple security keys. This is recommended so you have a backup if one is lost.
+You can register multiple WebAuthn methods (recommended for redundancy).
 </Aside>
-
-### In the CLI
-
-The CLI supports WebAuthn when used on systems with libfido2:
-
-<Tabs>
-<TabItem label="macOS">
-
-WebAuthn works out of the box on macOS. Just plug in your security key:
-
-```bash
-rack-gateway login
-# When prompted, touch your security key
-```
-
-</TabItem>
-<TabItem label="Linux">
-
-Install the required libraries:
-
-```bash
-# Ubuntu/Debian
-sudo apt install libfido2-dev libudev-dev libusb-1.0-0-dev
-
-# Fedora
-sudo dnf install libfido2-devel systemd-devel libusb1-devel
-```
-
-Then add udev rules for your security key (may require logout):
-
-```bash
-# Download YubiKey udev rules
-curl -o /etc/udev/rules.d/70-yubikey.rules \
-  https://raw.githubusercontent.com/Yubico/libu2f-host/master/70-u2f.rules
-sudo udevadm control --reload-rules
-```
-
-</TabItem>
-<TabItem label="Windows">
-
-WebAuthn works via Windows Hello. When prompted during login, follow the Windows Hello prompts.
-
-</TabItem>
-</Tabs>
 
 ## Using WebAuthn
 
-### Web Authentication
+### Web UI
 
-When MFA is required:
+When prompted for MFA, select the security key option and complete the browser prompt.
 
-1. You'll see "Insert your security key"
-2. Touch your security key when it blinks (or use biometrics)
-3. Authentication completes automatically
+### CLI
 
-### CLI Authentication
+The CLI can use WebAuthn methods marked **CLI Compatible**:
 
-```bash
-rack-gateway login
-```
-
-After OAuth:
-
-```
-MFA verification required
-Touch your security key to authenticate...
-```
-
-The CLI automatically detects WebAuthn credentials and prompts for touch.
-
-### Fallback Behavior
-
-If WebAuthn fails or no key is available:
-
-- **Web**: Option to "Use another method" (TOTP, backup codes)
-- **CLI**: Automatically falls back to TOTP prompt
+1. In **Account Security**, edit your WebAuthn method
+2. Enable **CLI Compatible** (recommended for hardware keys)
+3. Use `--mfa-method webauthn` when prompted
 
 ```bash
-rack-gateway login
-# If no security key is detected:
-No security key detected, falling back to TOTP
-Enter TOTP code: ******
+rack-gateway deploy -a myapp --mfa-method webauthn
 ```
 
-## Managing Keys
+## Managing Methods
 
-### View Registered Keys
+In **Account Security → Registered MFA Methods**, you can:
 
-In the web interface, navigate to **MFA** to see all registered security keys:
-
-| Key Name | Type | Registered | Last Used |
-|----------|------|------------|-----------|
-| YubiKey USB-A | Security Key | 2024-01-15 | 2024-01-20 |
-| MacBook Touch ID | Platform | 2024-01-10 | 2024-01-20 |
-
-### Remove a Key
-
-<Steps>
-
-1. Navigate to **MFA**
-
-2. Find the key to remove
-
-3. Click **Remove**
-
-4. Confirm by entering your MFA code
-
-</Steps>
+- Edit the label
+- Toggle **CLI Compatible** (WebAuthn only)
+- Remove a method
 
 <Aside type="caution">
-You cannot remove your last MFA method. Ensure you have another method (TOTP, another key, or backup codes) before removing a key.
+Keep at least one MFA method active so you don’t lock yourself out.
 </Aside>
-
-## Troubleshooting
-
-### Security Key Not Detected
-
-**Browser issues:**
-- Ensure you're using HTTPS (WebAuthn requires secure context)
-- Try a different browser (Chrome, Firefox, Safari, Edge all support WebAuthn)
-- Check browser permissions for security keys
-
-**Hardware issues:**
-- Try a different USB port
-- Ensure the key is fully inserted
-- For NFC keys, hold the key against the reader for 2-3 seconds
-
-**Linux-specific:**
-- Verify libfido2 is installed
-- Check udev rules are in place
-- Ensure your user is in the appropriate group (`plugdev` on Ubuntu)
-
-### Touch Not Registering
-
-- Press and hold for 1-2 seconds
-- Ensure you're touching the metal contact (not the plastic)
-- Some keys require firmer pressure
-
-### Platform Authenticator Not Working
-
-**macOS Touch ID:**
-- Ensure Touch ID is enabled in System Preferences
-- Check that the browser has permission to use Touch ID
-
-**Windows Hello:**
-- Verify Windows Hello is configured in Settings
-- Ensure the browser supports Windows Hello
-
-### CLI WebAuthn Failures
-
-If the CLI can't use WebAuthn:
-
-```bash
-# Check if libfido2 is available
-rack-gateway --version
-# Should show "WebAuthn: enabled" if supported
-
-# Force TOTP fallback
-rack-gateway login --totp
-```
-
-## Security Best Practices
-
-### Multiple Keys
-
-Register at least two security keys:
-- Primary key for daily use
-- Backup key stored securely
-
-### Key Storage
-
-- Keep backup keys in a safe or secure location
-- Consider a fireproof container for disaster recovery
-- Never leave keys unattended in public
-
-### Platform Authenticators
-
-Platform authenticators (Touch ID, Windows Hello) are convenient but:
-- Only work on that specific device
-- Should be combined with a portable security key
-- Consider passkeys for cross-device sync
-
-## Related
-
-- [MFA Overview](/user-guide/mfa/) - All MFA options
-- [YubiKey OTP](/user-guide/mfa/yubikey/) - YubiKey OTP mode
-- [Backup Codes](/user-guide/mfa/backup-codes/) - Recovery options

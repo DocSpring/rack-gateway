@@ -74,15 +74,15 @@ The `--rack` flag doesn't change your default; it only affects that one command.
 
 ## Environment Variable Override
 
-Set `GATEWAY_RACK` to override the current rack:
+Set `RACK_GATEWAY_RACK` to override the current rack:
 
 ```bash
 # Use staging for all commands in this shell
-export GATEWAY_RACK=staging
+export RACK_GATEWAY_RACK=staging
 rack-gateway apps  # Uses staging
 
 # Or for a single command
-GATEWAY_RACK=production rack-gateway apps
+RACK_GATEWAY_RACK=production rack-gateway apps
 ```
 
 ## Configuration File Structure
@@ -91,21 +91,26 @@ Your rack configurations are stored in `~/.config/rack-gateway/config.json`:
 
 ```json
 {
-  "current_rack": "production",
-  "racks": {
+  "current": "production",
+  "gateways": {
     "production": {
       "url": "https://gateway-prod.example.com",
-      "session_token": "rgw_sess_abc123...",
-      "session_id": "550e8400-e29b-41d4-a716-446655440000",
+      "token": "rgw_sess_abc123...",
+      "email": "developer@company.com",
+      "expires_at": "2024-02-15T10:30:00Z",
+      "session_id": 1024,
       "channel": "cli",
-      "user_email": "developer@company.com"
+      "device_id": "8f4c4b8c-...",
+      "device_name": "dev-mbp",
+      "mfa_verified": true
     },
     "staging": {
       "url": "https://gateway-staging.example.com",
-      "session_token": "rgw_sess_def456...",
-      "session_id": "660f9511-f30c-42e5-b827-557766551111",
-      "channel": "cli",
-      "user_email": "developer@company.com"
+      "token": "rgw_sess_def456...",
+      "email": "developer@company.com",
+      "expires_at": "2024-02-15T10:30:00Z",
+      "session_id": 2048,
+      "channel": "cli"
     }
   }
 }
@@ -173,7 +178,7 @@ For CI/CD, use API tokens with `RACK_GATEWAY_API_TOKEN` instead of managing OAut
 ```bash
 # In your CI environment
 export RACK_GATEWAY_API_TOKEN="rgw_token_..."
-export GATEWAY_RACK="production"
+export RACK_GATEWAY_RACK="production"
 
 rack-gateway deploy
 ```
@@ -183,8 +188,8 @@ rack-gateway deploy
 When determining which rack to use:
 
 1. `--rack` flag (highest priority)
-2. `GATEWAY_RACK` environment variable
-3. `current_rack` in config file (default)
+2. `RACK_GATEWAY_RACK` environment variable
+3. `current` in config file (default)
 
 ## Troubleshooting
 

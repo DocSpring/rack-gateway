@@ -5,144 +5,84 @@ description: "Managing users in the Rack Gateway web interface."
 
 import { Aside, Steps } from '@astrojs/starlight/components';
 
-Administrators can manage user accounts, assign roles, and control access through the Users section of the web interface.
+The Users page lists all gateway users and links to individual user detail pages. Admins can add, edit, lock, and delete users.
 
 <Aside type="note">
-User management is only available to administrators.
+All authenticated users can view the user list. Only admins can change user accounts.
 </Aside>
 
 ## Viewing Users
 
-Navigate to **Users** in the sidebar to see all users:
+Navigate to **Users** in the sidebar to see the list:
 
 | Column | Description |
 |--------|-------------|
-| **Email** | User's email address |
-| **Role** | Current assigned role |
-| **MFA** | Whether MFA is enabled |
+| **Name / Email** | User identity |
+| **Roles** | Current role badges |
 | **Status** | Active or locked |
+| **Created By** | Administrator who added the user |
 | **Created** | When the user was added |
-| **Last Login** | Most recent authentication |
 
-## Adding Users
+## Adding Users (Admin)
 
 <Steps>
 
-1. Click **Add User** in the top-right
-
-2. Enter the user's email address
-   - Must match your allowed domain (e.g., `@example.com`)
-
-3. Select a role:
-   - **Admin** - Full access
-   - **Deployer** - Deploy applications
-   - **Ops** - Operate applications
-   - **Viewer** - Read-only access
-
-4. Click **Create User**
+1. Click **Add User**
+2. Enter the user's name and email
+3. Select a role (Viewer, Ops, Deployer, Admin)
+4. Click **Add User**
 
 </Steps>
 
-The user will receive an email notification with instructions to log in.
+New users receive a welcome email with login instructions.
 
-## Changing User Roles
+## Editing Users (Admin)
+
+Admins can update name, email, and role:
 
 <Steps>
 
-1. Find the user in the list
-
-2. Click the **Edit** button (or the role dropdown)
-
-3. Select the new role
-
-4. Confirm the change
+1. Click a user's **Edit** action
+2. Update details
+3. Click **Save Changes**
 
 </Steps>
 
-<Aside type="caution">
-Role changes take effect immediately. The user's current session will use the new permissions.
-</Aside>
+## Locking or Unlocking Users (Admin)
 
-## Locking Users
-
-To temporarily disable a user's access:
+Locking disables access immediately and invalidates active sessions.
 
 <Steps>
 
-1. Find the user in the list
-
-2. Click **Lock Account**
-
-3. Confirm the action
+1. Open the user's detail page
+2. Click **Lock Account** or **Unlock Account**
 
 </Steps>
 
-Locked users:
-- Cannot log in
-- Existing sessions are invalidated
-- Account remains in the system
-
-To unlock, click **Unlock Account**.
-
-## Deleting Users
+## Deleting Users (Admin)
 
 <Steps>
 
-1. Find the user in the list
-
-2. Click **Delete**
-
+1. Open the user's detail page
+2. Click **Delete User**
 3. Confirm the deletion
 
 </Steps>
 
 <Aside type="danger">
-Deletion is permanent. The user's audit history is preserved, but they will need to be re-added to regain access.
+Deletion is permanent. Audit history remains, but access is removed.
 </Aside>
 
-## Resetting User MFA
+## User Detail Pages
 
-If a user loses access to their MFA device:
+Click a user to view their details. The page includes:
 
-<Steps>
-
-1. Find the user in the list
-
-2. Click **Reset MFA**
-
-3. Confirm the action
-
-</Steps>
-
-This removes all MFA methods from the user's account. They can then enroll new methods on their next login.
-
-## Bulk Operations
-
-For multiple users:
-
-1. Select users using the checkboxes
-2. Choose an action from the **Bulk Actions** menu:
-   - Change role
-   - Lock accounts
-   - Unlock accounts
-
-## Filtering and Search
-
-Use the search box to filter users by:
-- Email address
-- Role
-
-## User Details
-
-Click a user's email to view their details:
-
-- Account information
-- MFA methods enrolled
-- Recent login history
-- Active sessions
+- Role badges and account status
+- Active sessions with **Sign Out Everywhere**
+- User-specific audit logs
 
 ## Related
 
-- [RBAC Roles](/security/rbac/roles/) - Understanding roles
-- [API Tokens](/user-guide/web-ui/api-tokens/) - Managing tokens
-- [Audit Logs](/user-guide/web-ui/audit-logs/) - User activity
+- [RBAC Roles](/security/rbac/roles/) - Role definitions
+- [API Tokens](/user-guide/web-ui/api-tokens/) - Token management
+- [Audit Logs](/user-guide/web-ui/audit-logs/) - Activity history

@@ -80,9 +80,10 @@ The gateway supports two authentication channels:
 1. User runs `rack-gateway login`
 2. CLI generates PKCE code verifier and challenge
 3. Browser opens to Google OAuth with challenge
-4. After approval, code returned to CLI callback
-5. CLI exchanges code + verifier for ID token
-6. Session token stored in `~/.config/rack-gateway/config.json`
+4. After approval, Google redirects back to the gateway callback
+5. CLI polls the gateway to complete login
+6. Gateway exchanges code + verifier for ID token and issues a session
+7. Session token stored in `~/.config/rack-gateway/config.json`
 
 ## Session Management
 
@@ -175,7 +176,7 @@ Key authentication settings:
 | `GOOGLE_CLIENT_SECRET` | OAuth client secret | Required |
 | `GOOGLE_ALLOWED_DOMAIN` | Allowed email domain | Required |
 | `APP_SECRET_KEY` | Secret for sessions/CSRF | Required |
-| `SESSION_TIMEOUT_MINUTES` | Idle session timeout | 5 |
+| `RGW_SETTING_SESSION_TIMEOUT_MINUTES` | Idle session timeout | 5 |
 
 See [Configuration](/configuration/environment-variables/) for complete reference.
 

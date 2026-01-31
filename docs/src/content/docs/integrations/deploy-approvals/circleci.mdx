@@ -75,10 +75,11 @@ RGW_APP_MYAPP_SETTING_CIRCLECI_AUTO_APPROVE_ON_APPROVAL=true
 </TabItem>
 <TabItem label="Web UI">
 
-1. Navigate to **Settings** > **App Settings**
+1. Navigate to **Apps**
 2. Select your application
-3. Configure CircleCI integration settings
-4. Save changes
+3. Open the **Settings** tab
+4. Configure CircleCI integration settings
+5. Save changes
 
 </TabItem>
 </Tabs>
@@ -151,7 +152,12 @@ jobs:
       - image: docspringcom/ci:deploy
     steps:
       - checkout
-      - run: convox deploy --app myapp
+      - run:
+          name: Deploy via Rack Gateway
+          command: rack-gateway deploy --app myapp
+          environment:
+            RACK_GATEWAY_API_TOKEN: $RACK_GATEWAY_API_TOKEN
+            RACK_GATEWAY_URL: $RACK_GATEWAY_URL
 ```
 
 ### Key Points

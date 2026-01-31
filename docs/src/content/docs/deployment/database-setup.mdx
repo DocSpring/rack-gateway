@@ -161,10 +161,10 @@ Run migrations manually:
 
 ```bash
 # Via Docker
-docker exec rack-gateway rack-gateway migrate
+docker exec rack-gateway rack-gateway-api migrate
 
 # Via Convox
-convox run gateway -- rack-gateway migrate -a rack-gateway
+convox run gateway -- rack-gateway-api migrate -a rack-gateway
 ```
 
 ### Migration Safety
@@ -184,7 +184,7 @@ The reset command **deletes all data**. Use only for development or emergency re
 ```bash
 export RESET_RACK_GATEWAY_DATABASE=DELETE_ALL_DATA
 export DEV_MODE=true
-rack-gateway reset-db
+rack-gateway-api reset-db
 ```
 
 ### Emergency Production Reset
@@ -192,7 +192,7 @@ rack-gateway reset-db
 ```bash
 export RESET_RACK_GATEWAY_DATABASE=DELETE_ALL_DATA
 export DISABLE_DATABASE_ENVIRONMENT_CHECK=1
-rack-gateway reset-db
+rack-gateway-api reset-db
 ```
 
 ### Safety Guards
@@ -211,13 +211,17 @@ The gateway creates these tables:
 | Table | Purpose |
 |-------|---------|
 | `users` | User accounts and roles |
-| `sessions` | Active user sessions |
+| `user_sessions` | Active user sessions |
 | `api_tokens` | API tokens for CI/CD |
 | `mfa_methods` | MFA registrations (TOTP, WebAuthn) |
+| `mfa_backup_codes` | MFA recovery codes |
 | `trusted_devices` | Remembered MFA devices |
-| `audit_events` | Complete audit trail |
+| `audit.audit_event` | Complete audit trail |
 | `deploy_approval_requests` | Deploy workflow state |
 | `settings` | Configuration settings |
+| `user_resources` | User ↔ resource audit links |
+| `cli_login_states` | CLI OAuth state tracking |
+| `rgw_internal_metadata` | Environment markers |
 | `slack_integration` | Slack OAuth tokens |
 | `schema_migrations` | Migration tracking |
 
@@ -253,7 +257,7 @@ resource "aws_db_instance" "gateway" {
 pg_dump -h $PGHOST -U $PGUSER $PGDATABASE | gzip > backup-$(date +%Y%m%d).sql.gz
 
 # Export specific tables
-pg_dump -h $PGHOST -U $PGUSER -t audit_events $PGDATABASE > audit-backup.sql
+pg_dump -h $PGHOST -U $PGUSER -t audit.audit_event $PGDATABASE > audit-backup.sql
 ```
 
 ### Recovery

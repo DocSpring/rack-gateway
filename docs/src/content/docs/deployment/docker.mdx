@@ -12,7 +12,7 @@ This guide covers deploying Rack Gateway using Docker, suitable for development,
 The official Docker image is available on Docker Hub:
 
 ```bash
-docker pull docspringcom/rack-gateway:latest
+docker pull docker.io/docspringcom/rack-gateway:latest
 ```
 
 ### Image Tags
@@ -59,7 +59,7 @@ docker run -d \
   -e RACK_TOKEN=your-convox-rack-token \
   -e RACK_HOST=https://your-rack.convox.cloud \
   -e ADMIN_USERS=admin@example.com \
-  docspringcom/rack-gateway:latest
+  docker.io/docspringcom/rack-gateway:latest
 ```
 
 ### 4. Verify
@@ -90,7 +90,7 @@ services:
       retries: 5
 
   gateway:
-    image: docspringcom/rack-gateway:latest
+    image: docker.io/docspringcom/rack-gateway:latest
     depends_on:
       postgres:
         condition: service_healthy
@@ -145,7 +145,6 @@ docker compose up -d
 | `PORT` | `8080` | HTTP listen port |
 | `DEV_MODE` | `false` | Enable development mode |
 | `ADMIN_USERS` | - | Comma-separated admin emails |
-| `LOG_RETENTION_DAYS` | - | CloudWatch log retention |
 | `RACK_ALIAS` | - | Short rack name (e.g., `staging`) |
 
 See [Environment Variables](/configuration/environment-variables/) for the complete list.
@@ -155,7 +154,7 @@ See [Environment Variables](/configuration/environment-variables/) for the compl
 Migrations run automatically on startup. To run them manually:
 
 ```bash
-docker exec rack-gateway rack-gateway migrate
+docker exec rack-gateway rack-gateway-api migrate
 ```
 
 ## Health Checks
@@ -165,7 +164,6 @@ The gateway exposes health endpoints:
 | Endpoint | Purpose |
 |----------|---------|
 | `/api/v1/health` | Basic health check |
-| `/api/v1/health/ready` | Readiness (includes DB check) |
 
 Example health check configuration:
 
@@ -183,7 +181,7 @@ healthcheck:
 ### Use Specific Version Tags
 
 ```bash
-docker pull docspringcom/rack-gateway:v0.1.0
+docker pull docker.io/docspringcom/rack-gateway:v0.1.0
 ```
 
 ### Configure Resource Limits

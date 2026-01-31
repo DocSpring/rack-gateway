@@ -123,8 +123,9 @@ Some settings can be configured via the web admin UI and stored in the database:
 | Setting | Environment Variable | Database Setting |
 |---------|---------------------|------------------|
 | Session timeout | `RGW_SETTING_SESSION_TIMEOUT_MINUTES` | `session_timeout_minutes` |
-| Require MFA | `RGW_SETTING_REQUIRE_ALL_USERS` | `require_mfa_all_users` |
-| Step-up window | `RGW_SETTING_STEP_UP_WINDOW_MINUTES` | `step_up_window_minutes` |
+| Require MFA | `RGW_SETTING_MFA_REQUIRE_ALL_USERS` | `mfa_require_all_users` |
+| Step-up window | `RGW_SETTING_MFA_STEP_UP_WINDOW_MINUTES` | `mfa_step_up_window_minutes` |
+| Trusted device TTL | `RGW_SETTING_MFA_TRUSTED_DEVICE_TTL_DAYS` | `mfa_trusted_device_ttl_days` |
 
 **Precedence**: Database values take priority over environment variables when set.
 

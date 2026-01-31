@@ -11,8 +11,6 @@ Effective monitoring ensures Rack Gateway remains available and helps identify i
 
 Rack Gateway exposes health endpoints for monitoring and orchestration:
 
-### Liveness Check
-
 ```bash
 curl https://gateway.example.com/api/v1/health
 ```
@@ -28,29 +26,6 @@ Use for:
 - Container/pod liveness probes
 - Basic uptime monitoring
 - Load balancer health checks
-
-### Readiness Check
-
-```bash
-curl https://gateway.example.com/api/v1/health/ready
-```
-
-Response:
-```json
-{
-  "status": "ready",
-  "database": "connected"
-}
-```
-
-Use for:
-- Container/pod readiness probes
-- Deployment verification
-- Dependency health validation
-
-<Aside type="tip">
-The readiness endpoint verifies database connectivity. If it fails, the gateway can receive requests but may not function correctly.
-</Aside>
 
 ## Kubernetes Probes
 
@@ -75,7 +50,7 @@ spec:
             failureThreshold: 3
           readinessProbe:
             httpGet:
-              path: /api/v1/health/ready
+              path: /api/v1/health
               port: 8443
             initialDelaySeconds: 5
             periodSeconds: 10
@@ -134,19 +109,34 @@ Sentry automatically filters sensitive fields. Additional scrubbing is configure
 
 ### Log Format
 
-Rack Gateway uses structured JSON logging:
+Rack Gateway emits two kinds of logs:
+
+- **Application logs** use standard text output (Go `log` format)
+- **Audit logs** are structured JSON written to stdout for CloudWatch ingestion
+
+Example application log:
+
+```
+2025/01/29 12:34:56 WebAuthn enabled: rpid=gateway.example.com origin=https://gateway.example.com
+```
+
+Example audit log (JSON):
 
 ```json
 {
-  "level": "info",
-  "time": "2024-01-15T10:30:00Z",
-  "message": "Request completed",
-  "method": "POST",
-  "path": "/apps/myapp/releases",
-  "status": 200,
-  "duration_ms": 150,
-  "user": "alice@example.com",
-  "request_id": "req_abc123"
+  "ts": "2024-01-15T10:30:00Z",
+  "user_email": "alice@example.com",
+  "action_type": "convox",
+  "action": "deploy.create",
+  "resource": "myapp",
+  "resource_type": "app",
+  "status": "success",
+  "rbac_decision": "allow",
+  "http_status": 200,
+  "latency_ms": 1250,
+  "ip_address": "192.168.1.100",
+  "user_agent": "rack-gateway-cli/1.0.0",
+  "event_count": 1
 }
 ```
 

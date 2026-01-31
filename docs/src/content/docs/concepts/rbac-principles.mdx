@@ -54,10 +54,10 @@ Specific actions that can be performed. Rack Gateway uses a hierarchical permiss
 
 ```
 convox:*                    # All Convox permissions
-convox:apps:*               # All app-related permissions
-convox:apps:list            # List applications
-convox:apps:create          # Create applications
-convox:releases:promote     # Promote releases (deploy)
+convox:app:*                # All app-related permissions
+convox:app:list             # List applications
+convox:app:create           # Create applications
+convox:release:promote      # Promote releases (deploy)
 ```
 
 ### Role-Permission Mapping
@@ -183,13 +183,13 @@ What actions can be performed on each resource?
 Combine resources and operations:
 
 ```
-apps:list
-apps:create
-apps:delete
-deploys:create
-deploys:promote
-logs:view
-users:create
+convox:app:list
+convox:app:create
+convox:app:delete
+convox:release:create
+convox:release:promote
+convox:log:read
+gateway:user:create
 ```
 
 ### Step 4: Define Roles
@@ -198,22 +198,23 @@ Group permissions by job function:
 
 ```yaml
 viewer:
-  - apps:list
-  - logs:view
+  - convox:app:list
+  - convox:log:read
 
 developer:
-  - apps:list
-  - apps:update
-  - logs:view
-  - exec:run
+  - convox:app:list
+  - convox:app:update
+  - convox:log:read
+  - convox:process:exec
 
 operator:
-  - apps:*
-  - deploys:*
-  - logs:*
+  - convox:app:*
+  - convox:release:*
+  - convox:log:*
 
 admin:
-  - *:*
+  - convox:*:*
+  - gateway:*:*
 ```
 
 ### Step 5: Assign Roles to Users
@@ -235,8 +236,8 @@ users:
 | Role | Purpose | Key Permissions |
 |------|---------|-----------------|
 | **Admin** | Full system access | All permissions including user management |
-| **Operator** | Production operations | Deploy, scale, environment management |
-| **Developer** | Development work | Run commands, view logs, limited writes |
+| **Deployer** | Production operations | Deploy, scale, environment management |
+| **Ops** | Operational work | Run commands, view logs, manage processes |
 | **Viewer** | Read-only access | View apps, logs, status |
 
 ### Permission Structure
@@ -244,18 +245,18 @@ users:
 Rack Gateway uses a hierarchical permission system:
 
 ```
-gateway:*              # All gateway permissions
-gateway:admin:*        # Admin functions
-gateway:admin:users    # User management
-gateway:admin:tokens   # API token management
-gateway:admin:settings # Settings management
+gateway:*                     # All gateway permissions
+gateway:user:*                # User management
+gateway:api_token:*           # API token management
+gateway:deploy_approval_request:* # Deploy approvals
+gateway:setting:*             # Settings (individual)
 
-convox:*               # All Convox permissions
-convox:apps:*          # App management
-convox:builds:*        # Build operations
-convox:releases:*      # Release/deploy operations
-convox:env:*           # Environment variables
-convox:exec:*          # Command execution
+convox:*                      # All Convox permissions
+convox:app:*                  # App management
+convox:build:*                # Build operations
+convox:release:*              # Release/deploy operations
+convox:env:*                  # Environment variables
+convox:process:*              # Process operations
 ```
 
 ### Role Assignment

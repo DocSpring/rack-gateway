@@ -129,10 +129,9 @@ Authentication and MFA resources:
 
 | Permission | Description | Roles |
 |------------|-------------|-------|
-| `convox:build:list` | List builds | viewer, ops, deployer, cicd, admin |
-| `convox:build:read` | View build details | viewer, ops, deployer, cicd, admin |
+| `convox:build:list` | List builds | viewer, ops, deployer, admin |
+| `convox:build:read` | View build details | viewer, ops, deployer, admin |
 | `convox:build:create` | Create new build | deployer, admin |
-| `convox:build:delete` | Delete build | admin |
 
 </TabItem>
 <TabItem label="Releases">
@@ -206,7 +205,7 @@ Environment variables often contain secrets (API keys, database passwords). Only
 |------------|-------------|-------|
 | `gateway:api_token:list` | List all API tokens | admin |
 | `gateway:api_token:read` | View token details | admin |
-| `gateway:api_token:create` | Create new token | deployer, admin |
+| `gateway:api_token:create` | Create new token | admin |
 | `gateway:api_token:delete` | Delete/revoke token | admin |
 
 <Aside type="note">
@@ -228,11 +227,10 @@ Users can always manage their own API tokens. These permissions control access t
 
 | Permission | Description | Roles |
 |------------|-------------|-------|
-| `gateway:setting:read` | View gateway settings | admin |
-| `gateway:setting:set` | Modify gateway settings | admin |
 | `gateway:setting:{key}` | Modify specific setting | admin |
+| `gateway:setting_group:{group}` | Modify a setting group | admin |
 
-Settings are controlled individually by key. See [Settings](/user-guide/web-ui/settings/) for available keys.
+Settings are controlled by key or group. See [Settings](/user-guide/web-ui/settings/) for available keys.
 
 </TabItem>
 <TabItem label="Integrations">
@@ -254,8 +252,8 @@ These permissions control MFA and authentication operations:
 
 | Permission | Description | Notes |
 |------------|-------------|-------|
-| `auth:mfa_method:list` | List user's MFA methods | Self-service |
 | `auth:mfa_method:create` | Enroll new MFA method | Self-service |
+| `auth:mfa_method:update` | Update MFA method | Self-service |
 | `auth:mfa_method:delete` | Remove MFA method | Self-service |
 | `auth:mfa_backup_codes:generate` | Generate backup codes | Self-service |
 | `auth:mfa_verification:create` | Initiate MFA challenge | System |
@@ -321,15 +319,15 @@ Common API endpoints and their required permissions:
 
 | Endpoint | Method | Permission |
 |----------|--------|------------|
-| `/apps` | GET | `convox:app:list` |
-| `/apps/:name` | GET | `convox:app:read` |
-| `/apps/:name` | DELETE | `convox:app:delete` |
-| `/apps/:name/builds` | POST | `convox:build:create` |
-| `/apps/:name/processes` | GET | `convox:process:list` |
-| `/apps/:name/processes/:id/exec` | POST | `convox:process:exec` |
-| `/apps/:name/env` | GET | `convox:env:read` |
-| `/apps/:name/env` | POST | `convox:env:set` |
-| `/apps/:name/releases/:id/promote` | POST | `convox:release:promote` |
+| `/api/v1/rack-proxy/apps` | GET | `convox:app:list` |
+| `/api/v1/rack-proxy/apps/:name` | GET | `convox:app:read` |
+| `/api/v1/rack-proxy/apps/:name` | DELETE | `convox:app:delete` |
+| `/api/v1/rack-proxy/apps/:name/builds` | POST | `convox:build:create` |
+| `/api/v1/rack-proxy/apps/:name/processes` | GET | `convox:process:list` |
+| `/api/v1/rack-proxy/apps/:name/processes/:id/exec` | POST | `convox:process:exec` |
+| `/api/v1/apps/:app/env` | GET | `convox:env:read` |
+| `/api/v1/apps/:app/env` | PUT | `convox:env:set` |
+| `/api/v1/rack-proxy/apps/:name/releases/:id/promote` | POST | `convox:release:promote` |
 
 ## Next Steps
 

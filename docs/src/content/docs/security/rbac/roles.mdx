@@ -228,9 +228,9 @@ The CI/CD role is designed to work with [Deploy Approvals](/integrations/deploy-
 
 ```bash
 # In CI/CD pipeline
-rack-gateway deploy-request create -a myapp --build-id BXYZ123
+rack-gateway deploy-approval request --app myapp --commit <sha>
 # ... wait for approval ...
-rack-gateway releases promote RXYZ789 -a myapp
+rack-gateway deploy -a myapp
 ```
 
 ### Why Not Use Deployer for CI/CD?
@@ -287,9 +287,9 @@ The wildcard permissions grant access to everything, including:
 | Change user roles | `gateway:user:update` |
 | View all API tokens | `gateway:api_token:list` |
 | Delete any API token | `gateway:api_token:delete` |
-| View audit logs | `gateway:audit:read` |
+| View audit logs | `gateway:*:*` |
 | Delete applications | `convox:app:delete` |
-| Configure gateway settings | `gateway:setting:set` |
+| Configure gateway settings | `gateway:setting_group:*` |
 
 <Aside type="caution" title="Limit Admin Access">
 Follow the principle of least privilege. Most teams should have only 2-3 admins. Regular engineers should use Deployer or Ops roles.
@@ -311,7 +311,7 @@ Follow the principle of least privilege. Most teams should have only 2-3 admins.
 | Promote releases | No | No | Yes | No | Yes |
 | Set environment variables | No | No | Yes | No | Yes |
 | Request deploy approval | No | No | Yes | Yes | Yes |
-| Deploy with approval | No | No | Yes | Yes | Yes |
+| Deploy with approval | No | No | No | Yes | Yes |
 | Manage users | No | No | No | No | Yes |
 | View audit logs | No | No | No | No | Yes |
 | Delete applications | No | No | No | No | Yes |

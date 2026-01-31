@@ -20,7 +20,7 @@ flowchart TB
     subgraph Developer["Developer Machine"]
         CLI["rack-gateway CLI"]
         Convox["Native convox CLI"]
-        CLI --> RACKURL["RACK_URL=https://convox:token@gateway"]
+        CLI --> RACKURL["RACK_URL=https://convox:token@gateway/api/v1/rack-proxy"]
         Convox --> RACKURL
     end
 
@@ -61,11 +61,11 @@ rack-gateway login staging https://gateway.example.com
 ### 2. Command Execution
 
 ```bash
-rack-gateway convox apps
+rack-gateway apps
 # or: convox apps (with RACK_URL set)
 ```
 
-1. CLI sets `RACK_URL=https://convox:<session-token>@gateway.example.com`
+1. CLI sets `RACK_URL=https://convox:<session-token>@gateway.example.com/api/v1/rack-proxy`
 2. Convox CLI sends request to gateway with Basic Auth
 3. Gateway extracts token from Basic Auth password
 4. Gateway validates session token
@@ -118,15 +118,16 @@ A React single-page application served by the gateway:
 
 ### CLI Client
 
-The `rack-gateway` CLI is required for interacting with Rack Gateway. It provides:
+The `rack-gateway` CLI is recommended for interacting with Rack Gateway. It provides:
 
 - **Login/Logout**: OAuth authentication flow with the gateway
 - **Multi-Rack**: Configure and switch between multiple gateways
 - **Command Wrapper**: Wraps convox commands with authentication
 - **MFA Integration**: Handles step-up authentication prompts
 
-<Aside type="note" title="Required CLI">
-Users must install and use the `rack-gateway` CLI to interact with the gateway. It handles authentication and wraps convox commands transparently.
+<Aside type="note" title="CLI vs Native Convox CLI">
+You can use the native Convox CLI by setting `RACK_URL` to the gateway proxy path. The `rack-gateway`
+CLI makes OAuth login and multi-rack management easier, but it is not required.
 </Aside>
 
 ## Database Schema
@@ -156,12 +157,12 @@ mfa_methods
 ├── secret, public_key_credential
 └── name, last_used_at
 
-audit_logs
+audit.audit_event
 ├── id, timestamp, user_email
-├── method, path, status_code
-├── request_id, client_ip
-├── rbac_decision, latency_ms
-└── (request_body, response_body - redacted)
+├── action_type, action, status
+├── request_id, ip_address
+├── rbac_decision, response_time_ms
+└── details (redacted as needed)
 ```
 
 ## Security Architecture

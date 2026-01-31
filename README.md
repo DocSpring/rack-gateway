@@ -48,7 +48,7 @@ for managing multiple racks, monitoring and alerts, workflows for CI/CD, etc.
 
 - **[docs/DEPLOY.md](docs/DEPLOY.md)** - Production deployment guide
 - **[docs/CONFIGURATION.md](docs/CONFIGURATION.md)** - All environment variables and options
-- **[docs/CONVOX_REFERENCE.md](docs/CONVOX_REFERENCE.md)** - How Convox works
+- **[docs/legacy/CONVOX_REFERENCE.md](docs/legacy/CONVOX_REFERENCE.md)** - How Convox works
 
 ## Features
 
@@ -93,9 +93,9 @@ task dev
 # Login (opens mock OAuth in browser)
 ./bin/rack-gateway login staging http://localhost:8447
 
-# Run convox commands through the gateway
-./bin/rack-gateway convox apps
-./bin/rack-gateway convox ps
+# Run Convox commands through the gateway
+./bin/rack-gateway apps
+./bin/rack-gateway ps
 ```
 
 ### Prerequisites
@@ -182,29 +182,29 @@ The gateway acts as a transparent proxy that speaks the Convox API protocol. It 
 
 ```bash
 # For CI/CD with API token
-export RACK_URL="https://convox:<api-token>@gateway.example.com"
+export RACK_URL="https://convox:<api-token>@gateway.example.com/api/v1/rack-proxy"
 convox apps  # Uses standard convox CLI directly
 
 # For developers with session token
-export RACK_URL="https://convox:<session-token>@gateway.example.com"
+export RACK_URL="https://convox:<session-token>@gateway.example.com/api/v1/rack-proxy"
 convox apps  # Uses standard convox CLI directly
 ```
 
 #### Option 2: rack-gateway CLI Wrapper (Convenience)
 
 ```bash
-# Use our wrapper for easier multi-rack management
+# Use our CLI for easier multi-rack management
 rack-gateway login staging https://gateway.example.com
-rack-gateway convox apps  # Automatically sets RACK_URL with stored token
+rack-gateway apps  # Automatically proxies via the gateway
 
 # Set up convenient shell alias
-alias cx="rack-gateway convox"
-cx apps
-cx ps
-cx deploy
+alias cg="rack-gateway"
+cg apps
+cg ps
+cg deploy
 ```
 
-The `rack-gateway` CLI wrapper is optional - it just provides:
+The `rack-gateway` CLI is optional if you prefer the native Convox CLI. It provides:
 
 - Automatic token management
 - Multi-rack configuration
@@ -225,16 +225,16 @@ rack-gateway login staging https://gateway.example.com
 ### Running Convox Commands
 
 ```bash
-# All convox commands go through "rack-gateway convox"
-rack-gateway convox apps
-rack-gateway convox ps
-rack-gateway convox deploy
+# Convox commands are available directly
+rack-gateway apps
+rack-gateway ps
+rack-gateway deploy
 
-# With the cx alias:
-cx apps
-cx ps
-cx deploy
-cx logs -f
+# With the cg alias:
+cg apps
+cg ps
+cg deploy
+cg logs -f
 ```
 
 ### Managing Racks
@@ -259,8 +259,8 @@ cg switch eu-west
 
 The CLI determines which rack to use in this order:
 
-1. `--rack` flag: `rack-gateway --rack production convox apps`
-2. Environment variable: `RACK_GATEWAY_RACK=production cx apps`
+1. `--rack` flag: `rack-gateway --rack production apps`
+2. Environment variable: `RACK_GATEWAY_RACK=production rack-gateway apps`
 3. Current rack stored in `~/.config/rack-gateway/config.json`
 
 ### Generate shell completions:
@@ -302,6 +302,7 @@ The CLI stores its configuration separately:
 - **ops**: Restart apps, view env (via releases), manage processes
 - **deployer**: Full deployment permissions (builds/releases), non-destructive
 - **admin**: Complete access to all operations
+- **cicd**: Automation tokens only (not assignable to human users)
 
 ### Permissions
 

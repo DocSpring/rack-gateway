@@ -50,9 +50,9 @@ Every API request generates an audit log entry:
   "ts": "2024-01-15T10:30:00Z",
   "user_email": "developer@example.com",
   "user_name": "Alice Developer",
-  "api_token_name": "",
+  "api_token_name": "ci-deploy",
   "action_type": "convox",
-  "action": "deploy",
+  "action": "deploy.create",
   "resource": "myapp",
   "resource_type": "app",
   "command": "releases promote RABCDEF",
@@ -74,8 +74,8 @@ Every API request generates an audit log entry:
 | `user_email` | User's email address | `alice@example.com` |
 | `user_name` | User's display name | `Alice Developer` |
 | `api_token_name` | Token name (if used) | `ci-deploy` |
-| `action_type` | Category: convox, gateway | `convox` |
-| `action` | Specific action | `deploy`, `env:set` |
+| `action_type` | Category: convox, auth, users, tokens, admin | `convox` |
+| `action` | Specific action | `deploy.create`, `user.create` |
 | `resource` | Target resource | `myapp` |
 | `resource_type` | Resource category | `app`, `build`, `release` |
 | `command` | Full command executed | `releases promote RABCDEF` |
@@ -95,23 +95,18 @@ Sensitive data is automatically redacted before logging:
 
 | Pattern | Example | Redacted As |
 |---------|---------|-------------|
-| API keys | `API_KEY=secret123` | `API_KEY=[REDACTED]` |
-| Passwords | `PASSWORD=hunter2` | `PASSWORD=[REDACTED]` |
-| Tokens | `TOKEN=abc123def` | `TOKEN=[REDACTED]` |
-| Private keys | `-----BEGIN PRIVATE KEY-----` | `[REDACTED_PRIVATE_KEY]` |
-| AWS credentials | `AKIAIOSFODNN7EXAMPLE` | `[REDACTED_AWS_KEY]` |
-| Database URLs | `postgres://user:pass@host` | `postgres://[REDACTED]@host` |
+| Secrets/tokens/passwords | `PASSWORD=hunter2` | `PASSWORD=[REDACTED]` |
+| Auth headers/cookies | `Authorization: Bearer ...` | `[REDACTED]` |
+| API/client secrets | `CLIENT_SECRET=...` | `[REDACTED]` |
 
 ### Redaction Rules
 
 ```go
 // Built-in redaction patterns
 var redactPatterns = []string{
-    `(?i)(password|passwd|pwd|secret|token|api[_-]?key|auth[_-]?key)=([^\s&]+)`,
-    `(?i)(bearer|basic)\s+[a-zA-Z0-9+/=._-]+`,
-    `-----BEGIN\s+(RSA|EC|DSA|OPENSSH)?\s*PRIVATE\s+KEY-----`,
-    `AKIA[0-9A-Z]{16}`,
-    `(?i)postgres://[^:]+:([^@]+)@`,
+    `(?i)(secret|token|password|key|authorization|cookie|set-cookie|session)`,
+    `(?i)(api[-_]?key|api[-_]?secret|client[-_]?secret)`,
+    `(?i)(bearer|jwt|auth)`,
 }
 ```
 
@@ -123,32 +118,8 @@ Redaction happens before any logging, including stdout and database storage. Sec
 
 ### PostgreSQL (Primary)
 
-Audit logs are stored in PostgreSQL for fast querying:
-
-```sql
-CREATE TABLE audit_logs (
-    id BIGSERIAL PRIMARY KEY,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    user_id BIGINT REFERENCES users(id),
-    user_email TEXT NOT NULL,
-    user_name TEXT,
-    api_token_id BIGINT REFERENCES api_tokens(id),
-    api_token_name TEXT,
-    action_type TEXT NOT NULL,
-    action TEXT NOT NULL,
-    resource TEXT,
-    resource_type TEXT,
-    command TEXT,
-    status TEXT NOT NULL,
-    rbac_decision TEXT,
-    http_status INTEGER,
-    response_time_ms INTEGER,
-    ip_address TEXT,
-    user_agent TEXT,
-    request_id TEXT,
-    metadata JSONB
-);
-```
+Audit logs are stored in PostgreSQL under the `audit.audit_event` table. The table is
+append-only and protected by row-level security to prevent tampering.
 
 ### CloudWatch (Stream)
 
@@ -161,12 +132,13 @@ Logs are also written to stdout in structured JSON format for CloudWatch ingesti
 
 ### S3 WORM (Archival)
 
-For compliance requirements, logs can be anchored to S3 with Object Lock:
+For compliance requirements, the gateway writes periodic **anchors** to S3 Object Lock.
+Anchors capture the chain head hash and metadata (not full log exports).
 
 ```mermaid
 graph LR
-    DB[(PostgreSQL)] -->|Batch Export| Anchor[Anchor Job]
-    Anchor -->|Upload + SHA256| S3[S3 WORM Bucket]
+    DB[(PostgreSQL)] -->|Chain Head Hash| Anchor[Anchor Job]
+    Anchor -->|Upload JSON + SHA256| S3[S3 WORM Bucket]
     S3 -->|7 Year Retention| Archive[Immutable Archive]
 ```
 
@@ -185,22 +157,6 @@ See [Data Retention](/security/compliance/data-retention/) for S3 WORM configura
 3. Click entries to view full details
 4. Export for compliance reports
 
-### CLI
-
-```bash
-# Search by user
-rack-gateway audit search --user alice@example.com --days 30
-
-# Search by action
-rack-gateway audit search --action deploy --days 7
-
-# Search by decision
-rack-gateway audit search --decision deny --days 90
-
-# Export to JSON
-rack-gateway audit search --from "2024-01-01" --to "2024-03-31" --format json > audit.json
-```
-
 ### SQL Queries
 
 For advanced queries, access the database directly:
@@ -210,15 +166,15 @@ For advanced queries, access the database directly:
 
 ```sql
 SELECT
-    created_at,
+    timestamp,
     user_email,
     action,
     resource,
     status,
     rbac_decision
-FROM audit_logs
-WHERE created_at > NOW() - INTERVAL '7 days'
-ORDER BY created_at DESC
+FROM audit.audit_event
+WHERE timestamp > NOW() - INTERVAL '7 days'
+ORDER BY timestamp DESC
 LIMIT 100;
 ```
 
@@ -227,15 +183,15 @@ LIMIT 100;
 
 ```sql
 SELECT
-    created_at,
+    timestamp,
     user_email,
     action,
     resource,
     ip_address
-FROM audit_logs
+FROM audit.audit_event
 WHERE rbac_decision = 'deny'
-  AND created_at > NOW() - INTERVAL '30 days'
-ORDER BY created_at DESC;
+  AND timestamp > NOW() - INTERVAL '30 days'
+ORDER BY timestamp DESC;
 ```
 
 </TabItem>

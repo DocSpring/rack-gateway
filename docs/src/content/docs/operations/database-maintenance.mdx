@@ -9,14 +9,14 @@ Rack Gateway uses PostgreSQL for persistent storage. This guide covers database 
 
 ## Database Commands
 
-The `rack-gateway` binary includes maintenance subcommands for database operations.
+The `rack-gateway-api` binary includes maintenance subcommands for database operations.
 
 ### Apply Migrations
 
 Apply pending database migrations:
 
 ```bash
-rack-gateway migrate
+rack-gateway-api migrate
 ```
 
 This command:
@@ -26,7 +26,7 @@ This command:
 - Is safe to run repeatedly (idempotent)
 
 <Aside type="tip">
-Run `rack-gateway migrate` as part of your deployment process to ensure the schema is up to date before starting the application.
+Run `rack-gateway-api migrate` as part of your deployment process to ensure the schema is up to date before starting the application.
 </Aside>
 
 ### Reset Database
@@ -38,7 +38,7 @@ Reset the database to a clean state (development only):
 export RESET_RACK_GATEWAY_DATABASE=DELETE_ALL_DATA
 export DEV_MODE=true
 
-rack-gateway reset-db
+rack-gateway-api reset-db
 ```
 
 <Aside type="danger">
@@ -108,7 +108,7 @@ pg_dump $DATABASE_URL | gzip > rack_gateway_backup_$(date +%Y%m%d).sql.gz
 3. **Run any pending migrations**
 
    ```bash
-   rack-gateway migrate
+   rack-gateway-api migrate
    ```
 
 4. **Restart the service**
@@ -126,10 +126,12 @@ The database contains these main tables:
 | Table | Purpose |
 |-------|---------|
 | `users` | User accounts from OAuth |
-| `sessions` | Active user sessions |
+| `user_sessions` | Active user sessions |
 | `api_tokens` | API tokens for CI/CD |
 | `mfa_methods` | User MFA enrollments |
-| `audit_logs` | Request audit trail |
+| `audit.audit_event` | Immutable audit log entries |
+| `mfa_backup_codes` | MFA backup codes |
+| `trusted_devices` | Trusted devices for step-up |
 | `settings` | Gateway configuration |
 | `deploy_approval_requests` | Pending deploy approvals |
 
@@ -137,10 +139,10 @@ The database contains these main tables:
 
 ```mermaid
 erDiagram
-    users ||--o{ sessions : has
+    users ||--o{ user_sessions : has
     users ||--o{ api_tokens : creates
     users ||--o{ mfa_methods : enrolls
-    users ||--o{ audit_logs : generates
+    users ||--o{ audit_event : generates
     users ||--o{ deploy_approval_requests : creates
 ```
 
@@ -152,25 +154,25 @@ Sessions expire automatically, but you can manually clean up:
 
 ```sql
 -- Delete sessions older than 30 days
-DELETE FROM sessions
+DELETE FROM user_sessions
 WHERE created_at < NOW() - INTERVAL '30 days';
 ```
 
 ### Cleanup Old Audit Logs
 
-Audit logs are retained according to `LOG_RETENTION_DAYS`:
+Audit log retention is policy-driven. WORM anchors use `AUDIT_ANCHOR_RETENTION_DAYS`.
 
 ```sql
 -- Check audit log volume
-SELECT COUNT(*), DATE(created_at) as day
-FROM audit_logs
-GROUP BY DATE(created_at)
+SELECT COUNT(*), DATE(timestamp) as day
+FROM audit.audit_event
+GROUP BY DATE(timestamp)
 ORDER BY day DESC
 LIMIT 10;
 
 -- Manual cleanup (if needed)
-DELETE FROM audit_logs
-WHERE created_at < NOW() - INTERVAL '400 days';
+DELETE FROM audit.audit_event
+WHERE timestamp < NOW() - INTERVAL '400 days';
 ```
 
 <Aside type="caution">

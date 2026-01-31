@@ -23,17 +23,16 @@ API tokens provide authentication for automated systems like CI/CD pipelines, sc
 Each API token consists of:
 
 ```
-Format: rgwt_[role]_[random]
+Format: rgw_<random>
 
-Example: rgwt_cicd_kX7mN2pQ9rT4wY8zA1bC3dE5fG
-         ^^^^  ^^^^  ^^^^^^^^^^^^^^^^^^^^^^^^^^
-         prefix role  random component
+Example: rgw_kX7mN2pQ9rT4wY8zA1bC3dE5fG==
+         ^^^^  ^^^^^^^^^^^^^^^^^^^^^^^^^
+         prefix random component
 ```
 
 | Component | Description |
 |-----------|-------------|
-| `rgwt_` | Rack Gateway Token prefix |
-| Role code | Short role identifier (viewer, ops, deployer, cicd, admin) |
+| `rgw_` | Rack Gateway token prefix |
 | Random | 32 bytes, base64url encoded |
 
 ### Token Storage
@@ -41,7 +40,7 @@ Example: rgwt_cicd_kX7mN2pQ9rT4wY8zA1bC3dE5fG
 Like session tokens, API tokens are hashed before storage:
 
 ```
-Client has:  rgwt_cicd_kX7mN2pQ9rT4wY8...
+Client has:  rgw_kX7mN2pQ9rT4wY8...
 Database:    SHA-256 hash of full token
 ```
 
@@ -51,7 +50,7 @@ The full token is only shown once at creation time. It cannot be recovered. Stor
 
 ## Token Roles
 
-API tokens are assigned a role that determines their permissions:
+API tokens store explicit permissions. Roles are a shortcut at creation time:
 
 | Role | Use Case | Permissions |
 |------|----------|-------------|
@@ -98,10 +97,10 @@ rack-gateway api-token create --name "Datadog Monitor" --role viewer
 
 ```bash
 # Set token as environment variable
-export RACK_GATEWAY_TOKEN=rgwt_cicd_kX7mN2pQ9rT4...
+export RACK_GATEWAY_API_TOKEN=rgw_kX7mN2pQ9rT4...
 
-# Or use --token flag
-rack-gateway apps --token rgwt_cicd_kX7mN2pQ9rT4...
+# Or use --api-token flag
+rack-gateway apps --api-token rgw_kX7mN2pQ9rT4...
 ```
 
 ### HTTP API Usage
@@ -109,8 +108,8 @@ rack-gateway apps --token rgwt_cicd_kX7mN2pQ9rT4...
 Include the token in the `Authorization` header:
 
 ```bash
-curl -H "Authorization: Bearer rgwt_cicd_kX7mN2pQ9rT4..." \
-  https://gateway.example.com/apps
+curl -H "Authorization: Bearer rgw_kX7mN2pQ9rT4..." \
+  https://gateway.example.com/api/v1/rack-proxy/apps
 ```
 
 ### CI/CD Integration
@@ -131,7 +130,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Deploy
         env:
-          RACK_GATEWAY_TOKEN: ${{ secrets.RACK_GATEWAY_TOKEN }}
+          RACK_GATEWAY_API_TOKEN: ${{ secrets.RACK_GATEWAY_API_TOKEN }}
         run: |
           rack-gateway deploy -a myapp
 ```
@@ -154,7 +153,7 @@ jobs:
           name: Deploy
           command: rack-gateway deploy -a myapp
           environment:
-            RACK_GATEWAY_TOKEN: ${RACK_GATEWAY_TOKEN}
+            RACK_GATEWAY_API_TOKEN: ${RACK_GATEWAY_API_TOKEN}
 ```
 
 Store the token in CircleCI Environment Variables (Project Settings → Environment Variables).
@@ -168,7 +167,7 @@ deploy:
   script:
     - rack-gateway deploy -a myapp
   variables:
-    RACK_GATEWAY_TOKEN: $RACK_GATEWAY_TOKEN
+    RACK_GATEWAY_API_TOKEN: $RACK_GATEWAY_API_TOKEN
 ```
 
 Store the token in GitLab CI/CD Variables (Settings → CI/CD → Variables).
@@ -180,16 +179,10 @@ Store the token in GitLab CI/CD Variables (Settings → CI/CD → Variables).
 
 ### Listing Tokens
 
-Users can see their own tokens:
+API token management is admin-only:
 
 ```bash
-rack-gateway api-tokens list
-```
-
-Admins can see all tokens:
-
-```bash
-rack-gateway api-tokens list --all
+rack-gateway api-token list
 ```
 
 ### Revoking Tokens
@@ -208,11 +201,10 @@ Each token tracks:
 | Field | Description |
 |-------|-------------|
 | `name` | Descriptive identifier |
-| `role` | Assigned role |
+| `permissions` | Explicit permissions on the token |
 | `created_by` | User who created the token |
 | `created_at` | Creation timestamp |
 | `last_used_at` | Last successful use |
-| `use_count` | Total number of uses |
 
 ## Security Best Practices
 

@@ -141,9 +141,10 @@ task dev
 
 Several files are auto-generated:
 
-- **OpenAPI spec**: `internal/gateway/openapi/spec.yaml`
-- **TypeScript types**: `web/src/api/types.ts`
-- **API client**: `web/src/api/client.ts`
+- **OpenAPI spec (server)**: `internal/gateway/openapi/generated/swagger.json`
+- **OpenAPI spec (web)**: `web/src/api/openapi.json`
+- **TypeScript types**: `web/src/api/types.generated.ts`
+- **API client**: `web/src/api/generated.ts`
 
 Regenerate with:
 

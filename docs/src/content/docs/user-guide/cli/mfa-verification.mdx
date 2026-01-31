@@ -118,13 +118,13 @@ After successful MFA verification, there's typically a window (default: 10 minut
 
 ## Pre-emptive MFA Verification
 
-You can verify MFA before running commands using the `--mfa` flag or `--mfa-code`:
+You can preflight your MFA status or supply a code for non-interactive runs.
 
-### Using --mfa flag
+### Check MFA status
 
 ```bash
-# Triggers interactive MFA prompt before the command
-rack-gateway deploy -a myapp --mfa
+# Verify MFA enrollment and status
+rack-gateway test-auth mfa
 ```
 
 ### Using --mfa-code
@@ -147,7 +147,7 @@ rack-gateway deploy -a myapp --mfa-method webauthn
 Check your MFA enrollment and verification status:
 
 ```bash
-$ rack-gateway test-auth --mfa
+$ rack-gateway test-auth mfa
 
 ✓ Authenticated as developer@company.com
   Role: deployer

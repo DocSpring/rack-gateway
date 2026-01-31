@@ -92,8 +92,8 @@ graph TB
 |---------|----------------|----------|
 | Encryption in transit | TLS 1.2+ required | HTTPS configuration |
 | Encryption at rest | AWS KMS for S3 | KMS key policy |
-| Data retention | Configurable policies | Retention settings |
-| Data deletion | Automatic after retention | Cleanup jobs |
+| Data retention | Operator-managed retention | Retention policy docs |
+| Data deletion | Manual purge | Database procedures |
 
 ## Compliance Checklist
 
@@ -154,20 +154,12 @@ For compliance audits, Rack Gateway provides:
 
 ## Audit Log Queries
 
-Common queries for compliance evidence:
+Use the admin API or direct SQL:
 
 ```bash
-# All admin actions in a time period
-rack-gateway audit search --role admin --from "2024-01-01" --to "2024-03-31"
-
-# Failed access attempts
-rack-gateway audit search --decision deny --days 90
-
-# User activity for access review
-rack-gateway audit search --user alice@example.com --days 90
-
-# Deployment activity
-rack-gateway audit search --action deploy --days 30
+# API: last 7 days for a user
+curl -H "Authorization: Bearer TOKEN" \
+  "https://gateway.example.com/api/v1/audit-logs?user=alice@example.com&range=7d"
 ```
 
 ## Compliance Reporting

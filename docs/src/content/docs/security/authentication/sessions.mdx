@@ -145,7 +145,7 @@ CLI sessions have a fixed 90-day lifetime:
 
 ```bash
 # Set idle timeout to 15 minutes
-SESSION_TIMEOUT_MINUTES=15
+RGW_SETTING_SESSION_TIMEOUT_MINUTES=15
 ```
 
 The timeout is stored with each session, so existing sessions keep their original timeout when settings change.
