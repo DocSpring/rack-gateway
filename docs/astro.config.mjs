@@ -277,19 +277,6 @@ export default defineConfig({
             { label: 'API Reference', slug: 'development/api-reference' },
           ],
         },
-        {
-          label: 'Reference',
-          items: [
-            { label: 'CLI Commands', slug: 'reference/cli-commands' },
-            {
-              label: 'Environment Variables',
-              slug: 'reference/environment-variables',
-            },
-            { label: 'RBAC Permissions', slug: 'reference/rbac-permissions' },
-            { label: 'Audit Events', slug: 'reference/audit-events' },
-            { label: 'API Endpoints', slug: 'reference/api-endpoints' },
-          ],
-        },
       ],
     }),
   ],
