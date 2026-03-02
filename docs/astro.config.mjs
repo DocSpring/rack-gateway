@@ -280,7 +280,6 @@ export default defineConfig({
         {
           label: 'Reference',
           items: [
-            { label: 'Overview', slug: 'reference' },
             { label: 'CLI Commands', slug: 'reference/cli-commands' },
             {
               label: 'Environment Variables',

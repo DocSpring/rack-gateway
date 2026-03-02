@@ -1,6 +1,6 @@
 module github.com/DocSpring/rack-gateway
 
-go 1.25.0
+go 1.25.6
 
 require (
 	github.com/GeertJohan/yubigo v0.0.0-20190917122436-175bc097e60e
