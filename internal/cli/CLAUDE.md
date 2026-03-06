@@ -19,13 +19,14 @@ The `rack-gateway` CLI is a multi-rack aware wrapper around the `convox` CLI tha
 1. **Multi-rack support**: Switch between multiple gateway instances
 2. **OAuth flow**: PKCE-based browser authentication
 3. **Token management**: Stores session tokens per rack
-4. **Convox wrapper**: Transparently wraps `convox` CLI commands
+4. **Convox wrapper**: Wraps `convox` CLI commands
 
 ## Configuration
 
 Config file location: `~/.config/rack-gateway/config.json`
 
 Structure:
+
 ```json
 {
   "racks": {
@@ -45,6 +46,7 @@ Structure:
 ## Commands
 
 ### Login
+
 ```bash
 rack-gateway login <rack-name> <gateway-url>
 ```
@@ -52,6 +54,7 @@ rack-gateway login <rack-name> <gateway-url>
 Opens browser for OAuth flow, stores session token in config.
 
 ### Logout
+
 ```bash
 rack-gateway logout
 ```
@@ -59,6 +62,7 @@ rack-gateway logout
 Removes current rack from config.
 
 ### Convox Commands
+
 ```bash
 rack-gateway convox <any-convox-command>
 ```
@@ -74,6 +78,7 @@ task go:e2e
 ```
 
 Tests the complete CLI flow:
+
 - Login via OAuth
 - Token storage
 - Convox command proxying
@@ -81,6 +86,7 @@ Tests the complete CLI flow:
 - Logout
 
 **What the tests verify:**
+
 - Admin user can run all commands
 - Deployer can deploy but not delete apps
 - Ops can view but not modify
@@ -89,6 +95,7 @@ Tests the complete CLI flow:
 ## Development
 
 Build the CLI:
+
 ```bash
 task go:build
 # or

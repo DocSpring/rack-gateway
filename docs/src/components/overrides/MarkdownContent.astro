@@ -1,0 +1,68 @@
+---
+import Default from "@astrojs/starlight/components/MarkdownContent.astro";
+import ImageZoom from "starlight-image-zoom/components/ImageZoom.astro";
+// Extract config object exposed as virtual vite module
+import config from "virtual:@pasqal-io/starlight-client-mermaid";
+const { className } = config;
+// Use the window object to expose global config values from server to client
+declare global {
+  interface Window {
+    __mermaidClassName: string;
+  }
+}
+---
+
+<ImageZoom />
+<Default>
+  <slot />
+  <script define:vars={{ className }} is:inline>
+    window.__mermaidClassName = className;
+  </script>
+  <!-- We can't use define:vars directly on this script, because it would be inlined
+  and async loading of the Mermaid package wouldn't work -->
+  <script>
+    async function renderDiagrams(graphs: HTMLCollectionOf<Element>) {
+      const { default: mermaid } = await import("mermaid");
+
+      function render() {
+        const theme =
+          document.documentElement.getAttribute("data-theme") === "dark"
+            ? "dark"
+            : "default";
+
+        mermaid.initialize({ startOnLoad: false, theme });
+
+        for (const graph of graphs) {
+          const content = graph.getAttribute("data-content");
+          if (!content) continue;
+          const id = "mermaid-" + Math.round(Math.random() * 100000);
+          mermaid
+            .render(id, content)
+            .then((result) => {
+              graph.innerHTML = result.svg;
+              graph.setAttribute("data-status", "rendered");
+            })
+            .catch((e) => {
+              graph.innerHTML = e;
+              graph.setAttribute("data-status", "error");
+            });
+        }
+      }
+
+      render();
+
+      const themeObserver = new MutationObserver(render);
+      themeObserver.observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ["data-theme"],
+      });
+    }
+
+    const mermaidGraphs = document.getElementsByClassName(
+      window.__mermaidClassName,
+    );
+    if (mermaidGraphs.length > 0) {
+      renderDiagrams(mermaidGraphs);
+    }
+  </script>
+</Default>

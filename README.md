@@ -174,7 +174,7 @@ When logging in via http://localhost:8447 during development, you'll be redirect
 
 ## How It Works
 
-The gateway acts as a transparent proxy that speaks the Convox API protocol. It accepts session tokens (for developers) or API tokens (for CI/CD) as authentication.
+Rack gateway is a secure proxy for the Convox API. It accepts session tokens (for developers) or API tokens (for CI/CD) as authentication.
 
 ### Two Ways to Use the Gateway
 

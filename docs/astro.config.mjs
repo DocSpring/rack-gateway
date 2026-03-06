@@ -3,11 +3,11 @@ import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 import starlightImageZoom from 'starlight-image-zoom';
 import starlightLinksValidator from 'starlight-links-validator';
+import starlightClientMermaid from '@pasqal-io/starlight-client-mermaid';
 
 // https://astro.build/config
 export default defineConfig({
-  site: 'https://docspring.github.io',
-  base: '/rack-gateway',
+  site: 'https://docspring.github.io/rack-gateway',
   integrations: [
     starlight({
       title: 'Rack Gateway',
@@ -27,7 +27,10 @@ export default defineConfig({
       editLink: {
         baseUrl: 'https://github.com/docspring/rack-gateway/edit/main/docs/',
       },
-      plugins: [starlightImageZoom(), starlightLinksValidator()],
+      plugins: [starlightImageZoom(), starlightLinksValidator(), starlightClientMermaid()],
+      components: {
+        MarkdownContent: './src/components/overrides/MarkdownContent.astro',
+      },
       customCss: ['./src/styles/global.css'],
       sidebar: [
         {
