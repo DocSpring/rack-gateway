@@ -89,6 +89,70 @@ func TestResolveApp_DotConvoxFile_ParentDir(t *testing.T) {
 	}
 }
 
+func TestResolveApp_DotConvoxFile_WithHyphens(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, ".convox"), 0o750); err != nil {
+		t.Fatalf("mkdir .convox: %v", err)
+	}
+	// Test that hyphenated app names are preserved exactly
+	if err := os.WriteFile(filepath.Join(dir, ".convox", "app"), []byte("api-proxy\n"), 0o600); err != nil {
+		t.Fatalf("write app file: %v", err)
+	}
+	back := chdir(t, dir)
+	defer back()
+
+	t.Setenv("CONVOX_APP", "")
+
+	app, err := ResolveApp("")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if app != "api-proxy" {
+		t.Fatalf("want api-proxy, got %s (hyphen should be preserved, not converted to underscore)", app)
+	}
+}
+
+func TestResolveAppFlag_IntegrationWithDotConvoxFile(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, ".convox"), 0o750); err != nil {
+		t.Fatalf("mkdir .convox: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, ".convox", "app"), []byte("api-proxy\n"), 0o600); err != nil {
+		t.Fatalf("write app file: %v", err)
+	}
+	back := chdir(t, dir)
+	defer back()
+
+	t.Setenv("CONVOX_APP", "")
+
+	// Create a mock command with an app flag (like deploy command)
+	cmd := DeployCommand()
+
+	// Call resolveAppFlag like the deploy command does
+	if err := resolveAppFlag(cmd); err != nil {
+		t.Fatalf("resolveAppFlag failed: %v", err)
+	}
+
+	// Verify the app flag was set correctly
+	appFlag := cmd.Flags().Lookup("app")
+	if appFlag == nil {
+		t.Fatal("app flag not found")
+	}
+
+	if !appFlag.Changed {
+		t.Fatal("app flag should be marked as Changed after resolveAppFlag, but it wasn't")
+	}
+
+	appValue, err := cmd.Flags().GetString("app")
+	if err != nil {
+		t.Fatalf("failed to get app flag value: %v", err)
+	}
+
+	if appValue != "api-proxy" {
+		t.Fatalf("want app flag value 'api-proxy', got '%s'", appValue)
+	}
+}
+
 func TestResolveApp_FallbackBasename(t *testing.T) {
 	// Create a temp dir with a stable base name
 	base := "cg-app-base"
