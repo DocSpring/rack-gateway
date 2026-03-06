@@ -43,6 +43,15 @@ func main() {
 		return
 	}
 
+	// If we get here, no maintenance command was recognized.
+	// Crash if any arguments were passed (server mode takes no arguments).
+	if len(os.Args) > 1 {
+		log.Fatalf(
+			"Server mode does not accept arguments, got: %v\n\nUse 'help' to see available commands",
+			os.Args[1:],
+		)
+	}
+
 	if err := runGatewayServer(); err != nil {
 		log.Fatalf("Gateway server error: %v", err)
 	}
@@ -53,7 +62,27 @@ func handleMaintenanceCommand(args []string) (bool, error) {
 		return false, nil
 	}
 
-	switch args[1] {
+	cmd := args[1]
+
+	// Check if this is a valid command first
+	var isValidCommand bool
+	switch cmd {
+	case "migrate", "reset-db", "write-anchor", "help", "--help", "-h":
+		isValidCommand = true
+	}
+
+	// If it's NOT a valid command, return unknown command error immediately
+	if !isValidCommand {
+		return true, fmt.Errorf("unknown command: %s\n\nUse 'help' to see available commands", cmd)
+	}
+
+	// For valid commands, validate no extra arguments
+	if len(args) > 2 {
+		return true, fmt.Errorf("'%s' command does not accept arguments, got: %v", cmd, args[2:])
+	}
+
+	// Execute the command
+	switch cmd {
 	case "migrate":
 		return true, runMigrations()
 	case "reset-db":
@@ -69,7 +98,8 @@ func handleMaintenanceCommand(args []string) (bool, error) {
 		fmt.Println(helpText)
 		return true, nil
 	default:
-		return false, nil
+		// Should never reach here due to isValidCommand check above
+		return true, fmt.Errorf("unknown command: %s\n\nUse 'help' to see available commands", cmd)
 	}
 }
 
