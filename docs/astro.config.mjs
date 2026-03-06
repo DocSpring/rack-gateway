@@ -6,7 +6,8 @@ import starlightLinksValidator from 'starlight-links-validator';
 
 // https://astro.build/config
 export default defineConfig({
-  site: 'https://rack-gateway.docspring.io',
+  site: 'https://docspring.github.io',
+  base: '/rack-gateway',
   integrations: [
     starlight({
       title: 'Rack Gateway',
