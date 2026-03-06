@@ -1,7 +1,7 @@
 # Build stage
 # syntax=docker/dockerfile:1.5
 
-FROM golang:1.25.7-alpine AS builder
+FROM golang:1.26.1-alpine AS builder
 
 RUN apk add --no-cache git make
 
