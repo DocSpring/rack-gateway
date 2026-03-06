@@ -29,30 +29,23 @@ interface BrokenLink {
 }
 
 /** Extract all local links and resources from HTML */
-function extractLinks(html: string): { links: string[]; resources: string[] } {
-  const links: string[] = [];
-  const resources: string[] = [];
+function extractLinks(html: string): string[] {
+  const allLinks: string[] = [];
 
-  // Extract href from <a> tags
-  const hrefRegex = /<a[^>]+href=["']([^"']+)["']/gi;
+  // Extract href from <a> and <link> tags
+  const hrefRegex = /<(?:a|link)[^>]+href=["']([^"']+)["']/gi;
   let match: RegExpExecArray | null;
   while ((match = hrefRegex.exec(html)) !== null) {
-    links.push(match[1]);
+    allLinks.push(match[1]);
   }
 
-  // Extract src from <img>, <script>, <video>, <audio>, <source>
-  const srcRegex = /<(?:img|script|video|audio|source)[^>]+src=["']([^"']+)["']/gi;
+  // Extract src from <img>, <script>, <video>, <audio>, <iframe>, <source>
+  const srcRegex = /<(?:img|script|video|audio|iframe|source)[^>]+src=["']([^"']+)["']/gi;
   while ((match = srcRegex.exec(html)) !== null) {
-    resources.push(match[1]);
+    allLinks.push(match[1]);
   }
 
-  // Extract href from <link> (CSS, icons)
-  const linkHrefRegex = /<link[^>]+href=["']([^"']+)["']/gi;
-  while ((match = linkHrefRegex.exec(html)) !== null) {
-    resources.push(match[1]);
-  }
-
-  // Extract srcset
+  // Extract srcset from responsive images
   const srcsetRegex = /srcset=["']([^"']+)["']/gi;
   while ((match = srcsetRegex.exec(html)) !== null) {
     const srcset = match[1];
@@ -60,12 +53,12 @@ function extractLinks(html: string): { links: string[]; resources: string[] } {
     for (const part of srcset.split(',')) {
       const url = part.trim().split(/\s+/)[0];
       if (url) {
-        resources.push(url);
+        allLinks.push(url);
       }
     }
   }
 
-  return { links, resources };
+  return allLinks;
 }
 
 /** Check if URL is in the allowlist */
@@ -114,7 +107,7 @@ function urlToFilePath(url: string, htmlDir: string, distDir: string): string | 
   // URL decode
   url = decodeURIComponent(url);
 
-  // Handle absolute paths
+  // Handle absolute paths (with or without /rack-gateway prefix)
   if (url.startsWith(BASE_PATH)) {
     url = url.slice(BASE_PATH.length);
   }
@@ -122,19 +115,25 @@ function urlToFilePath(url: string, htmlDir: string, distDir: string): string | 
   if (url.startsWith('/')) {
     const path = url.slice(1);
 
-    // Try multiple candidates
-    const candidates = [
-      join(distDir, path),
-      join(distDir, path, 'index.html'),
-      join(distDir, path + '.html'),
-    ];
+    // For HTML pages, try multiple candidates
+    if (!path.match(/\.(css|js|svg|png|jpg|jpeg|gif|webp|woff|woff2|ttf|eot|ico|mp4|webm|pdf)$/i)) {
+      const candidates = [
+        join(distDir, path),
+        join(distDir, path, 'index.html'),
+        join(distDir, path + '.html'),
+      ];
 
-    for (const candidate of candidates) {
-      if (existsSync(candidate)) {
-        return candidate;
+      for (const candidate of candidates) {
+        if (existsSync(candidate)) {
+          return candidate;
+        }
       }
+      return null;
     }
-    return null;
+
+    // For resources (CSS, JS, images, fonts, etc.), check exact path
+    const resourcePath = join(distDir, path);
+    return existsSync(resourcePath) ? resourcePath : null;
   }
 
   // Handle relative paths
@@ -158,29 +157,23 @@ async function checkHtmlFile(
   }
 
   const htmlDir = dirname(filepath);
-  const { links, resources } = extractLinks(content);
+  const allLinks = extractLinks(content);
 
   let checked = 0;
 
-  // Check internal links
-  for (const link of links) {
-    if (!isLocalLink(link)) continue;
+  // Check ALL links and resources
+  for (const url of allLinks) {
+    if (!isLocalLink(url)) continue;
     checked++;
 
-    const targetPath = urlToFilePath(link, htmlDir, distDir);
+    const targetPath = urlToFilePath(url, htmlDir, distDir);
     if (!targetPath) {
-      broken.push({ url: link, type: 'link' });
-    }
-  }
-
-  // Check resources (images, CSS, JS)
-  for (const resource of resources) {
-    if (!isLocalLink(resource)) continue;
-    checked++;
-
-    const targetPath = urlToFilePath(resource, htmlDir, distDir);
-    if (!targetPath) {
-      broken.push({ url: resource, type: 'resource' });
+      // Determine type based on URL
+      const isResource = url.match(/\.(css|js|svg|png|jpg|jpeg|gif|webp|woff|woff2|ttf|eot|ico|mp4|webm|pdf)$/i);
+      broken.push({
+        url,
+        type: isResource ? 'resource' : 'link'
+      });
     }
   }
 
