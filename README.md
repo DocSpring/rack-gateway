@@ -12,9 +12,9 @@ See [NOTICE](./NOTICE) for details.
 
 API proxy for Convox racks with SSO, RBAC, and audit logging. SOC2 compliant.
 
-![Screenshot of audit logs](./docs/images/audit-logs.jpg)
+![Screenshot of audit logs](./docs/legacy/images/audit-logs.jpg)
 
-_[More screenshots](./docs/SCREENSHOTS.md)_
+_[More screenshots](./docs/legacy/SCREENSHOTS.md)_
 
 ## What is Convox?
 
@@ -470,6 +470,7 @@ git push origin v1.0.1  # or: git push --tags
 ```
 
 The GitHub Actions release workflow automatically:
+
 - Builds the Docker image for linux/amd64
 - Pushes to `docker.io/docspringcom/rack-gateway` with commit SHA and `latest` tags
 - Creates a GitHub release with binaries and checksums
