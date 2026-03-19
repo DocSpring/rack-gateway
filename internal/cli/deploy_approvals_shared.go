@@ -33,7 +33,13 @@ const (
 
 // colorsEnabled returns true if stdout is a terminal and colors should be used
 func colorsEnabled() bool {
-	return term.IsTerminal(int(os.Stdout.Fd()))
+	fd := os.Stdout.Fd()
+	// Validate fd fits in int (always true on supported platforms, but validates for gosec)
+	const maxInt = int(^uint(0) >> 1)
+	if fd > uintptr(maxInt) {
+		return false
+	}
+	return term.IsTerminal(int(fd))
 }
 
 // dim returns dimmed/gray text
@@ -122,6 +128,7 @@ func parseDurationFlag(raw, flag string, allowZero bool, defaultValue time.Durat
 }
 
 // resolveRacks parses a comma-separated list of rack names, or returns the selected rack if empty.
+// Special value "all" expands to all configured racks (excluding those in all_racks_exclude).
 func resolveRacks(racksFlag string) ([]string, error) {
 	trimmed := strings.TrimSpace(racksFlag)
 	if trimmed == "" {
@@ -130,6 +137,11 @@ func resolveRacks(racksFlag string) ([]string, error) {
 			return nil, err
 		}
 		return []string{rack}, nil
+	}
+
+	// Handle special "all" value
+	if trimmed == "all" {
+		return expandAllRacks()
 	}
 
 	parts := strings.Split(trimmed, ",")
@@ -144,6 +156,46 @@ func resolveRacks(racksFlag string) ([]string, error) {
 		return nil, fmt.Errorf("no valid rack names provided")
 	}
 	return racks, nil
+}
+
+// expandAllRacks returns all configured racks except those in all_racks_exclude.
+func expandAllRacks() ([]string, error) {
+	cfg, _, err := LoadConfig()
+	if err != nil {
+		return nil, fmt.Errorf("failed to load config: %w", err)
+	}
+	if len(cfg.Gateways) == 0 {
+		return nil, fmt.Errorf("no racks configured")
+	}
+
+	// Get all configured rack names
+	allRacks := make([]string, 0, len(cfg.Gateways))
+	for rackName := range cfg.Gateways {
+		allRacks = append(allRacks, rackName)
+	}
+
+	// Filter out excluded racks
+	return filterExcludedRacks(allRacks, cfg.AllRacksExclude), nil
+}
+
+// filterExcludedRacks filters out racks that are in the exclude list.
+func filterExcludedRacks(racks []string, exclude []string) []string {
+	if len(exclude) == 0 {
+		return racks
+	}
+
+	excludeMap := make(map[string]bool, len(exclude))
+	for _, excluded := range exclude {
+		excludeMap[excluded] = true
+	}
+
+	filtered := make([]string, 0, len(racks))
+	for _, rack := range racks {
+		if !excludeMap[rack] {
+			filtered = append(filtered, rack)
+		}
+	}
+	return filtered
 }
 
 // getCurrentGitCommit returns the current git commit hash (short form), or an error if not in a git repo.

@@ -391,7 +391,8 @@ func playNotificationSound(cfg *Config, rack string) error {
 		defer cleanup()
 	}
 
-	player, err := selectAudioPlayer(soundFile)
+	volume := resolveSoundVolumePreference(cfg, rack)
+	player, err := selectAudioPlayer(soundFile, volume)
 	if err != nil {
 		return err
 	}
@@ -414,6 +415,24 @@ func resolveNotificationPreference(cfg *Config, rack string) string {
 		return gwCfg.NotificationSound
 	}
 	return preference
+}
+
+func resolveSoundVolumePreference(cfg *Config, rack string) float64 {
+	const defaultVolume = 0.6 // 60%
+	if cfg == nil {
+		return defaultVolume
+	}
+	volume := defaultVolume
+	if cfg.SoundVolume != nil {
+		volume = *cfg.SoundVolume
+	}
+	if rack == "" || cfg.Gateways == nil {
+		return volume
+	}
+	if gwCfg, ok := cfg.Gateways[rack]; ok && gwCfg.SoundVolume != nil {
+		return *gwCfg.SoundVolume
+	}
+	return volume
 }
 
 func ensureSoundFile(preference string) (string, func(), error) {
@@ -446,27 +465,33 @@ func createTemporarySoundFile() (string, func(), error) {
 	return tmpFile.Name(), cleanup, nil
 }
 
-func selectAudioPlayer(soundFile string) (*exec.Cmd, error) {
+func selectAudioPlayer(soundFile string, volume float64) (*exec.Cmd, error) {
 	switch runtime.GOOS {
 	case "darwin":
 		//nolint:gosec // G204: Command hardcoded, file path controlled
-		return exec.Command("afplay", soundFile), nil
+		return exec.Command("afplay", "-v", fmt.Sprintf("%.2f", volume), soundFile), nil
 	case "linux":
-		return linuxAudioPlayer(soundFile)
+		return linuxAudioPlayer(soundFile, volume)
 	default:
 		return nil, fmt.Errorf("unsupported OS: %s", runtime.GOOS)
 	}
 }
 
-func linuxAudioPlayer(soundFile string) (*exec.Cmd, error) {
+func linuxAudioPlayer(soundFile string, volume float64) (*exec.Cmd, error) {
 	for _, candidate := range []string{"paplay", "aplay", "ffplay", "mpg123"} {
 		if _, err := exec.LookPath(candidate); err == nil {
-			if candidate == "ffplay" {
-				//nolint:gosec // G204: Command hardcoded, file path controlled
-				return exec.Command(candidate, "-nodisp", "-autoexit", soundFile), nil
-			}
 			//nolint:gosec // G204: Command hardcoded, file path controlled
-			return exec.Command(candidate, soundFile), nil
+			switch candidate {
+			case "paplay":
+				return exec.Command(candidate, "--volume", fmt.Sprintf("%.0f", volume*65536), soundFile), nil
+			case "ffplay":
+				volStr := fmt.Sprintf("%.0f", volume*100)
+				return exec.Command(candidate, "-nodisp", "-autoexit", "-volume", volStr, soundFile), nil
+			case "mpg123":
+				return exec.Command(candidate, "-f", fmt.Sprintf("%.0f", volume*32768), soundFile), nil
+			default:
+				return exec.Command(candidate, soundFile), nil
+			}
 		}
 	}
 	return nil, fmt.Errorf("no audio player found (tried paplay, aplay, ffplay, mpg123)")

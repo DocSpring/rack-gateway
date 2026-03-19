@@ -14,6 +14,10 @@ type Config struct {
 	MFAPreference string `json:"mfa_preference,omitempty"`
 	// Global default: "default", "disabled", or "/path/to/file.mp3"
 	NotificationSound string `json:"notification_sound,omitempty"`
+	// Global default: sound volume (0.0 to 1.0, default 0.6 = 60%)
+	SoundVolume *float64 `json:"sound_volume,omitempty"`
+	// Racks to exclude when using --racks all (e.g., ["dev", "Dev"])
+	AllRacksExclude []string `json:"all_racks_exclude,omitempty"`
 }
 
 // GatewayConfig represents configuration for a single gateway/rack
@@ -31,6 +35,8 @@ type GatewayConfig struct {
 	MFAPreference string `json:"mfa_preference,omitempty"`
 	// Per-rack override: "default", "disabled", or "/path/to/file.mp3"
 	NotificationSound string `json:"notification_sound,omitempty"`
+	// Per-rack override: sound volume (0.0 to 1.0, default 0.6 = 60%)
+	SoundVolume *float64 `json:"sound_volume,omitempty"`
 }
 
 // RackStatus contains information about the current rack

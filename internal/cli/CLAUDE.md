@@ -29,19 +29,73 @@ Structure:
 
 ```json
 {
-  "racks": {
+  "current": "production",
+  "gateways": {
     "production": {
       "url": "https://gateway-prod.example.com",
-      "token": "session-token-here"
+      "token": "session-token-here",
+      "email": "user@example.com",
+      "expires_at": "2025-12-31T23:59:59Z",
+      "mfa_preference": "webauthn",
+      "notification_sound": "default",
+      "sound_volume": 0.8
     },
     "staging": {
       "url": "https://gateway-staging.example.com",
       "token": "session-token-here"
+    },
+    "dev": {
+      "url": "http://localhost:8447"
     }
   },
-  "current_rack": "production"
+  "mfa_preference": "webauthn",
+  "notification_sound": "default",
+  "sound_volume": 0.6,
+  "all_racks_exclude": ["dev", "Dev"]
 }
 ```
+
+**Configuration Fields:**
+
+**Global Settings:**
+- `current` - Currently selected rack name
+- `gateways` - Map of rack configurations (see GatewayConfig below)
+- `machine_id` - Unique machine identifier
+- `mfa_preference` - Default MFA method: `"default"`, `"webauthn"`, or `"totp"`
+- `notification_sound` - Default notification sound: `"default"`, `"disabled"`, or path to MP3 file
+- `sound_volume` - Default sound volume: 0.0 to 1.0 (default: 0.6 = 60%)
+- `all_racks_exclude` - Array of rack names to exclude when using `--racks all`
+
+**Per-Rack Settings (GatewayConfig):**
+- `url` - Gateway API URL
+- `token` - Session authentication token
+- `email` - User email address
+- `expires_at` - Token expiration timestamp
+- `session_id` - Session identifier
+- `channel` - WebSocket channel for notifications
+- `device_id` - Device identifier
+- `device_name` - Device name
+- `mfa_verified` - Whether MFA has been verified for this session
+- `mfa_preference` - Per-rack MFA method override
+- `notification_sound` - Per-rack notification sound override
+- `sound_volume` - Per-rack sound volume override (0.0 to 1.0)
+
+**Using --racks all:**
+
+Deploy approval commands support `--racks all` to operate on all configured racks:
+
+```bash
+# Wait for deploy approval on all production racks (excluding dev)
+cx deploy-approval wait --racks all --commit abc123
+
+# Approve deploy on all racks
+cx deploy-approval approve --racks all --commit abc123
+
+# List deploy approval requests from all racks
+cx deploy-approval list --racks all
+```
+
+The `all` value expands to all configured racks in `gateways`, excluding any racks listed in `all_racks_exclude`. This is useful for avoiding local development racks when operating on production infrastructure.
 
 ## Commands
 
