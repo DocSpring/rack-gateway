@@ -19,6 +19,7 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	"github.com/DocSpring/rack-gateway/internal/gateway/jobs"
 	jobaudit "github.com/DocSpring/rack-gateway/internal/gateway/jobs/audit"
+	"github.com/DocSpring/rack-gateway/internal/gateway/logutil"
 )
 
 // @title Rack Gateway API
@@ -46,9 +47,14 @@ func main() {
 	// If we get here, no maintenance command was recognized.
 	// Crash if any arguments were passed (server mode takes no arguments).
 	if len(os.Args) > 1 {
+		// Sanitize args to prevent log injection
+		sanitized := make([]string, len(os.Args[1:]))
+		for i, arg := range os.Args[1:] {
+			sanitized[i] = logutil.SanitizeForLog(arg)
+		}
 		log.Fatalf(
 			"Server mode does not accept arguments, got: %v\n\nUse 'help' to see available commands",
-			os.Args[1:],
+			sanitized,
 		)
 	}
 

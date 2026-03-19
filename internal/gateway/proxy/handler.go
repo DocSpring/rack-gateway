@@ -19,6 +19,7 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/email"
 	"github.com/DocSpring/rack-gateway/internal/gateway/envutil"
 	"github.com/DocSpring/rack-gateway/internal/gateway/httpclient"
+	"github.com/DocSpring/rack-gateway/internal/gateway/logutil"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rackcert"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 	"github.com/DocSpring/rack-gateway/internal/gateway/settings"
@@ -111,9 +112,9 @@ func logRackTLSMismatch(scope string, err *rackcert.FingerprintMismatchError) {
 	log.Printf(
 		`{"level":"error","event":"rack_tls_verification_failed","scope":"%s",`+
 			`"expected_fingerprint":"%s","actual_fingerprint":"%s"}`,
-		scope,
-		err.Expected,
-		err.Actual,
+		logutil.SanitizeForLog(scope),
+		logutil.SanitizeForLog(err.Expected),
+		logutil.SanitizeForLog(err.Actual),
 	)
 }
 

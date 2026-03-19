@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -17,6 +18,7 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	"github.com/DocSpring/rack-gateway/internal/gateway/email"
 	"github.com/DocSpring/rack-gateway/internal/gateway/jobs"
+	"github.com/DocSpring/rack-gateway/internal/gateway/logutil"
 	"github.com/DocSpring/rack-gateway/internal/gateway/proxy"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rackcert"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
@@ -195,8 +197,10 @@ func (a *App) initTokenAndAuthServices() {
 	a.TokenService = token.NewService(a.Database)
 	a.AuthService = auth.NewAuthService(a.TokenService, a.Database, a.SessionManager)
 
-	log.Printf("Environment PORT=%s, Config Port=%s", os.Getenv("PORT"), a.Config.Port)
-	log.Printf("OAuth config - ClientID: %s, BaseURL: %s", a.Config.GoogleClientID, a.Config.GoogleOAuthBaseURL)
+	log.Printf("Environment PORT=%s, Config Port=%s",
+		logutil.SanitizeForLog(os.Getenv("PORT")), logutil.SanitizeForLog(a.Config.Port))
+	log.Printf("OAuth config - ClientID: %s, BaseURL: %s",
+		logutil.SanitizeForLog(a.Config.GoogleClientID), logutil.SanitizeForLog(a.Config.GoogleOAuthBaseURL))
 }
 
 func (a *App) resolveOAuthParameters() (string, string, string, error) {
@@ -341,9 +345,17 @@ func (a *App) configureAuditEnqueuer(logger *audit.Logger) {
 func (a *App) startJobsWorker() {
 	ctx, cancel := context.WithCancel(context.Background())
 	a.WorkerCtx = ctx
-	a.WorkerCancel = cancel
+
+	// Use sync.Once to ensure cancel is only called once (either on goroutine completion or shutdown)
+	var cancelOnce sync.Once
+	wrappedCancel := func() {
+		cancelOnce.Do(cancel)
+	}
+	a.WorkerCancel = wrappedCancel
+
 	a.WorkerWg.Add(1)
 	go func() {
+		defer wrappedCancel() // Cancel on goroutine completion
 		defer a.WorkerWg.Done()
 		if err := a.JobsClient.Start(ctx); err != nil {
 			log.Printf("ERROR: Failed to start jobs worker: %v", err)

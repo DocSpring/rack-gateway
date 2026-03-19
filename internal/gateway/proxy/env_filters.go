@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/envutil"
+	"github.com/DocSpring/rack-gateway/internal/gateway/logutil"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 )
 
@@ -173,7 +174,7 @@ func (h *Handler) isCommandApproved(app, command string) bool {
 
 	approvedCommands, err := h.settingsService.GetApprovedDeployCommands(app)
 	if err != nil {
-		log.Printf("Failed to get approved commands for app %s: %v", app, err)
+		log.Printf("Failed to get approved commands for app %s: %v", logutil.SanitizeForLog(app), err)
 		return false
 	}
 

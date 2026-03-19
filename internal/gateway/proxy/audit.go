@@ -14,6 +14,7 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/config"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	"github.com/DocSpring/rack-gateway/internal/gateway/envutil"
+	"github.com/DocSpring/rack-gateway/internal/gateway/logutil"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 )
 
@@ -126,11 +127,13 @@ func (h *Handler) validateAuditRequirements(
 
 	action, resource := h.auditLogger.ParseConvoxAction(path, r.Method, r.Header.Get("X-Audit-Resource"))
 	if action == "unknown" || resource == "unknown" {
-		errorMsg := fmt.Sprintf("cannot determine action/resource for %s %s", r.Method, r.URL.Path)
+		errorMsg := fmt.Sprintf("cannot determine action/resource for %s %s",
+			logutil.SanitizeForLog(r.Method), logutil.SanitizeForLog(r.URL.Path))
 		log.Printf(
 			`{"level":"error","error":"audit_failure","message":"%s","method":"%s","path":"%s",`+
 				`"action":"%s","resource":"%s"}`,
-			errorMsg, r.Method, r.URL.Path, action, resource,
+			logutil.SanitizeForLog(errorMsg), logutil.SanitizeForLog(r.Method), logutil.SanitizeForLog(r.URL.Path),
+			logutil.SanitizeForLog(action), logutil.SanitizeForLog(resource),
 		)
 		h.handleError(w, r, errorMsg, http.StatusInternalServerError, rackName, start)
 		return errors.New(errorMsg)
@@ -138,11 +141,13 @@ func (h *Handler) validateAuditRequirements(
 
 	resourceType := h.auditLogger.InferResourceType(r.URL.Path, action)
 	if resourceType == "unknown" {
-		errorMsg := fmt.Sprintf("cannot determine resource type for %s %s", r.Method, r.URL.Path)
+		errorMsg := fmt.Sprintf("cannot determine resource type for %s %s",
+			logutil.SanitizeForLog(r.Method), logutil.SanitizeForLog(r.URL.Path))
 		log.Printf(
 			`{"level":"error","error":"audit_failure","message":"%s","method":"%s","path":"%s",`+
 				`"action":"%s","resource":"%s","resource_type":"%s"}`,
-			errorMsg, r.Method, r.URL.Path, action, resource, resourceType,
+			logutil.SanitizeForLog(errorMsg), logutil.SanitizeForLog(r.Method), logutil.SanitizeForLog(r.URL.Path),
+			logutil.SanitizeForLog(action), logutil.SanitizeForLog(resource), logutil.SanitizeForLog(resourceType),
 		)
 		h.handleError(w, r, errorMsg, http.StatusInternalServerError, rackName, start)
 		return errors.New(errorMsg)
