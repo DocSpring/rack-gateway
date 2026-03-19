@@ -191,23 +191,42 @@ func (h *StaticHandler) setupDevProxyIfNeeded(cfg *config.Config) {
 		return
 	}
 
+	// In dev mode, only allow localhost URLs to prevent SSRF
+	if target.Hostname() != "localhost" && target.Hostname() != "127.0.0.1" && target.Hostname() != "::1" {
+		return
+	}
+
 	h.devProxy = h.createDevProxy(target)
 }
 
 func (h *StaticHandler) createDevProxy(target *url.URL) http.Handler {
 	proxy := httputil.NewSingleHostReverseProxy(target)
-	proxy.Director = createProxyDirector(target)
+	proxy.Rewrite = createProxyRewriter(target)
 	proxy.ModifyResponse = h.createProxyResponseModifier()
 	proxy.ErrorHandler = createProxyErrorHandler()
 	return proxy
 }
 
-func createProxyDirector(target *url.URL) func(*http.Request) {
-	return func(req *http.Request) {
-		req.URL.Scheme = target.Scheme
-		req.URL.Host = target.Host
-		req.URL.Path = target.Path + req.URL.Path
-		req.Header.Set("X-Gateway-Proxy", "true")
+func createProxyRewriter(target *url.URL) func(*httputil.ProxyRequest) {
+	return func(pr *httputil.ProxyRequest) {
+		pr.Out.URL.Scheme = target.Scheme
+		pr.Out.URL.Host = target.Host
+		pr.Out.URL.Path = singleJoiningSlash(target.Path, pr.In.URL.Path)
+		pr.Out.Header.Set("X-Gateway-Proxy", "true")
+	}
+}
+
+func singleJoiningSlash(a, b string) string {
+	aslash := strings.HasSuffix(a, "/")
+	bslash := strings.HasPrefix(b, "/")
+
+	switch {
+	case aslash && bslash:
+		return a + b[1:]
+	case !aslash && !bslash:
+		return a + "/" + b
+	default:
+		return a + b
 	}
 }
 

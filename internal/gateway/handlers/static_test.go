@@ -3,6 +3,8 @@ package handlers
 import (
 	"net/http"
 	"net/http/httptest"
+	nethttputil "net/http/httputil"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -166,5 +168,24 @@ func TestStaticHandlerInjectsSentryPlaceholders(t *testing.T) {
 	}
 	if !strings.Contains(body, cfg.SentryJSTracesRate) {
 		t.Fatalf("expected trace sample rate to be injected")
+	}
+}
+
+func TestCreateProxyRewriterJoinsWithSingleSlash(t *testing.T) {
+	target := &url.URL{
+		Scheme: "http",
+		Host:   "localhost:5173",
+		Path:   "/",
+	}
+	in := httptest.NewRequest(http.MethodGet, "http://gateway.local/app/login", nil)
+	out := in.Clone(in.Context())
+
+	createProxyRewriter(target)(&nethttputil.ProxyRequest{
+		In:  in,
+		Out: out,
+	})
+
+	if out.URL.Path != "/app/login" {
+		t.Fatalf("expected joined path /app/login, got %q", out.URL.Path)
 	}
 }

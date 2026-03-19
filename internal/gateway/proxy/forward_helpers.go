@@ -23,6 +23,11 @@ func prepareProxyRequest(
 	rack config.RackConfig,
 	authUser *auth.User,
 ) (*http.Request, error) {
+	// Validate targetURL is to configured rack to prevent SSRF
+	if !strings.HasPrefix(targetURL, rack.URL) {
+		return nil, fmt.Errorf("target URL does not match configured rack")
+	}
+
 	proxyReq, err := http.NewRequest(r.Method, targetURL, bytes.NewReader(bodyBytes))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create proxy request: %w", err)

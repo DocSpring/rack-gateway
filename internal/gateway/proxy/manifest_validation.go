@@ -9,7 +9,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -89,8 +91,10 @@ func (h *Handler) fetchObject(ctx context.Context, app, key string) ([]byte, err
 		}
 	}
 
-	// Build URL to fetch object: GET /apps/{app}/objects/{key}
-	fetchURL := fmt.Sprintf("%s/apps/%s/objects/%s", rack.URL, app, key)
+	fetchURL, err := buildObjectFetchURL(rack.URL, app, key)
+	if err != nil {
+		return nil, err
+	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fetchURL, nil)
 	if err != nil {
@@ -130,6 +134,78 @@ func (h *Handler) fetchObject(ctx context.Context, app, key string) ([]byte, err
 	}
 
 	return data, nil
+}
+
+func buildObjectFetchURL(rackURL, app, key string) (string, error) {
+	safeApp, err := sanitizeObjectFetchComponent(app)
+	if err != nil {
+		return "", fmt.Errorf("invalid app path component: %w", err)
+	}
+
+	safeKey, err := sanitizeObjectFetchPath(key)
+	if err != nil {
+		return "", fmt.Errorf("invalid object key path: %w", err)
+	}
+
+	baseURL, err := url.Parse(rackURL)
+	if err != nil {
+		return "", fmt.Errorf("invalid rack URL: %w", err)
+	}
+	if baseURL.Scheme == "" || baseURL.Host == "" {
+		return "", fmt.Errorf("invalid rack URL: missing scheme or host")
+	}
+
+	fetchURL := *baseURL
+	fetchURL.RawQuery = ""
+	fetchURL.Fragment = ""
+	fetchURL.Path = path.Join("/", baseURL.Path, "apps", safeApp, "objects", safeKey)
+
+	if fetchURL.Host != baseURL.Host {
+		return "", fmt.Errorf("fetch URL does not match configured rack host")
+	}
+
+	return fetchURL.String(), nil
+}
+
+func sanitizeObjectFetchComponent(value string) (string, error) {
+	safeValue := strings.TrimSpace(value)
+	if safeValue == "" {
+		return "", fmt.Errorf("value is empty")
+	}
+	if strings.HasPrefix(safeValue, "/") || strings.Contains(safeValue, "/") || strings.Contains(safeValue, "\\") {
+		return "", fmt.Errorf("value contains invalid separators")
+	}
+
+	cleanValue := path.Clean(safeValue)
+	if cleanValue == "." || cleanValue == ".." || strings.HasPrefix(cleanValue, "..") {
+		return "", fmt.Errorf("value escapes object namespace")
+	}
+
+	return cleanValue, nil
+}
+
+func sanitizeObjectFetchPath(value string) (string, error) {
+	safeValue := strings.TrimSpace(value)
+	if safeValue == "" {
+		return "", fmt.Errorf("value is empty")
+	}
+	if strings.HasPrefix(safeValue, "/") || strings.Contains(safeValue, "\\") {
+		return "", fmt.Errorf("value contains invalid separators")
+	}
+
+	segments := strings.Split(safeValue, "/")
+	for _, segment := range segments {
+		if segment == "" || segment == "." || segment == ".." {
+			return "", fmt.Errorf("value contains invalid path segment")
+		}
+	}
+
+	cleanValue := path.Clean(safeValue)
+	if cleanValue == "." || cleanValue == ".." || strings.HasPrefix(cleanValue, "../") {
+		return "", fmt.Errorf("value escapes object namespace")
+	}
+
+	return cleanValue, nil
 }
 
 // extractAndParseManifestFromPath safely extracts a gzipped tarball and parses the specified manifest file
@@ -303,18 +379,18 @@ func extractTarFile(tr *tar.Reader, targetPath string, header *tar.Header, curre
 }
 
 // validateTarPath validates that a tar entry path is safe (no directory traversal)
-func validateTarPath(path string) error {
+func validateTarPath(entryPath string) error {
 	// Clean the path
-	cleanPath := filepath.Clean(path)
+	cleanPath := filepath.Clean(entryPath)
 
 	// Check for absolute paths
 	if filepath.IsAbs(cleanPath) {
-		return fmt.Errorf("absolute paths not allowed: %s", path)
+		return fmt.Errorf("absolute paths not allowed: %s", entryPath)
 	}
 
 	// Check for path traversal attempts
 	if strings.Contains(cleanPath, "..") {
-		return fmt.Errorf("path traversal not allowed: %s", path)
+		return fmt.Errorf("path traversal not allowed: %s", entryPath)
 	}
 
 	return nil

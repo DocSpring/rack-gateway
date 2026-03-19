@@ -1,8 +1,6 @@
 package proxy
 
-import (
-	"testing"
-)
+import "testing"
 
 func TestValidateServiceImages(t *testing.T) {
 	tests := []struct {
@@ -140,7 +138,7 @@ func TestValidateServiceImages(t *testing.T) {
 				return
 			}
 			if err != nil && tt.errContains != "" {
-				if !contains(err.Error(), tt.errContains) {
+				if !contains(tt.errContains, err.Error()) {
 					t.Errorf(
 						"validateServiceImages() error = %v, want error containing %q",
 						err,
@@ -152,7 +150,41 @@ func TestValidateServiceImages(t *testing.T) {
 	}
 }
 
-func contains(s, substr string) bool {
+func TestBuildObjectFetchURL(t *testing.T) {
+	t.Parallel()
+
+	t.Run("builds fetch URL within rack namespace", func(t *testing.T) {
+		t.Parallel()
+
+		fetchURL, err := buildObjectFetchURL("https://rack.example.com/api", "docspring", "tmp/file.tgz")
+		if err != nil {
+			t.Fatalf("buildObjectFetchURL returned error: %v", err)
+		}
+
+		const want = "https://rack.example.com/api/apps/docspring/objects/tmp/file.tgz"
+		if fetchURL != want {
+			t.Fatalf("buildObjectFetchURL returned %q, want %q", fetchURL, want)
+		}
+	})
+
+	t.Run("rejects traversal in object key", func(t *testing.T) {
+		t.Parallel()
+
+		if _, err := buildObjectFetchURL("https://rack.example.com", "docspring", "../secrets.tgz"); err == nil {
+			t.Fatal("expected traversal key to be rejected")
+		}
+	})
+
+	t.Run("rejects invalid app path", func(t *testing.T) {
+		t.Parallel()
+
+		if _, err := buildObjectFetchURL("https://rack.example.com", "docspring/api", "tmp/file.tgz"); err == nil {
+			t.Fatal("expected invalid app path to be rejected")
+		}
+	})
+}
+
+func contains(substr, s string) bool {
 	return len(s) >= len(substr) && (s == substr || len(substr) == 0 || (len(s) > 0 && anySubstring(s, substr)))
 }
 
