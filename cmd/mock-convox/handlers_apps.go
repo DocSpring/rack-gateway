@@ -90,19 +90,32 @@ func listServices(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	app := vars["app"]
 	mclog.DebugTopicf(mclog.TopicAppProcesses, "services list app=%s", app)
-	services := []map[string]interface{}{
-		{
-			"name":    "web",
-			"process": "web",
-			"status":  "running",
-		},
-		{
-			"name":    "worker",
-			"process": "worker",
-			"status":  "running",
-		},
-	}
+	services := listServiceState(app)
 	writeJSON(w, services)
+}
+
+func updateService(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	app := vars["app"]
+	service := vars["service"]
+
+	updated, err := updateServiceState(app, service, r.URL.Query())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	mclog.DebugTopicf(
+		mclog.TopicAppProcesses,
+		"service update app=%s service=%s count=%d cpu=%d memory=%d query=%q",
+		app,
+		service,
+		updated.Count,
+		updated.CPU,
+		updated.Memory,
+		r.URL.RawQuery,
+	)
+	writeJSON(w, updated)
 }
 
 func restartService(w http.ResponseWriter, r *http.Request) {

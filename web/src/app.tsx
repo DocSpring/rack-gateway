@@ -21,6 +21,7 @@ import { AppEnvPage } from './pages/app-env-page'
 import { AppPage } from './pages/app-page'
 import { AppProcessesPage } from './pages/app-processes-page'
 import { AppReleasesPage } from './pages/app-releases-page'
+import { AppServicesPage } from './pages/app-services-page'
 import { AppSettingsPage } from './pages/app-settings-page'
 import { AppsListPage } from './pages/apps-list-page'
 import { AuditPage } from './pages/audit-page'
@@ -194,6 +195,11 @@ function buildRouteTree() {
     component: AppPage,
   })
 
+  const appServicesRoute = createRoute({
+    getParentRoute: () => appRoute,
+    path: 'services',
+    component: AppServicesPage,
+  })
   const appProcsRoute = createRoute({
     getParentRoute: () => appRoute,
     path: 'processes',
@@ -228,6 +234,7 @@ function buildRouteTree() {
     allProcessesRoute,
     appsListRoute,
     appRoute.addChildren([
+      appServicesRoute,
       appProcsRoute,
       appBuildsRoute,
       appReleasesRoute,

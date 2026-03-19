@@ -118,7 +118,7 @@ export function AllProcessesPage() {
                   <Link
                     className="underline hover:no-underline"
                     params={{ app: p.app }}
-                    to="/apps/$app/processes"
+                    to="/apps/$app/services"
                   >
                     {p.app}
                   </Link>

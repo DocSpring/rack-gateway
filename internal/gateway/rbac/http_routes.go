@@ -207,6 +207,12 @@ var httpRouteSpecs = []RouteSpec{
 	// Web-safe Convox proxies
 	newHTTPRoute("GET", "/api/v1/convox/apps", Convox(ResourceApp, ActionList)),
 	newHTTPRoute("GET", "/api/v1/convox/apps/*path", Convox(ResourceApp, ActionRead)),
+	newHTTPRoute("PUT", "/api/v1/convox/apps/:app/services/:name", Convox(ResourceApp, ActionUpdate)),
+	newHTTPRoute(
+		"DELETE",
+		"/api/v1/convox/apps/:app/processes/:pid",
+		Convox(ResourceProcess, ActionTerminate),
+	),
 	newHTTPRoute("GET", "/api/v1/convox/instances", Convox(ResourceInstance, ActionList)),
 	newHTTPRoute("GET", "/api/v1/convox/system/processes", Convox(ResourceRack, ActionRead)),
 

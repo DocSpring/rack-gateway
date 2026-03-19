@@ -1,20 +1,26 @@
-import { Link, Outlet, useLocation, useParams } from '@tanstack/react-router'
+import { Link, Outlet, useLocation, useNavigate, useParams } from '@tanstack/react-router'
 import { useEffect } from 'react'
 import { PageLayout } from '../components/page-layout'
 
 export function AppPage() {
   const { app } = useParams({ from: '/apps/$app' }) as { app: string }
   const location = useLocation()
+  const navigate = useNavigate()
 
-  // Redirect /apps/:app to processes subpage
+  // Redirect /apps/:app to services subpage
   useEffect(() => {
     const base = `/apps/${app}`
     if (location.pathname === base) {
-      window.history.replaceState(null, '', `${base}/processes`)
+      navigate({ to: '/apps/$app/services', params: { app }, replace: true })
     }
-  }, [app, location.pathname])
+  }, [app, location.pathname, navigate])
 
   const tabs = [
+    {
+      key: 'services',
+      name: 'Services',
+      to: '/apps/$app/services' as const,
+    },
     {
       key: 'processes',
       name: 'Processes',

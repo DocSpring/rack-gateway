@@ -1,6 +1,7 @@
 package main
 
 import (
+	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -17,6 +18,21 @@ type App struct {
 	Release    string    `json:"release"`
 	CreatedAt  time.Time `json:"created_at"`
 	UpdatedAt  time.Time `json:"updated_at"`
+}
+
+type Service struct {
+	Name   string        `json:"name"`
+	Count  int           `json:"count"`
+	CPU    int           `json:"cpu"`
+	Domain string        `json:"domain"`
+	Memory int           `json:"memory"`
+	Ports  []ServicePort `json:"ports"`
+}
+
+type ServicePort struct {
+	Balancer    int    `json:"balancer"`
+	Certificate string `json:"certificate"`
+	Container   int    `json:"container"`
 }
 
 type Process struct {
@@ -80,6 +96,7 @@ type System struct {
 
 var (
 	idCounter           atomic.Uint64
+	serviceStateMu      sync.Mutex
 	currentReleaseByApp = map[string]string{
 		"rack-gateway": "RAPP123456",
 	}

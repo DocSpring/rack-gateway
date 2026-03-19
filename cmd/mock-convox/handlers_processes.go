@@ -3,6 +3,7 @@ package main
 import (
 	"io"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -14,38 +15,13 @@ import (
 
 func getProcesses(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
-	processes := []Process{
-		{
-			Id:       "p-web-1",
-			App:      vars["app"],
-			Command:  "bundle exec rails server",
-			Cpu:      25.5,
-			Host:     "10.0.1.10",
-			Image:    "registry.example.com/app:latest",
-			Instance: "i-1234567890abcdef0",
-			Memory:   512.0,
-			Name:     "web",
-			Ports:    []string{"80:3000"},
-			Release:  "RAPI123456",
-			Started:  time.Now().Add(-3 * time.Hour),
-			Status:   "running",
-		},
-		{
-			Id:       "p-worker-1",
-			App:      vars["app"],
-			Command:  "bundle exec sidekiq",
-			Cpu:      15.0,
-			Host:     "10.0.1.11",
-			Image:    "registry.example.com/app:latest",
-			Instance: "i-0987654321fedcba0",
-			Memory:   256.0,
-			Name:     "worker",
-			Ports:    []string{},
-			Release:  "RAPI123456",
-			Started:  time.Now().Add(-2 * time.Hour),
-			Status:   "running",
-		},
-	}
+	processes := listProcessState(vars["app"])
+	slices.SortFunc(processes, func(a, b Process) int {
+		if a.Name == b.Name {
+			return strings.Compare(a.Id, b.Id)
+		}
+		return strings.Compare(a.Name, b.Name)
+	})
 
 	w.Header().Set("Content-Type", "application/json")
 	writeJSON(w, processes)
@@ -76,6 +52,10 @@ func getProcess(w http.ResponseWriter, r *http.Request) {
 func deleteProcess(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	mclog.DebugTopicf(mclog.TopicAppProcesses, "delete process app=%s id=%s", vars["app"], vars["id"])
+	if !stopProcessState(vars["app"], vars["id"]) {
+		http.Error(w, "process not found", http.StatusNotFound)
+		return
+	}
 	w.Header().Set("Content-Type", "application/json")
 	writeJSON(w, map[string]string{
 		"id":     vars["id"],

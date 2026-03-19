@@ -100,3 +100,27 @@ func TestHTTPRoutePermissionsHaveMFARequirements(t *testing.T) {
 		}
 	}
 }
+
+func TestWebConvoxMutationRoutesHavePrecisePermissions(t *testing.T) {
+	t.Run("service scale route", func(t *testing.T) {
+		perms, ok := HTTPMFAPermissions("PUT", "/api/v1/convox/apps/:app/services/:name")
+		if !ok {
+			t.Fatal("missing service scale MFA route")
+		}
+		expected := Convox(ResourceApp, ActionUpdate)
+		if len(perms) != 1 || perms[0] != expected {
+			t.Fatalf("got permissions %v, want [%s]", perms, expected)
+		}
+	})
+
+	t.Run("process stop route", func(t *testing.T) {
+		perms, ok := HTTPMFAPermissions("DELETE", "/api/v1/convox/apps/:app/processes/:pid")
+		if !ok {
+			t.Fatal("missing process stop MFA route")
+		}
+		expected := Convox(ResourceProcess, ActionTerminate)
+		if len(perms) != 1 || perms[0] != expected {
+			t.Fatalf("got permissions %v, want [%s]", perms, expected)
+		}
+	})
+}

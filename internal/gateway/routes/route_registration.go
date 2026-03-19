@@ -90,6 +90,13 @@ func registerAPIRoutes(authenticated *gin.RouterGroup, cfg *Config, h *handlerSe
 	convox.GET("/apps/*path", h.proxy.ProxyStripPrefix)
 	convox.GET("/instances", h.proxy.ProxyStripPrefix)
 	convox.GET("/system/processes", h.proxy.ProxyStripPrefix)
+
+	convoxMutations := authenticated.Group("/convox")
+	if cfg.SessionManager != nil {
+		convoxMutations.Use(middleware.CSRF(cfg.SessionManager))
+	}
+	convoxMutations.PUT("/apps/:app/services/:name", h.proxy.ProxyStripPrefix)
+	convoxMutations.DELETE("/apps/:app/processes/:pid", h.proxy.ProxyStripPrefix)
 }
 
 func registerDeployApprovalRoutes(authenticated *gin.RouterGroup, cfg *Config, h *handlerSet) {

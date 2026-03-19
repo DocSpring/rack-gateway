@@ -62,6 +62,12 @@ export const HTTP_ROUTE_MFA_REQUIREMENTS: HttpRouteMfaRequirement[] = [
   },
   {
     method: "DELETE",
+    pattern: "/api/v1/convox/apps/:app/processes/:pid",
+    permissions: ["convox:process:terminate"],
+    mfaLevel: "step_up",
+  },
+  {
+    method: "DELETE",
     pattern: "/api/v1/integrations/slack",
     permissions: ["gateway:integration:delete"],
     mfaLevel: "step_up",
@@ -478,6 +484,12 @@ export const HTTP_ROUTE_MFA_REQUIREMENTS: HttpRouteMfaRequirement[] = [
     method: "PUT",
     pattern: "/api/v1/auth/mfa/preferred-method",
     permissions: ["auth:mfa_preferences:update"],
+    mfaLevel: "step_up",
+  },
+  {
+    method: "PUT",
+    pattern: "/api/v1/convox/apps/:app/services/:name",
+    permissions: ["convox:app:update"],
     mfaLevel: "step_up",
   },
   {

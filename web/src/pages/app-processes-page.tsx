@@ -1,5 +1,6 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useParams } from '@tanstack/react-router'
+import { Loader2 } from 'lucide-react'
 import { useState } from 'react'
 import { TablePane } from '../components/table-pane'
 import { TimeAgo } from '../components/time-ago'
@@ -12,49 +13,41 @@ import {
   TableHeader,
   TableRow,
 } from '../components/ui/table'
+import { toast } from '../components/ui/use-toast'
+import { useAuth } from '../contexts/auth-context'
+import { useMutation } from '../hooks/use-mutation'
 import { api } from '../lib/api'
+import { fetchAppProcesses } from '../lib/app-runtime'
 import { DEFAULT_PER_PAGE } from '../lib/constants'
-
-type Process = {
-  id: string
-  service: string
-  name?: string
-  status: string
-  release: string
-  command?: string
-  started?: string
-}
+import { QUERY_KEYS } from '../lib/query-keys'
 
 export function AppProcessesPage() {
   const { app } = useParams({ from: '/apps/$app/processes' }) as {
     app: string
   }
+  const { user } = useAuth()
+  const queryClient = useQueryClient()
+  const roles = user?.roles ?? []
+  const canStopProcesses =
+    roles.includes('admin') || roles.includes('deployer') || roles.includes('ops')
   const {
     data = [],
     isLoading,
     error,
   } = useQuery({
-    queryKey: ['app-processes', app],
-    queryFn: async () => {
-      const ps = await api.get<
-        {
-          id: string
-          service?: string
-          name?: string
-          status: string
-          release: string
-          command?: string
-          started?: string
-        }[]
-      >(`/api/v1/convox/apps/${app}/processes`)
-      return ps.map((p) => ({
-        ...p,
-        service: p.service ?? p.name ?? '',
-      })) as Process[]
-    },
+    queryKey: [...QUERY_KEYS.APP_PROCESSES, app],
+    queryFn: () => fetchAppProcesses(app),
     refetchOnMount: 'always',
     refetchOnWindowFocus: true,
     staleTime: 0,
+  })
+  const stopMutation = useMutation({
+    mutationFn: async (processId: string) =>
+      api.delete(`/api/v1/convox/apps/${app}/processes/${encodeURIComponent(processId)}`),
+    onSuccess: async (_data, processId) => {
+      toast.success(`Stopped process ${processId}`)
+      await queryClient.invalidateQueries({ queryKey: [...QUERY_KEYS.APP_PROCESSES, app] })
+    },
   })
   const perPage = DEFAULT_PER_PAGE
   const total = data.length
@@ -79,6 +72,7 @@ export function AppProcessesPage() {
             <TableHead>Status</TableHead>
             <TableHead>Release</TableHead>
             <TableHead>Started</TableHead>
+            {canStopProcesses ? <TableHead className="text-right">Actions</TableHead> : null}
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -89,6 +83,23 @@ export function AppProcessesPage() {
               <TableCell>{p.status}</TableCell>
               <TableCell>{p.release}</TableCell>
               <TableCell>{p.started ? <TimeAgo date={p.started} /> : '—'}</TableCell>
+              {canStopProcesses ? (
+                <TableCell className="text-right">
+                  <Button
+                    aria-label={`Stop process ${p.id}`}
+                    data-testid={`stop-process-${p.id}`}
+                    disabled={stopMutation.isPending}
+                    onClick={() => stopMutation.mutate(p.id)}
+                    size="sm"
+                    variant="destructive"
+                  >
+                    {stopMutation.isPending && stopMutation.variables === p.id ? (
+                      <Loader2 className="animate-spin" />
+                    ) : null}
+                    Stop
+                  </Button>
+                </TableCell>
+              ) : null}
             </TableRow>
           ))}
         </TableBody>
