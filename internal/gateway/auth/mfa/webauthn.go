@@ -365,6 +365,7 @@ func (s *Service) findAndConfirmCredential(
 }
 
 // VerifyWebAuthn validates a WebAuthn assertion during login or step-up (legacy, for web UI).
+//
 // Deprecated: Use StartWebAuthnAssertion + VerifyWebAuthnAssertion for better session management.
 func (s *Service) VerifyWebAuthn(user *db.User, credentialJSON []byte) (*VerificationResult, error) {
 	if user == nil {

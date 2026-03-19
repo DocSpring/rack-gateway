@@ -153,7 +153,12 @@ func maybePromptForPIN(info *libfido2.DeviceInfo) (string, error) {
 	for _, opt := range info.Options {
 		if opt.Name == "clientPin" && opt.Value == libfido2.True {
 			fmt.Fprint(os.Stderr, "Enter your security key PIN: ")
-			pinBytes, err := term.ReadPassword(int(os.Stdin.Fd()))
+			stdinFd := os.Stdin.Fd()
+			const maxInt = int(^uint(0) >> 1)
+			if stdinFd > uintptr(maxInt) {
+				return "", fmt.Errorf("invalid file descriptor")
+			}
+			pinBytes, err := term.ReadPassword(int(stdinFd))
 			fmt.Fprintln(os.Stderr)
 			if err != nil {
 				return "", fmt.Errorf("failed to read PIN: %w", err)

@@ -259,7 +259,7 @@ func (d *Database) rebind(q string) string {
 	n := 1
 	for i := 0; i < len(q); i++ {
 		if q[i] == '?' {
-			b.WriteString(fmt.Sprintf("$%d", n))
+			fmt.Fprintf(&b, "$%d", n)
 			n++
 		} else {
 			b.WriteByte(q[i])

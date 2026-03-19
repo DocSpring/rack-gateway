@@ -67,7 +67,13 @@ func OpenBrowser(url string) error {
 
 // IsInteractive returns true if stdin and stdout are both terminals
 func IsInteractive() bool {
-	return term.IsTerminal(int(os.Stdin.Fd())) && term.IsTerminal(int(os.Stdout.Fd()))
+	const maxInt = int(^uint(0) >> 1)
+	stdinFd := os.Stdin.Fd()
+	stdoutFd := os.Stdout.Fd()
+	if stdinFd > uintptr(maxInt) || stdoutFd > uintptr(maxInt) {
+		return false
+	}
+	return term.IsTerminal(int(stdinFd)) && term.IsTerminal(int(stdoutFd))
 }
 
 // ResolveApp determines the Convox app name using a similar precedence to the Convox CLI:

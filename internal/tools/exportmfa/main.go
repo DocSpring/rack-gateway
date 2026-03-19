@@ -84,8 +84,8 @@ func writeTypeScript(path string, routes []mfaRoute) error {
 	builder.WriteString("export const HTTP_ROUTE_MFA_REQUIREMENTS: HttpRouteMfaRequirement[] = [\n")
 	for _, route := range routes {
 		builder.WriteString("  {\n")
-		builder.WriteString(fmt.Sprintf("    method: %s,\n", quote(route.Method)))
-		builder.WriteString(fmt.Sprintf("    pattern: %s,\n", quote(route.Pattern)))
+		fmt.Fprintf(&builder, "    method: %s,\n", quote(route.Method))
+		fmt.Fprintf(&builder, "    pattern: %s,\n", quote(route.Pattern))
 
 		builder.WriteString("    permissions: [")
 		for idx, perm := range route.Permissions {
@@ -96,7 +96,7 @@ func writeTypeScript(path string, routes []mfaRoute) error {
 		}
 		builder.WriteString("],\n")
 
-		builder.WriteString(fmt.Sprintf("    mfaLevel: %s,\n", quote(route.Level)))
+		fmt.Fprintf(&builder, "    mfaLevel: %s,\n", quote(route.Level))
 		builder.WriteString("  },\n")
 	}
 	builder.WriteString("];\n")

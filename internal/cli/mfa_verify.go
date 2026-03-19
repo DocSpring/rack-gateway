@@ -251,7 +251,12 @@ func submitWebAuthnAssertion(baseURL, sessionToken, sessionData, assertionJSON s
 }
 
 func promptMFACode() (string, error) {
-	fd := int(os.Stdin.Fd())
+	stdinFd := os.Stdin.Fd()
+	const maxInt = int(^uint(0) >> 1)
+	if stdinFd > uintptr(maxInt) {
+		return "", fmt.Errorf("invalid file descriptor")
+	}
+	fd := int(stdinFd)
 	if term.IsTerminal(fd) {
 		fmt.Fprint(os.Stderr, "Enter MFA code (TOTP or backup code): ")
 		codeBytes, err := term.ReadPassword(fd)

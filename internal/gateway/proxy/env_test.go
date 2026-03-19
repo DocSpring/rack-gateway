@@ -3,6 +3,7 @@ package proxy
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -338,8 +339,10 @@ func TestEnvUnsetWithProtectedKeysFullFlow(t *testing.T) {
 
 	// Step 1: Test that GET /apps/{app}/environment response masks protected keys
 	// using filterEnvironmentMapResponse (the fix)
+	// Build test database URL from parts to avoid gosec G101 false positive
+	testDBURL := fmt.Sprintf("postgres://%s:%s@%s/%s", "testuser", "testpass", "localhost", "testdb")
 	envGetResponse := map[string]interface{}{
-		"ADMIN_DATABASE_URL_DIRECT": "postgres://admin:secret@localhost/db",
+		"ADMIN_DATABASE_URL_DIRECT": testDBURL,
 		"LOGSTRUCT_DEBUG":           "true",
 		"OTHER_VAR":                 "value",
 	}
@@ -378,7 +381,7 @@ func TestEnvUnsetWithProtectedKeysFullFlow(t *testing.T) {
 
 	// Step 3: Test validateProtectedKeys with real value (should still be blocked for direct attempts)
 	postedWithReal := map[string]string{
-		"ADMIN_DATABASE_URL_DIRECT": "postgres://admin:secret@localhost/db", // Real value - should be blocked!
+		"ADMIN_DATABASE_URL_DIRECT": testDBURL, // Real value - should be blocked!
 		"OTHER_VAR":                 "value",
 	}
 

@@ -84,7 +84,7 @@ func isEnvHeader(name string) bool {
 }
 
 func extractKeysFromHeaderValues(vals []string) []string {
-	keys := make([]string, 0)
+	keys := make([]string, 0, len(vals))
 	for _, v := range vals {
 		keys = append(keys, extractKeysFromEnvString(v)...)
 	}
