@@ -171,13 +171,28 @@ func (mc *MockCredential) sign(data []byte) ([]byte, error) {
 
 // marshalPublicKeyCOSE marshals an ECDSA public key in COSE format
 func marshalPublicKeyCOSE(pubKey ecdsa.PublicKey) ([]byte, error) {
+	ecdhKey, err := pubKey.ECDH()
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert public key to ECDH: %w", err)
+	}
+
+	uncompressed := ecdhKey.Bytes()
+	if len(uncompressed) != 65 || uncompressed[0] != 0x04 {
+		return nil, fmt.Errorf("invalid uncompressed public key format")
+	}
+
+	// Extract X and Y coordinates from uncompressed format
+	// Format: 0x04 || X (32 bytes) || Y (32 bytes)
+	xCoord := uncompressed[1:33]
+	yCoord := uncompressed[33:65]
+
 	// COSE key format for ES256 (ECDSA P-256)
 	coseKey := map[int]interface{}{
-		1:  2,                               // kty: EC2
-		3:  webauthncose.AlgES256,           // alg: ES256 (-7)
-		-1: int(webauthncose.P256),          // crv: P-256
-		-2: padCoordinate(pubKey.X.Bytes()), // x coordinate (32 bytes)
-		-3: padCoordinate(pubKey.Y.Bytes()), // y coordinate (32 bytes)
+		1:  2,                      // kty: EC2
+		3:  webauthncose.AlgES256,  // alg: ES256 (-7)
+		-1: int(webauthncose.P256), // crv: P-256
+		-2: padCoordinate(xCoord),  // x coordinate (32 bytes)
+		-3: padCoordinate(yCoord),  // y coordinate (32 bytes)
 	}
 
 	return cbor.Marshal(coseKey)
