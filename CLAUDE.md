@@ -1,6 +1,6 @@
 # Rack Gateway - Technical Details
 
-IMPORTANT: Read [docs/CONVOX_REFERENCE.md](docs/CONVOX_REFERENCE.md) and [README.md](README.md) first for context on how Convox actually works and current project status.
+IMPORTANT: Read [docs/legacy/CONVOX_REFERENCE.md](docs/legacy/CONVOX_REFERENCE.md) and [README.md](README.md) first for context on how Convox actually works and current project status.
 
 ## 🚨 MISSION-CRITICAL AUTHENTICATION GATEWAY
 
@@ -126,7 +126,7 @@ This file contains high-level architecture and task commands. Component-specific
 
 - **`web/CLAUDE.md`** - Web frontend (React, Vite, Playwright testing, CSP)
 - **`internal/gateway/CLAUDE.md`** - Gateway API server (Go, auth, RBAC, proxy)
-- **`cmd/rack-gateway/CLAUDE.md`** - CLI client (multi-rack, OAuth flow)
+- **`internal/cli/CLAUDE.md`** - CLI client (multi-rack, OAuth flow)
 - **`mock-oauth/CLAUDE.md`** - Mock OAuth server for testing
 - **`docs/`** - Detailed documentation (configuration, database, Convox reference)
 
@@ -510,7 +510,7 @@ Flow:
 See component-specific CLAUDE.md files for detailed implementation information:
 
 - `internal/gateway/CLAUDE.md` - Auth, RBAC, proxy, audit logging
-- `cmd/rack-gateway/CLAUDE.md` - CLI OAuth flow, multi-rack config
+- `internal/cli/CLAUDE.md` - CLI OAuth flow, multi-rack config
 - `web/CLAUDE.md` - React SPA, CSP, testing
 
 ## Configuration
@@ -590,7 +590,7 @@ internal/gateway/         - Gateway API server (see internal/gateway/CLAUDE.md)
   audit/                  - Structured logging + redaction
   middleware/             - HTTP middleware (security, CSRF, sessions)
   ui/                     - Admin web interface (serves SPA)
-cmd/rack-gateway/         - CLI client (see cmd/rack-gateway/CLAUDE.md)
+cmd/rack-gateway/         - CLI entrypoint (see internal/cli/CLAUDE.md)
 web/                      - React SPA frontend (see web/CLAUDE.md)
 mock-oauth/               - Mock OAuth server for testing (see mock-oauth/CLAUDE.md)
 ```
