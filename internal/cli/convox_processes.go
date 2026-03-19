@@ -176,9 +176,9 @@ func RestartCommand() *cobra.Command {
 // ScaleCommand creates the scale command
 func ScaleCommand() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "scale",
+		Use:   "scale <service>",
 		Short: "scale app processes",
-		Args:  cobra.NoArgs,
+		Args:  validateScaleArgs,
 		RunE: SilenceOnError(func(cobraCmd *cobra.Command, args []string) error {
 			if err := resolveAppFlag(cobraCmd); err != nil {
 				return err
@@ -202,4 +202,21 @@ func ScaleCommand() *cobra.Command {
 	cmd.Flags().Int("memory", 0, "memory allocation")
 
 	return cmd
+}
+
+func validateScaleArgs(cmd *cobra.Command, args []string) error {
+	if scaleUpdateFlagsChanged(cmd) {
+		return cobra.ExactArgs(1)(cmd, args)
+	}
+
+	return cobra.NoArgs(cmd, args)
+}
+
+func scaleUpdateFlagsChanged(cmd *cobra.Command) bool {
+	return flagChanged(cmd, "count") || flagChanged(cmd, "cpu") || flagChanged(cmd, "memory")
+}
+
+func flagChanged(cmd *cobra.Command, name string) bool {
+	flag := cmd.Flags().Lookup(name)
+	return flag != nil && flag.Changed
 }

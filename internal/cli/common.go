@@ -168,9 +168,8 @@ func convertFlagValue(cmd *cobra.Command, name, flagType string) (*stdcli.Flag, 
 			return &stdcli.Flag{Name: name, Value: val}, "bool"
 		}
 	case "int":
-		if val, _ := cmd.Flags().GetInt(name); val != 0 {
-			return &stdcli.Flag{Name: name, Value: val}, "int"
-		}
+		val, _ := cmd.Flags().GetInt(name)
+		return &stdcli.Flag{Name: name, Value: val}, "int"
 	case "stringSlice":
 		if val, _ := cmd.Flags().GetStringSlice(name); len(val) > 0 {
 			return &stdcli.Flag{Name: name, Value: val}, "stringslice"
