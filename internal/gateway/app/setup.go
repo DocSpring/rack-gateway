@@ -6,7 +6,6 @@ import (
 	"log"
 	"os"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -86,7 +85,9 @@ func (a *App) initializeServices() error {
 
 	adminEmails := a.collectAdminEmails()
 	a.configureAuditEnqueuer(auditLogger)
-	a.startJobsWorker()
+	if err := a.startJobsWorker(); err != nil {
+		return err
+	}
 	a.initSecurityNotifier(auditLogger, adminEmails)
 
 	rackName, rackAlias := a.deriveRackIdentity()
@@ -342,25 +343,12 @@ func (a *App) configureAuditEnqueuer(logger *audit.Logger) {
 	logger.SetAuditEventEnqueuer(jobs.NewAuditEventEnqueuer(a.JobsClient))
 }
 
-func (a *App) startJobsWorker() {
-	ctx, cancel := context.WithCancel(context.Background())
-	a.WorkerCtx = ctx
-
-	// Use sync.Once to ensure cancel is only called once (either on goroutine completion or shutdown)
-	var cancelOnce sync.Once
-	wrappedCancel := func() {
-		cancelOnce.Do(cancel)
+func (a *App) startJobsWorker() error {
+	if err := a.JobsClient.Start(context.Background()); err != nil {
+		return fmt.Errorf("start jobs worker: %w", err)
 	}
-	a.WorkerCancel = wrappedCancel
-
-	a.WorkerWg.Add(1)
-	go func() {
-		defer wrappedCancel() // Cancel on goroutine completion
-		defer a.WorkerWg.Done()
-		if err := a.JobsClient.Start(ctx); err != nil {
-			log.Printf("ERROR: Failed to start jobs worker: %v", err)
-		}
-	}()
+	log.Printf("Jobs worker started")
+	return nil
 }
 
 func (a *App) initSecurityNotifier(logger *audit.Logger, adminEmails []string) {

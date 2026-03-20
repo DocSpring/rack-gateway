@@ -1,9 +1,6 @@
 package deps
 
 import (
-	"context"
-	"sync"
-
 	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth/mfa"
@@ -41,17 +38,4 @@ type Gateway struct {
 	SecurityNotifier *security.Notifier
 	SlackNotifier    *slack.Notifier
 	JobsClient       *jobs.Client
-
-	// Worker lifecycle management
-	WorkerCtx    context.Context
-	WorkerCancel context.CancelFunc
-	WorkerWg     sync.WaitGroup
-}
-
-// Shutdown gracefully stops the background job worker and waits for it to exit.
-func (g *Gateway) Shutdown() {
-	if g.WorkerCancel != nil {
-		g.WorkerCancel()
-		g.WorkerWg.Wait()
-	}
 }
