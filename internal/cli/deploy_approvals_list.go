@@ -11,7 +11,6 @@ import (
 )
 
 type deployApprovalListOptions struct {
-	racks    string
 	status   string
 	onlyOpen bool
 	limit    int
@@ -30,7 +29,6 @@ func newDeployApprovalListCommand() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&opts.racks, "racks", "", "Comma-separated list of racks to query")
 	cmd.Flags().StringVarP(&opts.status, "status", "s", "", "Filter by status (pending, approved, rejected, expired)")
 	cmd.Flags().BoolVar(&opts.onlyOpen, "open", false, "Only show open (pending) requests")
 	cmd.Flags().IntVarP(&opts.limit, "limit", "l", 50, "Maximum number of results per rack")
@@ -40,7 +38,7 @@ func newDeployApprovalListCommand() *cobra.Command {
 }
 
 func executeDeployApprovalList(cmd *cobra.Command, opts deployApprovalListOptions) error {
-	racks, err := resolveRacks(opts.racks)
+	racks, err := resolveRacks()
 	if err != nil {
 		return err
 	}
@@ -54,8 +52,7 @@ func executeDeployApprovalList(cmd *cobra.Command, opts deployApprovalListOption
 	for _, rack := range racks {
 		var result deployApprovalRequestList
 		if err := gatewayRequest(cmd, rack, http.MethodGet, endpoint, nil, &result); err != nil {
-			// Continue to next rack on error
-			continue
+			return rackScopedError(rack, err, len(racks))
 		}
 		for _, req := range result.DeployApprovalRequests {
 			rackMap[req.PublicID] = rack

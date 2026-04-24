@@ -2,6 +2,7 @@ package cli
 
 import (
 	_ "embed"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -102,7 +103,7 @@ func postDeployApprovalRequest(
 ) (*deployApprovalRequest, error) {
 	var result deployApprovalRequest
 	if err := gatewayRequest(cmd, rack, http.MethodPost, endpoint, payload, &result); err != nil {
-		if strings.Contains(err.Error(), "409") {
+		if isGatewayStatus(err, http.StatusConflict) {
 			return &result, &deployApprovalRequestConflictError{request: &result}
 		}
 		return nil, err
@@ -127,24 +128,31 @@ func parseDurationFlag(raw, flag string, allowZero bool, defaultValue time.Durat
 	return dur, nil
 }
 
-// resolveRacks parses a comma-separated list of rack names, or returns the selected rack if empty.
-// Special value "all" expands to all configured racks (excluding those in all_racks_exclude).
-func resolveRacks(racksFlag string) ([]string, error) {
-	trimmed := strings.TrimSpace(racksFlag)
-	if trimmed == "" {
-		rack, err := SelectedRack()
-		if err != nil {
-			return nil, err
-		}
-		return []string{rack}, nil
+// resolveRacks parses the selected rack. Deploy approval commands accept comma-separated rack names
+// through the global --rack flag. Special value "all" expands to all configured racks.
+func resolveRacks() ([]string, error) {
+	rack, err := SelectedRack()
+	if err != nil {
+		return nil, err
 	}
 
-	// Handle special "all" value
+	trimmed := strings.TrimSpace(rack)
 	if trimmed == "all" {
 		return expandAllRacks()
 	}
 
-	parts := strings.Split(trimmed, ",")
+	racks, err := parseRackList(trimmed)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateConfiguredRacks(racks); err != nil {
+		return nil, err
+	}
+	return racks, nil
+}
+
+func parseRackList(raw string) ([]string, error) {
+	parts := strings.Split(raw, ",")
 	racks := make([]string, 0, len(parts))
 	for _, part := range parts {
 		value := strings.TrimSpace(part)
@@ -198,9 +206,36 @@ func filterExcludedRacks(racks []string, exclude []string) []string {
 	return filtered
 }
 
+type missingRackError struct {
+	name string
+}
+
+func (e *missingRackError) Error() string {
+	return fmt.Sprintf("No rack found with name %q", e.name)
+}
+
+func validateConfiguredRacks(racks []string) error {
+	if strings.TrimSpace(os.Getenv("RACK_GATEWAY_URL")) != "" {
+		return nil
+	}
+
+	cfg, exists, err := LoadConfig()
+	if err != nil {
+		return err
+	}
+	for _, rack := range racks {
+		if !exists || cfg.Gateways == nil {
+			return &missingRackError{name: rack}
+		}
+		if _, ok := cfg.Gateways[rack]; !ok {
+			return &missingRackError{name: rack}
+		}
+	}
+	return nil
+}
+
 // getCurrentGitCommit returns the current git commit hash (short form), or an error if not in a git repo.
 func getCurrentGitCommit() (string, error) {
-	//nolint:gosec // G204: Command is hardcoded
 	cmd := exec.Command("git", "rev-parse", "--short", "HEAD")
 	output, err := cmd.Output()
 	if err != nil {
@@ -232,7 +267,7 @@ type deployApprovalRequestList struct {
 // searchForRequestInRack searches for a deploy approval request in a specific rack.
 func searchForRequestInRack(
 	cmd *cobra.Command, rack, app, branch, commit, status string,
-) (*deployApprovalRequest, bool) {
+) (*deployApprovalRequest, bool, error) {
 	params := url.Values{}
 	params.Set("status", status)
 	params.Set("limit", "1")
@@ -247,10 +282,25 @@ func searchForRequestInRack(
 
 	var result deployApprovalRequestList
 	if err := gatewayRequest(cmd, rack, http.MethodGet, endpoint, nil, &result); err != nil {
-		return nil, false
+		return nil, false, err
 	}
 	if len(result.DeployApprovalRequests) > 0 {
-		return &result.DeployApprovalRequests[0], true
+		return &result.DeployApprovalRequests[0], true, nil
 	}
-	return nil, false
+	return nil, false, nil
+}
+
+func rackScopedError(rack string, err error, rackCount int) error {
+	if errors.Is(err, ErrTokenExpired) {
+		return err
+	}
+	if rackCount <= 1 {
+		return err
+	}
+	return fmt.Errorf("rack %s: %w", rack, err)
+}
+
+func isGatewayStatus(err error, statusCode int) bool {
+	var gatewayErr *gatewayHTTPError
+	return errors.As(err, &gatewayErr) && gatewayErr.statusCode == statusCode
 }

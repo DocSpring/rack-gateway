@@ -36,6 +36,32 @@ type apiTokenResponse struct {
 	APIToken *apiToken `json:"api_token"`
 }
 
+type gatewayHTTPError struct {
+	statusCode int
+	message    string
+}
+
+func (e *gatewayHTTPError) Error() string {
+	if strings.TrimSpace(e.message) == "" {
+		return fmt.Sprintf("gateway request failed (%d)", e.statusCode)
+	}
+	return fmt.Sprintf("gateway request failed (%d): %s", e.statusCode, e.message)
+}
+
+func gatewayResponseError(statusCode int, responseBody []byte) error {
+	message := RenderGatewayError(responseBody)
+	if statusCode == http.StatusUnauthorized && isExpiredAuthMessage(message) {
+		return ErrTokenExpired
+	}
+	return &gatewayHTTPError{statusCode: statusCode, message: message}
+}
+
+func isExpiredAuthMessage(message string) bool {
+	lower := strings.ToLower(message)
+	return strings.Contains(lower, "expired") &&
+		(strings.Contains(lower, "token") || strings.Contains(lower, "session"))
+}
+
 type tokenPermissionMetadata struct {
 	Permissions        []string     `json:"permissions"`
 	Roles              []roleOption `json:"roles"`
@@ -213,7 +239,7 @@ func gatewayRequest(cmd *cobra.Command, rack, method, path string, body interfac
 
 	// Check for errors after potential retry
 	if statusCode >= 400 {
-		return fmt.Errorf("gateway request failed (%d): %s", statusCode, strings.TrimSpace(string(responseBody)))
+		return gatewayResponseError(statusCode, responseBody)
 	}
 
 	// Decode response if output pointer provided
@@ -255,7 +281,7 @@ func gatewayRequestWithMFA(
 	}
 
 	if statusCode >= 400 {
-		return fmt.Errorf("gateway request failed (%d): %s", statusCode, strings.TrimSpace(string(responseBody)))
+		return gatewayResponseError(statusCode, responseBody)
 	}
 
 	if out != nil {

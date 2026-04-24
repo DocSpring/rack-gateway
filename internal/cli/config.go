@@ -112,7 +112,7 @@ func LoadToken(rack string) (*GatewayConfig, error) {
 	}
 
 	if time.Now().After(gateway.ExpiresAt) {
-		return nil, fmt.Errorf("token expired")
+		return nil, ErrTokenExpired
 	}
 
 	return &gateway, nil

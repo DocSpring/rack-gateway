@@ -1,4 +1,4 @@
-FROM golang:1.26.1-alpine AS builder
+FROM golang:1.26.2-alpine AS builder
 
 RUN apk add --no-cache git ca-certificates make gcc musl-dev
 
@@ -6,6 +6,7 @@ WORKDIR /app
 
 # Cache go mod download
 COPY go.mod go.sum ./
+COPY internal/shims ./internal/shims
 RUN --mount=type=cache,target=/go/pkg/mod,sharing=locked \
     --mount=type=cache,target=/root/.cache/go-build,sharing=locked \
     go mod download

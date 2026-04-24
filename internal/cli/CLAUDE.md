@@ -64,7 +64,7 @@ Structure:
 - `mfa_preference` - Default MFA method: `"default"`, `"webauthn"`, or `"totp"`
 - `notification_sound` - Default notification sound: `"default"`, `"disabled"`, or path to MP3 file
 - `sound_volume` - Default sound volume: 0.0 to 1.0 (default: 0.6 = 60%)
-- `all_racks_exclude` - Array of rack names to exclude when using `--racks all`
+- `all_racks_exclude` - Array of rack names to exclude when using `--rack all`
 
 **Per-Rack Settings (GatewayConfig):**
 - `url` - Gateway API URL
@@ -80,19 +80,19 @@ Structure:
 - `notification_sound` - Per-rack notification sound override
 - `sound_volume` - Per-rack sound volume override (0.0 to 1.0)
 
-**Using --racks all:**
+**Using --rack all:**
 
-Deploy approval commands support `--racks all` to operate on all configured racks:
+Deploy approval commands support `--rack all` to operate on all configured racks:
 
 ```bash
 # Wait for deploy approval on all production racks (excluding dev)
-cx deploy-approval wait --racks all --commit abc123
+cx deploy-approval wait --rack all --commit abc123
 
 # Approve deploy on all racks
-cx deploy-approval approve --racks all --commit abc123
+cx deploy-approval approve --rack all --commit abc123
 
 # List deploy approval requests from all racks
-cx deploy-approval list --racks all
+cx deploy-approval list --rack all
 ```
 
 The `all` value expands to all configured racks in `gateways`, excluding any racks listed in `all_racks_exclude`. This is useful for avoiding local development racks when operating on production infrastructure.

@@ -11,7 +11,6 @@ import (
 )
 
 type deployApprovalShowOptions struct {
-	racks  string
 	app    string
 	branch string
 	commit string
@@ -46,14 +45,13 @@ Examples:
   cx deploy-approval show --commit abc123def
 
   # Show across multiple racks
-  cx deploy-approval show --racks staging,us,eu`,
+  cx deploy-approval show --rack staging,us,eu`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return executeDeployApprovalShow(cmd, args, opts)
 		},
 	}
 
-	cmd.Flags().StringVar(&opts.racks, "racks", "", "Comma-separated list of racks to search")
 	cmd.Flags().StringVarP(&opts.app, "app", "a", "", appFlagHelp)
 	cmd.Flags().StringVar(&opts.branch, "branch", "", "Search by git branch (uses current branch if no ID given)")
 	cmd.Flags().StringVar(&opts.commit, "commit", "", "Search by git commit hash")
@@ -63,7 +61,7 @@ Examples:
 }
 
 func executeDeployApprovalShow(cmd *cobra.Command, args []string, opts deployApprovalShowOptions) error {
-	racks, err := resolveRacks(opts.racks)
+	racks, err := resolveRacks()
 	if err != nil {
 		return err
 	}
@@ -96,12 +94,17 @@ func executeDeployApprovalShow(cmd *cobra.Command, args []string, opts deployApp
 
 func showByID(cmd *cobra.Command, racks []string, publicID, output string) error {
 	// Try each rack until we find the request
-	var lastErr error
 	for _, rack := range racks {
 		endpoint := fmt.Sprintf("/deploy-approval-requests/%s", publicID)
 		var result deployApprovalRequest
 		if err := gatewayRequest(cmd, rack, http.MethodGet, endpoint, nil, &result); err != nil {
-			lastErr = err
+			if isGatewayStatus(err, http.StatusNotFound) {
+				continue
+			}
+			return rackScopedError(rack, err, len(racks))
+		}
+
+		if result.PublicID == "" {
 			continue
 		}
 
@@ -111,9 +114,6 @@ func showByID(cmd *cobra.Command, racks []string, publicID, output string) error
 		return printDeployApprovalDetails(&result, rack, len(racks) > 1)
 	}
 
-	if lastErr != nil {
-		return fmt.Errorf("deploy approval request not found: %w", lastErr)
-	}
 	return fmt.Errorf("deploy approval request %s not found", publicID)
 }
 
@@ -123,7 +123,10 @@ type rackResult struct {
 }
 
 func showBySearch(cmd *cobra.Command, racks []string, app, branch, commit, output string) error {
-	results := collectResultsFromRacks(cmd, racks, app, branch, commit)
+	results, err := collectResultsFromRacks(cmd, racks, app, branch, commit)
+	if err != nil {
+		return err
+	}
 
 	if len(results) == 0 {
 		if branch != "" {
@@ -140,18 +143,21 @@ func showBySearch(cmd *cobra.Command, racks []string, app, branch, commit, outpu
 
 func collectResultsFromRacks(
 	cmd *cobra.Command, racks []string, app, branch, commit string,
-) []rackResult {
+) ([]rackResult, error) {
 	var results []rackResult
 	for _, rack := range racks {
 		for _, status := range []string{"pending", "approved"} {
-			req, found := searchForRequestInRack(cmd, rack, app, branch, commit, status)
+			req, found, err := searchForRequestInRack(cmd, rack, app, branch, commit, status)
+			if err != nil {
+				return nil, rackScopedError(rack, err, len(racks))
+			}
 			if found {
 				results = append(results, rackResult{rack: rack, req: req})
 				break
 			}
 		}
 	}
-	return results
+	return results, nil
 }
 
 func outputResultsAsJSON(cmd *cobra.Command, results []rackResult) error {

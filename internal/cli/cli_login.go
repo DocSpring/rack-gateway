@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -20,7 +21,8 @@ func LoginCommand() *cobra.Command {
 		Long: `Login to a Convox rack via OAuth.
 
 If no arguments are provided, re-authenticates with the current rack.
-Otherwise, provide both rack name and gateway URL to login to a new rack.`,
+Provide a rack name to re-authenticate against a configured rack URL.
+Provide both rack name and gateway URL to login to a new rack.`,
 		Args: cobra.RangeArgs(0, 2),
 		RunE: func(_ *cobra.Command, args []string) error {
 			return loginCommandWithFlags(args, noOpen, authFile)
@@ -68,13 +70,14 @@ func loginCommandWithFlags(args []string, noOpen bool, authFile string) error {
 }
 
 func resolveLoginTarget(args []string) (string, string, error) {
+	rackArg, gatewayArg := normalizeLoginArgs(args)
 	switch len(args) {
 	case 0:
 		rack, err := SelectedRack()
 		if err != nil {
 			return "", "", fmt.Errorf("no current rack selected: %w. Run: rack-gateway login <rack> <gateway-url>", err)
 		}
-		gatewayURL, _, err := LoadRackAuth(rack)
+		gatewayURL, err := resolveLoginGatewayURL(rack)
 		if err != nil {
 			return "", "", fmt.Errorf(
 				"rack %s not configured: %w. Run: rack-gateway login <rack> <gateway-url>",
@@ -84,9 +87,24 @@ func resolveLoginTarget(args []string) (string, string, error) {
 		}
 		return rack, gatewayURL, nil
 	case 1:
-		return "", "", fmt.Errorf("both rack name and gateway URL are required")
+		rack := rackArg
+		if rack == "" {
+			return "", "", fmt.Errorf("rack name cannot be empty")
+		}
+		gatewayURL, err := resolveLoginGatewayURL(rack)
+		if err != nil {
+			return "", "", fmt.Errorf("gateway URL required for rack %s: %w", rack, err)
+		}
+		return rack, gatewayURL, nil
 	case 2:
-		rack, gatewayURL := args[0], args[1]
+		rack := rackArg
+		gatewayURL := gatewayArg
+		if rack == "" {
+			return "", "", fmt.Errorf("rack name cannot be empty")
+		}
+		if gatewayURL == "" {
+			return "", "", fmt.Errorf("gateway URL cannot be empty")
+		}
 		if err := SaveGatewayConfig(rack, gatewayURL); err != nil {
 			return "", "", fmt.Errorf("failed to save gateway config: %w", err)
 		}
@@ -94,6 +112,30 @@ func resolveLoginTarget(args []string) (string, string, error) {
 	default:
 		return "", "", fmt.Errorf("unexpected number of arguments")
 	}
+}
+
+func normalizeLoginArgs(args []string) (string, string) {
+	var rack string
+	var gatewayURL string
+	for i, arg := range args {
+		switch i {
+		case 0:
+			rack = strings.TrimSpace(arg)
+		case 1:
+			gatewayURL = strings.TrimSpace(arg)
+		}
+	}
+	return rack, gatewayURL
+}
+
+func resolveLoginGatewayURL(rack string) (string, error) {
+	if gatewayURL := strings.TrimSpace(os.Getenv("RACK_GATEWAY_URL")); gatewayURL != "" {
+		if err := SaveGatewayConfig(rack, gatewayURL); err != nil {
+			return "", fmt.Errorf("failed to save gateway config: %w", err)
+		}
+		return gatewayURL, nil
+	}
+	return LoadGatewayURL(rack)
 }
 
 func writeAuthFile(path string, startResp *LoginStartResponse) error {

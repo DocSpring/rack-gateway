@@ -1,7 +1,7 @@
 # Build stage
 # syntax=docker/dockerfile:1.5
 
-FROM golang:1.26.1-alpine AS builder
+FROM golang:1.26.2-alpine AS builder
 
 RUN apk add --no-cache git make
 
@@ -9,6 +9,7 @@ WORKDIR /app
 
 # Cache go dependencies with BuildKit caches
 COPY go.mod go.sum ./
+COPY internal/shims ./internal/shims
 RUN --mount=type=cache,target=/go/pkg/mod,sharing=locked \
     --mount=type=cache,target=/root/.cache/go-build,sharing=locked \
     go mod download

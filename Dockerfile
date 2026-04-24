@@ -15,7 +15,7 @@ RUN bun install --frozen-lockfile
 COPY web/ ./
 RUN bun run build
 
-FROM golang:1.26.1-alpine AS builder
+FROM golang:1.26.2-alpine AS builder
 
 RUN apk add --no-cache git ca-certificates make gcc musl-dev nodejs npm
 
@@ -23,6 +23,7 @@ WORKDIR /app
 
 # Cache go mod download
 COPY go.mod go.sum ./
+COPY internal/shims ./internal/shims
 RUN go mod download
 
 # Copy version source (package.json for version number)

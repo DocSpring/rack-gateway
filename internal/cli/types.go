@@ -16,7 +16,7 @@ type Config struct {
 	NotificationSound string `json:"notification_sound,omitempty"`
 	// Global default: sound volume (0.0 to 1.0, default 0.6 = 60%)
 	SoundVolume *float64 `json:"sound_volume,omitempty"`
-	// Racks to exclude when using --racks all (e.g., ["dev", "Dev"])
+	// Racks to exclude when using --rack all (e.g., ["dev", "Dev"])
 	AllRacksExclude []string `json:"all_racks_exclude,omitempty"`
 }
 
@@ -104,6 +104,9 @@ type MFAMethodResponse struct {
 
 // ErrLoginPending is returned when login is still pending browser completion
 var ErrLoginPending = errors.New("login pending")
+
+// ErrTokenExpired is returned when a stored or gateway-authenticated token has expired.
+var ErrTokenExpired = errors.New("token expired")
 
 // GatewayInfoResponse is the response from /api/v1/info
 type GatewayInfoResponse struct {
