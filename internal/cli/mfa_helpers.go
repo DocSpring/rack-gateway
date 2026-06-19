@@ -235,6 +235,9 @@ func CollectMFAAuthWithPIN(
 		if err != nil {
 			return "", "", fmt.Errorf("WebAuthn verification failed: %w", err)
 		}
+		if err := writeLine(out, "MFA verified."); err != nil {
+			return "", "", err
+		}
 
 		return "webauthn." + assertionData, pinUsed, nil
 
