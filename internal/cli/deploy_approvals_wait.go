@@ -4,9 +4,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"os"
-	"os/exec"
-	"runtime"
 	"strings"
 	"time"
 
@@ -100,6 +97,7 @@ func parseDeployApprovalWaitOptions(
 
 func runDeployApprovalWait(cmd *cobra.Command, cfg deployApprovalWaitConfig) error {
 	waiter := newDeployApprovalWaiter(cmd, cfg)
+	defer waiter.waitForSound()
 
 	if err := waiter.printWaitingMessage(); err != nil {
 		return err
@@ -198,6 +196,7 @@ type deployApprovalWaiter struct {
 	rackIndex     int
 	cachedPIN     string
 	approvedRacks map[string]bool
+	soundDone     chan struct{}
 }
 
 func (w *deployApprovalWaiter) nextRack() string {
@@ -292,15 +291,11 @@ func (w *deployApprovalWaiter) handleRequest(rack string, request deployApproval
 	// Mark this rack as having an approved request (pending counts too, we'll approve it)
 	w.approvedRacks[rack] = true
 
-	cfg, _, _ := LoadConfig()
-	soundDone := w.startNotificationSound(cfg, rack)
+	w.playNotificationOnce(rack)
 
 	if err := w.writeRequestSummary(rack, request); err != nil {
-		<-soundDone
 		return err
 	}
-
-	<-soundDone
 
 	if !w.autoApprove {
 		msg := "\nUse 'rack-gateway deploy-approval approve <id>' to approve this request."
@@ -332,15 +327,27 @@ func (w *deployApprovalWaiter) handleRequest(rack string, request deployApproval
 	return writeLine(w.cmd.OutOrStdout(), statusLine)
 }
 
-func (w *deployApprovalWaiter) startNotificationSound(cfg *Config, rack string) <-chan struct{} {
-	done := make(chan struct{})
+// playNotificationOnce plays the notification sound a single time per invocation,
+// in the background, so multiple rack approvals don't queue up extra bells or block
+// the interactive approval flow. waitForSound (called on exit) lets it finish.
+func (w *deployApprovalWaiter) playNotificationOnce(rack string) {
+	if w.soundDone != nil {
+		return
+	}
+	cfg, _, _ := LoadConfig()
+	w.soundDone = make(chan struct{})
 	go func() {
-		defer close(done)
+		defer close(w.soundDone)
 		if err := playNotificationSound(cfg, rack); err != nil {
 			_ = writef(w.cmd.OutOrStdout(), "Warning: failed to play notification sound: %v\n", err)
 		}
 	}()
-	return done
+}
+
+func (w *deployApprovalWaiter) waitForSound() {
+	if w.soundDone != nil {
+		<-w.soundDone
+	}
 }
 
 func (w *deployApprovalWaiter) writeRequestSummary(rack string, request deployApprovalRequest) error {
@@ -372,124 +379,4 @@ func (w *deployApprovalWaiter) writeRequestSummary(rack string, request deployAp
 
 func (w *deployApprovalWaiter) sleep() {
 	time.Sleep(w.pollInterval)
-}
-
-func playNotificationSound(cfg *Config, rack string) error {
-	preference := resolveNotificationPreference(cfg, rack)
-	if preference == "disabled" {
-		return nil
-	}
-
-	soundFile, cleanup, err := ensureSoundFile(preference)
-	if err != nil {
-		return err
-	}
-	if cleanup != nil {
-		defer cleanup()
-	}
-
-	volume := resolveSoundVolumePreference(cfg, rack)
-	player, err := selectAudioPlayer(soundFile, volume)
-	if err != nil {
-		return err
-	}
-	return player.Run()
-}
-
-func resolveNotificationPreference(cfg *Config, rack string) string {
-	const defaultPreference = "default"
-	if cfg == nil {
-		return defaultPreference
-	}
-	preference := cfg.NotificationSound
-	if preference == "" {
-		preference = defaultPreference
-	}
-	if rack == "" || cfg.Gateways == nil {
-		return preference
-	}
-	if gwCfg, ok := cfg.Gateways[rack]; ok && gwCfg.NotificationSound != "" {
-		return gwCfg.NotificationSound
-	}
-	return preference
-}
-
-func resolveSoundVolumePreference(cfg *Config, rack string) float64 {
-	const defaultVolume = 0.6 // 60%
-	if cfg == nil {
-		return defaultVolume
-	}
-	volume := defaultVolume
-	if cfg.SoundVolume != nil {
-		volume = *cfg.SoundVolume
-	}
-	if rack == "" || cfg.Gateways == nil {
-		return volume
-	}
-	if gwCfg, ok := cfg.Gateways[rack]; ok && gwCfg.SoundVolume != nil {
-		return *gwCfg.SoundVolume
-	}
-	return volume
-}
-
-func ensureSoundFile(preference string) (string, func(), error) {
-	if preference == "" || preference == "default" {
-		return createTemporarySoundFile()
-	}
-	if _, err := os.Stat(preference); err != nil {
-		return "", nil, fmt.Errorf("notification sound file not found: %w", err)
-	}
-	return preference, nil, nil
-}
-
-func createTemporarySoundFile() (string, func(), error) {
-	tmpFile, err := os.CreateTemp("", "notification-*.mp3")
-	if err != nil {
-		return "", nil, err
-	}
-
-	if _, err := tmpFile.Write(notificationSound); err != nil {
-		_ = tmpFile.Close()
-		return "", nil, err
-	}
-	if err := tmpFile.Close(); err != nil {
-		return "", nil, err
-	}
-
-	cleanup := func() {
-		_ = os.Remove(tmpFile.Name())
-	}
-	return tmpFile.Name(), cleanup, nil
-}
-
-func selectAudioPlayer(soundFile string, volume float64) (*exec.Cmd, error) {
-	switch runtime.GOOS {
-	case "darwin":
-		//nolint:gosec // G204: Command hardcoded, file path controlled
-		return exec.Command("afplay", "-v", fmt.Sprintf("%.2f", volume), soundFile), nil
-	case "linux":
-		return linuxAudioPlayer(soundFile, volume)
-	default:
-		return nil, fmt.Errorf("unsupported OS: %s", runtime.GOOS)
-	}
-}
-
-func linuxAudioPlayer(soundFile string, volume float64) (*exec.Cmd, error) {
-	for _, candidate := range []string{"paplay", "aplay", "ffplay", "mpg123"} {
-		if _, err := exec.LookPath(candidate); err == nil {
-			//nolint:gosec // G204: Command hardcoded, file path controlled
-			switch candidate {
-			case "paplay":
-				return exec.Command(candidate, "--volume", fmt.Sprintf("%.0f", volume*65536), soundFile), nil
-			case "ffplay":
-				volStr := fmt.Sprintf("%.0f", volume*100)
-				return exec.Command(candidate, "-nodisp", "-autoexit", "-volume", volStr, soundFile), nil
-			case "mpg123":
-				return exec.Command(candidate, "-f", fmt.Sprintf("%.0f", volume*32768), soundFile), nil
-			default:
-				return exec.Command(candidate, soundFile), nil
-			}
-		}
-	}
-	return nil, fmt.Errorf("no audio player found (tried paplay, aplay, ffplay, mpg123)")
 }
