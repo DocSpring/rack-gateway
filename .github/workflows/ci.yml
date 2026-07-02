@@ -102,7 +102,11 @@ jobs:
           CGO_ENABLED: 1
 
       - name: Install jscpd for duplication checking
-        run: npm install -g jscpd
+        # Pinned: an unpinned install pulled the jscpd v5 rewrite mid-flight and
+        # broke CI (renamed flags, ignores .jscpd.json, different detection).
+        # v4.0.5 matches scripts/check_duplication.sh and the .jscpd.json
+        # configs; upgrading to v5 is a config+findings migration.
+        run: npm install -g jscpd@4.0.5
 
       - name: Check code duplication
         run: task duplication

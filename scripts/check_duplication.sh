@@ -26,6 +26,10 @@ cd "$TARGET_DIR"
 
 set -o pipefail
 # Run jscpd on the current directory (target dir) so it picks up local config (.jscpd.json)
+# NOTE: written for jscpd v4 (CI pins the version in .github/workflows/ci.yml).
+# jscpd v5 is a rewrite: it renames --exitCode to --exit-code, no longer
+# auto-loads .jscpd.json, and flags different clones -- upgrading is a
+# migration, not a version bump.
 if output=$(jscpd . --exitCode 1 2>&1); then
   echo "No duplicate $LABEL code detected."
   exit 0
