@@ -5,6 +5,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 
@@ -235,6 +236,32 @@ func (_ *Handler) logProxyResponse(
 	}
 }
 
+const (
+	// defaultForwardTimeout bounds ordinary proxied rack API calls.
+	defaultForwardTimeout = 30 * time.Second
+
+	// promoteForwardTimeout gives release promotes room to finish. The Convox
+	// API applies the entire release before responding (per-timer IAM/EKS
+	// pod-identity roles, Kubernetes applies), which can legitimately take
+	// minutes -- and canceling the request does NOT stop that work server-side.
+	// Abandoned promotes keep consuming the rack API's Kubernetes client rate
+	// limiter, so a short timeout plus retries makes every subsequent attempt
+	// slower (observed: 30s timeouts stacked zombie promotes running 3-9
+	// minutes each while deploys hard-failed).
+	promoteForwardTimeout = 10 * time.Minute
+)
+
+var promotePathPattern = regexp.MustCompile(`^/apps/[^/]+/releases/[^/]+/promote$`)
+
+// forwardTimeout selects the upstream timeout for a forwarded rack API request.
+func forwardTimeout(r *http.Request, path string) time.Duration {
+	normalized := "/" + strings.TrimLeft(path, "/")
+	if r.Method == http.MethodPost && promotePathPattern.MatchString(normalized) {
+		return promoteForwardTimeout
+	}
+	return defaultForwardTimeout
+}
+
 func (h *Handler) forwardRequest(
 	w http.ResponseWriter,
 	r *http.Request,
@@ -267,7 +294,7 @@ func (h *Handler) forwardRequest(
 		return 0, err
 	}
 
-	client, err := h.httpClient(r.Context(), 30*time.Second)
+	client, err := h.httpClient(r.Context(), forwardTimeout(r, path))
 	if err != nil {
 		log.Printf(`{"level":"error","event":"rack_tls_config_error","message":%q}`, err.Error())
 		return 0, fmt.Errorf("failed to prepare rack TLS: %w", err)
