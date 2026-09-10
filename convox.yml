@@ -41,8 +41,10 @@ services:
     port: 8080
     scale:
       count: 1
-      cpu: 256
-      memory: 256
+      # Requests reserve node capacity; 30-day peak usage is ~21m CPU / 18MB.
+      # Memory is also the OOM limit under convox, so keep some headroom.
+      cpu: 50
+      memory: 128
     sticky: true
     volumes: []
     annotations:
