@@ -11,7 +11,8 @@ import (
 
 	"github.com/fxamacker/cbor/v2"
 	"github.com/keys-pub/go-libfido2"
-	"golang.org/x/term"
+
+	"github.com/DocSpring/rack-gateway/internal/cli/pinentry"
 )
 
 // AssertionOptions contains the challenge and credential info from the server
@@ -62,7 +63,8 @@ func GetAssertionWithCachedPIN(options AssertionOptions, cachedPIN string) (*Ass
 			return nil, "", err
 		}
 	} else {
-		allowList, pin, err = filterCredentialsForDevice(device, options.RPID, allowList)
+		pinRequest := pinentry.Request{Gateway: options.Origin, Args: os.Args}
+		allowList, pin, err = filterCredentialsForDevice(device, options.RPID, allowList, pinRequest)
 		if err != nil {
 			return nil, "", err
 		}
@@ -112,13 +114,15 @@ func decodeCredentialIDs(ids []string) ([][]byte, error) {
 	return allowList, nil
 }
 
-func filterCredentialsForDevice(device *libfido2.Device, rpID string, allowList [][]byte) ([][]byte, string, error) {
+func filterCredentialsForDevice(
+	device *libfido2.Device, rpID string, allowList [][]byte, pinRequest pinentry.Request,
+) ([][]byte, string, error) {
 	info, err := device.Info()
 	if err != nil {
 		return allowList, "", nil
 	}
 
-	pin, err := maybePromptForPIN(info)
+	pin, err := maybePromptForPIN(info, pinRequest)
 	if err != nil {
 		return nil, "", err
 	}
@@ -149,21 +153,10 @@ func filterCredentialsOnly(device *libfido2.Device, rpID string, allowList [][]b
 	return filtered, nil
 }
 
-func maybePromptForPIN(info *libfido2.DeviceInfo) (string, error) {
+func maybePromptForPIN(info *libfido2.DeviceInfo, pinRequest pinentry.Request) (string, error) {
 	for _, opt := range info.Options {
 		if opt.Name == "clientPin" && opt.Value == libfido2.True {
-			fmt.Fprint(os.Stderr, "Enter your security key PIN: ")
-			stdinFd := os.Stdin.Fd()
-			const maxInt = int(^uint(0) >> 1)
-			if stdinFd > uintptr(maxInt) {
-				return "", fmt.Errorf("invalid file descriptor")
-			}
-			pinBytes, err := term.ReadPassword(int(stdinFd))
-			fmt.Fprintln(os.Stderr)
-			if err != nil {
-				return "", fmt.Errorf("failed to read PIN: %w", err)
-			}
-			return string(pinBytes), nil
+			return pinentry.ReadPIN(pinRequest)
 		}
 	}
 	return "", nil
