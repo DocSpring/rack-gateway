@@ -28,9 +28,10 @@ environment:
 
 services:
   gateway:
-    # To deploy: Build locally and push to Docker Hub using scripts/build-and-push.sh
-    # Then update the image tag below to the new version
-    image: docker.io/docspringcom/rack-gateway:latest
+    # Pinned to an immutable release tag. scripts/bump-version.sh sets it to the new
+    # version (:vX.Y.Z); the release workflow publishes that tag when the v* git tag is pushed.
+    # :e327add is the v0.1.1 release (identical to :latest when this was pinned).
+    image: docker.io/docspringcom/rack-gateway:e327add
     command: ./scripts/start-gateway.sh
     environment:
       - PORT=8080
@@ -51,8 +52,8 @@ services:
       - eks.amazonaws.com/role-arn: "${IAM_ROLE_ARN}"
 
   admin:
-    # Uses same image as gateway service
-    image: docker.io/docspringcom/rack-gateway:latest
+    # Uses same image as gateway service (kept in sync by scripts/bump-version.sh)
+    image: docker.io/docspringcom/rack-gateway:e327add
     command: echo "Use this service to run migrations, database admin tasks, etc."
     environment:
       - PORT=8080

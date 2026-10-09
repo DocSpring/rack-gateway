@@ -1,0 +1,29 @@
+name: Install Task
+description: Install a pinned, checksum-verified Task (taskfile.dev) binary into /usr/local/bin.
+
+inputs:
+  version:
+    description: Task release version
+    default: "3.53.1"
+  sha256:
+    description: SHA-256 of task_linux_amd64.tar.gz for that version (from task_checksums.txt)
+    default: a54a408f6861ff921f6e87774180db31bacd8c1e7c944ca696db9fea49a82fc7
+
+runs:
+  using: composite
+  steps:
+    - name: Install Task
+      shell: bash
+      env:
+        TASK_VERSION: ${{ inputs.version }}
+        TASK_SHA256: ${{ inputs.sha256 }}
+      run: |
+        set -euo pipefail
+        tmp="$(mktemp -d)"
+        curl -fsSL -o "${tmp}/task.tar.gz" \
+          "https://github.com/go-task/task/releases/download/v${TASK_VERSION}/task_linux_amd64.tar.gz"
+        echo "${TASK_SHA256}  ${tmp}/task.tar.gz" | sha256sum --check --strict
+        tar -xzf "${tmp}/task.tar.gz" -C "${tmp}" task
+        sudo install -m 0755 "${tmp}/task" /usr/local/bin/task
+        rm -rf "${tmp}"
+        task --version

@@ -64,11 +64,19 @@ pg_dump $DATABASE_URL > backup_pre_upgrade.sql
    convox env -a rack-gateway
    ```
 
-3. **Deploy**
+3. **Build, migrate, then promote**
+
+   The gateway doesn't run migrations on startup in production, so run them against the new release
+   before promoting it:
 
    ```bash
-   convox deploy -a rack-gateway
+   convox build -a rack-gateway                 # note the release ID it prints
+   convox run admin -a rack-gateway --release RELEASE_ID ./rack-gateway-api migrate
+   convox releases promote RELEASE_ID -a rack-gateway --wait
    ```
+
+   `scripts/deploy.sh <rack>` does these three steps through the gateway, and `scripts/deploy_all.sh`
+   runs them for every rack in turn.
 
 4. **Verify deployment**
 
@@ -224,27 +232,14 @@ services:
 
 ## Database Migrations
 
-Migrations run automatically or can be run manually:
-
-### Automatic (Recommended)
-
-Configure the gateway to run migrations on startup:
-```bash
-# Migrations run before server starts
-# This is the default behavior
-```
-
-### Manual
-
-For more control, run migrations separately:
+Migrations run automatically on startup only in development (`DEV_MODE=true`). In production, run them
+against the new release before promoting it:
 
 ```bash
-# Run migration job
-convox run gateway rack-gateway migrate
-
-# Then deploy
-convox deploy
+convox run admin -a rack-gateway --release RELEASE_ID ./rack-gateway-api migrate
 ```
+
+Migrations are idempotent; running them again is safe.
 
 ### Rollback Migrations
 
@@ -380,7 +375,7 @@ convox logs -a rack-gateway --since 5m
 
 ```bash
 # Test health endpoint directly
-convox run gateway -- curl localhost:8443/api/v1/health
+convox run gateway -a rack-gateway -- wget -q -O - http://localhost:8080/api/v1/health
 
 # Check startup logs
 convox logs -a rack-gateway | grep -i "start\|error"

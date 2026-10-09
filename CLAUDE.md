@@ -525,59 +525,50 @@ See [docs/CONFIGURATION.md](docs/CONFIGURATION.md) for complete environment vari
 
 ## Version Management and Deployment
 
-**IMPORTANT: Deploying to production requires a new Docker image, which is only built when you push a git tag.**
+**IMPORTANT: Deploying to production requires a new Docker image, which is only built when you push a `v*` git tag.**
 
-There is no way to deploy code changes without:
-1. Creating a version tag (e.g., `v0.0.19`)
-2. Pushing the tag to trigger the GitHub Actions release workflow
-3. Waiting for the Docker image to build and push
+**Single Source of Truth**: The project version is stored in `web/package.json`. `scripts/bump-version.sh` also pins
+both `convox.yml` services to the matching immutable image tag (`docker.io/docspringcom/rack-gateway:vX.Y.Z`), so a
+deploy never uses the mutable `:latest` tag.
 
-**Single Source of Truth**: The project version is stored in `web/package.json`.
+**Who can release:** a repository ruleset only lets repo admins create, move or delete `v*` tags, and `main` requires
+a PR with green CI (admins can bypass). The Release workflow only runs on `v*` tags; it has no manual trigger.
 
 **Releasing a new version:**
 
-1. Bump the version in `web/package.json`:
+1. Bump the version (updates `web/package.json`, `web/bun.lock` and the image tag in `convox.yml`):
    ```bash
    ./scripts/bump-version.sh patch  # or minor, major
    ```
 
-2. Commit the version bump:
+2. Commit and push the version bump:
    ```bash
    git commit -am "chore: bump version to vX.Y.Z"
-   ```
-
-3. Push the commit to main:
-   ```bash
    git push origin main
    ```
 
-4. Create and push a git tag to trigger the release:
+3. Create and push the release tag (admins only):
    ```bash
    ./scripts/create-release-tags.sh
-   git push --tags
+   git push origin vX.Y.Z
    ```
 
-The GitHub Actions release workflow (`.github/workflows/release.yml`) is triggered by `v*` tags and:
-- Builds the Docker image for linux/amd64
-- Pushes to `docker.io/docspringcom/rack-gateway` with both version tag and `latest` tags
-- Creates a GitHub release with binaries and checksums
+The Release workflow (`.github/workflows/release.yml`):
+- Checks the tag matches `web/package.json` and waits for CI + E2E to pass on the tagged commit
+- Builds the Docker image without any build cache and pushes `:vX.Y.Z`, `:<short-sha>` and `:latest`
+- Builds the CLI (`rack-gateway version` reports the release version) with checksums
+- Publishes signed build provenance attestations for the image and the CLI archive
+- Creates a GitHub release with the CLI archive and checksum
 
-**Deployment to Convox:**
+**Deployment to Convox:** once the Release workflow has published `:vX.Y.Z`, run `./scripts/deploy_all.sh` from the
+repo root (staging → eu → us). For each rack it builds (`convox.yml` already points at the new tag), runs
+`./rack-gateway-api migrate` against the new release, then promotes. Production never migrates on startup, so plain
+`convox deploy` would skip migrations. To deploy one rack: `./scripts/deploy.sh <rack>`.
 
-After the release workflow completes successfully:
-1. The `convox.yml` uses `image: docker.io/docspringcom/rack-gateway:latest` (or a specific version tag)
-2. Run `convox deploy` to deploy the new image to the rack
-
-**Quick Release Workflow:**
+**Verifying a release:**
 ```bash
-# After your changes are merged to main:
-./scripts/bump-version.sh patch
-git commit -am "chore: bump version to v0.0.19"
-git push origin main
-./scripts/create-release-tags.sh
-git push --tags
-# Wait for GitHub Actions to complete, then deploy
-convox deploy
+gh attestation verify oci://docker.io/docspringcom/rack-gateway:vX.Y.Z --repo DocSpring/rack-gateway
+gh attestation verify rack-gateway-linux-amd64.tar.gz --repo DocSpring/rack-gateway
 ```
 
 ## Code Structure

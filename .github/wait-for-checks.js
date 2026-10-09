@@ -42,13 +42,16 @@ module.exports = async function waitForChecks({
   );
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-    const { data } = await github.rest.checks.listForRef({
+    // Paginate: scheduled workflows (e.g. the daily security scan) add check runs to the same commit,
+    // which can push the required ones off the first page.
+    const allRuns = await github.paginate(github.rest.checks.listForRef, {
       owner,
       repo,
       ref,
+      per_page: 100,
     });
 
-    const runs = data.check_runs.filter((run) => checkSet.has(run.name));
+    const runs = allRuns.filter((run) => checkSet.has(run.name));
 
     if (runs.length === checkSet.size) {
       const incomplete = runs.filter((run) => run.status !== "completed");

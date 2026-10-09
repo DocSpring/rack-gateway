@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-FROM oven/bun:1.3.2-alpine AS webbuild
+FROM oven/bun:1.3.2-alpine@sha256:adda30fd4db7d8ef9a2113cb935c6f751de3daad39373713b56eefe49db78471 AS webbuild
 
 ARG COMMIT_SHA
 RUN test -n "$COMMIT_SHA" || (echo "COMMIT_SHA build arg is required" && exit 1)
@@ -15,7 +15,7 @@ RUN bun install --frozen-lockfile
 COPY web/ ./
 RUN bun run build
 
-FROM golang:1.26.9-alpine AS builder
+FROM golang:1.26.9-alpine@sha256:cdfd4fe2da6b225d8b40c6b7a105736e548e83ff56d5d8f9394446eeb5eb84e0 AS builder
 
 RUN apk add --no-cache git ca-certificates make gcc musl-dev nodejs npm
 
@@ -33,24 +33,30 @@ COPY web/package.json ./web/package.json
 COPY internal ./internal
 COPY cmd/gateway ./cmd/gateway
 
-# Build the gateway binary with version info
-ARG COMMIT_HASH=unknown
+# Build the gateway binary with version info (COMMIT_SHA is the same build arg the web stage requires)
+ARG COMMIT_SHA
+RUN test -n "$COMMIT_SHA" || (echo "COMMIT_SHA build arg is required" && exit 1)
 RUN VERSION=$(node -p "require('./web/package.json').version") && \
     CGO_ENABLED=0 go build \
-    -ldflags "-X github.com/DocSpring/rack-gateway/internal/gateway/version.Version=${VERSION} -X github.com/DocSpring/rack-gateway/internal/gateway/version.CommitHash=${COMMIT_HASH}" \
+    -ldflags "-X github.com/DocSpring/rack-gateway/internal/gateway/version.Version=${VERSION} -X github.com/DocSpring/rack-gateway/internal/gateway/version.CommitHash=${COMMIT_SHA}" \
     -o /out/rack-gateway-api ./cmd/gateway \
     && /out/rack-gateway-api help
 
-FROM alpine:latest
+FROM alpine:3.24.2@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6
 
-RUN apk --no-cache add ca-certificates curl
+# ca-certificates for outbound TLS. No curl: the compose healthcheck uses busybox wget.
+RUN apk --no-cache add ca-certificates \
+    && addgroup -S -g 10001 gateway \
+    && adduser -S -D -H -u 10001 -G gateway -s /sbin/nologin gateway
 
 WORKDIR /app
 
+# Files stay root-owned and read-only to the runtime user.
 COPY --from=builder /out/rack-gateway-api ./
 COPY --from=webbuild /app/web/dist ./web/dist
-COPY scripts/start-gateway.sh ./scripts/start-gateway.sh
-RUN chmod +x ./scripts/start-gateway.sh
+COPY --chmod=0755 scripts/start-gateway.sh ./scripts/start-gateway.sh
+
+USER 10001:10001
 
 EXPOSE 8080
 

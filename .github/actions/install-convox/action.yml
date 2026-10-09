@@ -1,0 +1,28 @@
+name: Install Convox CLI
+description: Install a pinned, checksum-verified Convox CLI (linux amd64) into /usr/local/bin.
+
+inputs:
+  version:
+    description: Convox CLI release version
+    default: "3.25.7"
+  sha256:
+    description: SHA-256 of the convox-linux asset for that version
+    default: 6a0ffe6faf269302c311c2f8e4d1cdc116902c933c7d91f461c47d8a25190759
+
+runs:
+  using: composite
+  steps:
+    - name: Install Convox CLI
+      shell: bash
+      env:
+        CONVOX_VERSION: ${{ inputs.version }}
+        CONVOX_SHA256: ${{ inputs.sha256 }}
+      run: |
+        set -euo pipefail
+        tmp="$(mktemp -d)"
+        curl -fsSL -o "${tmp}/convox" \
+          "https://github.com/convox/convox/releases/download/${CONVOX_VERSION}/convox-linux"
+        echo "${CONVOX_SHA256}  ${tmp}/convox" | sha256sum --check --strict
+        sudo install -m 0755 "${tmp}/convox" /usr/local/bin/convox
+        rm -rf "${tmp}"
+        convox version || true
