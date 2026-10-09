@@ -52,7 +52,7 @@ func (s *Service) StartYubiOTPEnrollment(user *db.User, yubiOTP string) (*StartY
 		return nil, err
 	}
 
-	backupCodes, err := s.ensureBackupCodes(user.ID)
+	backupCodes, err := s.backupCodesForEnrollment(user)
 	if err != nil {
 		return nil, err
 	}

@@ -38,6 +38,15 @@ func IsMFAChallengeRequired(settings *MFASettings, user *User) bool {
 	return ShouldEnforceMFA(settings, user)
 }
 
+// SessionAwaitingMFA returns true when the session belongs to a user who must
+// complete an MFA challenge but has not yet done so for this session.
+func SessionAwaitingMFA(settings *MFASettings, user *User, session *UserSession) bool {
+	if session == nil || session.MFAVerifiedAt != nil {
+		return false
+	}
+	return IsMFAChallengeRequired(settings, user)
+}
+
 // SetUserMFAEnrolled updates the MFA enrollment status for a user.
 // If enrolled is true, it also sets mfa_enforced_at if not already set.
 func (d *Database) SetUserMFAEnrolled(userID int64, enrolled bool) error {

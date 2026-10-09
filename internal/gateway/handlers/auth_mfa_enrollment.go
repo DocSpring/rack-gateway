@@ -98,7 +98,7 @@ func (h *AuthHandler) ConfirmTOTPEnrollment(c *gin.Context) {
 		return
 	}
 
-	h.logMFAEnrollmentCompletion(ctx, req.Label, "totp")
+	h.logMFAEnrollmentCompletion(c, ctx.userRecord, req.Label, "totp")
 
 	response := VerifyMFAResponse{
 		MFAVerifiedAt:         now,
@@ -146,6 +146,7 @@ func (h *AuthHandler) StartYubiOTPEnrollment(c *gin.Context) {
 		return
 	}
 
+	h.logMFAEnrollmentCompletion(c, ctx.userRecord, "", "yubiotp")
 	c.JSON(http.StatusOK, result)
 }
 
@@ -275,7 +276,7 @@ func (h *AuthHandler) ConfirmWebAuthnEnrollment(c *gin.Context) {
 		return
 	}
 
-	h.logMFAEnrollmentCompletion(ctx, label, "webauthn")
+	h.logMFAEnrollmentCompletion(c, ctx.userRecord, label, "webauthn")
 
 	c.JSON(http.StatusOK, gin.H{"status": "enrolled", "method_id": methodID})
 }
@@ -299,38 +300,28 @@ func (h *AuthHandler) updateMFAMethodLabel(methodID int64, label, defaultLabel s
 	}
 }
 
-func (h *AuthHandler) logMFAEnrollmentCompletion(ctx *mfaContext, label, resourceType string) {
-	if h.database == nil {
-		return
-	}
+func (h *AuthHandler) logMFAEnrollmentCompletion(c *gin.Context, user *db.User, label, methodType string) {
 	methodLabel := strings.TrimSpace(label)
 	if methodLabel == "" {
-		if resourceType == "totp" {
-			methodLabel = "Authenticator App"
-		} else {
-			methodLabel = "Security Key"
-		}
+		methodLabel = defaultMFAMethodLabel(methodType)
 	}
-	details, _ := json.Marshal(map[string]interface{}{
-		"label": methodLabel,
+	h.auditMFAEvent(c, user, mfaAuditEvent{
+		scope:        audit.ActionScopeMFAMethod,
+		verb:         audit.ActionVerbEnroll,
+		resourceType: "mfa_method",
+		resource:     methodType,
+		details:      map[string]interface{}{"label": methodLabel},
 	})
-	if err := h.auditLogger.LogDBEntry(&db.AuditLog{
-		UserEmail:    ctx.userRecord.Email,
-		UserName:     ctx.userRecord.Name,
-		ActionType:   "auth",
-		Action:       audit.BuildAction(audit.ActionScopeMFAMethod, audit.ActionVerbEnroll),
-		ResourceType: "mfa_method",
-		Resource:     resourceType,
-		Details:      string(details),
-		Status:       "success",
-		IPAddress:    ctx.ipAddress,
-		UserAgent:    ctx.userAgent,
-	}); err != nil {
-		log.Printf(
-			`{"level":"error","event":"audit_log_failed",`+
-				`"action":audit.BuildAction(audit.ActionScopeMFAMethod, audit.ActionVerbEnroll),"error":%q}`,
-			err,
-		)
+}
+
+func defaultMFAMethodLabel(methodType string) string {
+	switch methodType {
+	case "totp":
+		return "Authenticator App"
+	case "yubiotp":
+		return "Yubikey"
+	default:
+		return "Security Key"
 	}
 }
 
