@@ -183,8 +183,8 @@ export function EnrollmentDialog({
             <div className="space-y-3">
               <Label htmlFor="verification-code">Enter the 6-digit code to confirm</Label>
               <MFAInput
-                autoFocus
                 className="max-w-64"
+                focusOnMount
                 id="verification-code"
                 maxLength={6}
                 onChange={(event) => onVerificationCodeChange(event.target.value.trim())}

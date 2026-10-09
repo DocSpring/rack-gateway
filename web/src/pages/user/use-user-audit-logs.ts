@@ -27,7 +27,7 @@ export function useUserAuditLogs(email: string | null, enabled: boolean): UserAu
     queryKey: [...QUERY_KEYS.USER_AUDIT_LOGS, email, pageIndex, DEFAULT_PER_PAGE],
     queryFn: () =>
       email
-        ? api.listAuditLogs({ user: email, page: pageIndex, limit: DEFAULT_PER_PAGE, range: '30d' })
+        ? api.listUserAuditLogs(email, { page: pageIndex, limit: DEFAULT_PER_PAGE, range: '30d' })
         : Promise.reject(new Error('Missing email parameter')),
     enabled: Boolean(email) && enabled,
     placeholderData: keepPreviousData,

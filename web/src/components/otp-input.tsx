@@ -8,7 +8,7 @@ type OTPInputProps = Omit<ComponentPropsWithoutRef<'fieldset'>, 'onChange'> & {
   onChange: (value: string) => void
   onComplete?: (code: string) => void
   length?: number
-  autoFocus?: boolean
+  focusOnMount?: boolean
   disabled?: boolean
   id?: string
 }
@@ -29,7 +29,7 @@ export const OTPInput = forwardRef<HTMLFieldSetElement, OTPInputProps>(
       onChange,
       onComplete,
       length = 6,
-      autoFocus = false,
+      focusOnMount = false,
       disabled = false,
       id,
       className,
@@ -39,16 +39,16 @@ export const OTPInput = forwardRef<HTMLFieldSetElement, OTPInputProps>(
   ) => {
     const inputRefs = useRef<(HTMLInputElement | null)[]>([])
 
-    // Manually focus first input when autoFocus is true
+    // Focus the first input on mount (in an effect, not the native autoFocus attribute)
     // Use setTimeout to let Dialog's onOpenAutoFocus blur the dropdown first
     useEffect(() => {
-      if (autoFocus) {
+      if (focusOnMount) {
         const timeoutId = setTimeout(() => {
           inputRefs.current[0]?.focus()
         }, 0)
         return () => clearTimeout(timeoutId)
       }
-    }, [autoFocus])
+    }, [focusOnMount])
 
     // Ensure value is padded to length
     const paddedValue = value.padEnd(length, '')

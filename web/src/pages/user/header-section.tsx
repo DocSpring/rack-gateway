@@ -6,6 +6,9 @@ import { RoleBadges } from '@/pages/user/role-badges'
 
 type UserHeaderProps = {
   user: GatewayUser | undefined
+  // Edit, lock and unlock need user-admin permissions; deleting needs user:delete.
+  canManage: boolean
+  canDelete: boolean
   userLoading: boolean
   decodedEmail: string
   onEdit: () => void
@@ -21,8 +24,70 @@ type UserHeaderProps = {
   deletePending: boolean
 }
 
+type AccountAdminActionsProps = {
+  userLoading: boolean
+  userMissing: boolean
+  onEdit: () => void
+  isEditBusy: boolean
+  onUnlock: () => Promise<unknown>
+  unlockPending: boolean
+  locked: boolean
+  onLock: () => void
+}
+
+// Edit, lock and unlock, shown only to callers who can manage other users.
+function AccountAdminActions({
+  userLoading,
+  userMissing,
+  onEdit,
+  isEditBusy,
+  onUnlock,
+  unlockPending,
+  locked,
+  onLock,
+}: AccountAdminActionsProps) {
+  const handleUnlockClick = () => {
+    onUnlock().catch(() => {
+      /* handled within hook */
+    })
+  }
+
+  return (
+    <>
+      <Button
+        disabled={userLoading || userMissing || isEditBusy}
+        onClick={onEdit}
+        variant="secondary"
+      >
+        <Edit2 className="mr-2 h-4 w-4" /> Edit
+      </Button>
+      {locked ? (
+        <Button
+          disabled={unlockPending || userLoading}
+          onClick={handleUnlockClick}
+          variant="secondary"
+        >
+          {unlockPending ? (
+            <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+          ) : (
+            <Unlock className="mr-2 h-4 w-4" />
+          )}
+          Unlock Account
+        </Button>
+      ) : (
+        <Button disabled={userLoading || userMissing} onClick={onLock} variant="secondary">
+          <Lock className="mr-2 h-4 w-4" />
+          Lock Account
+        </Button>
+      )}
+    </>
+  )
+}
+
 export function UserHeaderSection({
   user,
+  canManage,
+  canDelete,
   userLoading,
   decodedEmail,
   onEdit,
@@ -37,12 +102,6 @@ export function UserHeaderSection({
   onDelete,
   deletePending,
 }: UserHeaderProps) {
-  const handleUnlockClick = () => {
-    onUnlock().catch(() => {
-      /* handled within hook */
-    })
-  }
-
   return (
     <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
       <div>
@@ -59,27 +118,17 @@ export function UserHeaderSection({
         )}
       </div>
       <div className="flex flex-wrap items-center gap-2 md:justify-end">
-        <Button disabled={userLoading || !user || isEditBusy} onClick={onEdit} variant="secondary">
-          <Edit2 className="mr-2 h-4 w-4" /> Edit
-        </Button>
-        {locked ? (
-          <Button
-            disabled={unlockPending || userLoading}
-            onClick={handleUnlockClick}
-            variant="secondary"
-          >
-            {unlockPending ? (
-              <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <Unlock className="mr-2 h-4 w-4" />
-            )}
-            Unlock Account
-          </Button>
-        ) : (
-          <Button disabled={userLoading || !user} onClick={onLock} variant="secondary">
-            <Lock className="mr-2 h-4 w-4" />
-            Lock Account
-          </Button>
+        {canManage && (
+          <AccountAdminActions
+            isEditBusy={isEditBusy}
+            locked={locked}
+            onEdit={onEdit}
+            onLock={onLock}
+            onUnlock={onUnlock}
+            unlockPending={unlockPending}
+            userLoading={userLoading}
+            userMissing={!user}
+          />
         )}
         <Button
           disabled={signOutPending || userLoading || !hasSessions}
@@ -89,18 +138,20 @@ export function UserHeaderSection({
           {signOutPending && <RefreshCw className="mr-2 h-4 w-4 animate-spin" />}
           Sign Out Everywhere
         </Button>
-        <Button
-          disabled={userLoading || !user || deletePending}
-          onClick={onDelete}
-          variant="destructive"
-        >
-          {deletePending ? (
-            <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-          ) : (
-            <Trash2 className="mr-2 h-4 w-4" />
-          )}
-          Delete User
-        </Button>
+        {canDelete && (
+          <Button
+            disabled={userLoading || !user || deletePending}
+            onClick={onDelete}
+            variant="destructive"
+          >
+            {deletePending ? (
+              <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Trash2 className="mr-2 h-4 w-4" />
+            )}
+            Delete User
+          </Button>
+        )}
       </div>
     </div>
   )

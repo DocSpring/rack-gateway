@@ -54,10 +54,11 @@ The sidebar contains these sections (some are admin-only):
 |---------|-------------|--------|
 | **Rack** | Rack metadata and status | All users |
 | **Apps / Processes / Instances / Builds / Releases** | Convox operational views | Role-based |
-| **Users** | User list and details | All users (admin actions only) |
-| **API Tokens** | Token list and management | All users (create/edit requires Admin or Deployer) |
+| **Users** | Team directory; your own details and sessions | All users (other users' details and admin actions: Admin only) |
+| **API Tokens** | Your tokens (admins: every token) | All users (create/edit/delete own tokens: Deployer; anyone's: Admin) |
 | **Deploy Approvals** | Pending approvals | Admin only |
-| **Audit Logs** | Audit trail and export | All users (read-only) |
+| **Audit Logs** | Everyone's audit trail and export | Admin only |
+| **My Activity** | Your own audit trail | Non-admins (admins use Audit Logs) |
 | **Account Security** | MFA + trusted devices | All users |
 | **Integrations** | Slack, GitHub, CircleCI | Admin only |
 | **Settings** | Global security settings | Admin only |
@@ -65,7 +66,7 @@ The sidebar contains these sections (some are admin-only):
 | **Configure CLI** | Quick CLI setup dialog | All users |
 
 <Aside type="note">
-Non-admins can browse most read-only views, but only admins can change users, integrations, or global settings.
+Non-admins can browse the read-only views their role allows, manage their own sessions, and (deployers) their own API tokens. Only admins can change users, integrations, or global settings. The sidebar only shows pages you can use; the gateway enforces the same rules on every request.
 </Aside>
 
 ## App Settings

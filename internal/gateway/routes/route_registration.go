@@ -157,6 +157,7 @@ func registerUserManagementRoutes(authenticated *gin.RouterGroup, cfg *Config, h
 	users.GET("/:email/sessions", h.admin.ListUserSessions)
 	users.POST("/:email/sessions/:sessionID/revoke", h.admin.RevokeUserSession)
 	users.POST("/:email/sessions/revoke_all", h.admin.RevokeAllUserSessions)
+	users.GET("/:email/audit-logs", h.admin.ListUserAuditLogs)
 	users.POST("/:email/lock", h.admin.LockUser)
 	users.POST("/:email/unlock", h.admin.UnlockUser)
 

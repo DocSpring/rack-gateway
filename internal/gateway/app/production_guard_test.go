@@ -31,6 +31,16 @@ func TestCheckProductionSafety(t *testing.T) {
 			true,
 		},
 		{
+			"production with global AWS endpoint override", "production",
+			map[string]string{"AWS_ENDPOINT_URL": "http://localstack:4566"},
+			true,
+		},
+		{
+			"production with STS endpoint override", "production",
+			map[string]string{"AWS_ENDPOINT_URL_STS": "http://localstack:4566"},
+			true,
+		},
+		{
 			"production with Postmark override", "production",
 			map[string]string{"POSTMARK_API_BASE": "http://evil"},
 			true,

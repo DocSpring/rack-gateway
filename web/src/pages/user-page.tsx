@@ -7,7 +7,9 @@ import { toast } from '@/components/ui/use-toast'
 import { UserEditDialog } from '@/components/user-edit-dialog'
 import { UserLockDialog } from '@/components/user-lock-dialog'
 import { useAuth } from '@/contexts/auth-context'
+import { useCan } from '@/hooks/use-can'
 import type { RoleName } from '@/lib/api'
+import { PERMISSIONS } from '@/lib/permissions'
 import { UserAuditLogsSection } from '@/pages/user/audit-logs-section'
 import { UserHeaderSection } from '@/pages/user/header-section'
 import { LockedNotice } from '@/pages/user/locked-notice'
@@ -25,6 +27,9 @@ export function UserPage() {
   const queryClient = useQueryClient()
   const { user: currentUser } = useAuth()
   const currentUserEmail = currentUser?.email ?? null
+  // Everyone can open their own profile to see and sign out their sessions; managing the account
+  // itself needs user-admin permissions.
+  const can = useCan()
 
   const { user, userLoading, userError, currentPrimaryRole } = useUserDetails(decodedEmail)
   const { sessions, sessionsLoading, sessionsError } = useUserSessions(decodedEmail, Boolean(user))
@@ -80,6 +85,8 @@ export function UserPage() {
   return (
     <div className="space-y-8 p-8">
       <UserHeaderSection
+        canDelete={can(PERMISSIONS.userDelete)}
+        canManage={can(PERMISSIONS.userUpdate)}
         decodedEmail={decodedEmail}
         deletePending={dangerZone.deleteUserMutation.isPending}
         hasSessions={sessions.length > 0}

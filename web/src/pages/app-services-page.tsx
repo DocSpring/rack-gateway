@@ -50,10 +50,12 @@ export function AppServicesPage() {
   })
 
   const scaleMutation = useMutation({
-    mutationFn: async ({ serviceName, count }: { serviceName: string; count: number }) =>
-      api.put(`/api/v1/convox/apps/${app}/services/${encodeURIComponent(serviceName)}`, undefined, {
-        params: { count },
-      }),
+    mutationFn: ({ serviceName, count }: { serviceName: string; count: number }) =>
+      api.put(
+        `/api/v1/convox/apps/${app}/services/${encodeURIComponent(serviceName)}`,
+        // Sent as a form body like the Convox SDK; the gateway refuses unknown query parameters.
+        new URLSearchParams({ count: String(count) })
+      ),
     onSuccess: async (_data, variables) => {
       toast.success(`Scaled ${variables.serviceName} to ${variables.count}`)
       await Promise.all([

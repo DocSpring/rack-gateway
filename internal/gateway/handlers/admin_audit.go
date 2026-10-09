@@ -48,6 +48,12 @@ var (
 // @Security SessionCookie
 // @Router /audit-logs [get]
 func (h *AdminHandler) ListAuditLogs(c *gin.Context) {
+	h.respondWithAuditLogs(c, "")
+}
+
+// respondWithAuditLogs responds with the filtered, paginated audit log. A non-empty userEmail restricts the
+// results to that user's activity, overriding any user filter in the query string.
+func (h *AdminHandler) respondWithAuditLogs(c *gin.Context, userEmail string) {
 	start := time.Now()
 	filters, page, limit, err := h.auditFiltersFromRequest(c)
 	if err != nil {
@@ -78,6 +84,9 @@ func (h *AdminHandler) ListAuditLogs(c *gin.Context) {
 			)
 		}
 		return
+	}
+	if userEmail != "" {
+		filters.UserEmail = userEmail
 	}
 
 	logs, total, err := h.database.GetAuditLogsAggregated(filters)

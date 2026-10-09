@@ -22,9 +22,12 @@ import {
   clearMfaAttempts,
   createPendingDeployApprovalRequest,
   deleteDeployApprovalRequest,
+  ensureAdminUser,
+  getUserMfaSecret,
+  setupTotpMfaForUser,
 } from './db'
 import { expect, test } from './fixtures'
-import { ensureMfaEnrollment, resetMfaFor } from './helpers'
+import { ensureMfaEnrollment, isOnMfaChallengeUrl, resetMfaFor, typeOtpCode } from './helpers'
 
 const ADMIN_EMAIL = 'admin@example.com'
 const LOOPBACK_URL = /^http:\/\/127\.0\.0\.1:\d+\/callback/
@@ -142,6 +145,36 @@ test.describe('CLI login to WebUI flow', () => {
       }
 
       await assertDeployRequestPostAuthenticates(page, csrfToken)
+    })
+  })
+
+  test('enrolled user can use the WebUI after approving a CLI login', async ({ page, request }) => {
+    await ensureAdminUser()
+    await setupTotpMfaForUser(ADMIN_EMAIL)
+    const secret = await getUserMfaSecret(ADMIN_EMAIL)
+    expect(secret).toBeTruthy()
+
+    await withCliLogin(request, async (cli) => {
+      await page.goto(cli.authUrl)
+      const userCard = page.locator('text=Admin User').first()
+      await expect(userCard).toBeVisible({ timeout: 5000 })
+      await userCard.click()
+
+      // The CLI login signs this browser in too; approving it on the MFA challenge page must also
+      // complete MFA for that browser session.
+      await page.waitForURL((url) => isOnMfaChallengeUrl(url), { timeout: 10_000 })
+      await clearMfaAttempts()
+      await typeOtpCode(page, page, authenticator.generate(secret as string))
+      await expect(page).toHaveURL(LOOPBACK_URL, { timeout: 15_000 })
+
+      await page.goto(WebRoute('rack'))
+      await page.waitForURL(/\/app\/rack/, { timeout: 10_000 })
+      await expect(page.getByRole('dialog', { name: /Multi-Factor Authentication/i })).toHaveCount(
+        0
+      )
+      const info = await fetchJson(page, APIRoute('info'))
+      expect((info.data as { user?: { mfa_pending?: boolean } })?.user?.mfa_pending).toBe(false)
+      expect((await fetchJson(page, APIRoute('users'))).status).toBe(200)
     })
   })
 })

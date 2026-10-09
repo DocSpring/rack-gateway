@@ -58,9 +58,7 @@ export function useUserEditing({
 
   const updateRolesMutation = useMutation({
     mutationFn: async ({ email: targetEmail, roles }: { email: string; roles: string[] }) => {
-      await api.put(`/api/v1/users/${encodeURIComponent(targetEmail)}/roles`, {
-        roles,
-      })
+      await api.updateUser(targetEmail, { roles })
     },
   })
 

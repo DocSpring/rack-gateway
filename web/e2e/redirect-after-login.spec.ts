@@ -1,6 +1,6 @@
 import { WebRoute } from '@/lib/routes'
 import { expect, test } from './fixtures'
-import { clickLoginButton, resetMfaFor } from './helpers'
+import { clickLoginButton, enforceMfaFor, resetMfaFor } from './helpers'
 
 const ADMIN_EMAIL = 'admin@example.com'
 
@@ -8,6 +8,8 @@ test.describe('Redirect after login', () => {
   test.beforeEach(async () => {
     // Reset MFA for clean state - ensureMfaEnrollment in login() will set it up
     await resetMfaFor(ADMIN_EMAIL)
+    // Require MFA for this user regardless of global settings left by earlier tests in the worker
+    await enforceMfaFor(ADMIN_EMAIL)
   })
 
   test('unauthenticated visit to protected page includes returnTo in login redirect', async ({

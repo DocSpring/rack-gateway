@@ -48,7 +48,7 @@ func (s *Service) StartYubiOTPEnrollment(user *db.User, yubiOTP string) (*StartY
 	}
 
 	// Auto-confirm since we validated the OTP
-	if err := s.finalizeEnrollment(user.ID, method.ID); err != nil {
+	if err := s.finalizeEnrollment(user, method.ID); err != nil {
 		return nil, err
 	}
 
