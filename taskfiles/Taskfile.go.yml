@@ -252,7 +252,7 @@ tasks:
   sec:secrets:
     desc: Scan for secrets with TruffleHog
     cmds:
-      - trufflehog git file://. --results verified --fail
+      - trufflehog git file://. --results verified --fail --no-update
 
   mod:tidy:
     desc: Tidy go modules
