@@ -23,7 +23,10 @@ func buildSentryOptions(cfg *config.Config) (sentry.ClientOptions, bool) {
 	}
 	opts.Dsn = dsn
 	opts.AttachStacktrace = true
-	opts.SendDefaultPII = true
+	// Requests carry session tokens, API tokens and inline MFA codes in headers and cookies.
+	// Never let the SDK attach them, and scrub anything that gets through.
+	opts.SendDefaultPII = false
+	opts.BeforeSend = scrubSentryEvent
 
 	env := strings.TrimSpace(cfg.SentryEnvironment)
 	if env == "" {
@@ -59,4 +62,30 @@ func initializeSentry(cfg *config.Config) (bool, error) {
 
 	log.Printf("Sentry enabled (environment=%s, release=%s)", opts.Environment, opts.Release)
 	return true, nil
+}
+
+// sentryHeaderAllowlist lists the only request headers forwarded to Sentry.
+var sentryHeaderAllowlist = map[string]bool{
+	"accept":       true,
+	"content-type": true,
+	"user-agent":   true,
+	"x-request-id": true,
+}
+
+// scrubSentryEvent removes credentials from request data before an event leaves the gateway.
+func scrubSentryEvent(event *sentry.Event, _ *sentry.EventHint) *sentry.Event {
+	if event == nil || event.Request == nil {
+		return event
+	}
+	req := event.Request
+	for name := range req.Headers {
+		if !sentryHeaderAllowlist[strings.ToLower(name)] {
+			delete(req.Headers, name)
+		}
+	}
+	req.Cookies = ""
+	req.QueryString = ""
+	req.Data = ""
+	req.Env = nil
+	return event
 }
