@@ -11,8 +11,8 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 )
 
-func (h *Handler) filterReleaseEnvForUser(email string, body []byte, app string) []byte {
-	canEnvView, _ := h.rbacManager.Enforce(email, rbac.ScopeConvox, rbac.ResourceEnv, rbac.ActionRead)
+func (h *Handler) filterReleaseEnvForUser(r *http.Request, body []byte, app string) []byte {
+	canEnvView := h.callerCan(r, rbac.ResourceEnv, rbac.ActionRead)
 
 	var payload interface{}
 	if err := json.Unmarshal(body, &payload); err != nil {
@@ -194,8 +194,8 @@ func (h *Handler) isCommandApproved(app, command string) bool {
 // filterEnvironmentMapResponse masks secret keys in GET /apps/{app}/environment response.
 // The environment endpoint returns a flat JSON map: {"KEY1": "value1", "KEY2": "value2"}
 // This is different from the release format which has an "env" field with newline-separated values.
-func (h *Handler) filterEnvironmentMapResponse(email string, body []byte, app string) []byte {
-	canEnvView, _ := h.rbacManager.Enforce(email, rbac.ScopeConvox, rbac.ResourceEnv, rbac.ActionRead)
+func (h *Handler) filterEnvironmentMapResponse(r *http.Request, body []byte, app string) []byte {
+	canEnvView := h.callerCan(r, rbac.ResourceEnv, rbac.ActionRead)
 
 	var envMap map[string]string
 	if err := json.Unmarshal(body, &envMap); err != nil {

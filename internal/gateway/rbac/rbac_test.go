@@ -1,8 +1,8 @@
 package rbac
 
 import (
-	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -10,61 +10,144 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/testutil/dbtest"
 )
 
-// TestEnforceDeployerPermissions verifies deployer can update but not create/delete apps.
-func TestEnforceDeployerPermissions(t *testing.T) {
+func newTestManager(t *testing.T) (*DBManager, *db.Database) {
+	t.Helper()
 	database := dbtest.NewDatabase(t)
-
-	// Create users
-	_, err := database.CreateUser("deployer@test.com", "Deployer", []string{"deployer"})
-	require.NoError(t, err)
-	_, err = database.CreateUser("admin@test.com", "Admin", []string{"admin"})
-	require.NoError(t, err)
-
-	// RBAC manager (DB-backed)
 	mgr, err := NewDBManager(database, "example.com")
 	require.NoError(t, err)
+	return mgr, database
+}
 
-	// Deployer: denied create, allowed update, denied delete
-	ok, err := mgr.Enforce("deployer@test.com", ScopeConvox, ResourceApp, ActionCreate)
+func createUser(t *testing.T, database *db.Database, email string, roles ...string) *db.User {
+	t.Helper()
+	user, err := database.CreateUser(email, email, roles)
 	require.NoError(t, err)
-	require.False(t, ok, "deployer should NOT be allowed to create apps")
+	return user
+}
 
-	ok, err = mgr.Enforce("deployer@test.com", ScopeConvox, ResourceApp, ActionUpdate)
+func userCan(t *testing.T, mgr *DBManager, database *db.Database, email, permission string) bool {
+	t.Helper()
+	user, err := database.GetUser(email)
 	require.NoError(t, err)
-	require.True(t, ok, "deployer should be allowed to update apps")
+	ok, err := mgr.Authorize(UserPrincipal(user), permission)
+	require.NoError(t, err)
+	return ok
+}
 
-	ok, err = mgr.Enforce("deployer@test.com", ScopeConvox, ResourceApp, ActionDelete)
-	require.NoError(t, err)
-	require.False(t, ok, "deployer should NOT be allowed to delete apps")
+// TestAuthorizeRolePermissions verifies role permissions, inheritance and admin wildcards.
+func TestAuthorizeRolePermissions(t *testing.T) {
+	mgr, database := newTestManager(t)
+	createUser(t, database, "deployer@test.com", "deployer")
+	createUser(t, database, "viewer@test.com", "viewer")
+	createUser(t, database, "admin@test.com", "admin")
 
-	// Deploy approval permissions
-	ok, err = mgr.Enforce("deployer@test.com", ScopeGateway, ResourceDeployApprovalRequest, ActionCreate)
-	require.NoError(t, err)
-	require.True(t, ok, "deployer should be allowed to request deploy approval")
+	cases := []struct {
+		email      string
+		permission string
+		want       bool
+	}{
+		{"deployer@test.com", Convox(ResourceApp, ActionCreate), false},
+		{"deployer@test.com", Convox(ResourceApp, ActionUpdate), true},
+		{"deployer@test.com", Convox(ResourceApp, ActionDelete), false},
+		{"deployer@test.com", Convox(ResourceProcess, ActionExec), true}, // inherited from ops
+		{"deployer@test.com", Convox(ResourceApp, ActionList), true},     // inherited from viewer
+		{"deployer@test.com", Gateway(ResourceDeployApprovalRequest, ActionCreate), true},
+		{"deployer@test.com", Gateway(ResourceDeployApprovalRequest, ActionApprove), false},
+		{"deployer@test.com", Gateway(ResourceUser, ActionCreate), false},
+		{"viewer@test.com", Gateway(ResourceAPIToken, ActionCreate), false},
+		{"viewer@test.com", Gateway(ResourceAuditLog, ActionRead), false},
+		{"viewer@test.com", Convox(ResourceEnv, ActionRead), false},
+		{"admin@test.com", Convox(ResourceApp, ActionDelete), true},
+		{"admin@test.com", Gateway(ResourceDeployApprovalRequest, ActionApprove), true},
+		{"admin@test.com", Gateway(ResourceAuditLog, ActionRead), true},
+		{"admin@test.com", "gateway:setting_group:mfa_configuration", true},
+		{"admin@test.com", Security(ResourceSecret, ActionUpdate), true},
+	}
+	for _, tc := range cases {
+		require.Equal(t, tc.want, userCan(t, mgr, database, tc.email, tc.permission), "%s %s", tc.email, tc.permission)
+	}
+}
 
-	ok, err = mgr.Enforce("deployer@test.com", ScopeGateway, ResourceDeployApprovalRequest, ActionApprove)
-	require.NoError(t, err)
-	require.False(t, ok, "deployer should NOT be allowed to approve deploy approval requests")
+// TestAuthorizeUsesCurrentRoles verifies role changes and deletion take effect without a restart.
+func TestAuthorizeUsesCurrentRoles(t *testing.T) {
+	mgr, database := newTestManager(t)
+	createUser(t, database, "user@test.com", "admin")
+	deleteApps := Convox(ResourceApp, ActionDelete)
+	require.True(t, userCan(t, mgr, database, "user@test.com", deleteApps))
 
-	// Admin: allowed delete
-	ok, err = mgr.Enforce("admin@test.com", ScopeConvox, ResourceApp, ActionDelete)
-	require.NoError(t, err)
-	require.True(t, ok, "admin should be allowed to delete apps")
+	require.NoError(t, mgr.SaveUser("user@test.com", &UserConfig{Roles: []string{"viewer"}}))
+	require.False(t, userCan(t, mgr, database, "user@test.com", deleteApps), "demotion must apply immediately")
 
-	ok, err = mgr.Enforce("admin@test.com", ScopeGateway, ResourceDeployApprovalRequest, ActionApprove)
-	require.NoError(t, err)
-	require.True(t, ok, "admin should be allowed to approve deploy approval requests")
+	require.NoError(t, mgr.SaveUser("user@test.com", &UserConfig{Roles: []string{"admin"}}))
+	require.NoError(t, mgr.DeleteUser("user@test.com"))
+	createUser(t, database, "user@test.com", "viewer")
+	require.False(t, userCan(t, mgr, database, "user@test.com", deleteApps), "re-created user must not keep old roles")
+}
+
+// TestAuthorizeDeniesSuspendedAndLockedUsers verifies blocked users get nothing.
+func TestAuthorizeDeniesSuspendedAndLockedUsers(t *testing.T) {
+	mgr, _ := newTestManager(t)
+	now := time.Now()
+	locked := &db.User{Email: "locked@test.com", Roles: []string{"admin"}, LockedAt: &now}
+	suspended := &db.User{Email: "suspended@test.com", Roles: []string{"admin"}, Suspended: true}
+
+	for _, p := range []Principal{
+		UserPrincipal(locked),
+		UserPrincipal(suspended),
+		TokenPrincipal(locked, []string{"convox:*:*"}),
+		UserPrincipal(nil),
+	} {
+		ok, err := mgr.Authorize(p, Convox(ResourceApp, ActionList))
+		require.NoError(t, err)
+		require.False(t, ok)
+	}
+}
+
+// TestAuthorizeAPITokens verifies tokens are limited to their own permissions AND their owner's roles.
+func TestAuthorizeAPITokens(t *testing.T) {
+	mgr, _ := newTestManager(t)
+	admin := &db.User{Email: "admin@test.com", Roles: []string{"admin"}}
+	viewer := &db.User{Email: "viewer@test.com", Roles: []string{"viewer"}}
+
+	cases := []struct {
+		name       string
+		owner      *db.User
+		tokenPerms []string
+		permission string
+		want       bool
+	}{
+		{"token permission granted", admin, []string{"convox:app:list"}, Convox(ResourceApp, ActionList), true},
+		{
+			"admin-owned token limited to its own permissions", admin,
+			[]string{"convox:app:list"},
+			Convox(ResourceEnv, ActionRead), false,
+		},
+		{
+			"admin-owned token cannot approve deploys", admin, defaultRolePermissions["cicd"],
+			Gateway(ResourceDeployApprovalRequest, ActionApprove), false,
+		},
+		{"wildcard token permission", admin, []string{"convox:*:*"}, Convox(ResourceApp, ActionDelete), true},
+		{"token capped by owner role", viewer, []string{"convox:*:*"}, Convox(ResourceApp, ActionDelete), false},
+		{
+			"token with gateway wildcard capped by owner role", viewer,
+			[]string{"gateway:*:*"},
+			Gateway(ResourceUser, ActionCreate), false,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ok, err := mgr.Authorize(TokenPrincipal(tc.owner, tc.tokenPerms), tc.permission)
+			require.NoError(t, err)
+			require.Equal(t, tc.want, ok)
+		})
+	}
 }
 
 func TestSaveUserUpdatesDisplayName(t *testing.T) {
-	database := dbtest.NewDatabase(t)
-	_, err := database.CreateUser("user@example.com", "Old Name", []string{"viewer"})
-	require.NoError(t, err)
+	mgr, database := newTestManager(t)
+	createUser(t, database, "user@example.com", "viewer")
 
-	mgr, err := NewDBManager(database, "example.com")
-	require.NoError(t, err)
-
-	err = mgr.SaveUser("user@example.com", &UserConfig{Name: "New Name", Roles: []string{"viewer"}})
+	err := mgr.SaveUser("user@example.com", &UserConfig{Name: "New Name", Roles: []string{"viewer"}})
 	require.NoError(t, err)
 
 	updated, err := database.GetUser("user@example.com")
@@ -79,99 +162,4 @@ func TestSaveUserUpdatesDisplayName(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, unchanged)
 	require.Equal(t, "New Name", unchanged.Name)
-}
-
-func TestAPITokenPermissions(t *testing.T) {
-	cases := []struct {
-		name     string
-		perms    []string
-		resource Resource
-		action   Action
-		want     bool
-	}{
-		{
-			name:     "direct permission granted",
-			perms:    []string{"convox:app:list"},
-			resource: ResourceApp,
-			action:   ActionList,
-			want:     true,
-		},
-		{
-			name:     "direct permission denied",
-			perms:    []string{"convox:app:list"},
-			resource: ResourceApp,
-			action:   ActionDelete,
-			want:     false,
-		},
-		{
-			name:     "wildcard permission",
-			perms:    []string{"convox:*:*"},
-			resource: ResourceApp,
-			action:   ActionDelete,
-			want:     true,
-		},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			mgr := newTestDBManager(tc.perms)
-			ok, err := mgr.EnforceForAPIToken(1, ScopeConvox, tc.resource, tc.action)
-			require.NoError(t, err)
-			require.Equal(t, tc.want, ok)
-		})
-	}
-}
-
-func newTestDBManager(perms []string) *DBManager {
-	return &DBManager{
-		db: &mockDatabase{
-			apiToken: &db.APIToken{ID: 1, Permissions: perms},
-		},
-		mu: sync.RWMutex{},
-	}
-}
-
-// mockDatabase implements the Database interface for testing.
-type mockDatabase struct {
-	apiToken          *db.APIToken
-	hasActiveApproval bool
-	approvalErr       error
-	user              *db.User
-	users             []*db.User
-}
-
-func (m *mockDatabase) GetAPITokenByID(_ int64) (*db.APIToken, error) {
-	return m.apiToken, nil
-}
-
-func (m *mockDatabase) HasActiveDeployApproval(_ int64) (bool, error) {
-	return m.hasActiveApproval, m.approvalErr
-}
-
-func (m *mockDatabase) HasActiveDeployApprovalForApp(_ int64, _ string) (bool, error) {
-	return m.hasActiveApproval, m.approvalErr
-}
-
-func (m *mockDatabase) GetUser(_ string) (*db.User, error) {
-	return m.user, nil
-}
-
-func (m *mockDatabase) ListUsers() ([]*db.User, error) {
-	return m.users, nil
-}
-
-func (_ *mockDatabase) CreateUser(_ string, _ string, _ []string) (*db.User, error) {
-	return nil, nil
-}
-
-func (_ *mockDatabase) UpdateUserRoles(_ string, _ []string) error {
-	return nil
-}
-
-func (_ *mockDatabase) UpdateUserName(_ string, _ string) error {
-	return nil
-}
-
-func (_ *mockDatabase) DeleteUser(_ string) error {
-	return nil
 }

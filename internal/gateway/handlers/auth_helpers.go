@@ -454,7 +454,7 @@ func requireAuth(c *gin.Context, rbacSvc rbac.Manager, resource rbac.Resource, a
 		return "", false
 	}
 
-	allowed, err := rbacSvc.Enforce(userEmail, rbac.ScopeGateway, resource, action)
+	allowed, err := auth.Authorize(c.Request.Context(), rbacSvc, rbac.Gateway(resource, action))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to check permissions"})
 		return "", false
@@ -465,4 +465,14 @@ func requireAuth(c *gin.Context, rbacSvc rbac.Manager, resource rbac.Resource, a
 	}
 
 	return userEmail, true
+}
+
+// callerCan reports whether the authenticated caller (user or API token) on this request holds the permission.
+func callerCan(c *gin.Context, rbacSvc rbac.Manager, permission string) bool {
+	allowed, err := auth.Authorize(c.Request.Context(), rbacSvc, permission)
+	if err != nil {
+		log.Printf("permission check failed for %s: %v", permission, err)
+		return false
+	}
+	return allowed
 }

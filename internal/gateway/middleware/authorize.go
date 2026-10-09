@@ -1,0 +1,73 @@
+package middleware
+
+import (
+	"net/http"
+
+	"github.com/gin-gonic/gin"
+
+	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
+	gtwlog "github.com/DocSpring/rack-gateway/internal/gateway/logging"
+	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
+)
+
+// Authorize enforces the access policy declared for each authenticated gateway route in
+// rbac's route table. It must run after Authenticated. Routes without a declared policy are denied.
+func Authorize(manager rbac.Manager) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		spec, ok := rbac.LookupHTTPRoute(c.Request.Method, c.FullPath())
+		if !ok {
+			gtwlog.Errorf("authz: no policy for method=%s path=%s", c.Request.Method, c.FullPath())
+			abortForbidden(c, "no authorization policy for this endpoint")
+			return
+		}
+
+		authUser, ok := auth.GetAuthUser(c.Request.Context())
+		if !ok || authUser == nil {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
+			return
+		}
+
+		if authUser.IsAPIToken && !spec.AllowAPIToken {
+			abortForbidden(c, "API tokens cannot use this endpoint")
+			return
+		}
+
+		allowed, err := routeAllowed(manager, spec, authUser.Principal())
+		if err != nil {
+			gtwlog.Errorf("authz: failed to check permissions for %s %s: %v", spec.Method, spec.Pattern, err)
+			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "failed to check permissions"})
+			return
+		}
+		if !allowed {
+			abortForbidden(c, "insufficient permissions")
+			return
+		}
+
+		c.Next()
+	}
+}
+
+func routeAllowed(manager rbac.Manager, spec rbac.RouteSpec, principal rbac.Principal) (bool, error) {
+	switch spec.Access {
+	case rbac.AccessAuthenticated:
+		return true, nil
+	case rbac.AccessPermissions:
+		permissions := spec.PermissionStrings()
+		if len(permissions) == 0 {
+			return false, nil
+		}
+		for _, permission := range permissions {
+			allowed, err := manager.Authorize(principal, permission)
+			if err != nil || !allowed {
+				return false, err
+			}
+		}
+		return true, nil
+	default:
+		return false, nil
+	}
+}
+
+func abortForbidden(c *gin.Context, message string) {
+	c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": message})
+}

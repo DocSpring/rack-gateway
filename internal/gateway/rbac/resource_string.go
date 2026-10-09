@@ -34,11 +34,12 @@ func _() {
 	_ = x[ResourceMFAPreferences-23]
 	_ = x[ResourceMFAVerification-24]
 	_ = x[ResourceTrustedDevice-25]
+	_ = x[ResourceAuditLog-26]
 }
 
-const _Resource_name = "appbuildcertdeployenvinstancelogobjectprocessrackregistryreleaseresourceapi_tokendeploy_approval_requestintegrationjobsecretsettinguserauthmfa_backup_codesmfa_methodmfa_preferencesmfa_verificationtrusted_device"
+const _Resource_name = "appbuildcertdeployenvinstancelogobjectprocessrackregistryreleaseresourceapi_tokendeploy_approval_requestintegrationjobsecretsettinguserauthmfa_backup_codesmfa_methodmfa_preferencesmfa_verificationtrusted_deviceaudit_log"
 
-var _Resource_index = [...]uint8{0, 3, 8, 12, 18, 21, 29, 32, 38, 45, 49, 57, 64, 72, 81, 104, 115, 118, 124, 131, 135, 139, 155, 165, 180, 196, 210}
+var _Resource_index = [...]uint8{0, 3, 8, 12, 18, 21, 29, 32, 38, 45, 49, 57, 64, 72, 81, 104, 115, 118, 124, 131, 135, 139, 155, 165, 180, 196, 210, 219}
 
 func (i Resource) String() string {
 	idx := int(i) - 0

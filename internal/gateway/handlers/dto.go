@@ -263,10 +263,11 @@ type UpdateUserNameRequest struct {
 
 // CreateAPITokenRequest represents the request body for creating a new API token.
 type CreateAPITokenRequest struct {
-	Name        string   `json:"name"        binding:"required"`
-	UserEmail   string   `json:"user_email"`
-	Role        string   `json:"role"`        // Role shortcut (viewer, ops, deployer, cicd, admin)
-	Permissions []string `json:"permissions"` // Explicit permissions (overrides role)
+	Name        string     `json:"name"        binding:"required"`
+	UserEmail   string     `json:"user_email"`
+	Role        string     `json:"role"`        // Role shortcut (viewer, ops, deployer, cicd, admin)
+	Permissions []string   `json:"permissions"` // Explicit permissions (overrides role)
+	ExpiresAt   *time.Time `json:"expires_at"`  // Optional expiry; the token stops working after this time
 }
 
 // CreateAPITokenResponse represents the response body for API token creation.

@@ -41,7 +41,8 @@ func Setup(router *gin.Engine, cfg *Config) {
 	api.GET("/health", h.health.Health)
 
 	authenticated := api.Group("")
-	authenticated.Use(middleware.Authenticated(cfg.AuthService, cfg.RBACManager))
+	authenticated.Use(middleware.Authenticated(cfg.AuthService))
+	authenticated.Use(middleware.Authorize(cfg.RBACManager))
 	authenticated.Use(middleware.RequireMFAEnrollmentWeb(cfg.Database, cfg.MFASettings))
 	authenticated.Use(middleware.EnforceMFARequirements(cfg.MFAService, cfg.Database, cfg.MFASettings))
 

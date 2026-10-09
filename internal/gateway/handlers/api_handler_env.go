@@ -102,7 +102,7 @@ func (h *APIHandler) GetEnvValues(c *gin.Context) {
 	email := c.GetString("user_email")
 	name := c.GetString("user_name")
 
-	if ok, _ := h.rbac.Enforce(email, rbac.ScopeConvox, rbac.ResourceEnv, rbac.ActionRead); !ok {
+	if !callerCan(c, h.rbac, rbac.Convox(rbac.ResourceEnv, rbac.ActionRead)) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "You don't have permission to view environment variables."})
 		return
 	}
@@ -145,7 +145,7 @@ func (h *APIHandler) checkSecretPermissions(
 		return false, true
 	}
 
-	if ok, _ := h.rbac.Enforce(email, rbac.ScopeConvox, rbac.ResourceSecret, rbac.ActionRead); ok {
+	if callerCan(c, h.rbac, rbac.Convox(rbac.ResourceSecret, rbac.ActionRead)) {
 		return true, true
 	}
 
@@ -329,7 +329,7 @@ func (h *APIHandler) prepareEnvUpdateContext(c *gin.Context) (*envUpdateContext,
 	ctx.email = c.GetString("user_email")
 	ctx.name = c.GetString("user_name")
 
-	if ok, _ := h.rbac.Enforce(ctx.email, rbac.ScopeConvox, rbac.ResourceEnv, rbac.ActionSet); !ok {
+	if !callerCan(c, h.rbac, rbac.Convox(rbac.ResourceEnv, rbac.ActionSet)) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "You don't have permission to modify environment variables."})
 		return nil, false
 	}
@@ -348,8 +348,8 @@ func (h *APIHandler) prepareEnvUpdateContext(c *gin.Context) (*envUpdateContext,
 	ctx.baseEnv = baseEnv
 
 	ctx.extraSecrets, ctx.protectedKeys = h.secretAndProtectedKeys(ctx.app)
-	ctx.allowSecrets, _ = h.rbac.Enforce(ctx.email, rbac.ScopeConvox, rbac.ResourceSecret, rbac.ActionSet)
-	ctx.canViewSecrets, _ = h.rbac.Enforce(ctx.email, rbac.ScopeConvox, rbac.ResourceSecret, rbac.ActionRead)
+	ctx.allowSecrets = callerCan(c, h.rbac, rbac.Convox(rbac.ResourceSecret, rbac.ActionSet))
+	ctx.canViewSecrets = callerCan(c, h.rbac, rbac.Convox(rbac.ResourceSecret, rbac.ActionRead))
 
 	return ctx, true
 }

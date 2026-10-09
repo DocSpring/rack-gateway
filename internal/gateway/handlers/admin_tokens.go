@@ -75,7 +75,7 @@ func (h *AdminHandler) CreateAPIToken(c *gin.Context) {
 
 	// Get user ID
 	user, err := h.database.GetUser(targetEmail)
-	if err != nil {
+	if err != nil || user == nil {
 		h.respondAuditError(
 			c,
 			http.StatusNotFound,
@@ -93,6 +93,7 @@ func (h *AdminHandler) CreateAPIToken(c *gin.Context) {
 		Name:        req.Name,
 		UserID:      user.ID,
 		Permissions: req.Permissions,
+		ExpiresAt:   req.ExpiresAt,
 	}
 	if creatorEmail := strings.TrimSpace(c.GetString("user_email")); creatorEmail != "" && h.rbac != nil {
 		if creator, err := h.rbac.GetUserWithID(creatorEmail); err == nil && creator != nil {

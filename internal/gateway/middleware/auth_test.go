@@ -10,7 +10,6 @@ import (
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
-	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 	"github.com/DocSpring/rack-gateway/internal/gateway/testutil/dbtest"
 )
 
@@ -20,11 +19,6 @@ func TestAuthenticatedSetsRequestContext(t *testing.T) {
 	database := setupTestDatabase(t)
 	if _, err := database.CreateUser("user@example.com", "User", []string{"viewer"}); err != nil {
 		t.Fatalf("create user: %v", err)
-	}
-
-	mgr, err := rbac.NewDBManager(database, "example.com")
-	if err != nil {
-		t.Fatalf("new rbac manager: %v", err)
 	}
 
 	sessionManager := auth.NewSessionManager(database, "test-secret", &auth.StaticTTLProvider{TTL: time.Hour})
@@ -41,7 +35,7 @@ func TestAuthenticatedSetsRequestContext(t *testing.T) {
 	}
 
 	router := gin.New()
-	router.Use(Authenticated(service, mgr))
+	router.Use(Authenticated(service))
 	var sawHandler bool
 	router.GET("/me", func(c *gin.Context) {
 		sawHandler = true

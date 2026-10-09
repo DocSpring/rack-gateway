@@ -260,6 +260,9 @@ func (a *Service) validateAPIToken(tokenString string) (*User, error) {
 	if user.Suspended {
 		return nil, fmt.Errorf("token owner is suspended")
 	}
+	if user.LockedAt != nil {
+		return nil, fmt.Errorf("token owner is locked")
+	}
 
 	userResp := &User{
 		Email:              user.Email,

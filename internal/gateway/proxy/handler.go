@@ -19,6 +19,7 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/email"
 	"github.com/DocSpring/rack-gateway/internal/gateway/envutil"
 	"github.com/DocSpring/rack-gateway/internal/gateway/httpclient"
+	gtwlog "github.com/DocSpring/rack-gateway/internal/gateway/logging"
 	"github.com/DocSpring/rack-gateway/internal/gateway/logutil"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rackcert"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
@@ -354,14 +355,20 @@ func (h *Handler) checkUserPermissions(
 	resource rbac.Resource,
 	action rbac.Action,
 ) (bool, error) {
-	if authUser != nil && authUser.DBUser != nil {
-		return h.rbacManager.EnforceUser(authUser.DBUser, rbac.ScopeConvox, resource, action)
+	if authUser == nil {
+		return false, nil
 	}
-	allowed, err := h.rbacManager.Enforce(authUser.Email, rbac.ScopeConvox, resource, action)
+	return h.rbacManager.Authorize(authUser.Principal(), rbac.Convox(resource, action))
+}
+
+// callerCan reports whether the authenticated caller on r holds convox:<resource>:<action>.
+func (h *Handler) callerCan(r *http.Request, resource rbac.Resource, action rbac.Action) bool {
+	allowed, err := auth.Authorize(r.Context(), h.rbacManager, rbac.Convox(resource, action))
 	if err != nil {
-		return false, err
+		gtwlog.Errorf("proxy: permission check failed for %s: %v", rbac.Convox(resource, action), err)
+		return false
 	}
-	return allowed, nil
+	return allowed
 }
 
 func (h *Handler) handlePermissionError(

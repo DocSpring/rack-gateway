@@ -98,6 +98,7 @@ var roleConfigs = map[string]roleConfig{
 		Permissions: []string{
 			"convox:*:*",
 			"gateway:*:*",
+			"security:*:*",
 		},
 	},
 }

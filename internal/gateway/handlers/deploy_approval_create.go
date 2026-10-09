@@ -32,7 +32,7 @@ func (h *APIHandler) CreateDeployApprovalRequest(c *gin.Context) {
 		return
 	}
 
-	if !h.authorizeCreateRequest(c, userEmail) {
+	if !h.authorizeCreateRequest(c) {
 		return
 	}
 
@@ -106,7 +106,7 @@ func (h *APIHandler) GetDeployApprovalRequest(c *gin.Context) {
 		return
 	}
 
-	userEmail, dbUser, ok := h.authenticateUser(c)
+	_, dbUser, ok := h.authenticateUser(c)
 	if !ok {
 		return
 	}
@@ -116,7 +116,7 @@ func (h *APIHandler) GetDeployApprovalRequest(c *gin.Context) {
 		return
 	}
 
-	if !h.authorizeViewRequest(c, userEmail, dbUser, record) {
+	if !h.authorizeViewRequest(c, dbUser, record) {
 		return
 	}
 
@@ -173,18 +173,8 @@ func (h *APIHandler) authenticateUser(c *gin.Context) (string, *db.User, bool) {
 	return userEmail, dbUser, true
 }
 
-func (h *APIHandler) authorizeCreateRequest(c *gin.Context, userEmail string) bool {
-	allowed, err := h.rbac.Enforce(
-		userEmail,
-		rbac.ScopeGateway,
-		rbac.ResourceDeployApprovalRequest,
-		rbac.ActionCreate,
-	)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to check permissions"})
-		return false
-	}
-	if !allowed {
+func (h *APIHandler) authorizeCreateRequest(c *gin.Context) bool {
+	if !callerCan(c, h.rbac, rbac.Gateway(rbac.ResourceDeployApprovalRequest, rbac.ActionCreate)) {
 		c.JSON(http.StatusForbidden, gin.H{
 			"error": "you do not have permission to request a deploy approval",
 		})

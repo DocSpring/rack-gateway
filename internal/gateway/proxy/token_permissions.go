@@ -40,8 +40,7 @@ func (h *Handler) hasAPITokenPermission(authUser *auth.User, resource rbac.Resou
 		return false
 	}
 
-	// Use RBAC manager to check permissions, which handles deploy_with_approval logic
-	allowed, err := h.rbacManager.EnforceForAPIToken(*authUser.TokenID, rbac.ScopeConvox, resource, action)
+	allowed, err := h.rbacManager.Authorize(authUser.Principal(), rbac.Convox(resource, action))
 	if err != nil {
 		// Error checking permission, deny access
 		return false

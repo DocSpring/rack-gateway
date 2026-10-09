@@ -21,12 +21,7 @@ func (h *AdminHandler) enforceIntegrationPermission(c *gin.Context, action rbac.
 		return false
 	}
 
-	allowed, err := h.rbac.Enforce(userEmail, rbac.ScopeGateway, rbac.ResourceIntegration, action)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to check permissions"})
-		return false
-	}
-	if !allowed {
+	if !callerCan(c, h.rbac, rbac.Gateway(rbac.ResourceIntegration, action)) {
 		if action == rbac.ActionRead {
 			c.JSON(http.StatusForbidden, gin.H{"error": "insufficient permissions"})
 		} else {

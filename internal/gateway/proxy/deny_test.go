@@ -1,7 +1,6 @@
 package proxy
 
 import (
-	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -11,7 +10,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
-	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
 	"github.com/DocSpring/rack-gateway/internal/gateway/config"
 	"github.com/DocSpring/rack-gateway/internal/gateway/email"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
@@ -57,9 +55,7 @@ func TestDeployerCannotDeleteApp(t *testing.T) {
 	// Create request: DELETE /apps/myapp
 	req := httptest.NewRequest(http.MethodDelete, "/apps/myapp", nil)
 	// Inject authenticated session user into context
-	au := &auth.User{Email: "deployer@test.com", Name: "Deployer", IsAPIToken: false}
-	ctx := context.WithValue(req.Context(), auth.UserContextKey, au)
-	req = req.WithContext(ctx)
+	req = req.WithContext(requestAs(t, database, "deployer@test.com").Context())
 
 	rr := httptest.NewRecorder()
 	h.ProxyToRack(rr, req)

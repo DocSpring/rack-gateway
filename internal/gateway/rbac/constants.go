@@ -141,15 +141,17 @@ const (
 	ResourceMFAVerification // mfa_verification
 	// ResourceTrustedDevice identifies trusted device resources.
 	ResourceTrustedDevice // trusted_device
+	// ResourceAuditLog identifies the gateway audit log.
+	ResourceAuditLog // audit_log
 )
 
 // IsValid reports whether the resource represents a defined value.
-func (r Resource) IsValid() bool { return r <= ResourceTrustedDevice }
+func (r Resource) IsValid() bool { return r <= ResourceAuditLog }
 
 // ParseResource converts a string name into a Resource value.
 func ParseResource(v string) (Resource, error) {
 	// Try each known value
-	for r := ResourceApp; r <= ResourceTrustedDevice; r++ {
+	for r := ResourceApp; r <= ResourceAuditLog; r++ {
 		if r.String() == v {
 			return r, nil
 		}

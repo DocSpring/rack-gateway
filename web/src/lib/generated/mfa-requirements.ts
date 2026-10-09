@@ -147,13 +147,13 @@ export const HTTP_ROUTE_MFA_REQUIREMENTS: HttpRouteMfaRequirement[] = [
   {
     method: "GET",
     pattern: "/api/v1/audit-logs",
-    permissions: ["gateway:deploy_approval_request:read"],
+    permissions: ["gateway:audit_log:read"],
     mfaLevel: "none",
   },
   {
     method: "GET",
     pattern: "/api/v1/audit-logs/export",
-    permissions: ["gateway:deploy_approval_request:read"],
+    permissions: ["gateway:audit_log:read"],
     mfaLevel: "none",
   },
   {
@@ -195,8 +195,8 @@ export const HTTP_ROUTE_MFA_REQUIREMENTS: HttpRouteMfaRequirement[] = [
   {
     method: "GET",
     pattern: "/api/v1/deploy-approval-requests",
-    permissions: ["gateway:deploy_approval_request:read"],
-    mfaLevel: "none",
+    permissions: ["gateway:deploy_approval_request:approve"],
+    mfaLevel: "always",
   },
   {
     method: "GET",
@@ -207,8 +207,8 @@ export const HTTP_ROUTE_MFA_REQUIREMENTS: HttpRouteMfaRequirement[] = [
   {
     method: "GET",
     pattern: "/api/v1/deploy-approval-requests/:id/audit-logs",
-    permissions: ["gateway:deploy_approval_request:read"],
-    mfaLevel: "none",
+    permissions: ["gateway:deploy_approval_request:approve"],
+    mfaLevel: "always",
   },
   {
     method: "GET",
@@ -267,19 +267,19 @@ export const HTTP_ROUTE_MFA_REQUIREMENTS: HttpRouteMfaRequirement[] = [
   {
     method: "GET",
     pattern: "/api/v1/users",
-    permissions: [],
+    permissions: ["gateway:user:read"],
     mfaLevel: "none",
   },
   {
     method: "GET",
     pattern: "/api/v1/users/:email",
-    permissions: [],
+    permissions: ["gateway:user:read"],
     mfaLevel: "none",
   },
   {
     method: "GET",
     pattern: "/api/v1/users/:email/sessions",
-    permissions: [],
+    permissions: ["gateway:user:read"],
     mfaLevel: "none",
   },
   {

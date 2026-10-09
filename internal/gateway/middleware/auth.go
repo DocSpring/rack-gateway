@@ -12,11 +12,10 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
-	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 )
 
 // Authenticated enforces authentication for browser/admin API requests, supporting both session tokens and cookies.
-func Authenticated(authService *auth.Service, _ rbac.Manager) gin.HandlerFunc {
+func Authenticated(authService *auth.Service) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if authService == nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "authentication unavailable"})
@@ -157,38 +156,4 @@ func CLIOnly(authService *auth.Service) gin.HandlerFunc {
 			c.Status(http.StatusSwitchingProtocols)
 		}
 	}
-}
-
-// RequireRole creates middleware that requires specific roles
-func RequireRole(roles ...string) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		userRoles, exists := c.Get("user_roles")
-		if !exists {
-			c.JSON(http.StatusForbidden, gin.H{"error": "no roles found"})
-			c.Abort()
-			return
-		}
-
-		userRoleList := userRoles.([]string)
-
-		if !hasRequiredRole(userRoleList, roles) {
-			c.JSON(http.StatusForbidden, gin.H{"error": "insufficient permissions"})
-			c.Abort()
-			return
-		}
-
-		c.Next()
-	}
-}
-
-// hasRequiredRole checks if the user has any of the required roles
-func hasRequiredRole(userRoles, requiredRoles []string) bool {
-	for _, required := range requiredRoles {
-		for _, userRole := range userRoles {
-			if userRole == required {
-				return true
-			}
-		}
-	}
-	return false
 }

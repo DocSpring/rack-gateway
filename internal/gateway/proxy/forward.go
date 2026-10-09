@@ -88,12 +88,12 @@ func (h *Handler) processBufferedResponse(
 
 	if filterRelease {
 		app := extractAppFromPath(pth)
-		body = h.filterReleaseEnvForUser(authUserEmail, body, app)
+		body = h.filterReleaseEnvForUser(r, body, app)
 	}
 
 	if filterEnvironment {
 		app := extractAppFromPath(pth)
-		body = h.filterEnvironmentMapResponse(authUserEmail, body, app)
+		body = h.filterEnvironmentMapResponse(r, body, app)
 	}
 
 	if shouldCapture {

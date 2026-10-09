@@ -43,70 +43,6 @@ func (h *Handler) logDeniedRBACAction(
 	})
 }
 
-func (h *Handler) checkEnvSetPermissions(r *http.Request, email string) bool {
-	// Extract keys from known headers
-	keys := h.extractEnvKeysFromHeaders(r.Header)
-	if len(keys) == 0 {
-		// No explicit env changes detected; allow
-		return true
-	}
-	// Require env:set for any env changes
-	canEnvSet, _ := h.rbacManager.Enforce(email, rbac.ScopeConvox, rbac.ResourceEnv, rbac.ActionSet)
-	if !canEnvSet {
-		return false
-	}
-	// For secret keys, require secrets:set
-	canSecretsSet, _ := h.rbacManager.Enforce(email, rbac.ScopeConvox, rbac.ResourceSecret, rbac.ActionSet)
-	if !canSecretsSet {
-		for _, k := range keys {
-			if h.isSecretKey(k) {
-				return false
-			}
-		}
-	}
-	return true
-}
-
-func (_ *Handler) extractEnvKeysFromHeaders(hdr http.Header) []string {
-	keys := make([]string, 0)
-	for name, vals := range hdr {
-		if !isEnvHeader(name) {
-			continue
-		}
-		keys = append(keys, extractKeysFromHeaderValues(vals)...)
-	}
-	return keys
-}
-
-func isEnvHeader(name string) bool {
-	ln := strings.ToLower(name)
-	return ln == "env" || ln == "environment" || ln == "release-env"
-}
-
-func extractKeysFromHeaderValues(vals []string) []string {
-	keys := make([]string, 0, len(vals))
-	for _, v := range vals {
-		keys = append(keys, extractKeysFromEnvString(v)...)
-	}
-	return keys
-}
-
-func extractKeysFromEnvString(envStr string) []string {
-	keys := make([]string, 0)
-	for _, line := range strings.Split(envStr, "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" {
-			continue
-		}
-		parts := strings.SplitN(line, "=", 2)
-		k := strings.TrimSpace(parts[0])
-		if k != "" {
-			keys = append(keys, k)
-		}
-	}
-	return keys
-}
-
 func (h *Handler) prepareReleaseCreate(
 	r *http.Request,
 	rack config.RackConfig,
@@ -148,7 +84,7 @@ func (h *Handler) prepareReleaseCreate(
 		return false, nil, nil
 	}
 
-	canSecretsSet, _ := h.rbacManager.Enforce(email, rbac.ScopeConvox, rbac.ResourceSecret, rbac.ActionSet)
+	canSecretsSet := h.callerCan(r, rbac.ResourceSecret, rbac.ActionSet)
 	merged, diffs, err := h.mergeEnvAndComputeDiffs(r, email, app, posted, order, baseEnv, canSecretsSet)
 	if err != nil {
 		return false, nil, nil
@@ -212,7 +148,7 @@ func (h *Handler) validateSecretsPermissions(
 	posted map[string]string,
 	order []string,
 ) error {
-	canSecretsSet, _ := h.rbacManager.Enforce(email, rbac.ScopeConvox, rbac.ResourceSecret, rbac.ActionSet)
+	canSecretsSet := h.callerCan(r, rbac.ResourceSecret, rbac.ActionSet)
 	if canSecretsSet {
 		return nil
 	}
@@ -287,7 +223,7 @@ func (h *Handler) validateEnvPermissions(
 	email, app string,
 	order []string,
 ) error {
-	canEnvSet, _ := h.rbacManager.Enforce(email, rbac.ScopeConvox, rbac.ResourceEnv, rbac.ActionSet)
+	canEnvSet := h.callerCan(r, rbac.ResourceEnv, rbac.ActionSet)
 	if canEnvSet {
 		return nil
 	}
