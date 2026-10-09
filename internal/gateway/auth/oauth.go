@@ -116,7 +116,7 @@ func NewOAuthHandler(
 	// Create ID token verifier with proper configuration
 	verifierConfig := &oidc.Config{
 		ClientID:             clientID,
-		SupportedSigningAlgs: []string{"RS256", "HS256"}, // Support both for flexibility
+		SupportedSigningAlgs: []string{oidc.RS256},
 	}
 	idTokenVerifier := provider.Verifier(verifierConfig)
 
@@ -218,24 +218,12 @@ func (h *OAuthHandler) CompleteLogin(code, _ string, codeVerifier string) (*Logi
 		return nil, fmt.Errorf("failed to verify ID token: %w", err)
 	}
 
-	// Extract user claims
-	var claims struct {
-		Email         string `json:"email"`
-		EmailVerified bool   `json:"email_verified"`
-		Name          string `json:"name"`
-		HD            string `json:"hd,omitempty"` // Google Workspace domain
-	}
-
+	var claims identityClaims
 	if err := idToken.Claims(&claims); err != nil {
 		return nil, fmt.Errorf("failed to extract claims: %w", err)
 	}
-
-	// Verify email domain if required
-	if h.allowedDomain != "" && !h.isAllowedDomain(claims.Email) {
-		return nil, &DomainNotAllowedError{
-			Email: claims.Email,
-			Name:  claims.Name,
-		}
+	if err := claims.validate(h.allowedDomain); err != nil {
+		return nil, err
 	}
 
 	return &LoginResponse{
@@ -244,16 +232,28 @@ func (h *OAuthHandler) CompleteLogin(code, _ string, codeVerifier string) (*Logi
 	}, nil
 }
 
-// isAllowedDomain checks if email domain is allowed
-func (h *OAuthHandler) isAllowedDomain(email string) bool {
-	if h.allowedDomain == "" {
-		return true
+// identityClaims are the Google ID token claims the gateway relies on.
+type identityClaims struct {
+	Email         string `json:"email"`
+	EmailVerified bool   `json:"email_verified"`
+	Name          string `json:"name"`
+	HD            string `json:"hd,omitempty"` // Google Workspace hosted domain; absent for consumer accounts
+}
+
+// validate requires a verified email and, when an allowed domain is configured, that both the email
+// domain and the hosted-domain claim match it.
+func (c identityClaims) validate(allowedDomain string) error {
+	if !c.EmailVerified {
+		return fmt.Errorf("google account email %q is not verified", c.Email)
 	}
-	parts := strings.Split(email, "@")
-	if len(parts) != 2 {
-		return false
+	if allowedDomain == "" {
+		return nil
 	}
-	return parts[1] == h.allowedDomain
+	parts := strings.Split(c.Email, "@")
+	if len(parts) != 2 || !strings.EqualFold(parts[1], allowedDomain) || !strings.EqualFold(c.HD, allowedDomain) {
+		return &DomainNotAllowedError{Email: c.Email, Name: c.Name}
+	}
+	return nil
 }
 
 // generateSecureRandomString generates a cryptographically secure random string

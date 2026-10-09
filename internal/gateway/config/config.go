@@ -81,6 +81,10 @@ func Load() (*Config, error) {
 	if err := cfg.loadSessionSecret(); err != nil {
 		return nil, err
 	}
+	if !cfg.DevMode && strings.TrimSpace(cfg.GoogleAllowedDomain) == "" {
+		// Without it any Google account could sign in (and be matched to users by email).
+		return nil, fmt.Errorf("GOOGLE_ALLOWED_DOMAIN is required in production")
+	}
 
 	cfg.loadUserRoles()
 	cfg.loadTrustedProxies()

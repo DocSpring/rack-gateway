@@ -64,6 +64,8 @@ export const generateMockIdToken = (user: MockUser): Promise<string> => {
     iat: now,
     email: user.email,
     email_verified: user.verified_email,
+    // Google sets hd (hosted domain) for Google Workspace accounts; every mock user is one.
+    hd: user.email.split("@")[1],
     name: user.name,
     picture: user.picture,
   };
