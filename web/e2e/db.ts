@@ -549,7 +549,7 @@ export async function createPendingDeployApprovalRequest(): Promise<string> {
          status
        )
        VALUES (
-         'abc123def456',
+         'abc123def4567890abc123def4567890abc123de',
          'main',
          'E2E Test Deploy Request',
          'docspring',

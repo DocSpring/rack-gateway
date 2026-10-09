@@ -1,8 +1,6 @@
 package proxy
 
 import (
-	"context"
-	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -12,154 +10,88 @@ import (
 	gtwlog "github.com/DocSpring/rack-gateway/internal/gateway/logging"
 )
 
-type buildApprovalContext struct {
-	approvalID int64
-	gitCommit  string
-	app        string
-}
+const defaultManifestPath = "convox.yml"
 
-type buildApprovalContextKey struct{}
-
-// validateBuildManifestForAllUsers validates build manifests against configured image patterns.
-// This applies to ALL users (admin, deployer, API tokens) and enforces security policies.
-func (h *Handler) validateBuildManifestForAllUsers(r *http.Request, bodyBytes []byte) error {
-	// Parse request body (form-encoded: url=object://app/tmp/file.tgz&manifest=convox.yml&...)
-	vals, err := url.ParseQuery(string(bodyBytes))
-	if err != nil {
-		return fmt.Errorf("invalid build request body")
-	}
-
-	// Get app name from path
+// validateBuildManifestForAllUsers validates build manifests against the app's configured image patterns.
+// It applies to every build that is not bound to a deploy approval (users and API tokens with direct
+// build permission). Approval-bound token builds are validated by validateTokenBuildBinding instead.
+func (h *Handler) validateBuildManifestForAllUsers(r *http.Request, vals url.Values) error {
 	app := extractAppFromPath(r.URL.Path)
-
-	// Check if manifest validation is required for this app
 	patterns, err := h.settingsService.GetServiceImagePatterns(app)
 	if err != nil {
 		return fmt.Errorf("failed to get service image patterns: %w", err)
 	}
-
-	if len(patterns) > 0 {
-		// Manifest validation is required - extract and validate the manifest
-		objectURL := strings.TrimSpace(vals.Get("url"))
-		manifestPath := strings.TrimSpace(vals.Get("manifest"))
-		if manifestPath == "" {
-			manifestPath = "convox.yml" // Default manifest name
-		}
-
-		if objectURL == "" {
-			return fmt.Errorf("build request missing object URL")
-		}
-
-		// Get git commit for validation
-		gitSHA := strings.TrimSpace(vals.Get("git-sha"))
-		if gitSHA == "" {
-			return fmt.Errorf("git-sha is required when image pattern validation is configured")
-		}
-
-		// Validate the manifest from the tarball
-		if err := h.validateBuildManifest(r.Context(), app, objectURL, manifestPath, patterns, gitSHA); err != nil {
-			return fmt.Errorf("manifest validation failed: %w", err)
-		}
-	}
-
-	return nil
-}
-
-// validateBuildRequestForAPIToken validates build requests for API tokens with deploy approvals.
-// This is only called for API token requests and handles deploy approval tracking.
-func (h *Handler) validateBuildRequestForAPIToken(r *http.Request, bodyBytes []byte, tokenID int64) error {
-	// Parse request body (form-encoded: git-sha=abc123&url=object://app/tmp/file.tgz&manifest=convox.yml&...)
-	vals, err := url.ParseQuery(string(bodyBytes))
-	if err != nil {
-		gtwlog.Errorf("validateBuildRequestForAPIToken: failed to parse request body: %v", err)
-		return fmt.Errorf("invalid build request body")
-	}
-
-	gitSHA := strings.TrimSpace(vals.Get("git-sha"))
-	if gitSHA == "" {
-		// No git-sha in request, skip git-sha validation
-		// RBAC permission check will still run separately
-		gtwlog.Infof(
-			"validateBuildRequestForAPIToken: no git-sha, skipping git-sha validation (tokenID=%d)",
-			tokenID,
-		)
+	if len(patterns) == 0 {
 		return nil
 	}
 
-	gtwlog.Infof(
-		"validateBuildRequestForAPIToken: looking up approval for tokenID=%d git-sha=%s",
-		tokenID,
-		gitSHA,
-	)
-
-	// Check if there's an active approved deployment for this token and git commit
-	approval, err := h.database.FindDeployApprovalRequest(db.DeployApprovalLookup{
-		TokenID:       tokenID,
-		GitCommitHash: gitSHA,
-		StatusFilter:  "approved",
-	})
-	if err != nil {
-		if errors.Is(err, db.ErrDeployApprovalRequestNotFound) {
-			gtwlog.Warnf(
-				"validateBuildRequestForAPIToken: no approved deployment (tokenID=%d git-sha=%s)",
-				tokenID,
-				gitSHA,
-			)
-			return fmt.Errorf("deployment approval required for git commit %s", gitSHA)
-		}
-		gtwlog.Errorf("validateBuildRequestForAPIToken: database error looking up approval: %v", err)
-		return fmt.Errorf("failed to check deploy approval: %w", err)
+	objectURL := strings.TrimSpace(vals.Get("url"))
+	if objectURL == "" {
+		return fmt.Errorf("build request missing object URL")
+	}
+	gitSHA := strings.TrimSpace(vals.Get("git-sha"))
+	if gitSHA == "" {
+		return fmt.Errorf("git-sha is required when image pattern validation is configured")
 	}
 
-	if approval == nil {
-		gtwlog.Warnf(
-			"validateBuildRequestForAPIToken: approval lookup returned nil (tokenID=%d git-sha=%s)",
-			tokenID,
-			gitSHA,
-		)
-		return fmt.Errorf("deployment approval required for git commit %s", gitSHA)
+	policy := newImagePolicy(patterns, gitSHA, false)
+	if err := h.validateBuildManifest(r.Context(), app, objectURL, manifestPathFrom(vals), policy); err != nil {
+		return fmt.Errorf("manifest validation failed: %w", err)
 	}
-
-	gtwlog.Infof(
-		"validateBuildRequestForAPIToken: found approval id=%d public_id=%s for git-sha=%s",
-		approval.ID,
-		approval.PublicID,
-		gitSHA,
-	)
-
-	// Check for duplicate: only fail if object_url is set AND build already exists.
-	// The normal flow is: object upload (sets object_url) → build creation (uses same approval).
-	// If object_url is set but build hasn't been created yet, that's OK - it's the normal flow.
-	// This must happen BEFORE manifest validation to catch true duplicates even if manifest is invalid.
-	if approval.ObjectURL != "" && (approval.BuildID != "" || approval.ReleaseID != "") {
-		gtwlog.Warnf(
-			"validateBuildRequestForAPIToken: duplicate build (approval id=%d object_url=%s build_id=%s release_id=%s)",
-			approval.ID,
-			approval.ObjectURL,
-			approval.BuildID,
-			approval.ReleaseID,
-		)
-		return fmt.Errorf("an archive has already been uploaded for this deploy approval request")
-	}
-
-	// Get app name from path
-	app := extractAppFromPath(r.URL.Path)
-
-	// Store approval in context so we can update it after successful build
-	ctx := context.WithValue(r.Context(), buildApprovalContextKey{}, &buildApprovalContext{
-		approvalID: approval.ID,
-		gitCommit:  gitSHA,
-		app:        app,
-	})
-	*r = *r.WithContext(ctx)
-
-	gtwlog.Infof(
-		"validateBuildRequestForAPIToken: stored buildApprovalContext (approval_id=%d git-sha=%s)",
-		approval.ID,
-		gitSHA,
-	)
-
 	return nil
+}
+
+// validateTokenBuildBinding binds an API-token build to the deploy approval that authorized it:
+//   - the build must use the archive that was uploaded under that approval,
+//   - a git-sha, if sent, must equal the approved commit,
+//   - every service image in the uploaded manifest must be tagged with the approved commit, and
+//   - the app's configured image patterns (if any) must also match.
+//
+// The approved commit always comes from the approval record, never from the client.
+func (h *Handler) validateTokenBuildBinding(r *http.Request, vals url.Values, tracker *deployApprovalTracker) error {
+	approval := tracker.request
+	objectURL := strings.TrimSpace(vals.Get("url"))
+	if objectURL == "" || objectURL != approval.ObjectURL {
+		return fmt.Errorf("build must use the archive uploaded for deploy approval %s", approval.PublicID)
+	}
+
+	commit, ok := db.NormalizeCommitSHA(approval.GitCommitHash)
+	if !ok {
+		return fmt.Errorf("deploy approval %s is not bound to a full git commit SHA", approval.PublicID)
+	}
+	if gitSHA := strings.TrimSpace(vals.Get("git-sha")); gitSHA != "" && !strings.EqualFold(gitSHA, commit) {
+		return fmt.Errorf("git-sha %s does not match the approved commit %s", gitSHA, commit)
+	}
+
+	patterns, err := h.settingsService.GetServiceImagePatterns(tracker.app)
+	if err != nil {
+		return fmt.Errorf("failed to get service image patterns: %w", err)
+	}
+	// The commit tag alone doesn't pin the image repository (attacker/image:<sha> would pass),
+	// so approval-bound builds require patterns that name the repository.
+	if len(patterns) == 0 {
+		return fmt.Errorf(
+			"deploy approvals for app %s require service_image_patterns to pin the image repository "+
+				`(e.g. {"*": "docker.io/org/app:{{GIT_COMMIT}}-amd64"})`,
+			tracker.app,
+		)
+	}
+
+	policy := newImagePolicy(patterns, commit, true)
+	if err := h.validateBuildManifest(r.Context(), tracker.app, objectURL, manifestPathFrom(vals), policy); err != nil {
+		gtwlog.Warnf("deploy approval %s: build manifest rejected: %v", approval.PublicID, err)
+		return fmt.Errorf("manifest validation failed: %w", err)
+	}
+
+	gtwlog.Infof("deploy approval %s: build bound to commit %s and object %s", approval.PublicID, commit, objectURL)
+	return nil
+}
+
+func manifestPathFrom(vals url.Values) string {
+	if manifestPath := strings.TrimSpace(vals.Get("manifest")); manifestPath != "" {
+		return manifestPath
+	}
+	return defaultManifestPath
 }
 
 // updateObjectURLApprovalTracking updates the deploy approval request with object_url

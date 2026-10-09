@@ -130,7 +130,7 @@ INSERT INTO settings (app_name, key, value, updated_at) VALUES
   (NULL, 'allow_destructive_actions', 'false'::jsonb, NOW()),
   (NULL, 'deploy_approvals_enabled', 'true'::jsonb, NOW()),
   (NULL, 'deploy_approval_window_minutes', '15'::jsonb, NOW()),
-  ('rack-gateway', 'approved_deploy_commands', '{"commands": ["echo rake db:migrate"]}'::jsonb, NOW()),
+  ('rack-gateway', 'approved_deploy_commands', '["echo rake db:migrate"]'::jsonb, NOW()),
   ('rack-gateway', 'service_image_patterns', '{"gateway": ".*:{{GIT_COMMIT}}-amd64"}'::jsonb, NOW())
 ON CONFLICT (COALESCE(app_name, ''), key) DO UPDATE
   SET value = EXCLUDED.value,

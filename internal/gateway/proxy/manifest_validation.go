@@ -13,7 +13,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"time"
 
@@ -38,12 +37,12 @@ type convoxService struct {
 	// Ignore all other fields
 }
 
-// validateBuildManifest fetches the tarball from the Convox API and validates the manifest
+// validateBuildManifest fetches the tarball from the Convox API and validates the manifest's
+// service images against the policy.
 func (h *Handler) validateBuildManifest(
 	ctx context.Context,
 	app, objectURL, manifestPath string,
-	servicePatterns map[string]string,
-	gitCommit string,
+	policy imagePolicy,
 ) error {
 	// Extract the object key from the URL (e.g., "object://myapp/tmp/file.tgz" -> "tmp/file.tgz")
 	// The object URL format is: object://app/key
@@ -69,14 +68,7 @@ func (h *Handler) validateBuildManifest(
 		return fmt.Errorf("failed to extract manifest: %w", err)
 	}
 
-	// Replace {{GIT_COMMIT}} in all patterns with actual commit hash
-	patterns := make(map[string]string)
-	for service, patternTemplate := range servicePatterns {
-		patterns[service] = strings.ReplaceAll(patternTemplate, "{{GIT_COMMIT}}", gitCommit)
-	}
-
-	// Validate all service images match their patterns
-	return validateServiceImages(manifest, patterns)
+	return policy.validate(manifest)
 }
 
 // fetchObject fetches an object from the Convox API
@@ -391,64 +383,6 @@ func validateTarPath(entryPath string) error {
 	// Check for path traversal attempts
 	if strings.Contains(cleanPath, "..") {
 		return fmt.Errorf("path traversal not allowed: %s", entryPath)
-	}
-
-	return nil
-}
-
-// validateServiceImages validates that all service images match their required patterns
-func validateServiceImages(manifest *convoxManifest, servicePatterns map[string]string) error {
-	if manifest == nil || len(manifest.Services) == 0 {
-		return fmt.Errorf("no services defined in manifest")
-	}
-
-	// Compile all patterns
-	compiledPatterns := make(map[string]*regexp.Regexp)
-	for service, pattern := range servicePatterns {
-		re, err := regexp.Compile(pattern)
-		if err != nil {
-			return fmt.Errorf("invalid image pattern for service %s: %w", service, err)
-		}
-		compiledPatterns[service] = re
-	}
-
-	for serviceName, service := range manifest.Services {
-		// Check if this service has a pattern configured
-		pattern, hasPattern := compiledPatterns[serviceName]
-		var patternString string
-
-		if hasPattern {
-			// Use service-specific pattern
-			patternString = servicePatterns[serviceName]
-		} else if wildcardPattern, hasWildcard := compiledPatterns["*"]; hasWildcard {
-			// Use wildcard pattern as fallback (lowest precedence)
-			pattern = wildcardPattern
-			hasPattern = true
-			patternString = servicePatterns["*"]
-		}
-
-		if !hasPattern {
-			// No pattern for this service - skip validation
-			continue
-		}
-
-		// When image pattern is configured for a service, it must use a pre-built image
-		if service.Image == "" {
-			return fmt.Errorf(
-				"service %s must use a pre-built image (image pattern is configured for this service)",
-				serviceName,
-			)
-		}
-
-		// Validate image matches pattern
-		if !pattern.MatchString(service.Image) {
-			return fmt.Errorf(
-				"service %s image %q does not match required pattern %q",
-				serviceName,
-				service.Image,
-				patternString,
-			)
-		}
 	}
 
 	return nil

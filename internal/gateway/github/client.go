@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -12,20 +13,34 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/settings"
 )
 
+const defaultAPIBaseURL = "https://api.github.com"
+
 // Client handles GitHub API requests
 type Client struct {
 	token      string
+	apiBaseURL string
 	httpClient *http.Client
 }
 
 // NewClient creates a new GitHub API client
 func NewClient(token string) *Client {
 	return &Client{
-		token: token,
+		token:      token,
+		apiBaseURL: defaultAPIBaseURL,
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},
 	}
+}
+
+// repoURL builds an API URL under /repos/{owner}/{repo}, path-escaping every segment.
+func (c *Client) repoURL(owner, repo string, segments ...string) string {
+	parts := make([]string, 0, 4+len(segments))
+	parts = append(parts, c.apiBaseURL, "repos", url.PathEscape(owner), url.PathEscape(repo))
+	for _, segment := range segments {
+		parts = append(parts, url.PathEscape(segment))
+	}
+	return strings.Join(parts, "/")
 }
 
 // PullRequest represents a GitHub pull request
@@ -91,7 +106,7 @@ type VerifyCommitOptions struct {
 // doRequest executes an HTTP request to the GitHub API with standard headers and error handling.
 // Parameters:
 //   - method: HTTP method (GET, POST, etc.)
-//   - url: Full API URL
+//   - apiURL: Full API URL
 //   - body: Optional request body (can be nil)
 //   - expectedStatus: Expected HTTP status code(s) for success
 //   - notFoundError: Optional custom error message for 404 responses (if empty, 404 is treated as a regular error)
@@ -99,13 +114,13 @@ type VerifyCommitOptions struct {
 //
 // Returns an error if the request fails, returns unexpected status, or JSON decoding fails.
 func (c *Client) doRequest(
-	method, url string,
+	method, apiURL string,
 	body io.Reader,
 	expectedStatus int,
 	notFoundError string,
 	target interface{},
 ) error {
-	req, err := http.NewRequest(method, url, body)
+	req, err := http.NewRequest(method, apiURL, body)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
@@ -145,10 +160,11 @@ func (c *Client) doRequest(
 
 // VerifyCommitAndFindPR verifies a commit against GitHub and optionally finds a PR.
 // The behavior depends on the options:
-// - Mode "latest": commit must be the latest on the specified branch
-// - Mode "branch": commit must exist on the specified branch (uses git compare API)
+// - Mode "latest": commit must be the current head of the specified branch
+// - Mode "branch": commit must be on the specified branch (the head or one of its ancestors)
 // - RequirePR: if true, requires an open PR for the branch
-// Returns the PR URL if found (empty string if not required/found), or an error.
+// commitHash must be a full 40-character SHA. Returns the PR URL if found (empty string if not
+// required/found), or an error.
 func (c *Client) VerifyCommitAndFindPR(
 	owner, repo, branch, commitHash string,
 	opts VerifyCommitOptions,
@@ -157,81 +173,90 @@ func (c *Client) VerifyCommitAndFindPR(
 		return "", fmt.Errorf("GitHub token not configured")
 	}
 
-	// 1. Get the branch info
 	branchInfo, err := c.getBranch(owner, repo, branch)
 	if err != nil {
 		return "", fmt.Errorf("failed to get branch info: %w", err)
 	}
 
-	// 2. Verify commit based on mode
-	switch opts.Mode {
-	case settings.VerifyGitCommitModeLatest:
-		// Check if the commit hash matches the latest commit on the branch
-		if !strings.HasPrefix(branchInfo.Commit.SHA, commitHash) &&
-			!strings.HasPrefix(commitHash, branchInfo.Commit.SHA) {
-			return "", fmt.Errorf(
-				"commit %s is not the latest commit on branch %s (latest: %s)",
-				commitHash,
-				branch,
-				branchInfo.Commit.SHA,
-			)
-		}
-	case settings.VerifyGitCommitModeBranch:
-		// Verify commit exists on the branch using compare API
-		if err := c.verifyCommitOnBranch(owner, repo, branch, commitHash, branchInfo.Commit.SHA); err != nil {
-			return "", err
-		}
-	default:
-		return "", fmt.Errorf(
-			"invalid verify_git_commit_mode: %s (must be '%s' or '%s')",
-			opts.Mode,
-			settings.VerifyGitCommitModeBranch,
-			settings.VerifyGitCommitModeLatest,
-		)
+	if err := c.verifyCommitForMode(owner, repo, branch, commitHash, branchInfo.Commit.SHA, opts.Mode); err != nil {
+		return "", err
 	}
 
-	// 3. Always look up the PR (for informational purposes)
+	// Always look up the PR (for informational purposes)
 	pr, err := c.findPRForBranch(owner, repo, branch)
 	if err != nil {
 		// Don't fail on PR lookup errors if PR is not required
 		if opts.RequirePR {
 			return "", fmt.Errorf("failed to find PR for branch: %w", err)
 		}
-		// Just log and continue if PR lookup fails but isn't required
 		return "", nil
 	}
 
-	// If PR is required but not found, error
 	if opts.RequirePR && pr == nil {
 		return "", fmt.Errorf("no open pull request found for branch %s", branch)
 	}
-
-	// Return PR URL if found (empty string if not found)
 	if pr != nil {
 		return pr.HTMLURL, nil
 	}
-
 	return "", nil
 }
 
-// verifyCommitOnBranch verifies that a commit exists on a branch using the compare API
-func (c *Client) verifyCommitOnBranch(owner, repo, branch, commitHash, branchHeadSHA string) error {
-	// Use GitHub compare API to check if commit is an ancestor of the branch head
-	// API: GET /repos/{owner}/{repo}/compare/{basehead}
-	// If commit is on the branch, the compare will show it's behind or identical
-	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/compare/%s...%s", owner, repo, commitHash, branchHeadSHA)
+func (c *Client) verifyCommitForMode(owner, repo, branch, commitHash, branchHeadSHA, mode string) error {
+	switch mode {
+	case settings.VerifyGitCommitModeLatest:
+		if !strings.EqualFold(strings.TrimSpace(branchHeadSHA), strings.TrimSpace(commitHash)) {
+			return fmt.Errorf(
+				"commit %s is not the latest commit on branch %s (latest: %s)",
+				commitHash,
+				branch,
+				branchHeadSHA,
+			)
+		}
+		return nil
+	case settings.VerifyGitCommitModeBranch:
+		return c.verifyCommitOnBranch(owner, repo, branch, commitHash, branchHeadSHA)
+	default:
+		return fmt.Errorf(
+			"invalid verify_git_commit_mode: %s (must be '%s' or '%s')",
+			mode,
+			settings.VerifyGitCommitModeBranch,
+			settings.VerifyGitCommitModeLatest,
+		)
+	}
+}
 
+// compareResponse is the subset of GitHub's compare API response used to check ancestry.
+type compareResponse struct {
+	Status string `json:"status"` // "ahead", "behind", "identical" or "diverged"
+}
+
+// verifyCommitOnBranch verifies that a commit is on a branch: it must be the branch head or one of
+// its ancestors. GET /repos/{owner}/{repo}/compare/{head}...{commit} reports the commit as "behind"
+// (ancestor) or "identical" (head) in that case; "ahead" or "diverged" means it is not on the branch.
+// The API returns 200 for any two commits in the repository, so the status must be checked.
+func (c *Client) verifyCommitOnBranch(owner, repo, branch, commitHash, branchHeadSHA string) error {
+	apiURL := c.repoURL(owner, repo, "compare", branchHeadSHA+"..."+commitHash)
+
+	var result compareResponse
 	notFoundError := fmt.Sprintf("commit %s not found or not on branch %s", commitHash, branch)
-	return c.doRequest("GET", url, nil, http.StatusOK, notFoundError, nil)
+	if err := c.doRequest("GET", apiURL, nil, http.StatusOK, notFoundError, &result); err != nil {
+		return err
+	}
+	switch result.Status {
+	case "behind", "identical":
+		return nil
+	default:
+		return fmt.Errorf("commit %s is not on branch %s (compare status: %q)", commitHash, branch, result.Status)
+	}
 }
 
 // getBranch fetches branch information from GitHub
 func (c *Client) getBranch(owner, repo, branch string) (*Branch, error) {
-	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/branches/%s", owner, repo, branch)
+	apiURL := c.repoURL(owner, repo, "branches", branch)
 
 	var branchInfo Branch
 	notFoundError := fmt.Sprintf("branch %s not found in repository %s/%s", branch, owner, repo)
-	if err := c.doRequest("GET", url, nil, http.StatusOK, notFoundError, &branchInfo); err != nil {
+	if err := c.doRequest("GET", apiURL, nil, http.StatusOK, notFoundError, &branchInfo); err != nil {
 		return nil, err
 	}
 
@@ -240,10 +265,11 @@ func (c *Client) getBranch(owner, repo, branch string) (*Branch, error) {
 
 // findPRForBranch finds an open PR for the specified branch
 func (c *Client) findPRForBranch(owner, repo, branch string) (*PullRequest, error) {
-	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/pulls?head=%s:%s&state=open", owner, repo, owner, branch)
+	query := url.Values{"head": {owner + ":" + branch}, "state": {"open"}}
+	apiURL := c.repoURL(owner, repo, "pulls") + "?" + query.Encode()
 
 	var prs []PullRequest
-	if err := c.doRequest("GET", url, nil, http.StatusOK, "", &prs); err != nil {
+	if err := c.doRequest("GET", apiURL, nil, http.StatusOK, "", &prs); err != nil {
 		return nil, err
 	}
 
@@ -256,12 +282,12 @@ func (c *Client) findPRForBranch(owner, repo, branch string) (*PullRequest, erro
 
 // PostPRComment posts a comment on a pull request
 func (c *Client) PostPRComment(owner, repo string, prNumber int, comment string) error {
-	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/issues/%d/comments", owner, repo, prNumber)
+	apiURL := c.repoURL(owner, repo, "issues", strconv.Itoa(prNumber), "comments")
 
 	body, err := json.Marshal(PRCommentRequest{Body: comment})
 	if err != nil {
 		return fmt.Errorf("failed to marshal comment: %w", err)
 	}
 
-	return c.doRequest("POST", url, strings.NewReader(string(body)), http.StatusCreated, "", nil)
+	return c.doRequest("POST", apiURL, strings.NewReader(string(body)), http.StatusCreated, "", nil)
 }

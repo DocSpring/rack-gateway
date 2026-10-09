@@ -77,13 +77,13 @@ func TestUpdateObjectURLApprovalTracking_WithTracker(t *testing.T) {
 	approvalReq, err := database.CreateDeployApprovalRequest(
 		"Test deployment", // message
 		"test-app",        // app
-		"abc123",          // gitCommitHash
-		"main",            // gitBranch
-		"",                // prURL
-		[]byte("{}"),      // ciMetadata
-		user.ID,           // createdByUserID
-		nil,               // createdByAPITokenID
-		apiToken.ID,       // targetAPITokenID
+		"abc123def4567890abc123def4567890abc123de", // gitCommitHash
+		"main",       // gitBranch
+		"",           // prURL
+		[]byte("{}"), // ciMetadata
+		user.ID,      // createdByUserID
+		nil,          // createdByAPITokenID
+		apiToken.ID,  // targetAPITokenID
 	)
 	require.NoError(t, err)
 
@@ -116,7 +116,7 @@ func TestUpdateObjectURLApprovalTracking_WithTracker(t *testing.T) {
 	// Verify object_url was saved to database
 	updated, err := database.FindDeployApprovalRequest(db.DeployApprovalLookup{
 		TokenID:       apiToken.ID,
-		GitCommitHash: "abc123",
+		GitCommitHash: "abc123def4567890abc123def4567890abc123de",
 		StatusFilter:  "approved",
 	})
 	require.NoError(t, err)
@@ -164,13 +164,13 @@ func TestUpdateBuildApprovalTracking_WithTracker(t *testing.T) {
 	approvalReq, err := database.CreateDeployApprovalRequest(
 		"Test deployment", // message
 		"test-app",        // app
-		"abc123",          // gitCommitHash
-		"main",            // gitBranch
-		"",                // prURL
-		[]byte("{}"),      // ciMetadata
-		user.ID,           // createdByUserID
-		nil,               // createdByAPITokenID
-		apiToken.ID,       // targetAPITokenID
+		"abc123def4567890abc123def4567890abc123de", // gitCommitHash
+		"main",       // gitBranch
+		"",           // prURL
+		[]byte("{}"), // ciMetadata
+		user.ID,      // createdByUserID
+		nil,          // createdByAPITokenID
+		apiToken.ID,  // targetAPITokenID
 	)
 	require.NoError(t, err)
 
@@ -211,7 +211,7 @@ func TestUpdateBuildApprovalTracking_WithTracker(t *testing.T) {
 	// Verify build_id was saved
 	updated, err := database.FindDeployApprovalRequest(db.DeployApprovalLookup{
 		TokenID:       apiToken.ID,
-		GitCommitHash: "abc123",
+		GitCommitHash: "abc123def4567890abc123def4567890abc123de",
 		StatusFilter:  "approved",
 	})
 	require.NoError(t, err)
@@ -224,7 +224,7 @@ func TestUpdateBuildApprovalTracking_WithTracker(t *testing.T) {
 	// Verify release_id was saved
 	updated, err = database.FindDeployApprovalRequest(db.DeployApprovalLookup{
 		TokenID:       apiToken.ID,
-		GitCommitHash: "abc123",
+		GitCommitHash: "abc123def4567890abc123def4567890abc123de",
 		StatusFilter:  "approved",
 	})
 	require.NoError(t, err)
@@ -271,13 +271,13 @@ func TestCaptureObjectUpload_CallsUpdateObjectURLApprovalTracking(t *testing.T) 
 	approvalReq, err := database.CreateDeployApprovalRequest(
 		"Test deployment", // message
 		"test-app",        // app
-		"abc123",          // gitCommitHash
-		"main",            // gitBranch
-		"",                // prURL
-		[]byte("{}"),      // ciMetadata
-		user.ID,           // createdByUserID
-		nil,               // createdByAPITokenID
-		apiToken.ID,       // targetAPITokenID
+		"abc123def4567890abc123def4567890abc123de", // gitCommitHash
+		"main",       // gitBranch
+		"",           // prURL
+		[]byte("{}"), // ciMetadata
+		user.ID,      // createdByUserID
+		nil,          // createdByAPITokenID
+		apiToken.ID,  // targetAPITokenID
 	)
 	require.NoError(t, err)
 
@@ -315,7 +315,7 @@ func TestCaptureObjectUpload_CallsUpdateObjectURLApprovalTracking(t *testing.T) 
 	// Verify object_url was saved
 	updated, err := database.FindDeployApprovalRequest(db.DeployApprovalLookup{
 		TokenID:       apiToken.ID,
-		GitCommitHash: "abc123",
+		GitCommitHash: "abc123def4567890abc123def4567890abc123de",
 		StatusFilter:  "approved",
 	})
 	require.NoError(t, err)
@@ -351,13 +351,13 @@ func TestCaptureBuildCreation_CallsUpdateBuildApprovalTracking(t *testing.T) {
 	approvalReq, err := database.CreateDeployApprovalRequest(
 		"Test deployment", // message
 		"test-app",        // app
-		"abc123",          // gitCommitHash
-		"main",            // gitBranch
-		"",                // prURL
-		[]byte("{}"),      // ciMetadata
-		user.ID,           // createdByUserID
-		nil,               // createdByAPITokenID
-		apiToken.ID,       // targetAPITokenID
+		"abc123def4567890abc123def4567890abc123de", // gitCommitHash
+		"main",       // gitBranch
+		"",           // prURL
+		[]byte("{}"), // ciMetadata
+		user.ID,      // createdByUserID
+		nil,          // createdByAPITokenID
+		apiToken.ID,  // targetAPITokenID
 	)
 	require.NoError(t, err)
 
@@ -401,7 +401,7 @@ func TestCaptureBuildCreation_CallsUpdateBuildApprovalTracking(t *testing.T) {
 	// Verify build_id was saved but release_id is still empty
 	updated, err := database.FindDeployApprovalRequest(db.DeployApprovalLookup{
 		TokenID:       apiToken.ID,
-		GitCommitHash: "abc123",
+		GitCommitHash: "abc123def4567890abc123def4567890abc123de",
 		StatusFilter:  "approved",
 	})
 	require.NoError(t, err)
@@ -431,7 +431,7 @@ func TestCaptureBuildCreation_CallsUpdateBuildApprovalTracking(t *testing.T) {
 	// Verify release_id was saved
 	updated, err = database.FindDeployApprovalRequest(db.DeployApprovalLookup{
 		TokenID:       apiToken.ID,
-		GitCommitHash: "abc123",
+		GitCommitHash: "abc123def4567890abc123def4567890abc123de",
 		StatusFilter:  "approved",
 	})
 	require.NoError(t, err)

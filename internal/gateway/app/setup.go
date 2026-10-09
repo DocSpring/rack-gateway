@@ -290,6 +290,8 @@ func (a *App) initJobsClient(sender email.Sender, notifier *slackpkg.Notifier) e
 		Database:      a.Database,
 		EmailSender:   sender,
 		SlackNotifier: notifier,
+		CircleCIToken: a.Config.CircleCIToken,
+		GitHubToken:   a.Config.GitHubToken,
 	}, auditAnchorConfig)
 	if err != nil {
 		return fmt.Errorf("failed to initialize jobs client: %w", err)

@@ -8,6 +8,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	"github.com/DocSpring/rack-gateway/internal/gateway/httpclient"
 	gtwlog "github.com/DocSpring/rack-gateway/internal/gateway/logging"
 )
@@ -74,9 +75,9 @@ func (h *APIHandler) validateRequestFields(
 		return "", "", "", false
 	}
 
-	gitCommitHash := strings.TrimSpace(req.GitCommitHash)
-	if gitCommitHash == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "git_commit_hash is required"})
+	gitCommitHash, ok := db.NormalizeCommitSHA(req.GitCommitHash)
+	if !ok {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "git_commit_hash must be a full 40-character commit SHA"})
 		return "", "", "", false
 	}
 

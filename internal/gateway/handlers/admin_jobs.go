@@ -340,21 +340,12 @@ func toJobResponse(job *rivertype.JobRow) JobResponse {
 		lastError = job.Errors[len(job.Errors)-1].Error
 	}
 
-	// Decode args from byte array to JSON
-	// The args are stored as bytes in the database, we just pass them through as-is
-	// and let JSON marshal handle the conversion
-	var args json.RawMessage
-	if len(job.EncodedArgs) > 0 {
-		// River stores args as JSON bytes, we just return them as JSON
-		args = job.EncodedArgs
-	}
-
 	return JobResponse{
 		ID:          job.ID,
 		State:       string(job.State),
 		Queue:       job.Queue,
 		Kind:        job.Kind,
-		Args:        args,
+		Args:        redactJobArgs(job.EncodedArgs),
 		Attempt:     job.Attempt,
 		MaxAttempts: job.MaxAttempts,
 		CreatedAt:   job.CreatedAt,

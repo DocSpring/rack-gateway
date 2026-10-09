@@ -104,11 +104,10 @@ func (h *APIHandler) enqueueGitHubComment(c *gin.Context, owner, repo string, pr
 	}
 
 	_, err := h.jobsClient.Insert(c.Request.Context(), jobgithub.PostPRCommentArgs{
-		GitHubToken: h.config.GitHubToken,
-		Owner:       owner,
-		Repo:        repo,
-		PRNumber:    prNumber,
-		Comment:     comment,
+		Owner:    owner,
+		Repo:     repo,
+		PRNumber: prNumber,
+		Comment:  comment,
 	}, &river.InsertOpts{
 		Queue:       jobs.QueueIntegrations,
 		MaxAttempts: jobs.MaxAttemptsNotification,
