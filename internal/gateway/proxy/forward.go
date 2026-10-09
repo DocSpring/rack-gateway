@@ -269,7 +269,16 @@ func (h *Handler) forwardRequest(
 	path string,
 	authUser *auth.User,
 ) (int, error) {
-	targetURL := buildTargetURL(rack, path, r.URL.RawQuery)
+	targetURL, err := buildTargetURL(rack, path, r.URL.RawQuery)
+	if err != nil {
+		return 0, err
+	}
+
+	if disallowed := h.disallowedRunOptions(r, authUser); len(disallowed) > 0 {
+		msg := fmt.Sprintf("only admins can use these process options: %s", strings.Join(disallowed, ", "))
+		http.Error(w, msg, http.StatusForbidden)
+		return http.StatusForbidden, nil
+	}
 
 	if strings.Contains(strings.ToLower(r.Header.Get("Connection")), "upgrade") &&
 		strings.ToLower(r.Header.Get("Upgrade")) == "websocket" {

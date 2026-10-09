@@ -2,7 +2,6 @@ package proxy
 
 import (
 	"context"
-	"encoding/base64"
 	"fmt"
 	"io"
 	"log"
@@ -12,7 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
@@ -44,11 +42,7 @@ func (h *Handler) proxyWebSocket(
 		return 0, err
 	}
 
-	userEmail := ""
-	if authUser != nil {
-		userEmail = authUser.Email
-	}
-	header := h.buildWebSocketHeaders(r, rack, userEmail, wsURL)
+	header := buildWebSocketHeaders(r, rack, authUser, wsURL)
 
 	upstreamConn, resp, err := h.dialUpstreamWebSocket(r.Context(), wsURL, header, rack.URL)
 	if err != nil {
@@ -179,18 +173,16 @@ func (_ *Handler) prepareWebSocketURL(target string) (*url.URL, error) {
 	return u, nil
 }
 
-// buildWebSocketHeaders constructs headers for upstream WebSocket connection
-func (h *Handler) buildWebSocketHeaders(
+// buildWebSocketHeaders constructs headers for the upstream WebSocket connection.
+func buildWebSocketHeaders(
 	r *http.Request,
 	rack config.RackConfig,
-	userEmail string,
+	authUser *auth.User,
 	wsURL *url.URL,
 ) http.Header {
 	header := http.Header{}
-	authValue := fmt.Sprintf("%s:%s", rack.Username, rack.APIKey)
-	header.Set("Authorization", "Basic "+base64.StdEncoding.EncodeToString([]byte(authValue)))
-	header.Set("X-User-Email", userEmail)
-	header.Set("X-Request-ID", uuid.New().String())
+	copyForwardedHeaders(header, r.Header)
+	setGatewayHeaders(header, rack, authUser)
 
 	scheme := "http"
 	if strings.HasPrefix(rack.URL, "https") {
@@ -198,39 +190,10 @@ func (h *Handler) buildWebSocketHeaders(
 	}
 	header.Set("Origin", fmt.Sprintf("%s://%s", scheme, wsURL.Host))
 
-	h.copyClientHeaders(r.Header, header)
-
 	if sp := r.Header.Get("Sec-WebSocket-Protocol"); sp != "" {
 		header.Set("Sec-WebSocket-Protocol", sp)
 	}
 	return header
-}
-
-// copyClientHeaders copies allowed headers from client request
-func (_ *Handler) copyClientHeaders(src, dst http.Header) {
-	excludedHeaders := map[string]bool{
-		"authorization":            true,
-		"host":                     true,
-		"connection":               true,
-		"upgrade":                  true,
-		"sec-websocket-key":        true,
-		"sec-websocket-version":    true,
-		"sec-websocket-extensions": true,
-		"origin":                   true,
-		"sec-websocket-protocol":   true,
-		"x-user-email":             true,
-		"x-request-id":             true,
-		"x-audit-resource":         true,
-	}
-
-	for k, vals := range src {
-		if excludedHeaders[strings.ToLower(k)] {
-			continue
-		}
-		for _, v := range vals {
-			dst.Add(k, v)
-		}
-	}
 }
 
 // dialUpstreamWebSocket establishes connection to upstream WebSocket
@@ -268,6 +231,7 @@ func (h *Handler) dialWithRedirects(
 	var resp *http.Response
 	var err error
 
+	rackHost := wsURL.Host
 	for i := 0; i < 3; i++ {
 		conn, resp, err = dialer.Dial(wsURL.String(), header)
 		if err == nil {
@@ -281,6 +245,10 @@ func (h *Handler) dialWithRedirects(
 		newURL, parseErr := h.parseRedirectLocation(resp, wsURL)
 		if parseErr != nil {
 			break
+		}
+		// The dial carries the rack credential; never send it anywhere but the configured rack.
+		if !strings.EqualFold(newURL.Host, rackHost) {
+			return nil, nil, fmt.Errorf("refusing websocket redirect from %s to %s", rackHost, newURL.Host)
 		}
 		wsURL = newURL
 	}

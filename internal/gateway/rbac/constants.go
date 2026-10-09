@@ -245,15 +245,18 @@ const (
 	ActionUpdate // update
 	// ActionUpdateName represents updating only the resource name.
 	ActionUpdateName // update_name
+	// ActionRunPrivileged represents starting a process with options that escape the app's release
+	// image or scheduling constraints (custom image, host volumes, privileged mode, node placement).
+	ActionRunPrivileged // run_privileged
 )
 
 // IsValid reports whether the action represents a defined value.
-func (a Action) IsValid() bool { return a <= ActionUpdateName }
+func (a Action) IsValid() bool { return a <= ActionRunPrivileged }
 
 // ParseAction converts a string name into an Action value.
 func ParseAction(v string) (Action, error) {
 	// Try each known value
-	for a := ActionAdd; a <= ActionUpdateName; a++ {
+	for a := ActionAdd; a <= ActionRunPrivileged; a++ {
 		if a.String() == v {
 			return a, nil
 		}
