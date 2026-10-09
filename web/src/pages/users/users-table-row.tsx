@@ -9,7 +9,8 @@ import { AVAILABLE_ROLES, isUserLocked, type User } from '@/pages/users/user-uti
 
 type UsersTableRowProps = {
   user: User
-  isAdmin: boolean
+  canManage: boolean
+  canOpenProfile: boolean
   currentUserEmail?: string
   onEdit: (user: User) => void
   onDelete: (user: User) => void
@@ -18,9 +19,33 @@ type UsersTableRowProps = {
   isUnlocking: boolean
 }
 
+function ProfileLink({
+  user,
+  enabled,
+  children,
+}: {
+  user: User
+  enabled: boolean
+  children: React.ReactNode
+}) {
+  if (!enabled) {
+    return <span>{children}</span>
+  }
+  return (
+    <Link
+      className="underline hover:no-underline"
+      params={{ email: user.email }}
+      to="/users/$email"
+    >
+      {children}
+    </Link>
+  )
+}
+
 export function UsersTableRow({
   user,
-  isAdmin,
+  canManage,
+  canOpenProfile,
   currentUserEmail,
   onEdit,
   onDelete,
@@ -35,13 +60,9 @@ export function UsersTableRow({
       <TableCell className={locked ? 'opacity-60' : ''}>
         <div>
           <div className="font-medium">
-            <Link
-              className="underline hover:no-underline"
-              params={{ email: user.email }}
-              to="/users/$email"
-            >
+            <ProfileLink enabled={canOpenProfile} user={user}>
               {user.name}
-            </Link>
+            </ProfileLink>
             {locked && <Lock className="ml-2 inline h-4 w-4" />}
             {user.email === currentUserEmail && (
               <Badge className="ml-2" variant="outline">
@@ -50,13 +71,9 @@ export function UsersTableRow({
             )}
           </div>
           <div className="text-muted-foreground text-sm">
-            <Link
-              className="underline hover:no-underline"
-              params={{ email: user.email }}
-              to="/users/$email"
-            >
+            <ProfileLink enabled={canOpenProfile} user={user}>
               {user.email}
-            </Link>
+            </ProfileLink>
           </div>
         </div>
       </TableCell>
@@ -88,7 +105,7 @@ export function UsersTableRow({
       <TableCell className={locked ? 'text-sm opacity-60' : 'text-sm'}>
         <TimeAgo date={user.created_at} />
       </TableCell>
-      {isAdmin && (
+      {canManage && (
         <TableCell className="text-right">
           <UserActions
             currentUserEmail={currentUserEmail}

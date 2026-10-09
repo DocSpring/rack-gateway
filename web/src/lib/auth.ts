@@ -9,6 +9,8 @@ export type User = {
   email: string
   name: string
   roles: string[]
+  // Effective permissions from the user's roles; used only to hide UI the user can't use.
+  permissions: string[]
   rack?: { name: string; alias?: string; host: string }
   mfa_enrolled?: boolean
   mfa_required?: boolean
@@ -80,11 +82,13 @@ class AuthService {
 
       const rack: User['rack'] = normalizeRack(data?.rack)
       const roles = Array.isArray(userInfo?.roles) ? userInfo.roles : []
+      const permissions = Array.isArray(userInfo?.permissions) ? userInfo.permissions : []
 
       const mapped: User = {
         email: userInfo?.email ?? '',
         name: userInfo?.name ?? '',
         roles,
+        permissions,
         rack,
         mfa_enrolled: Boolean(userInfo?.mfa_enrolled),
         mfa_required: Boolean(userInfo?.mfa_required),

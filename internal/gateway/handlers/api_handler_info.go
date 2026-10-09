@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -17,6 +18,7 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/httpclient"
 	gtwlog "github.com/DocSpring/rack-gateway/internal/gateway/logging"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rackcert"
+	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 	"github.com/DocSpring/rack-gateway/internal/gateway/version"
 )
 
@@ -90,6 +92,7 @@ func (h *APIHandler) buildUserInfo(
 		MFAEnrolled:      false,
 		MFARequired:      false,
 		HasTrustedDevice: false,
+		Permissions:      effectivePermissions(roles, dbUser, authUser),
 	}
 
 	if dbUser != nil {
@@ -109,6 +112,30 @@ func (h *APIHandler) buildUserInfo(
 		userInfo.MFAPending = db.SessionAwaitingMFA(h.mfaSettings, dbUser, authUser.Session)
 	}
 	return userInfo
+}
+
+// effectivePermissions lists what the caller may do: an API token's own permission list, or the
+// permissions of a person's current roles.
+func effectivePermissions(roles []string, dbUser *db.User, authUser *auth.User) []string {
+	if authUser != nil && authUser.IsAPIToken {
+		return append([]string{}, authUser.Permissions...)
+	}
+	if dbUser != nil {
+		roles = dbUser.Roles
+	}
+	rolePerms := rbac.DefaultRolePermissions()
+	set := make(map[string]struct{})
+	for _, role := range roles {
+		for _, perm := range rolePerms[role] {
+			set[perm] = struct{}{}
+		}
+	}
+	perms := make([]string, 0, len(set))
+	for perm := range set {
+		perms = append(perms, perm)
+	}
+	sort.Strings(perms)
+	return perms
 }
 
 func (h *APIHandler) enrichUserInfoWithSession(email string, authUser *auth.User, userInfo *UserInfo) {

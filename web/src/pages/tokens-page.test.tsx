@@ -133,14 +133,15 @@ Object.assign(navigator, {
   },
 })
 
-async function createWrapper(
-  user = {
-    email: 'admin@example.com',
-    name: 'Admin User',
-    roles: ['admin'],
-    integrations: { slack: false, github: false, circleci: false },
-  }
-) {
+const ADMIN_USER = {
+  email: 'admin@example.com',
+  name: 'Admin User',
+  roles: ['admin'],
+  permissions: ['convox:*:*', 'gateway:*:*', 'security:*:*'],
+  integrations: { slack: false, github: false, circleci: false },
+}
+
+async function createWrapper(user = ADMIN_USER) {
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: { retry: false },
@@ -202,6 +203,57 @@ describe('TokensPage', () => {
     // Use getAllByText since status badges may appear multiple times (e.g., in header + row)
     expect(screen.getAllByText('Expired').length).toBeGreaterThanOrEqual(1)
     expect(screen.getAllByText('Active').length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('lets deployers create their own tokens', async () => {
+    vi.mocked(api.get).mockImplementation((url: string) => {
+      if (url.includes('/permissions')) {
+        return Promise.resolve(mockPermissionMetadata)
+      }
+      return Promise.resolve(mockTokens)
+    })
+
+    const Wrapper = await createWrapper({
+      ...ADMIN_USER,
+      email: 'deployer@example.com',
+      roles: ['deployer'],
+      permissions: [
+        'gateway:api_token:read',
+        'gateway:api_token:create',
+        'gateway:api_token:update',
+        'gateway:api_token:delete',
+      ],
+    })
+    render(<TokensPage />, { wrapper: Wrapper })
+
+    await waitFor(() => {
+      expect(screen.getByText('CI/CD Pipeline')).toBeInTheDocument()
+    })
+    expect(screen.getByText('Create Token')).toBeInTheDocument()
+    expect(screen.getByLabelText('Actions for CI/CD Pipeline')).toBeInTheDocument()
+  })
+
+  it('shows viewers their tokens without create or edit actions', async () => {
+    vi.mocked(api.get).mockImplementation((url: string) => {
+      if (url.includes('/permissions')) {
+        return Promise.resolve(mockPermissionMetadata)
+      }
+      return Promise.resolve(mockTokens)
+    })
+
+    const Wrapper = await createWrapper({
+      ...ADMIN_USER,
+      email: 'viewer@example.com',
+      roles: ['viewer'],
+      permissions: ['gateway:user:list', 'gateway:api_token:read'],
+    })
+    render(<TokensPage />, { wrapper: Wrapper })
+
+    await waitFor(() => {
+      expect(screen.getByText('CI/CD Pipeline')).toBeInTheDocument()
+    })
+    expect(screen.queryByText('Create Token')).toBeNull()
+    expect(screen.queryByLabelText('Actions for CI/CD Pipeline')).toBeNull()
   })
 
   it('shows empty state', async () => {

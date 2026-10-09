@@ -1,39 +1,14 @@
 import { Link, Navigate, Outlet, useLocation } from '@tanstack/react-router'
-import {
-  Blocks,
-  Boxes,
-  Cpu,
-  Hammer,
-  HardDrive,
-  Key,
-  ListChecks,
-  Lock,
-  LogOut,
-  Logs,
-  type LucideIcon,
-  Puzzle,
-  Server,
-  ServerCog,
-  Settings,
-  TerminalSquare,
-  Users,
-} from 'lucide-react'
+import { LogOut } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../contexts/auth-context'
 import { redirectToMfaChallenge } from '../lib/mfa-challenge-redirect'
 import { cn } from '../lib/utils'
 import { CliSetupDialog } from './cli-setup-dialog'
+import { buildNavigationItems, type NavigationItem } from './navigation-items'
 import { ThemeToggle } from './theme-toggle'
 import { Button } from './ui/button'
 import { Separator } from './ui/separator'
-
-type NavigationItem = {
-  name: string
-  icon: LucideIcon
-  href?: string
-  onSelect?: () => void
-  disabled?: boolean
-}
 
 const USER_AUDIT_RE = /\/users\/[^/]+\/audit-logs/
 
@@ -44,7 +19,8 @@ function isNavigationItemActive(item: NavigationItem, pathname: string): boolean
   if (item.href === '/rack') {
     return pathname === '/rack'
   }
-  if (item.href === '/audit-logs') {
+  // "Audit Logs" (/audit-logs) and "My Activity" (/users/<email>/audit-logs)
+  if (item.href.endsWith('/audit-logs')) {
     return pathname.startsWith('/audit-logs') || USER_AUDIT_RE.test(pathname)
   }
   if (item.href === '/users') {
@@ -56,51 +32,6 @@ function isNavigationItemActive(item: NavigationItem, pathname: string): boolean
     return pathname === '/'
   }
   return pathname === item.href || pathname.startsWith(`${item.href}/`)
-}
-
-function buildNavigationItems(
-  userRoles: string[] | undefined,
-  setShowCliDialog: (show: boolean) => void
-): NavigationItem[] {
-  const nav: NavigationItem[] = [
-    { name: 'Rack', href: '/rack', icon: Server },
-    { name: 'Apps', href: '/apps', icon: Boxes },
-    { name: 'Processes', href: '/processes', icon: Cpu },
-    { name: 'Instances', href: '/instances', icon: HardDrive },
-    { name: 'Builds', href: '/builds', icon: Hammer },
-    { name: 'Releases', href: '/releases', icon: Blocks },
-    { name: 'Users', href: '/users', icon: Users },
-    { name: 'API Tokens', href: '/api-tokens', icon: Key },
-  ]
-
-  if (userRoles?.includes('admin')) {
-    nav.push({
-      name: 'Deploy Approvals',
-      href: '/deploy-approval-requests',
-      icon: ListChecks,
-    })
-  }
-
-  nav.push({ name: 'Audit Logs', href: '/audit-logs', icon: Logs })
-  nav.push({
-    name: 'Account Security',
-    href: '/account/security',
-    icon: Lock,
-  })
-
-  if (userRoles?.includes('admin')) {
-    nav.push({ name: 'Integrations', href: '/integrations', icon: Puzzle })
-    nav.push({ name: 'Settings', href: '/settings', icon: Settings })
-    nav.push({ name: 'Background Jobs', href: '/jobs', icon: ServerCog })
-  }
-
-  nav.push({
-    name: 'Configure CLI',
-    icon: TerminalSquare,
-    onSelect: () => setShowCliDialog(true),
-  })
-
-  return nav
 }
 
 function applyMfaEnrollmentRestrictions(nav: NavigationItem[]): NavigationItem[] {
@@ -298,9 +229,9 @@ export function Layout() {
   }, [])
 
   const navigation = useMemo<NavigationItem[]>(() => {
-    const nav = buildNavigationItems(user?.roles, setShowCliDialog)
+    const nav = buildNavigationItems(user, setShowCliDialog)
     return needsMfaEnrollment ? applyMfaEnrollmentRestrictions(nav) : nav
-  }, [needsMfaEnrollment, user?.roles])
+  }, [needsMfaEnrollment, user])
 
   const mfaPending = Boolean(user?.mfa_pending)
   useEffect(() => {

@@ -35,6 +35,7 @@ import type {
   GetRack200,
   GetRoles200,
   GetSettings200,
+  GetUsersEmailAuditLogsParams,
   HandlersAuditLogsResponse,
   HandlersBackupCodesResponse,
   HandlersCLILoginCompleteRequest,
@@ -93,9 +94,10 @@ type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 export const getRackGatewayAPI = () => {
   /**
-   * Returns all API tokens configured in the system.
-   * @summary List API tokens
-   */
+ * Returns the caller's own API tokens, or every token when the caller holds
+gateway:api_token:manage.
+ * @summary List API tokens
+ */
   const getApiTokens = (
     options?: SecondParameter<typeof createGatewayClient<DbAPIToken[]>>,
   ) => {
@@ -106,9 +108,11 @@ export const getRackGatewayAPI = () => {
   };
 
   /**
-   * Generates a new API token for automation or CI/CD use.
-   * @summary Create an API token
-   */
+ * Generates a new API token for automation or CI/CD use. The token belongs to the caller
+unless user_email names someone else, which requires gateway:api_token:manage. Its
+permissions must be within the owner's current role.
+ * @summary Create an API token
+ */
   const postApiTokens = (
     handlersCreateAPITokenRequest: HandlersCreateAPITokenRequest,
     options?: SecondParameter<
@@ -1164,9 +1168,11 @@ Secrets remain masked unless the user has secrets permissions.
   };
 
   /**
-   * Returns every user configured in the gateway along with role assignments.
-   * @summary List all gateway users
-   */
+ * Returns every user configured in the gateway along with role assignments.
+Callers without gateway:user:read get the team directory: lock reasons, who locked
+the account, and MFA preferences are omitted.
+ * @summary List all gateway users
+ */
   const getUsers = (
     options?: SecondParameter<typeof createGatewayClient<DbUser[]>>,
   ) => {
@@ -1239,6 +1245,24 @@ Secrets remain masked unless the user has secrets permissions.
   ) => {
     return createGatewayClient<string>(
       { url: `/users/${email}`, method: 'DELETE' },
+      options,
+    );
+  };
+
+  /**
+ * Returns paginated audit logs for actions performed by one user. Every user may read
+their own activity; reading another user's activity requires gateway:audit_log:read.
+ * @summary List a user's audit logs
+ */
+  const getUsersEmailAuditLogs = (
+    email: string,
+    params?: GetUsersEmailAuditLogsParams,
+    options?: SecondParameter<
+      typeof createGatewayClient<HandlersAuditLogsResponse>
+    >,
+  ) => {
+    return createGatewayClient<HandlersAuditLogsResponse>(
+      { url: `/users/${email}/audit-logs`, method: 'GET', params },
       options,
     );
   };
@@ -1419,6 +1443,7 @@ Secrets remain masked unless the user has secrets permissions.
     getUsersEmail,
     putUsersEmail,
     deleteUsersEmail,
+    getUsersEmailAuditLogs,
     postUsersEmailLock,
     putUsersEmailName,
     getUsersEmailSessions,
@@ -1778,6 +1803,11 @@ export type PutUsersEmailResult = NonNullable<
 >;
 export type DeleteUsersEmailResult = NonNullable<
   Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>['deleteUsersEmail']>>
+>;
+export type GetUsersEmailAuditLogsResult = NonNullable<
+  Awaited<
+    ReturnType<ReturnType<typeof getRackGatewayAPI>['getUsersEmailAuditLogs']>
+  >
 >;
 export type PostUsersEmailLockResult = NonNullable<
   Awaited<

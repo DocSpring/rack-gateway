@@ -207,6 +207,13 @@ export type AuditLogQuery = Partial<{
 export const listAuditLogs = (params: AuditLogQuery): Promise<AuditLogsResponse> =>
   unwrap(gateway.getAuditLogs(params))
 
+// One user's activity. Every user may read their own; other users' need gateway:audit_log:read.
+export const listUserAuditLogs = (
+  email: string,
+  params: Omit<AuditLogQuery, 'user' | 'user_id'>
+): Promise<AuditLogsResponse> =>
+  get<AuditLogsResponse>(`/api/v1/users/${encodeURIComponent(email)}/audit-logs`, { params })
+
 export const exportAuditLogs = (
   params: Parameters<typeof gateway.getAuditLogsExport>[0]
 ): Promise<Blob> => unwrap(gateway.getAuditLogsExport(params))
@@ -439,6 +446,7 @@ export const api = {
   unlockUser,
   getUserSessions: listUserSessions,
   listAuditLogs,
+  listUserAuditLogs,
   exportAuditLogs,
   listRoles,
   getTokenPermissionMetadata,

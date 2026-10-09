@@ -149,23 +149,34 @@ var httpRouteSpecs = []RouteSpec{
 
 	// Users & roles
 	newSelfRoute("GET", "/api/v1/roles"),
-	newHTTPRoute("GET", "/api/v1/users", Gateway(ResourceUser, ActionRead)),
-	newHTTPRoute("GET", "/api/v1/users/:email", Gateway(ResourceUser, ActionRead)),
+	// The team directory (names, emails, roles) is visible to every role. The handler only returns
+	// lock and MFA details to callers holding gateway:user:read.
+	newHTTPRoute("GET", "/api/v1/users", Gateway(ResourceUser, ActionList)),
 	newHTTPRoute("POST", "/api/v1/users", Gateway(ResourceUser, ActionCreate)),
 	newHTTPRoute("DELETE", "/api/v1/users/:email", Gateway(ResourceUser, ActionDelete)),
 	newHTTPRoute("PUT", "/api/v1/users/:email", Gateway(ResourceUser, ActionUpdate)),
 	newHTTPRoute("PUT", "/api/v1/users/:email/name", Gateway(ResourceUser, ActionUpdateName)),
-	newHTTPRoute("GET", "/api/v1/users/:email/sessions", Gateway(ResourceUser, ActionRead)),
-	newHTTPRoute("POST", "/api/v1/users/:email/sessions/:sessionID/revoke", Gateway(ResourceUser, ActionUpdate)),
-	newHTTPRoute("POST", "/api/v1/users/:email/sessions/revoke_all", Gateway(ResourceUser, ActionUpdate)),
 	newHTTPRoute("POST", "/api/v1/users/:email/lock", Gateway(ResourceUser, ActionUpdate)),
 	newHTTPRoute("POST", "/api/v1/users/:email/unlock", Gateway(ResourceUser, ActionUpdate)),
+	// Every user can see their own profile, sessions and audit trail, and sign out their own sessions.
+	// Other users' records need the listed permission. Revoking keeps user:update's MFA level.
+	newOwnUserRoute("GET", "/api/v1/users/:email", Gateway(ResourceUser, ActionRead)),
+	newOwnUserRoute("GET", "/api/v1/users/:email/sessions", Gateway(ResourceUser, ActionRead)),
+	newOwnUserRoute(
+		"POST",
+		"/api/v1/users/:email/sessions/:sessionID/revoke",
+		Gateway(ResourceUser, ActionUpdate),
+	),
+	newOwnUserRoute("POST", "/api/v1/users/:email/sessions/revoke_all", Gateway(ResourceUser, ActionUpdate)),
+	newOwnUserRoute("GET", "/api/v1/users/:email/audit-logs", Gateway(ResourceAuditLog, ActionRead)),
 
-	// Audit logs
+	// Audit logs (every user's activity)
 	newHTTPRoute("GET", "/api/v1/audit-logs", Gateway(ResourceAuditLog, ActionRead)),
 	newHTTPRoute("GET", "/api/v1/audit-logs/export", Gateway(ResourceAuditLog, ActionRead)),
 
-	// API tokens
+	// API tokens. The permissions below let a user manage their own tokens; the handlers also require
+	// gateway:api_token:manage to see or change another user's tokens, and cap a token's permissions
+	// at its owner's current role.
 	newHTTPRoute("GET", "/api/v1/api-tokens", Gateway(ResourceAPIToken, ActionRead)),
 	newSelfRoute("GET", "/api/v1/api-tokens/permissions"),
 	newHTTPRoute("GET", "/api/v1/api-tokens/:tokenID", Gateway(ResourceAPIToken, ActionRead)),

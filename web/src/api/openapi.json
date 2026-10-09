@@ -14,7 +14,7 @@
                         "SessionCookie": []
                     }
                 ],
-                "description": "Returns all API tokens configured in the system.",
+                "description": "Returns the caller's own API tokens, or every token when the caller holds\ngateway:api_token:manage.",
                 "tags": [
                     "API Tokens"
                 ],
@@ -54,7 +54,7 @@
                         "CSRFToken": []
                     }
                 ],
-                "description": "Generates a new API token for automation or CI/CD use.",
+                "description": "Generates a new API token for automation or CI/CD use. The token belongs to the caller\nunless user_email names someone else, which requires gateway:api_token:manage. Its\npermissions must be within the owner's current role.",
                 "tags": [
                     "API Tokens"
                 ],
@@ -83,6 +83,16 @@
                     },
                     "400": {
                         "description": "Bad Request",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -265,6 +275,16 @@
                     },
                     "400": {
                         "description": "Bad Request",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -3980,7 +4000,7 @@
                         "SessionCookie": []
                     }
                 ],
-                "description": "Returns every user configured in the gateway along with role assignments.",
+                "description": "Returns every user configured in the gateway along with role assignments.\nCallers without gateway:user:read get the team directory: lock reasons, who locked\nthe account, and MFA preferences are omitted.",
                 "tags": [
                     "Users"
                 ],
@@ -4285,6 +4305,135 @@
                         "description": "Internal Server Error",
                         "content": {
                             "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/users/{email}/audit-logs": {
+            "get": {
+                "security": [
+                    {
+                        "SessionCookie": []
+                    }
+                ],
+                "description": "Returns paginated audit logs for actions performed by one user. Every user may read\ntheir own activity; reading another user's activity requires gateway:audit_log:read.",
+                "tags": [
+                    "Audit"
+                ],
+                "summary": "List a user's audit logs",
+                "parameters": [
+                    {
+                        "description": "User email",
+                        "name": "email",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "Text search",
+                        "name": "search",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "Action type filter",
+                        "name": "action_type",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "Resource type filter",
+                        "name": "resource_type",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "Status filter",
+                        "name": "status",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "Page number",
+                        "name": "page",
+                        "in": "query",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "description": "Page size",
+                        "name": "limit",
+                        "in": "query",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "description": "ISO8601 start time",
+                        "name": "start",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "ISO8601 end time",
+                        "name": "end",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "Relative range (e.g. 24h, 7d, custom)",
+                        "name": "range",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.AuditLogsResponse"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/handlers.ErrorResponse"
                                 }
@@ -6163,6 +6312,7 @@
                     "mfa_pending",
                     "mfa_required",
                     "name",
+                    "permissions",
                     "roles"
                 ],
                 "properties": {
@@ -6183,6 +6333,13 @@
                     },
                     "name": {
                         "type": "string"
+                    },
+                    "permissions": {
+                        "description": "Permissions are the caller's effective permissions (from their roles, or an API token's own\nlist) so clients can hide what the caller can't use. The server still enforces every request.",
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
                     },
                     "preferred_mfa_method": {
                         "type": "string"

@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -10,6 +11,12 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
+)
+
+// errAPITokenCannotApprove explains why approving with RACK_GATEWAY_API_TOKEN fails: the gateway only
+// accepts approvals from people, after MFA.
+var errAPITokenCannotApprove = errors.New(
+	"API tokens can't approve deploy requests; unset RACK_GATEWAY_API_TOKEN and approve as a logged-in user",
 )
 
 type deployApprovalApproveOptions struct {
@@ -301,7 +308,7 @@ func approveDeployRequestWithPIN(
 
 func getDeployApprovalMFAAuth(cmd *cobra.Command, rack, cachedPIN string) (string, string, error) {
 	if os.Getenv("RACK_GATEWAY_API_TOKEN") != "" {
-		return "", "", nil
+		return "", "", errAPITokenCannotApprove
 	}
 
 	gatewayURL, bearer, err := gatewayAuthInfo(rack)

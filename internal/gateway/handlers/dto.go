@@ -170,6 +170,9 @@ type UserInfo struct {
 	RecentStepUpExpiresAt *time.Time `json:"recent_step_up_expires_at,omitempty"`
 	HasTrustedDevice      bool       `json:"has_trusted_device"                  validate:"required"`
 	MFAPending            bool       `json:"mfa_pending"                         validate:"required"`
+	// Permissions are the caller's effective permissions (from their roles, or an API token's own
+	// list) so clients can hide what the caller can't use. The server still enforces every request.
+	Permissions []string `json:"permissions" validate:"required"`
 }
 
 // IntegrationsInfo describes which external integrations are configured

@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 
@@ -29,6 +30,11 @@ func Authorize(manager rbac.Manager) gin.HandlerFunc {
 
 		if authUser.IsAPIToken && !spec.AllowAPIToken {
 			abortForbidden(c, "API tokens cannot use this endpoint")
+			return
+		}
+
+		if isOwnAccount(c, spec, authUser) {
+			c.Next()
 			return
 		}
 
@@ -71,6 +77,21 @@ func routeAllowed(manager rbac.Manager, spec rbac.RouteSpec, principal rbac.Prin
 	default:
 		return false, "", nil
 	}
+}
+
+// isOwnAccount reports whether a human caller is using a self-service route for their own account.
+// The path parameter must match the caller's email exactly (handlers look users up by exact email).
+// API tokens, and suspended or locked users (whom RBAC also denies), never qualify.
+func isOwnAccount(c *gin.Context, spec rbac.RouteSpec, authUser *auth.User) bool {
+	if spec.SelfParam == "" || authUser.IsAPIToken {
+		return false
+	}
+	user := authUser.DBUser
+	if user == nil || user.Suspended || user.LockedAt != nil {
+		return false
+	}
+	target := strings.TrimSpace(c.Param(spec.SelfParam))
+	return target != "" && target == user.Email
 }
 
 // insufficientPermissionsMessage names the missing permission so CLI and UI users can tell

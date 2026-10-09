@@ -73,7 +73,14 @@ const mockUsers = [
   },
 ]
 
-const createWrapper = (user = { email: 'admin@example.com', roles: ['admin'] }) => {
+const ADMIN_PERMISSIONS = ['convox:*:*', 'gateway:*:*', 'security:*:*']
+const VIEWER_PERMISSIONS = ['convox:app:list', 'gateway:user:list', 'gateway:api_token:read']
+
+type MockUser = { email: string; roles: string[]; permissions: string[] }
+
+const createWrapper = (
+  user: MockUser = { email: 'admin@example.com', roles: ['admin'], permissions: ADMIN_PERMISSIONS }
+) => {
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: { retry: false },
@@ -344,6 +351,7 @@ describe('UsersPage', () => {
       const Wrapper = createWrapper({
         email: 'viewer@example.com',
         roles: ['viewer'],
+        permissions: VIEWER_PERMISSIONS,
       })
       render(<UsersPage />, { wrapper: Wrapper })
 
@@ -367,6 +375,7 @@ describe('UsersPage', () => {
       const Wrapper = createWrapper({
         email: 'ops@example.com',
         roles: ['ops'],
+        permissions: VIEWER_PERMISSIONS,
       })
       render(<UsersPage />, { wrapper: Wrapper })
 
@@ -380,6 +389,38 @@ describe('UsersPage', () => {
         throw new Error('Admin row not found')
       }
       expect(within(adminRow).queryByRole('button')).toBeNull()
+    })
+  })
+
+  describe('Profile links', () => {
+    it('links non-admins only to their own profile', async () => {
+      vi.mocked(api.get).mockResolvedValue(mockUsers)
+
+      const Wrapper = createWrapper({
+        email: 'viewer@example.com',
+        roles: ['viewer'],
+        permissions: VIEWER_PERMISSIONS,
+      })
+      render(<UsersPage />, { wrapper: Wrapper })
+
+      await waitFor(() => {
+        expect(screen.getByText('Viewer User')).toBeInTheDocument()
+      })
+      expect(screen.getByText('Viewer User').closest('a')).not.toBeNull()
+      expect(screen.getByText('Admin User').closest('a')).toBeNull()
+    })
+
+    it('links admins to every profile', async () => {
+      vi.mocked(api.get).mockResolvedValue(mockUsers)
+
+      const Wrapper = createWrapper()
+      render(<UsersPage />, { wrapper: Wrapper })
+
+      await waitFor(() => {
+        expect(screen.getByText('Admin User')).toBeInTheDocument()
+      })
+      expect(screen.getByText('Admin User').closest('a')).not.toBeNull()
+      expect(screen.getByText('Viewer User').closest('a')).not.toBeNull()
     })
   })
 

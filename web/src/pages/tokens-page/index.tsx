@@ -5,9 +5,10 @@ import { QUERY_KEYS } from '@/lib/query-keys'
 import { TablePane } from '../../components/table-pane'
 import { Button } from '../../components/ui/button'
 import { Table, TableBody, TableHead, TableHeader, TableRow } from '../../components/ui/table'
-import { useAuth } from '../../contexts/auth-context'
+import { useCan } from '../../hooks/use-can'
 import { api } from '../../lib/api'
 import { DEFAULT_PER_PAGE } from '../../lib/constants'
+import { PERMISSIONS } from '../../lib/permissions'
 import { CreateTokenDialog } from './create-token-dialog'
 import { DeleteTokenDialog } from './delete-token-dialog'
 import { EditTokenDialog } from './edit-token-dialog'
@@ -28,7 +29,7 @@ export function TokensPage() {
 }
 
 function TokensPageInner() {
-  const { user: currentUser } = useAuth()
+  const can = useCan()
   const [modal, setModal] = useState<ModalState>({ type: 'closed' })
   const [page, setPage] = useState(1)
 
@@ -61,10 +62,10 @@ function TokensPageInner() {
   const end = Math.min(start + perPage, total)
   const rows = tokenList.slice(start, end)
 
-  const roles = currentUser?.roles || []
-  const isAdmin = roles.includes('admin')
-  const isDeployer = roles.includes('deployer')
-  const canCreate = isAdmin || isDeployer
+  // The gateway lists only the caller's own tokens unless they may manage everyone's, so every row
+  // here is one the caller may change when they hold the update permission.
+  const canCreate = can(PERMISSIONS.apiTokenCreate)
+  const canEdit = can(PERMISSIONS.apiTokenUpdate) && can(PERMISSIONS.apiTokenDelete)
 
   const availablePermissions = useMemo(
     () => normalizePermissions(permissionMetadata?.permissions ?? []),
@@ -120,7 +121,9 @@ function TokensPageInner() {
       <div className="mb-8">
         <h1 className="font-bold text-3xl">API Tokens</h1>
         <p className="mt-2 text-muted-foreground">
-          Manage API tokens for programmatic access to the gateway
+          {can(PERMISSIONS.apiTokenManage)
+            ? 'Manage API tokens for programmatic access to the gateway'
+            : 'Your API tokens for programmatic access to the gateway. A token can never do more than your role allows.'}
         </p>
       </div>
 
@@ -152,33 +155,26 @@ function TokensPageInner() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {rows.map((token: APIToken) => {
-              const isOwner =
-                token.created_by_email && currentUser?.email
-                  ? token.created_by_email.toLowerCase() === currentUser.email.toLowerCase()
-                  : false
-              const canEdit = isAdmin || (isDeployer && isOwner)
-              return (
-                <TokenRow
-                  canEdit={canEdit}
-                  deletePending={false}
-                  key={token.id}
-                  onDelete={() => {
-                    if (!canEdit) {
-                      return
-                    }
-                    handleDeleteToken(token.public_id)
-                  }}
-                  onEdit={() => {
-                    if (!canEdit) {
-                      return
-                    }
-                    handleEditToken(token.public_id)
-                  }}
-                  token={token}
-                />
-              )
-            })}
+            {rows.map((token: APIToken) => (
+              <TokenRow
+                canEdit={canEdit}
+                deletePending={false}
+                key={token.id}
+                onDelete={() => {
+                  if (!canEdit) {
+                    return
+                  }
+                  handleDeleteToken(token.public_id)
+                }}
+                onEdit={() => {
+                  if (!canEdit) {
+                    return
+                  }
+                  handleEditToken(token.public_id)
+                }}
+                token={token}
+              />
+            ))}
           </TableBody>
         </Table>
 

@@ -215,7 +215,7 @@ func (h *AdminHandler) validateUpdateAPITokenRequest(
 		h.respondAuditError(c, http.StatusInternalServerError, action, tokenIDStr, "failed to load token", start, nil)
 		return "", nil, nil, false
 	}
-	if existing == nil {
+	if !h.callerMayAccessToken(c, existing) {
 		h.respondAuditError(c, http.StatusNotFound, action, tokenIDStr, "token not found", start, nil)
 		return "", nil, nil, false
 	}
