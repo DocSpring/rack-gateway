@@ -24,7 +24,7 @@ export type RenderProps = {
   setUseBackupCode: (value: boolean) => void
   handleVerifyBackupCode: (code: string) => void
   renderCancelButton?: () => ReactNode
-  autoFocus: boolean
+  focusOnMount: boolean
   inputVersion: number
   code: string
   setError: (error: string | null) => void
@@ -172,8 +172,8 @@ function renderTOTPForm(props: RenderProps) {
       <div className="space-y-6">
         <div className="flex flex-col items-center">
           <MFAInput
-            autoFocus={props.autoFocus}
             disabled={props.isVerifying}
+            focusOnMount={props.focusOnMount}
             key={props.inputVersion}
             maxLength={6}
             onChange={(event) => handleTOTPChange(props, event.target.value)}
@@ -208,8 +208,8 @@ function renderTOTPForm(props: RenderProps) {
 function renderBackupCodeForm(props: RenderProps) {
   return (
     <BackupCodeForm
-      autoFocus={props.autoFocus}
       backLabel={props.useWebAuthn ? 'Back to security key' : 'Back to authenticator app'}
+      focusOnMount={props.focusOnMount}
       isVerifying={props.isVerifying}
       key={props.inputVersion}
       onBack={() => {

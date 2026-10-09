@@ -2,7 +2,7 @@ export type StepUpAction = (() => Promise<unknown>) | (() => unknown) | null
 
 export type StepUpRequest = {
   action?: StepUpAction
-  onResolve?: (value: unknown) => void
+  onResolve?: (value?: unknown) => void
   onReject?: (error: unknown) => void
 }
 
@@ -59,7 +59,7 @@ export async function retryQueuedRequests(
   await Promise.all(
     requests.map(async (request) => {
       if (!request.action) {
-        request.onResolve?.(undefined)
+        request.onResolve?.()
         return
       }
       try {

@@ -212,7 +212,7 @@ export const listUserAuditLogs = (
   email: string,
   params: Omit<AuditLogQuery, 'user' | 'user_id'>
 ): Promise<AuditLogsResponse> =>
-  get<AuditLogsResponse>(`/api/v1/users/${encodeURIComponent(email)}/audit-logs`, { params })
+  unwrap(gateway.getUsersEmailAuditLogs(encodeURIComponent(email), params))
 
 export const exportAuditLogs = (
   params: Parameters<typeof gateway.getAuditLogsExport>[0]

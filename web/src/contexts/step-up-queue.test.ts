@@ -50,7 +50,7 @@ describe('retryQueuedRequests', () => {
 
     expect(succeeded.onResolve).toHaveBeenCalledWith('ok')
     expect(failed.onReject).toHaveBeenCalledWith(new Error('boom'))
-    expect(waiting.onResolve).toHaveBeenCalledWith(undefined)
+    expect(waiting.onResolve).toHaveBeenCalledWith()
     expect(requeue).not.toHaveBeenCalled()
   })
 

@@ -95,7 +95,11 @@ func (h *AdminHandler) resolveNewTokenOwner(
 		targetEmail = caller.Email
 	}
 
-	isSelf := caller != nil && targetEmail == caller.Email
+	// Email addresses are case-insensitive; resolve the caller's own address to the stored spelling.
+	isSelf := caller != nil && strings.EqualFold(targetEmail, caller.Email)
+	if isSelf {
+		targetEmail = caller.Email
+	}
 	if !isSelf && !h.canManageAnyAPIToken(c) {
 		message := "insufficient permissions: requires " + permManageAnyAPIToken
 		h.respondAuditError(c, http.StatusForbidden, action, targetEmail, message, start, nil)

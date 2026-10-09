@@ -141,3 +141,19 @@ func TestCreatedTokenKeepsItsExpiry(t *testing.T) {
 	require.NotNil(t, stored.ExpiresAt, "expires_at must be stored")
 	require.WithinDuration(t, expiresAt, *stored.ExpiresAt, time.Second)
 }
+
+// Naming yourself as the owner in different letter case still issues the token to you.
+func TestDeployerNamingThemselfInAnyCaseOwnsTheToken(t *testing.T) {
+	e := newAuthzEnv(t)
+	deployer := e.enrolledSession(t, "deployer@example.com")
+
+	w := e.do(t, deployer.withMFA(t), http.MethodPost, "/api/v1/api-tokens", map[string]interface{}{
+		"name": "mixed-case-ci", "role": "cicd", "user_email": "Deployer@Example.com",
+	})
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	var created struct {
+		APIToken db.APIToken `json:"api_token"`
+	}
+	decodeJSON(t, w.Body.Bytes(), &created)
+	require.Equal(t, mustUserID(t, e, "deployer@example.com"), created.APIToken.UserID)
+}

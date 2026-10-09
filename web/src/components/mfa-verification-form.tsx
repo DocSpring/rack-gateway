@@ -43,7 +43,7 @@ export function MFAVerificationForm({
   onSuccess,
   onError,
   onMFAStatusLoaded,
-  autoFocus = true,
+  focusOnMount = true,
   showTrustDevice = true,
   trustDeviceDefault = true,
   allowMethodSwitch = true,
@@ -272,7 +272,7 @@ export function MFAVerificationForm({
       })
     },
     renderCancelButton,
-    autoFocus,
+    focusOnMount,
     inputVersion,
     code,
     setError,

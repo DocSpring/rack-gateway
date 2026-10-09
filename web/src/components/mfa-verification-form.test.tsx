@@ -24,7 +24,7 @@ function mfaStatus(unusedBackupCodes: number) {
 }
 
 function renderForm() {
-  const onVerify = vi.fn().mockResolvedValue(undefined)
+  const onVerify = vi.fn(() => Promise.resolve())
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   const wrapper = ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={client}>{children}</QueryClientProvider>

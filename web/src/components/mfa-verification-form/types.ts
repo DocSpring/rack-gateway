@@ -23,7 +23,7 @@ export type MFAVerificationFormProps = {
   onSuccess?: () => void | Promise<void>
   onError?: (error: unknown) => void
   onMFAStatusLoaded?: (mfaStatus: MFAStatus) => void
-  autoFocus?: boolean
+  focusOnMount?: boolean
   showTrustDevice?: boolean
   trustDeviceDefault?: boolean
   allowMethodSwitch?: boolean

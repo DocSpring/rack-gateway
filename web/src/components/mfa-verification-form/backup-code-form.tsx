@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label'
 import { isValidBackupCode, normalizeBackupCode } from './backup-code'
 
 type BackupCodeFormProps = {
-  autoFocus: boolean
+  focusOnMount: boolean
   isVerifying: boolean
   backLabel: string
   onBack: () => void
@@ -19,7 +19,7 @@ type BackupCodeFormProps = {
  * backup codes issued at enrollment.
  */
 export function BackupCodeForm({
-  autoFocus,
+  focusOnMount,
   isVerifying,
   backLabel,
   onBack,
@@ -32,12 +32,12 @@ export function BackupCodeForm({
 
   // Focus manually (like OTPInput) so a dialog's onOpenAutoFocus can blur other elements first
   useEffect(() => {
-    if (!autoFocus) {
+    if (!focusOnMount) {
       return
     }
     const timeoutId = setTimeout(() => inputRef.current?.focus(), 0)
     return () => clearTimeout(timeoutId)
-  }, [autoFocus])
+  }, [focusOnMount])
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
