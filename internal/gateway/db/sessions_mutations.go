@@ -1,7 +1,6 @@
 package db
 
 import (
-	"encoding/json"
 	"fmt"
 	"time"
 
@@ -144,44 +143,6 @@ func (d *Database) AttachTrustedDeviceToSession(sessionID int64, trustedDeviceID
 	)
 	if err != nil {
 		return fmt.Errorf("failed to attach trusted device to session: %w", err)
-	}
-	return nil
-}
-
-// UpdateSessionMetadata merges new metadata into an existing session's metadata field.
-func (d *Database) UpdateSessionMetadata(sessionID int64, metadata map[string]interface{}) error {
-	if len(metadata) == 0 {
-		return nil
-	}
-
-	session, err := d.GetSessionByID(sessionID)
-	if err != nil {
-		return fmt.Errorf("failed to get session: %w", err)
-	}
-	if session == nil {
-		return fmt.Errorf("session not found")
-	}
-
-	existingMeta := make(map[string]interface{})
-	if len(session.Metadata) > 0 {
-		if err := json.Unmarshal(session.Metadata, &existingMeta); err != nil {
-			return fmt.Errorf("failed to parse existing metadata: %w", err)
-		}
-	}
-
-	for k, v := range metadata {
-		existingMeta[k] = v
-	}
-
-	metaJSON := marshalJSONMap(existingMeta)
-
-	_, err = d.exec(
-		"UPDATE user_sessions SET metadata = ?, updated_at = NOW() WHERE id = ?",
-		metaJSON,
-		sessionID,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to update session metadata: %w", err)
 	}
 	return nil
 }

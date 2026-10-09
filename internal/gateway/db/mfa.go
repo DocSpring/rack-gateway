@@ -216,7 +216,7 @@ func (d *Database) ListAllMFAMethods(userID int64) ([]*MFAMethod, error) {
 func (d *Database) queryMFAMethods(userID int64, includeUnconfirmed bool) ([]*MFAMethod, error) {
 	query := `
         SELECT id, user_id, type, label, secret, credential_id, public_key, transports, metadata,
-               cli_capable, created_at, confirmed_at, last_used_at
+               cli_capable, webauthn_sign_count, created_at, confirmed_at, last_used_at
         FROM mfa_methods WHERE user_id = ?`
 	if !includeUnconfirmed {
 		query += " AND confirmed_at IS NOT NULL"
@@ -297,7 +297,7 @@ func (d *Database) UpdateMFAMethodCredential(
 func (d *Database) GetMFAMethodByID(id int64) (*MFAMethod, error) {
 	query := `
         SELECT id, user_id, type, label, secret, credential_id, public_key, transports, metadata,
-               cli_capable, created_at, confirmed_at, last_used_at
+               cli_capable, webauthn_sign_count, created_at, confirmed_at, last_used_at
         FROM mfa_methods WHERE id = ?
     `
 	method, err := scanMFAMethod(d.queryRow(query, id))

@@ -864,8 +864,8 @@ func testCLIWebAuthnMFA(t *testing.T, s *TestServers) {
 	require.Equal(t, http.StatusOK, startResp.StatusCode)
 
 	var startResponse struct {
-		Options     map[string]interface{} `json:"options"`
-		SessionData string                 `json:"session_data"`
+		Options     json.RawMessage `json:"options"`
+		SessionData string          `json:"session_data"`
 	}
 	err = json.NewDecoder(startResp.Body).Decode(&startResponse)
 	startResp.Body.Close()
@@ -874,7 +874,7 @@ func testCLIWebAuthnMFA(t *testing.T, s *TestServers) {
 
 	// Step 2: Generate valid assertion using mock credential
 	// Use the same origin as the gateway (http://localhost:8448 in dev mode)
-	assertionJSON, err := credential.GenerateAssertionForSession([]byte(startResponse.SessionData), "http://localhost:"+gatewayPort)
+	assertionJSON, err := credential.GenerateAssertionFromOptionsJSON(startResponse.Options, "http://localhost:"+gatewayPort)
 	require.NoError(t, err, "failed to generate assertion")
 
 	// Step 3: Format assertion the way CLI does (base64-encoded JSON with session_data and assertion_response)

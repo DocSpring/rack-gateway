@@ -176,6 +176,7 @@ type MFAMethod struct {
 	Transports   []string   `json:"transports,omitempty"`
 	Metadata     []byte     `json:"metadata,omitempty"`
 	CLICapable   bool       `json:"cli_capable"`
+	SignCount    uint32     `json:"-"` // last WebAuthn signature counter seen
 	CreatedAt    time.Time  `json:"created_at"`
 	ConfirmedAt  *time.Time `json:"confirmed_at,omitempty"`
 	LastUsedAt   *time.Time `json:"last_used_at,omitempty"`

@@ -46,14 +46,14 @@ func TestEnforceMFARequirements_AllowsInlineWebAuthn(t *testing.T) {
 	mfaService, mfaSettings, sessionManager := setupMFAHelpers(t, database)
 	session := confirmSession(t, sessionManager, user)
 
-	_, sessionData, err := mfaService.StartWebAuthnAssertion(user)
+	options, challengeID, err := mfaService.StartWebAuthnAssertion(user, &session.ID)
 	require.NoError(t, err)
 
-	assertionJSON, err := credential.GenerateAssertionForSession(sessionData, "http://localhost")
+	assertionJSON, err := credential.GenerateAssertion(options, "http://localhost")
 	require.NoError(t, err)
 
 	inlinePayload := map[string]string{
-		"session_data":       string(sessionData),
+		"session_data":       challengeID,
 		"assertion_response": assertionJSON,
 	}
 	inlineBytes, err := json.Marshal(inlinePayload)

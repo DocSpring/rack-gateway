@@ -1,7 +1,7 @@
 package cli
 
 import (
-	"fmt"
+	"net/url"
 	"os"
 	"reflect"
 	"strings"
@@ -21,15 +21,29 @@ import (
 //   - No MFA: abc123def456...
 //   - TOTP:   abc123def456....totp.123456
 //   - WebAuthn: abc123def456....webauthn.base64_assertion
+//
+// The auth is percent-encoded so inline WebAuthn data (standard base64 with '/', '+', '=') can't break URL
+// parsing, which would otherwise fail with an error message containing the session token.
 func buildRackURL(gatewayURL, auth string) string {
-	// Add /api/v1/rack-proxy prefix to the gateway URL
-	base := strings.TrimSuffix(gatewayURL, "/") + "/api/v1/rack-proxy"
-
-	// Inject auth as basic auth password
-	if strings.HasPrefix(base, "http://") {
-		return fmt.Sprintf("http://convox:%s@%s", auth, strings.TrimPrefix(base, "http://"))
+	scheme := "https"
+	host := strings.TrimSuffix(gatewayURL, "/")
+	if rest, ok := strings.CutPrefix(host, "http://"); ok {
+		scheme, host = "http", rest
+	} else {
+		host = strings.TrimPrefix(host, "https://")
 	}
-	return fmt.Sprintf("https://convox:%s@%s", auth, strings.TrimPrefix(base, "https://"))
+	host, basePath, _ := strings.Cut(host, "/")
+	if basePath != "" {
+		basePath = "/" + basePath
+	}
+
+	u := url.URL{
+		Scheme: scheme,
+		User:   url.UserPassword("convox", auth),
+		Host:   host,
+		Path:   basePath + "/api/v1/rack-proxy",
+	}
+	return u.String()
 }
 
 // Global flags that should NEVER be forwarded to the Convox SDK
@@ -63,7 +77,11 @@ func SetupConvoxCommandWithMFA(
 	if err != nil {
 		return nil, nil, err
 	}
+	if err := requireSecureGatewayURL(gatewayURL); err != nil {
+		return nil, nil, err
+	}
 
+	secureConvoxSDK()
 	client, err := sdk.New(buildRackURL(gatewayURL, auth))
 	if err != nil {
 		return nil, nil, err

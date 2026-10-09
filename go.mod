@@ -10,6 +10,7 @@ require (
 	github.com/casbin/casbin/v2 v2.127.0
 	github.com/convox/convox v0.0.0-20251023182947-1ddac03d0705
 	github.com/convox/stdcli v0.0.0-20240813092220-8beeb2dc2420
+	github.com/convox/stdsdk v0.0.3
 	github.com/coreos/go-oidc/v3 v3.15.0
 	github.com/fxamacker/cbor/v2 v2.9.0
 	github.com/getsentry/sentry-go v0.29.0
@@ -108,7 +109,6 @@ require (
 	github.com/convox/inotify v0.0.0-20170313035821-b56f5149b5c6 // indirect
 	github.com/convox/logger v0.0.0-20180522214415-e39179955b52 // indirect
 	github.com/convox/stdapi v1.1.3-0.20221110171947-8d98f61e61ed // indirect
-	github.com/convox/stdsdk v0.0.3 // indirect
 	github.com/convox/version v0.0.0-20160822184233-ffefa0d565d2 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.6 // indirect
 	github.com/creack/pty v1.1.18 // indirect

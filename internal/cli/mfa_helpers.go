@@ -4,7 +4,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"os"
 	"strings"
 	"time"
@@ -261,55 +260,17 @@ func CollectMFAAuthWithPIN(
 // collectWebAuthnAssertionWithPIN collects a WebAuthn assertion, optionally using a cached PIN.
 // Returns the assertion data, the PIN used (for caching), and any error.
 func collectWebAuthnAssertionWithPIN(baseURL, bearer, cachedPIN string) (string, string, error) {
-	endpoint := fmt.Sprintf("%s/api/v1/auth/mfa/webauthn/assertion/start", baseURL)
-	req, err := http.NewRequest(http.MethodPost, endpoint, http.NoBody)
+	start, err := startWebAuthnAssertion(baseURL, bearer)
 	if err != nil {
 		return "", "", err
 	}
-	req.Header.Set("Authorization", "Bearer "+bearer)
 
-	resp, err := HTTPClient.Do(req)
+	options, err := buildAssertionOptions(baseURL, extractAllowedCredentialIDs(start), start)
 	if err != nil {
 		return "", "", err
 	}
-	defer func() { _ = resp.Body.Close() }()
 
-	if resp.StatusCode != http.StatusOK {
-		return "", "", fmt.Errorf("failed to start WebAuthn assertion")
-	}
-
-	var startResp struct {
-		Options struct {
-			PublicKey struct {
-				Challenge        string `json:"challenge"`
-				RPID             string `json:"rpId"`
-				AllowCredentials []struct {
-					ID string `json:"id"`
-				} `json:"allowCredentials"`
-				Timeout          int    `json:"timeout"`
-				UserVerification string `json:"userVerification"`
-			} `json:"publicKey"`
-		} `json:"options"`
-		SessionData string `json:"session_data"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&startResp); err != nil {
-		return "", "", err
-	}
-
-	allowedCreds := make([]string, 0, len(startResp.Options.PublicKey.AllowCredentials))
-	for _, cred := range startResp.Options.PublicKey.AllowCredentials {
-		allowedCreds = append(allowedCreds, cred.ID)
-	}
-
-	assertion, pinUsed, err := webauthn.GetAssertionWithCachedPIN(webauthn.AssertionOptions{
-		Challenge:        startResp.Options.PublicKey.Challenge,
-		RPID:             startResp.Options.PublicKey.RPID,
-		AllowCredentials: allowedCreds,
-		Timeout:          startResp.Options.PublicKey.Timeout,
-		UserVerification: startResp.Options.PublicKey.UserVerification,
-		Origin:           baseURL,
-	}, cachedPIN)
+	assertion, pinUsed, err := webauthn.GetAssertionWithCachedPIN(options, cachedPIN)
 	if err != nil {
 		return "", "", err
 	}
@@ -320,7 +281,7 @@ func collectWebAuthnAssertionWithPIN(baseURL, bearer, cachedPIN string) (string,
 	}
 
 	inlineData := map[string]any{
-		"session_data":       startResp.SessionData,
+		"session_data":       start.SessionData,
 		"assertion_response": assertionJSON,
 	}
 

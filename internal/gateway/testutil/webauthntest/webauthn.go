@@ -8,14 +8,15 @@ import (
 	"crypto/sha256"
 	"encoding/asn1"
 	"encoding/base64"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"math/big"
 	"strings"
 
 	"github.com/fxamacker/cbor/v2"
+	"github.com/go-webauthn/webauthn/protocol"
 	"github.com/go-webauthn/webauthn/protocol/webauthncose"
-	"github.com/go-webauthn/webauthn/webauthn"
 )
 
 // MockCredential represents a mock WebAuthn credential for testing
@@ -23,6 +24,10 @@ type MockCredential struct {
 	ID         []byte
 	PublicKey  []byte
 	PrivateKey *ecdsa.PrivateKey
+	// Counter is the signature counter reported in generated assertions.
+	Counter uint32
+	// WithoutUserVerification clears the UV flag (e.g. a key used without its PIN).
+	WithoutUserVerification bool
 }
 
 // GenerateMockCredential creates a mock WebAuthn credential with a valid key pair
@@ -52,43 +57,38 @@ func GenerateMockCredential() (*MockCredential, error) {
 	}, nil
 }
 
-// GenerateAssertionForSession creates a valid WebAuthn assertion response for the
-// provided session payload returned by StartWebAuthnAssertion. The origin should
-// match the configured WebAuthn origin (e.g., "http://localhost").
-func (mc *MockCredential) GenerateAssertionForSession(sessionJSON []byte, origin string) (string, error) {
-	if len(sessionJSON) == 0 {
-		return "", fmt.Errorf("session data is required")
+// GenerateAssertion creates a valid WebAuthn assertion response for the options returned by
+// StartWebAuthnAssertion. The origin should match the configured WebAuthn origin (e.g. "http://localhost").
+// The signature counter in the authenticator data is mc.Counter.
+func (mc *MockCredential) GenerateAssertion(options *protocol.CredentialAssertion, origin string) (string, error) {
+	if options == nil {
+		return "", fmt.Errorf("assertion options are required")
 	}
-
-	var session webauthn.SessionData
-	if err := json.Unmarshal(sessionJSON, &session); err != nil {
-		return "", fmt.Errorf("failed to unmarshal session: %w", err)
+	request := options.Response
+	if strings.TrimSpace(request.RelyingPartyID) == "" {
+		return "", fmt.Errorf("options missing relying party id")
 	}
-
-	if strings.TrimSpace(session.RelyingPartyID) == "" {
-		return "", fmt.Errorf("session missing relying party id")
-	}
-
-	if _, err := base64.RawURLEncoding.DecodeString(session.Challenge); err != nil {
-		return "", fmt.Errorf("failed to decode challenge: %w", err)
+	if len(request.Challenge) == 0 {
+		return "", fmt.Errorf("options missing challenge")
 	}
 
 	credentialID := mc.ID
-	if len(session.AllowedCredentialIDs) > 0 {
-		credentialID = session.AllowedCredentialIDs[0]
+	if len(request.AllowedCredentials) > 0 {
+		credentialID = request.AllowedCredentials[0].CredentialID
 	}
 	if len(credentialID) == 0 {
-		return "", fmt.Errorf("session missing credential id")
+		return "", fmt.Errorf("options missing credential id")
 	}
 	if len(mc.ID) > 0 && !bytes.Equal(mc.ID, credentialID) {
-		return "", fmt.Errorf("mock credential does not match session credential")
+		return "", fmt.Errorf("mock credential does not match allowed credential")
 	}
 
 	if strings.TrimSpace(origin) == "" {
-		origin = fmt.Sprintf("http://%s", session.RelyingPartyID)
+		origin = fmt.Sprintf("http://%s", request.RelyingPartyID)
 	}
 
-	assertion, err := mc.buildAssertion(session.Challenge, session.RelyingPartyID, credentialID, origin, session.UserID)
+	challenge := base64.RawURLEncoding.EncodeToString(request.Challenge)
+	assertion, err := mc.buildAssertion(challenge, request.RelyingPartyID, credentialID, origin, nil)
 	if err != nil {
 		return "", err
 	}
@@ -99,6 +99,16 @@ func (mc *MockCredential) GenerateAssertionForSession(sessionJSON []byte, origin
 	}
 
 	return string(assertionBytes), nil
+}
+
+// GenerateAssertionFromOptionsJSON is GenerateAssertion for the JSON "options" object returned by the
+// /auth/mfa/webauthn/assertion/start endpoint.
+func (mc *MockCredential) GenerateAssertionFromOptionsJSON(optionsJSON []byte, origin string) (string, error) {
+	var options protocol.CredentialAssertion
+	if err := json.Unmarshal(optionsJSON, &options); err != nil {
+		return "", fmt.Errorf("failed to unmarshal assertion options: %w", err)
+	}
+	return mc.GenerateAssertion(&options, origin)
 }
 
 func (mc *MockCredential) buildAssertion(
@@ -112,6 +122,10 @@ func (mc *MockCredential) buildAssertion(
 	authData := make([]byte, 37)
 	copy(authData[0:32], rpIDHash[:])
 	authData[32] = 0x05 // user present + user verified
+	if mc.WithoutUserVerification {
+		authData[32] = 0x01 // user present only
+	}
+	binary.BigEndian.PutUint32(authData[33:37], mc.Counter)
 
 	clientDataJSON := map[string]interface{}{
 		"type":        "webauthn.get",

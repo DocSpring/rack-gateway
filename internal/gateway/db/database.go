@@ -390,6 +390,7 @@ func (d *Database) dropAllTables() error {
 
 	// Drop dependent tables first to satisfy foreign keys.
 	tables := []string{
+		"webauthn_challenges",
 		"user_resources",
 		"deploy_approval_requests",
 		"api_tokens",

@@ -66,15 +66,17 @@ type VerifyMFAResponse struct {
 	TrustedDeviceCookie   bool      `json:"trusted_device_cookie"     validate:"required"`
 }
 
-// WebAuthnAssertionStartResponse contains WebAuthn assertion options and session data.
+// WebAuthnAssertionStartResponse contains WebAuthn assertion options and the challenge ID.
 type WebAuthnAssertionStartResponse struct {
 	Options interface{} `json:"options"      validate:"required"` // protocol.CredentialAssertion
-	// SessionData is the serialized session to send back with verification
+	// SessionData is an opaque, single-use challenge ID to send back with the assertion.
+	// The challenge itself is stored server-side and expires after a few minutes.
 	SessionData string `json:"session_data" validate:"required"`
 }
 
 // VerifyWebAuthnAssertionRequest contains the WebAuthn assertion response to verify.
 type VerifyWebAuthnAssertionRequest struct {
+	// SessionData is the challenge ID returned by /auth/mfa/webauthn/assertion/start.
 	SessionData       string `json:"session_data"       binding:"required"`
 	AssertionResponse string `json:"assertion_response" binding:"required"`
 	TrustDevice       bool   `json:"trust_device"`
