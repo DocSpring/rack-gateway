@@ -193,16 +193,20 @@ func (s *Service) findAndConfirmCredential(
 		return nil, fmt.Errorf("credential not found")
 	}
 
-	if credential.Authenticator.CloneWarning {
+	advanced := false
+	if !credential.Authenticator.CloneWarning {
+		var err error
+		advanced, err = s.db.AdvanceMFAMethodSignCount(method.ID, credential.Authenticator.SignCount)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if !advanced {
 		attempt.log(s, &method.ID, false, "sign_count_not_increased")
 		if err := s.checkAndLockAccount(attempt.userID); err != nil {
 			return nil, err
 		}
 		return nil, fmt.Errorf("security key signature counter did not increase; the key may have been cloned")
-	}
-
-	if err := s.db.UpdateMFAMethodSignCount(method.ID, credential.Authenticator.SignCount); err != nil {
-		return nil, err
 	}
 	if err := s.touchMFAMethod(method); err != nil {
 		return nil, err

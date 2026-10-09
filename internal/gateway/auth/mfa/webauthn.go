@@ -211,5 +211,5 @@ func (s *Service) storeParsedCredential(
 	); err != nil {
 		return err
 	}
-	return s.db.UpdateMFAMethodSignCount(methodID, credential.Authenticator.SignCount)
+	return s.db.SetMFAMethodSignCount(methodID, credential.Authenticator.SignCount)
 }

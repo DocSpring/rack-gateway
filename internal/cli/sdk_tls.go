@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -25,9 +26,14 @@ var sdkRootCAs *x509.CertPool
 // MFA proof in Basic auth, so a man-in-the-middle with any certificate could capture them. HTTP requests
 // get a verifying client; websockets get a NetDialTLSContext hook, which gorilla uses instead of
 // TLSClientConfig, so stdsdk's per-call override has no effect.
+//
+// Gateway connections ignore HTTP(S)_PROXY / ALL_PROXY, as stdsdk's own HTTP client always did. gorilla
+// would otherwise use the TLS hook to dial the proxy itself (and skip TLS to the gateway), which breaks
+// logs, exec and run behind a proxy.
 func secureConvoxSDK() {
 	stdsdk.DefaultClient = newVerifyingSDKClient()
 	websocket.DefaultDialer.NetDialTLSContext = dialVerifiedTLS
+	websocket.DefaultDialer.Proxy = nil
 }
 
 func verifyingTLSConfig(serverName string) *tls.Config {
@@ -43,6 +49,9 @@ func newVerifyingSDKClient() *http.Client {
 	transport.TLSClientConfig = verifyingTLSConfig("")
 	transport.TLSHandshakeTimeout = 10 * time.Second
 	transport.IdleConnTimeout = 90 * time.Second
+	transport.Proxy = nil
+	// HTTP/1.1, as with stdsdk's own client (its custom TLS config never negotiated h2).
+	transport.ForceAttemptHTTP2 = false
 	return &http.Client{Transport: transport}
 }
 
@@ -58,24 +67,37 @@ func dialVerifiedTLS(ctx context.Context, network, addr string) (net.Conn, error
 	return dialer.DialContext(ctx, network, addr)
 }
 
-// requireSecureGatewayURL refuses to send credentials over plain HTTP unless the gateway is on this machine.
-func requireSecureGatewayURL(gatewayURL string) error {
-	u, err := url.Parse(strings.TrimSpace(gatewayURL))
+// parseGatewayURL parses a gateway base URL and refuses ones the CLI must not send credentials to: plain HTTP
+// to anything other than this machine, and URLs carrying user info, a query or a fragment.
+func parseGatewayURL(raw string) (*url.URL, error) {
+	u, err := url.Parse(strings.TrimSpace(raw))
 	if err != nil {
-		return fmt.Errorf("invalid gateway URL %q: %w", gatewayURL, err)
+		var urlErr *url.Error
+		if errors.As(err, &urlErr) {
+			err = urlErr.Err
+		}
+		return nil, fmt.Errorf("invalid gateway URL: %w", err)
+	}
+	if u.Host == "" {
+		return nil, fmt.Errorf("invalid gateway URL %q: missing host", u.Redacted())
+	}
+	if u.User != nil || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" {
+		return nil, fmt.Errorf(
+			"invalid gateway URL %q: it must not contain user info, a query or a fragment", u.Redacted(),
+		)
 	}
 	switch u.Scheme {
 	case "https":
-		return nil
+		return u, nil
 	case "http":
 		if isLoopbackHost(u.Hostname()) {
-			return nil
+			return u, nil
 		}
-		return fmt.Errorf(
+		return nil, fmt.Errorf(
 			"refusing to send credentials to %s over plain HTTP; use an https:// gateway URL", u.Host,
 		)
 	default:
-		return fmt.Errorf("unsupported gateway URL scheme %q", u.Scheme)
+		return nil, fmt.Errorf("unsupported gateway URL scheme %q", u.Scheme)
 	}
 }
 

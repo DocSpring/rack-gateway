@@ -41,6 +41,11 @@ func NormalizeGatewayURL(raw string) (string, error) {
 		trimmed = "https://" + trimmed
 	}
 	trimmed = strings.TrimSuffix(trimmed, "/")
+	// Every CLI request carries the session token, so plain HTTP is refused here for all of them
+	// (MFA calls, native API calls and proxied Convox commands), not just the Convox SDK.
+	if _, err := parseGatewayURL(trimmed); err != nil {
+		return "", err
+	}
 	return trimmed, nil
 }
 

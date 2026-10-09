@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"fmt"
 	"net/url"
 	"os"
 	"reflect"
@@ -22,28 +23,17 @@ import (
 //   - TOTP:   abc123def456....totp.123456
 //   - WebAuthn: abc123def456....webauthn.base64_assertion
 //
-// The auth is percent-encoded so inline WebAuthn data (standard base64 with '/', '+', '=') can't break URL
-// parsing, which would otherwise fail with an error message containing the session token.
-func buildRackURL(gatewayURL, auth string) string {
-	scheme := "https"
-	host := strings.TrimSuffix(gatewayURL, "/")
-	if rest, ok := strings.CutPrefix(host, "http://"); ok {
-		scheme, host = "http", rest
-	} else {
-		host = strings.TrimPrefix(host, "https://")
+// The gateway URL is parsed and validated first (see parseGatewayURL), and the credential is set on the parsed
+// URL, so no error can echo the session token.
+func buildRackURL(gatewayURL, auth string) (string, error) {
+	u, err := parseGatewayURL(gatewayURL)
+	if err != nil {
+		return "", err
 	}
-	host, basePath, _ := strings.Cut(host, "/")
-	if basePath != "" {
-		basePath = "/" + basePath
-	}
-
-	u := url.URL{
-		Scheme: scheme,
-		User:   url.UserPassword("convox", auth),
-		Host:   host,
-		Path:   basePath + "/api/v1/rack-proxy",
-	}
-	return u.String()
+	u.User = url.UserPassword("convox", auth)
+	u.Path = strings.TrimSuffix(u.Path, "/") + "/api/v1/rack-proxy"
+	u.RawPath = ""
+	return u.String(), nil
 }
 
 // Global flags that should NEVER be forwarded to the Convox SDK
@@ -77,14 +67,16 @@ func SetupConvoxCommandWithMFA(
 	if err != nil {
 		return nil, nil, err
 	}
-	if err := requireSecureGatewayURL(gatewayURL); err != nil {
+	rackURL, err := buildRackURL(gatewayURL, auth)
+	if err != nil {
 		return nil, nil, err
 	}
 
 	secureConvoxSDK()
-	client, err := sdk.New(buildRackURL(gatewayURL, auth))
+	client, err := sdk.New(rackURL)
 	if err != nil {
-		return nil, nil, err
+		// The error would quote rackURL, which carries the session token.
+		return nil, nil, fmt.Errorf("failed to configure the Convox client for %s", gatewayURL)
 	}
 
 	engine := newStdCLIEngine(cobraCmd)

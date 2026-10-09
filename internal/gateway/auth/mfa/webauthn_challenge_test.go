@@ -173,3 +173,58 @@ func TestWebAuthnAssertionAllowsZeroCounterAuthenticators(t *testing.T) {
 		require.NoError(t, err)
 	}
 }
+
+// Two assertions with the same counter (a cloned key racing the real one): only one may succeed.
+func TestWebAuthnSignCounterAdvancesAtomically(t *testing.T) {
+	t.Parallel()
+	f := newWebAuthnFixture(t)
+	f.credential.Counter = 10
+	_, _, err := f.assert(t, nil, nil)
+	require.NoError(t, err)
+
+	f.credential.Counter = 11
+	first, firstID := f.signedAssertion(t)
+	second, secondID := f.signedAssertion(t)
+	results := make(chan error, 2)
+	for _, pair := range [][2]string{{firstID, first}, {secondID, second}} {
+		go func(challengeID, assertionJSON string) {
+			_, err := f.service.VerifyWebAuthnAssertion(
+				f.user, []byte(challengeID), []byte(assertionJSON), "127.0.0.1", "test", nil,
+			)
+			results <- err
+		}(pair[0], pair[1])
+	}
+	succeeded := 0
+	for i := 0; i < 2; i++ {
+		if <-results == nil {
+			succeeded++
+		}
+	}
+	require.Equal(t, 1, succeeded, "exactly one assertion with counter 11 may succeed")
+}
+
+func TestAdvanceMFAMethodSignCount(t *testing.T) {
+	t.Parallel()
+	f := newWebAuthnFixture(t)
+	advance := func(count uint32) bool {
+		ok, err := f.database.AdvanceMFAMethodSignCount(f.method.ID, count)
+		require.NoError(t, err)
+		return ok
+	}
+	require.True(t, advance(0), "authenticators that don't count stay at 0")
+	require.True(t, advance(0))
+	require.True(t, advance(5))
+	require.False(t, advance(5), "the same counter twice")
+	require.False(t, advance(0), "dropping back to 0")
+	require.True(t, advance(6))
+}
+
+// signedAssertion starts a ceremony and signs it with the credential's current counter.
+func (f *webAuthnFixture) signedAssertion(t *testing.T) (string, string) {
+	t.Helper()
+	options, challengeID, err := f.service.StartWebAuthnAssertion(f.user, nil)
+	require.NoError(t, err)
+	assertionJSON, err := f.credential.GenerateAssertion(options, "http://localhost")
+	require.NoError(t, err)
+	return assertionJSON, challengeID
+}

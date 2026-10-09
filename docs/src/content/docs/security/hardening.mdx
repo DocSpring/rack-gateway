@@ -94,6 +94,10 @@ Require MFA for all users or privileged roles:
 | Step-up Window | 10 minutes | Shorter for higher security |
 | Trusted Device TTL | 7 days | Or disable for highest security |
 
+The CLI verifies the gateway's TLS certificate (system roots) for all requests, including websockets, and
+refuses plain `http://` gateways except on loopback, so serve the gateway over HTTPS with a publicly trusted
+or system-trusted certificate.
+
 ### Session Security
 
 Configure secure session settings:

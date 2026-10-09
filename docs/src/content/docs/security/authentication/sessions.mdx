@@ -255,6 +255,20 @@ For sensitive actions, users may need to re-verify MFA even within an active ses
 - After step-up, `recent_step_up_at` is updated
 - Subsequent sensitive actions within window don't require re-verification
 
+### Inline MFA Proofs
+
+The CLI sends its MFA proof (a TOTP code or WebAuthn assertion) with every request of a command. Each proof
+verifies only once: TOTP codes can't be replayed and WebAuthn challenges are single-use. The first request that
+needs MFA verifies the proof and starts the session's step-up window, so the command's later requests within the
+window need no further proof.
+
+### WebAuthn Challenges
+
+WebAuthn challenges are stored server-side in `webauthn_challenges`, bound to the user and the session that
+started the ceremony, deleted when used and expired after 5 minutes. Clients only hold an opaque challenge ID.
+User verification (PIN or biometric) is required, and each credential's signature counter must increase
+(authenticators that always report 0 are allowed); the compare and store is a single statement.
+
 ## CSRF Protection
 
 Web sessions require CSRF tokens:

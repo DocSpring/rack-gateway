@@ -102,13 +102,33 @@ func (d *Database) ConsumeSessionWebAuthnChallenge(
 	return scanWebAuthnChallenge(row)
 }
 
-// UpdateMFAMethodSignCount stores the latest WebAuthn signature counter for a credential.
-func (d *Database) UpdateMFAMethodSignCount(methodID int64, signCount uint32) error {
+// SetMFAMethodSignCount stores the signature counter of a newly registered credential.
+func (d *Database) SetMFAMethodSignCount(methodID int64, signCount uint32) error {
 	_, err := d.exec("UPDATE mfa_methods SET webauthn_sign_count = ? WHERE id = ?", signCount, methodID)
 	if err != nil {
-		return fmt.Errorf("failed to update webauthn sign count: %w", err)
+		return fmt.Errorf("failed to store webauthn sign count: %w", err)
 	}
 	return nil
+}
+
+// AdvanceMFAMethodSignCount stores a WebAuthn signature counter only if it moves forward: it must exceed the
+// stored counter, or both must be 0 (authenticators that don't count). The compare and store are one
+// statement, so two concurrent assertions with the same counter (a cloned key racing the real one) can't
+// both succeed. It returns false when the counter didn't advance.
+func (d *Database) AdvanceMFAMethodSignCount(methodID int64, signCount uint32) (bool, error) {
+	res, err := d.exec(`
+		UPDATE mfa_methods SET webauthn_sign_count = ?
+		WHERE id = ? AND (webauthn_sign_count < ? OR (? = 0 AND webauthn_sign_count = 0))`,
+		signCount, methodID, signCount, signCount,
+	)
+	if err != nil {
+		return false, fmt.Errorf("failed to update webauthn sign count: %w", err)
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("failed to update webauthn sign count: %w", err)
+	}
+	return rows == 1, nil
 }
 
 func scanWebAuthnChallenge(row *sql.Row) (*WebAuthnChallenge, error) {
