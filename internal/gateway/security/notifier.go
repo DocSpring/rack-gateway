@@ -150,6 +150,18 @@ func (n *Notifier) shouldSendEmail(recipient, subject, eventType string) bool {
 	return true
 }
 
+// NewCLISession emails the user when a CLI session is created for their account, so a login they
+// did not start is noticed.
+func (n *Notifier) NewCLISession(userEmail, userName, deviceName, ipAddress, userAgent string) {
+	n.enqueueSecurityNotification(userEmail, "New CLI Login", "cli_session:"+deviceName, jobemail.NewCLISessionArgs{
+		UserEmail:  userEmail,
+		UserName:   userName,
+		DeviceName: deviceName,
+		IPAddress:  ipAddress,
+		UserAgent:  userAgent,
+	})
+}
+
 // FailedMFAAttempt logs and notifies about failed MFA verification
 func (n *Notifier) FailedMFAAttempt(userEmail, userName, ipAddress, userAgent string) {
 	// Audit log

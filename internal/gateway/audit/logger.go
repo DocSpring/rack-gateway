@@ -233,7 +233,7 @@ func (l *Logger) LogRequest(
 		UserEmail:    userEmail,
 		Method:       r.Method,
 		Path:         path,
-		QueryParams:  r.URL.RawQuery,
+		QueryParams:  RedactQuery(r.URL.RawQuery),
 		Status:       status,
 		LatencyMs:    latency.Milliseconds(),
 		RBACDecision: rbacDecision,
@@ -368,9 +368,8 @@ func (_ *Logger) BuildDetailsJSON(r *http.Request) string {
 		"path":   r.URL.Path,
 	}
 
-	// Add query parameters as-is (only app IDs and pagination params)
 	if r.URL.RawQuery != "" {
-		details["query"] = r.URL.RawQuery
+		details["query"] = RedactQuery(r.URL.RawQuery)
 	}
 
 	// For exec, include command and process id if available

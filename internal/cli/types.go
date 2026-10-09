@@ -46,18 +46,19 @@ type RackStatus struct {
 	StatusLines []string
 }
 
-// LoginStartResponse is the response from /api/v1/auth/cli/start
-type LoginStartResponse struct {
-	AuthURL      string `json:"auth_url"`
-	State        string `json:"state"`
-	CodeVerifier string `json:"code_verifier"`
+// LoginStartRequest is the request to /api/v1/auth/cli/start. The CLI keeps the PKCE code
+// verifier; the gateway only sees its S256 challenge.
+type LoginStartRequest struct {
+	CodeChallenge       string `json:"code_challenge"`
+	CodeChallengeMethod string `json:"code_challenge_method"`
+	RedirectURI         string `json:"redirect_uri"`
+	State               string `json:"state"`
+	DeviceName          string `json:"device_name"`
 }
 
-// LoginCallbackRequest is the request to /api/v1/auth/cli/complete
-type LoginCallbackRequest struct {
-	Code         string `json:"code"`
-	State        string `json:"state"`
-	CodeVerifier string `json:"code_verifier"`
+// LoginStartResponse is the response from /api/v1/auth/cli/start
+type LoginStartResponse struct {
+	AuthURL string `json:"auth_url"`
 }
 
 // LoginResponse is the response from /api/v1/auth/cli/complete
@@ -101,9 +102,6 @@ type MFAMethodResponse struct {
 	LastUsedAt  string `json:"last_used_at,omitempty"`
 	IsEnrolling bool   `json:"is_enrolling"`
 }
-
-// ErrLoginPending is returned when login is still pending browser completion
-var ErrLoginPending = errors.New("login pending")
 
 // ErrTokenExpired is returned when a stored or gateway-authenticated token has expired.
 var ErrTokenExpired = errors.New("token expired")

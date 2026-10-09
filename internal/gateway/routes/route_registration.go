@@ -25,6 +25,7 @@ func registerAuthRoutes(api *gin.RouterGroup, cfg *Config, h *handlerSet) {
 	authGroup.POST("/auth/cli/complete", h.auth.CLILoginComplete)
 	authGroup.GET("/auth/cli/mfa", h.auth.CLILoginMFAForm)
 	authGroup.POST("/auth/cli/mfa", h.auth.CLILoginMFASubmit)
+	authGroup.GET("/auth/cli/return", h.auth.CLILoginReturn)
 	authGroup.GET("/auth/web/login", h.auth.WebLoginStart)
 	authGroup.HEAD("/auth/web/login", h.auth.WebLoginStart)
 	authGroup.GET("/auth/web/callback", h.auth.WebLoginCallback)

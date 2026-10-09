@@ -5,6 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
 	"github.com/DocSpring/rack-gateway/internal/gateway/config"
 )
 
@@ -38,7 +39,10 @@ var staticAssetExtensions = map[string]struct{}{
 // This middleware should be added early in the chain to capture all requests.
 func DebugLogging(_ *config.Config) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		path := c.Request.URL.RequestURI()
+		path := c.Request.URL.EscapedPath()
+		if c.Request.URL.RawQuery != "" {
+			path += "?" + audit.RedactQuery(c.Request.URL.RawQuery)
+		}
 		logReqInfo, logReqHeaders, logReqBody, logRespHeaders, logRespBody := shouldLogDebugTopics(path)
 
 		if !logReqInfo && !logReqHeaders && !logReqBody && !logRespHeaders && !logRespBody {

@@ -20,11 +20,10 @@ import (
 )
 
 const (
-	webOAuthStateCookie       = "rgw_oauth_state"
-	webOAuthReturnToCookie    = "rgw_return_to"
-	webOAuthStateTTL          = 5 * time.Minute
-	trustedDeviceCookie       = "rgw_trusted_device"
-	cliEnrollmentErrorMessage = "You must set up multi-factor authentication before you can continue using the CLI."
+	webOAuthStateCookie    = "rgw_oauth_state"
+	webOAuthReturnToCookie = "rgw_return_to"
+	webOAuthStateTTL       = 5 * time.Minute
+	trustedDeviceCookie    = "rgw_trusted_device"
 )
 
 func extractSessionToken(c *gin.Context) string {

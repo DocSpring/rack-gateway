@@ -209,9 +209,24 @@ type UpdateEnvValuesResponse struct {
 	ReleaseID string            `json:"release_id,omitempty"`
 }
 
+// CLILoginStartRequest starts a loopback CLI login. The CLI keeps the PKCE code verifier and
+// receives a single-use login code on its loopback redirect URI.
+type CLILoginStartRequest struct {
+	CodeChallenge       string `json:"code_challenge"        binding:"required"`
+	CodeChallengeMethod string `json:"code_challenge_method" binding:"required"`
+	RedirectURI         string `json:"redirect_uri"          binding:"required"`
+	State               string `json:"state"                 binding:"required"`
+	DeviceName          string `json:"device_name"`
+}
+
+// CLILoginStartResponse returns the identity provider URL for the CLI to open in the browser.
+type CLILoginStartResponse struct {
+	AuthURL string `json:"auth_url" validate:"required"`
+}
+
 // CLILoginCompleteRequest represents the payload used to finish the CLI OAuth flow.
 type CLILoginCompleteRequest struct {
-	State         string `json:"state"          binding:"required"`
+	LoginCode     string `json:"login_code"     binding:"required"`
 	CodeVerifier  string `json:"code_verifier"  binding:"required"`
 	DeviceID      string `json:"device_id"`
 	DeviceName    string `json:"device_name"`

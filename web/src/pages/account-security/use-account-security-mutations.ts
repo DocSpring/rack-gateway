@@ -20,7 +20,7 @@ import {
   updatePreferredMFAMethod,
 } from '@/lib/api'
 import { getErrorMessage } from '@/lib/error-utils'
-import { resolveWebRedirect, WebRoute } from '@/lib/routes'
+import { APIRoute, resolveWebRedirect } from '@/lib/routes'
 import {
   createCredential,
   prepareCreationOptions,
@@ -39,7 +39,8 @@ function handleEnrollmentRedirect(
   if (typeof window === 'undefined') return
 
   if (enrollmentChannel === 'cli' && cliState) {
-    window.location.assign(`${WebRoute('cli/auth/success')}?state=${encodeURIComponent(cliState)}`)
+    // The gateway finishes the CLI login and hands the browser back to the waiting CLI.
+    window.location.assign(`${APIRoute('auth/cli/return')}?state=${encodeURIComponent(cliState)}`)
     return
   }
 

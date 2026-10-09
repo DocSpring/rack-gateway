@@ -55,8 +55,9 @@ func OpenBrowser(url string) error {
 		cmd = "xdg-open"
 		args = []string{url}
 	case "windows":
-		cmd = "cmd"
-		args = []string{"/c", "start", url}
+		// rundll32 receives the URL as one argument; `cmd /c start` would let '&' split the command.
+		cmd = "rundll32"
+		args = []string{"url.dll,FileProtocolHandler", url}
 	default:
 		return fmt.Errorf("unsupported platform")
 	}
