@@ -1,177 +1,230 @@
 name: Release
 
+# Releases are built only from v* tags. A repository ruleset restricts creating,
+# moving and deleting v* tags to repository admins.
 on:
   push:
     tags:
       - v*
-  workflow_dispatch: {}
 
-permissions:
-  contents: write
-  checks: read
+# Each job declares the minimum permissions it needs.
+permissions: {}
 
 jobs:
-  docker_build:
+  verify_tag:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: read # wait-for-checks.js reads check runs for the tagged commit
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+      short_sha: ${{ steps.version.outputs.short_sha }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
-          fetch-depth: 0
-          fetch-tags: true
-      - uses: actions/github-script@v7
+          persist-credentials: false
+
+      - name: Validate tag and version
+        id: version
+        env:
+          TAG: ${{ github.ref_name }}
+          COMMIT: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "Error: invalid tag '$TAG' (expected vMAJOR.MINOR.PATCH[-PRERELEASE])" >&2
+            exit 1
+          fi
+          VERSION="${TAG#v}"
+          PACKAGE_VERSION="$(jq -r '.version' web/package.json)"
+          if [ "$VERSION" != "$PACKAGE_VERSION" ]; then
+            echo "Error: tag $TAG does not match web/package.json version $PACKAGE_VERSION" >&2
+            exit 1
+          fi
+          {
+            echo "version=$VERSION"
+            echo "tag=$TAG"
+            echo "short_sha=${COMMIT:0:7}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Wait for CI and E2E checks on the tagged commit
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
         with:
           script: |
             const script = require('./.github/wait-for-checks.js');
             await script({ github, context, core });
 
+  docker_build:
+    runs-on: ubuntu-latest
+    needs: verify_tag
+    permissions:
+      contents: read
+      id-token: write # sign the build provenance attestation
+      attestations: write
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
+    env:
+      IMAGE: docker.io/docspringcom/rack-gateway
+      VERSION: ${{ needs.verify_tag.outputs.version }}
+      SHORT_SHA: ${{ needs.verify_tag.outputs.short_sha }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
 
       - name: Log in to Docker Hub
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
         with:
           username: ${{ secrets.DOCKER_HUB_USERNAME }}
           password: ${{ secrets.DOCKER_HUB_TOKEN }}
 
-      - name: Extract version info
-        run: |
-          if [ "${{ github.event_name }}" = "push" ]; then
-            TAG="${GITHUB_REF#refs/tags/}"
-            echo "VERSION=${TAG#v}" >> "$GITHUB_ENV"
-            echo "GIT_TAG=${TAG}" >> "$GITHUB_ENV"
-          else
-            TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "latest")
-            echo "VERSION=${TAG#v}" >> "$GITHUB_ENV"
-            echo "GIT_TAG=${TAG}" >> "$GITHUB_ENV"
-          fi
-          echo "COMMIT_SHA=$(git rev-parse --short HEAD)" >> "$GITHUB_ENV"
-
+      # No build cache: release images are built from scratch so a cache written by
+      # another workflow run can't influence what gets published.
       - name: Build and push Docker image
-        uses: docker/build-push-action@v6
+        id: build
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
         with:
           context: .
           platforms: linux/amd64
           push: true
+          no-cache: true
           build-args: |
             COMMIT_SHA=${{ github.sha }}
           tags: |
-            docker.io/docspringcom/rack-gateway:${{ env.COMMIT_SHA }}
-            docker.io/docspringcom/rack-gateway:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+            ${{ env.IMAGE }}:v${{ env.VERSION }}
+            ${{ env.IMAGE }}:${{ env.SHORT_SHA }}
+            ${{ env.IMAGE }}:latest
+
+      - name: Attest image build provenance
+        uses: actions/attest-build-provenance@96278af6caaf10aea03fd8d33a09a777ca52d62f # v3.2.0
+        with:
+          subject-name: index.docker.io/docspringcom/rack-gateway
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
 
   release_build:
     runs-on: ubuntu-latest
+    needs: verify_tag
+    permissions:
+      contents: read
+      id-token: write # sign the build provenance attestation
+      attestations: write
+    env:
+      VERSION: ${{ needs.verify_tag.outputs.version }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
-          fetch-depth: 0
-          fetch-tags: true
-      - uses: actions/github-script@v7
-        with:
-          script: |
-            const script = require('./.github/wait-for-checks.js');
-            await script({ github, context, core });
+          persist-credentials: false
+
+      # cache: false so modules restored from another workflow's cache can't end up in the release binary
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version: "1.26.9"
+          cache: false
+
       - name: Build binary
         env:
           CGO_ENABLED: 0
           GOOS: linux
           GOARCH: amd64
+          GOFLAGS: -mod=readonly
         run: |
-          set -e
+          set -euo pipefail
+          BUILD_TIME="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
           go build \
             -tags nofido \
             -buildvcs=false \
-            -ldflags "-s -w" \
+            -trimpath \
+            -ldflags "-s -w -X main.version=${VERSION} -X main.buildTime=${BUILD_TIME}" \
             -o rack-gateway-linux-amd64 \
             ./cmd/rack-gateway/
-      - name: Create archive
+          ./rack-gateway-linux-amd64 version | grep -F "client: ${VERSION}"
+
+      - name: Create archive and checksum
         run: |
-          set -e
-          tar czf rack-gateway-linux-amd64.tar.gz rack-gateway-linux-amd64
-          echo "ASSET_PATH=rack-gateway-linux-amd64.tar.gz" >> "$GITHUB_ENV"
-      - uses: actions/upload-artifact@v4
+          set -euo pipefail
+          mkdir -p dist
+          tar czf dist/rack-gateway-linux-amd64.tar.gz rack-gateway-linux-amd64
+          (cd dist && sha256sum rack-gateway-linux-amd64.tar.gz > rack-gateway-linux-amd64.tar.gz.sha256)
+
+      - name: Attest binary build provenance
+        uses: actions/attest-build-provenance@96278af6caaf10aea03fd8d33a09a777ca52d62f # v3.2.0
         with:
-          path: ${{ env.ASSET_PATH }}
+          subject-path: dist/rack-gateway-linux-amd64.tar.gz
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
           name: rack-gateway-linux-amd64
+          path: dist/
 
   release_create:
     runs-on: ubuntu-latest
     needs:
+      - verify_tag
+      - docker_build
       - release_build
+    permissions:
+      contents: write # create the GitHub release
+    env:
+      RELEASE_TAG: ${{ needs.verify_tag.outputs.tag }}
+      RELEASE_VERSION: ${{ needs.verify_tag.outputs.version }}
+      REPOSITORY: ${{ github.repository }}
+      IMAGE_DIGEST: ${{ needs.docker_build.outputs.digest }}
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          fetch-tags: true
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: rack-gateway-linux-amd64
-          path: artifacts/rack-gateway-linux-amd64
-      - run: |
-          if [ "${{ github.event_name }}" = "push" ]; then
-            TAG="${GITHUB_REF#refs/tags/}"
-            if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+ ]]; then
-              echo "Error: Invalid tag format $TAG (expected v*.*.* semver)" >&2
-              exit 1
-            fi
-            echo "RELEASE_TAG=$TAG" >> "$GITHUB_ENV"
-            VERSION="${TAG#v}"
-            echo "RELEASE_VERSION=$VERSION" >> "$GITHUB_ENV"
-          else
-            # For workflow_dispatch, use latest tag
-            TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
-            if [ -z "$TAG" ]; then
-              echo "Error: No tags found. Cannot create release without a tag." >&2
-              exit 1
-            fi
-            echo "RELEASE_TAG=$TAG" >> "$GITHUB_ENV"
-            VERSION="${TAG#v}"
-            echo "RELEASE_VERSION=$VERSION" >> "$GITHUB_ENV"
-          fi
-      - name: Generate checksums
+          path: dist
+
+      - name: Verify checksum
         run: |
-          set -e
-          cd artifacts
-          for dir in */; do
-            cd "$dir"
-            for file in *; do
-              case "$file" in
-                *.tar.gz|*.zip)
-                  if [ -f "$file" ]; then
-                    sha256sum "$file" > "${file}.sha256" || shasum -a 256 "$file" | awk '{print $1}' > "${file}.sha256"
-                  fi
-                  ;;
-              esac
-            done
-            cd ..
-          done
-          cd ..
+          set -euo pipefail
+          cd dist
+          sha256sum --check --strict rack-gateway-linux-amd64.tar.gz.sha256
+
       - name: Generate changelog
         run: |
-          cat > changelog.md <<EOF
-          ## Installation
+          set -euo pipefail
+          {
+            echo "## Installation"
+            echo
+            echo "### Linux (x86_64)"
+            echo
+            echo '```sh'
+            echo "curl -fsSLO https://github.com/${REPOSITORY}/releases/download/${RELEASE_TAG}/rack-gateway-linux-amd64.tar.gz"
+            echo "curl -fsSLO https://github.com/${REPOSITORY}/releases/download/${RELEASE_TAG}/rack-gateway-linux-amd64.tar.gz.sha256"
+            echo "sha256sum --check rack-gateway-linux-amd64.tar.gz.sha256"
+            echo "gh attestation verify rack-gateway-linux-amd64.tar.gz --repo ${REPOSITORY}"
+            echo "tar xzf rack-gateway-linux-amd64.tar.gz"
+            echo "sudo install -m 0755 rack-gateway-linux-amd64 /usr/local/bin/rack-gateway"
+            echo "rack-gateway version"
+            echo '```'
+            echo
+            echo "### Docker image"
+            echo
+            echo "\`docker.io/docspringcom/rack-gateway:${RELEASE_TAG}\` (digest \`${IMAGE_DIGEST}\`)"
+            echo
+            echo '```sh'
+            echo "gh attestation verify oci://docker.io/docspringcom/rack-gateway:${RELEASE_TAG} --repo ${REPOSITORY}"
+            echo '```'
+          } > changelog.md
 
-          ### Linux (x86_64)
-              curl -L https://github.com/${{ github.repository }}/releases/download/${{ env.RELEASE_TAG }}/rack-gateway-linux-amd64.tar.gz | tar xz
-              sudo mv rack-gateway-linux-amd64 /usr/local/bin/rack-gateway
-              sudo chmod +x /usr/local/bin/rack-gateway
-              rack-gateway version
-          EOF
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
           files: |
-            artifacts/**/*.tar.gz
-            artifacts/**/*.sha256
+            dist/rack-gateway-linux-amd64.tar.gz
+            dist/rack-gateway-linux-amd64.tar.gz.sha256
           prerelease: ${{ contains(env.RELEASE_TAG, '-') }}
           body_path: changelog.md
           name: rack-gateway v${{ env.RELEASE_VERSION }}
           draft: false
           tag_name: ${{ env.RELEASE_TAG }}
+          fail_on_unmatched_files: true

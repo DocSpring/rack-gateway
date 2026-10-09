@@ -458,30 +458,36 @@ If your support needs are more complex, please consider using the official Convo
 To create a new release:
 
 ```bash
-# 1. Bump the version
+# 1. Bump the version (also pins convox.yml to docker.io/docspringcom/rack-gateway:v1.0.1)
 ./scripts/bump-version.sh patch  # or minor, major
 
-# 2. Commit the version bump
+# 2. Commit and push the version bump
 git commit -am "chore: bump version to v1.0.1"
+git push origin main
 
-# 3. Create and push the release tag
+# 3. Create and push the release tag (only repository admins can push v* tags)
 ./scripts/create-release-tags.sh
-git push origin v1.0.1  # or: git push --tags
+git push origin v1.0.1
 ```
 
-The GitHub Actions release workflow automatically:
+The GitHub Actions release workflow (triggered only by `v*` tags):
 
-- Builds the Docker image for linux/amd64
-- Pushes to `docker.io/docspringcom/rack-gateway` with commit SHA and `latest` tags
-- Creates a GitHub release with binaries and checksums
+- Checks the tag matches `web/package.json` and waits for CI and E2E to pass on the tagged commit
+- Builds the Docker image for linux/amd64 without a build cache
+- Pushes `docker.io/docspringcom/rack-gateway` with the version (`v1.0.1`), short commit SHA and `latest` tags
+- Publishes signed build provenance attestations for the image and the CLI archive
+- Creates a GitHub release with the CLI archive and its checksum
 
-After the release completes, update your deployment:
+After the release completes, deploy. `convox.yml` already references the new version tag:
 
 ```bash
-# Update convox.yml to use the new image tag
-# image: docker.io/docspringcom/rack-gateway:${COMMIT_SHA}
-
 convox deploy
+```
+
+Verify what you deployed:
+
+```bash
+gh attestation verify oci://docker.io/docspringcom/rack-gateway:v1.0.1 --repo DocSpring/rack-gateway
 ```
 
 ## Deployment

@@ -2,6 +2,11 @@
 
 Deploy the gateway and UI using the `convox.yml` in this repo — no separate manifest needed.
 
+> `convox.yml` deploys a released image pinned to an immutable version tag
+> (`docker.io/docspringcom/rack-gateway:vX.Y.Z`). `scripts/bump-version.sh` updates that tag, and the Release
+> workflow publishes it when a repository admin pushes the matching `v*` git tag. Verify a release with
+> `gh attestation verify oci://docker.io/docspringcom/rack-gateway:vX.Y.Z --repo DocSpring/rack-gateway`.
+
 ## Prerequisites
 
 - Convox CLI, authenticated against your rack (e.g., `staging`)
