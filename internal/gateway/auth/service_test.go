@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/testutil/dbtest"
+	"github.com/DocSpring/rack-gateway/internal/gateway/token"
 )
 
 func TestAuthServiceAllowsCookieSession(t *testing.T) {
@@ -107,5 +108,42 @@ func TestValidateSessionRejectsLockedUser(t *testing.T) {
 	}
 	if revokedSession.RevokedAt == nil {
 		t.Fatalf("expected session to be revoked")
+	}
+}
+
+// A locked owner's API tokens stop working, including on routes that need no specific permission.
+func TestAPITokenRejectedWhenOwnerLocked(t *testing.T) {
+	database := dbtest.NewDatabase(t)
+	t.Cleanup(func() { dbtest.Reset(t, database) })
+
+	owner, err := database.CreateUser("owner@example.com", "Owner", []string{"admin"})
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	tokenResp, err := token.NewService(database).GenerateAPIToken(&token.APITokenRequest{
+		Name: "CI", UserID: owner.ID, Permissions: token.DefaultCICDPermissions(),
+	})
+	if err != nil {
+		t.Fatalf("create token: %v", err)
+	}
+	svc := NewAuthService(token.NewService(database), database, nil)
+
+	authenticates := func() bool {
+		called := false
+		next := http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) { called = true })
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/info", nil)
+		req.Header.Set("Authorization", "Bearer "+tokenResp.Token)
+		svc.Middleware(next).ServeHTTP(httptest.NewRecorder(), req)
+		return called
+	}
+
+	if !authenticates() {
+		t.Fatalf("token should authenticate while its owner is active")
+	}
+	if err := database.LockUser(owner.ID, "test lock", nil); err != nil {
+		t.Fatalf("lock user: %v", err)
+	}
+	if authenticates() {
+		t.Fatalf("token must be rejected once its owner is locked")
 	}
 }

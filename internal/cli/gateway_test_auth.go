@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -31,6 +32,10 @@ func runTestAuth(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	if os.Getenv("RACK_GATEWAY_API_TOKEN") != "" {
+		return testAPITokenAuth(rack, determineTestMode(args))
+	}
+
 	normalized, bearer, status, err := loadAuthStatus(rack)
 	if err != nil {
 		return err
@@ -48,6 +53,31 @@ func runTestAuth(cmd *cobra.Command, args []string) error {
 	}
 
 	return runMFATestMode(cmd, testMode, normalized, bearer, status, rack)
+}
+
+// testAPITokenAuth checks an API token against /api/v1/info. Tokens have no MFA, and the MFA status
+// endpoint is only for people, so the MFA test modes need a logged-in user instead.
+func testAPITokenAuth(rack, testMode string) error {
+	if testMode != "basic" {
+		return fmt.Errorf("API tokens have no MFA; unset RACK_GATEWAY_API_TOKEN to test MFA as a logged-in user")
+	}
+
+	gatewayURL, bearer, err := gatewayAuthInfo(rack)
+	if err != nil {
+		return err
+	}
+	normalized, err := NormalizeGatewayURL(gatewayURL)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("Testing API token authentication to %s...\n", normalized)
+	info, err := GetGatewayInfo(normalized, bearer)
+	if err != nil {
+		return fmt.Errorf("authentication failed: %w", err)
+	}
+	fmt.Printf("✓ Authentication successful (token owned by %s)\n", info.User.Email)
+	return nil
 }
 
 func loadAuthStatus(rack string) (string, string, *MFAStatusResponse, error) {

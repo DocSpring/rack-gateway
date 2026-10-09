@@ -9,12 +9,16 @@ export type User = {
   email: string
   name: string
   roles: string[]
+  // Effective permissions from the user's roles; used only to hide UI the user can't use.
+  permissions: string[]
   rack?: { name: string; alias?: string; host: string }
   mfa_enrolled?: boolean
   mfa_required?: boolean
   preferred_mfa_method?: string | null
   recent_step_up_expires_at?: string | null
   has_trusted_device?: boolean
+  // The session still owes its login MFA challenge (see GET /api/v1/info)
+  mfa_pending?: boolean
   integrations: {
     slack: boolean
     github: boolean
@@ -78,17 +82,20 @@ class AuthService {
 
       const rack: User['rack'] = normalizeRack(data?.rack)
       const roles = Array.isArray(userInfo?.roles) ? userInfo.roles : []
+      const permissions = Array.isArray(userInfo?.permissions) ? userInfo.permissions : []
 
       const mapped: User = {
         email: userInfo?.email ?? '',
         name: userInfo?.name ?? '',
         roles,
+        permissions,
         rack,
         mfa_enrolled: Boolean(userInfo?.mfa_enrolled),
         mfa_required: Boolean(userInfo?.mfa_required),
         preferred_mfa_method: userInfo?.preferred_mfa_method ?? null,
         recent_step_up_expires_at: userInfo?.recent_step_up_expires_at ?? null,
         has_trusted_device: Boolean(userInfo?.has_trusted_device),
+        mfa_pending: Boolean(userInfo?.mfa_pending),
         integrations: {
           slack: Boolean(data?.integrations?.slack),
           github: Boolean(data?.integrations?.github),

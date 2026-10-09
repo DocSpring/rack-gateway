@@ -220,3 +220,25 @@ func TestEmptyTokenNameRejected(t *testing.T) {
 	_, err := service.GenerateAPIToken(req)
 	assert.ErrorIs(t, err, ErrAPITokenNameRequired)
 }
+
+// Token names become the X-Convox-Actor header sent to the rack, so control characters are refused.
+func TestTokenNameWithControlCharactersRejected(t *testing.T) {
+	user, service := setupTokenServiceTest(t)
+
+	for _, name := range []string{"ci\ndeploys", "ci\rdeploys", "ci\x01deploys", "ci\tdeploys"} {
+		_, err := service.GenerateAPIToken(&APITokenRequest{
+			Name:        name,
+			UserID:      user.ID,
+			Permissions: DefaultCICDPermissions(),
+		})
+		assert.ErrorIsf(t, err, ErrAPITokenNameInvalid, "name %q", name)
+	}
+
+	resp, err := service.GenerateAPIToken(&APITokenRequest{
+		Name:        "CircleCI Deploys",
+		UserID:      user.ID,
+		Permissions: DefaultCICDPermissions(),
+	})
+	require.NoError(t, err)
+	assert.ErrorIs(t, service.UpdateTokenName(resp.APIToken.ID, "Circle\nCI"), ErrAPITokenNameInvalid)
+}

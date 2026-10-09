@@ -99,7 +99,13 @@ func updateService(w http.ResponseWriter, r *http.Request) {
 	app := vars["app"]
 	service := vars["service"]
 
-	updated, err := updateServiceState(app, service, r.URL.Query())
+	// Like the real rack, read options from the form body (where the SDK sends them) as well as the query.
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	updated, err := updateServiceState(app, service, r.Form)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return

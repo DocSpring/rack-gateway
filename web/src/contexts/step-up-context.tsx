@@ -19,18 +19,17 @@ import {
   setTotpHeader,
   setWebAuthnHeader,
 } from '@/contexts/step-up-helpers'
+import {
+  createCancelledError,
+  retryQueuedRequests,
+  type StepUpAction,
+  StepUpQueue,
+  type StepUpRequest,
+} from '@/contexts/step-up-queue'
 import { getMFAStatus } from '@/lib/api'
 import { getMfaRequirementForRequest } from '@/lib/mfa-preflight'
 
 const STEP_UP_BUFFER_MS = 10_000
-
-type StepUpAction = (() => Promise<unknown>) | (() => unknown) | null
-
-type StepUpRequest = {
-  action?: StepUpAction
-  onResolve?: (value: unknown) => void
-  onReject?: (error: unknown) => void
-}
 
 type StepUpContextValue = {
   openStepUp: (request?: StepUpRequest) => void
@@ -56,8 +55,8 @@ export function StepUpProvider({ children }: { children: ReactNode }): React.Rea
   const [isOpen, setIsOpen] = useState(false)
   const [isVerifying, setIsVerifying] = useState(false)
 
-  // Single active request
-  const activeRequestRef = useRef<StepUpRequest | null>(null)
+  // Every request waiting on the current MFA prompt
+  const queueRef = useRef(new StepUpQueue())
 
   const closeStepUp = useCallback(() => {
     if (isVerifying) {
@@ -65,22 +64,16 @@ export function StepUpProvider({ children }: { children: ReactNode }): React.Rea
     }
     debugLog('closeStepUp')
     setIsOpen(false)
-    if (activeRequestRef.current?.onReject) {
-      // Create error with suppressToast flag to prevent duplicate toasts
-      const error = new Error('MFA verification cancelled')
-      ;(error as Error & { suppressToast?: boolean }).suppressToast = true
-      activeRequestRef.current.onReject(error)
-    }
-    activeRequestRef.current = null
+    queueRef.current.rejectAll(createCancelledError())
   }, [isVerifying])
 
   const openStepUp = useCallback((request?: StepUpRequest) => {
-    debugLog('openStepUp')
+    debugLog('openStepUp', { queued: queueRef.current.size })
     // Blur any active element (like dropdown menus) to prevent focus conflicts
     if (document.activeElement instanceof HTMLElement) {
       document.activeElement.blur()
     }
-    activeRequestRef.current = request ?? {}
+    queueRef.current.enqueue(request ?? {})
     setIsOpen(true)
   }, [])
 
@@ -119,7 +112,8 @@ export function StepUpProvider({ children }: { children: ReactNode }): React.Rea
       session_data?: string
       assertion_response?: string
     }) => {
-      const request = activeRequestRef.current
+      const queue = queueRef.current
+      const request = queue.primary()
       if (!request?.action) {
         throw new Error('No active MFA request')
       }
@@ -141,27 +135,31 @@ export function StepUpProvider({ children }: { children: ReactNode }): React.Rea
 
       debugLog('MFA headers before action', getMFAHeaders())
 
+      let result: unknown
       try {
         // Run the action - this will make a new request with MFA headers
-        const result = await runAction(request.action)
-
+        result = await runAction(request.action)
         debugLog('handleVerify - action succeeded')
-
-        // Success: close dialog and resolve
-        activeRequestRef.current = null
-        setIsOpen(false)
-        request.onResolve?.(result)
       } catch (error) {
         debugLog('handleVerify - action failed', error)
 
-        // DON'T close dialog, DON'T clear activeRequestRef
-        // Just re-throw so the form shows the error inline
+        // Keep the dialog open and the queue intact; re-throw so the form shows the error inline
         throw error
       } finally {
         clearMFAHeaders()
       }
+
+      // Success: close the dialog, resolve this request, then retry everything that was waiting
+      const waiting = queue.drain().filter((queued) => queued !== request)
+      setIsOpen(false)
+      request.onResolve?.(result)
+      retryQueuedRequests(waiting, { run: runAction, isMFAError, requeue: openStepUp }).catch(
+        (error: unknown) => {
+          debugLog('retryQueuedRequests failed', error)
+        }
+      )
     },
-    [runAction]
+    [openStepUp, runAction]
   )
 
   const handleDialogVerify = useCallback(

@@ -12,8 +12,8 @@ API tokens provide authentication for automated systems like CI/CD pipelines, sc
 | Aspect | API Tokens | Sessions |
 |--------|-----------|----------|
 | **Use Case** | Automation, CI/CD | Human users |
-| **Creation** | Admin/user creates | OAuth flow |
-| **Lifetime** | Until deleted | Idle timeout |
+| **Creation** | Deployers (for themselves) or admins | OAuth flow |
+| **Lifetime** | Until deleted or the optional `expires_at` | Idle timeout |
 | **MFA** | Not applicable | Supported |
 | **CSRF** | Not required | Required |
 | **Revocation** | Manual delete | Logout/admin |
@@ -58,13 +58,23 @@ API tokens store explicit permissions. Roles are a shortcut at creation time:
 | `ops` | Emergency scripts | Restart, exec, view env |
 | `deployer` | Deploy automation | Full deploy capabilities |
 | `cicd` | CI/CD pipelines | Minimal deploy + approval |
-| `admin` | Full automation | All operations |
+| `admin` | Rack automation | All Convox operations, capped by the owner's role |
 
 <Aside type="tip" title="Recommended: CI/CD Role">
 For CI/CD pipelines, use the dedicated `cicd` role instead of `deployer`. It has minimal permissions and integrates with deploy approvals for additional security.
 </Aside>
 
 See [Roles](/security/rbac/roles/) for detailed permission lists.
+
+## What a Token Can Do
+
+A token is always limited by the person who owns it:
+
+- **Capped by the owner's current role.** Every request needs the permission in the token's own list *and* in the owner's current role. Demote the owner and their tokens lose the extra access on the next request.
+- **Stops working with its owner.** Tokens of a locked, suspended or deleted user are rejected.
+- **Created within the owner's role.** When a token is created or edited, each permission must be one the owner's role grants. Deployers can create tokens for themselves; only admins can create tokens for other users.
+- **Rack access only, plus a few gateway endpoints.** Tokens can use the rack proxy (`/api/v1/rack-proxy/*`) and only these gateway endpoints: `GET /api/v1/info`, `GET /api/v1/rack`, `POST /api/v1/deploy-approval-requests` and `GET /api/v1/deploy-approval-requests/:id`. User, token, settings, audit-log and approval endpoints refuse tokens, even admin-owned ones.
+- **No privileged runs.** Tokens can never start a process with a custom image, host volumes, privileged mode or node placement options.
 
 ## Creating Tokens
 
@@ -227,7 +237,7 @@ Always use the minimum required role:
 | Monitoring | `viewer` | Read-only sufficient |
 | Health checks | `viewer` | Read-only sufficient |
 | Emergency restart | `ops` | Only restart, no deploy |
-| Admin automation | `admin` | Full access needed |
+| Rack automation | `admin` | Only if it really needs every Convox operation |
 
 ### Token Rotation
 
@@ -322,16 +332,16 @@ Token-based requests are distinguishable from session-based requests in audit lo
 
 API tokens don't support MFA because:
 - Automation can't complete interactive MFA
-- Token role determines permissions
+- The token's permissions, capped by its owner's role, determine access
 - Audit logging provides accountability
 
 For sensitive operations requiring human approval, use [Deploy Approvals](/integrations/deploy-approvals/).
 
-### No Expiration
+### Optional Expiration
 
-Tokens don't expire automatically:
-- Useful for long-running automation
-- Manual rotation/deletion required
+Tokens don't expire unless you set `expires_at` when creating them (for example `rack-gateway api-token create --expires-at 2027-01-01T00:00:00Z`):
+- Without an expiry, tokens suit long-running automation
+- Manual rotation/deletion is still required
 - Regular review process recommended
 
 ### No CSRF

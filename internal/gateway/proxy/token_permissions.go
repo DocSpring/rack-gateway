@@ -86,7 +86,7 @@ func (h *Handler) evaluateAPITokenPermission(
 		return false, nil, nil
 	}
 
-	if !callerHasDeployWithApproval(authUser) {
+	if !callerHasDeployWithApproval(authUser) || !h.tokenOwnerCan(authUser, resource, action) {
 		return false, nil, nil
 	}
 
@@ -155,6 +155,12 @@ func isApprovalGated(resource rbac.Resource, action rbac.Action, path string) bo
 		}
 	}
 	return false
+}
+
+// tokenOwnerCan reports whether the token owner's roles allow the action: approval never exceeds the owner.
+func (h *Handler) tokenOwnerCan(authUser *auth.User, resource rbac.Resource, action rbac.Action) bool {
+	allowed, err := h.rbacManager.Authorize(rbac.UserPrincipal(authUser.DBUser), rbac.Convox(resource, action))
+	return err == nil && allowed
 }
 
 func callerHasDeployWithApproval(authUser *auth.User) bool {

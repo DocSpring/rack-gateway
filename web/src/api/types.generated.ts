@@ -13,7 +13,8 @@ export interface paths {
         };
         /**
          * List API tokens
-         * @description Returns all API tokens configured in the system.
+         * @description Returns the caller's own API tokens, or every token when the caller holds
+         *     gateway:api_token:manage.
          */
         get: {
             parameters: {
@@ -47,7 +48,9 @@ export interface paths {
         put?: never;
         /**
          * Create an API token
-         * @description Generates a new API token for automation or CI/CD use.
+         * @description Generates a new API token for automation or CI/CD use. The token belongs to the caller
+         *     unless user_email names someone else, which requires gateway:api_token:manage. Its
+         *     permissions must be within the owner's current role.
          */
         post: {
             parameters: {
@@ -74,6 +77,15 @@ export interface paths {
                 };
                 /** @description Bad Request */
                 400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+                /** @description Forbidden */
+                403: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -248,6 +260,15 @@ export interface paths {
                 };
                 /** @description Bad Request */
                 400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+                /** @description Forbidden */
+                403: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -3817,6 +3838,8 @@ export interface paths {
         /**
          * List all gateway users
          * @description Returns every user configured in the gateway along with role assignments.
+         *     Callers without gateway:user:read get the team directory: lock reasons, who locked
+         *     the account, and MFA preferences are omitted.
          */
         get: {
             parameters: {
@@ -4085,6 +4108,86 @@ export interface paths {
                 };
             };
         };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/users/{email}/audit-logs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List a user's audit logs
+         * @description Returns paginated audit logs for actions performed by one user. Every user may read
+         *     their own activity; reading another user's activity requires gateway:audit_log:read.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description Text search */
+                    search?: string;
+                    /** @description Action type filter */
+                    action_type?: string;
+                    /** @description Resource type filter */
+                    resource_type?: string;
+                    /** @description Status filter */
+                    status?: string;
+                    /** @description Page number */
+                    page?: number;
+                    /** @description Page size */
+                    limit?: number;
+                    /** @description ISO8601 start time */
+                    start?: string;
+                    /** @description ISO8601 end time */
+                    end?: string;
+                    /** @description Relative range (e.g. 24h, 7d, custom) */
+                    range?: string;
+                };
+                header?: never;
+                path: {
+                    /** @description User email */
+                    email: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.AuditLogsResponse"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+                /** @description Internal Server Error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -4691,6 +4794,8 @@ export interface components {
             method_id: number;
         };
         "handlers.CreateAPITokenRequest": {
+            /** @description Optional expiry; the token stops working after this time */
+            expires_at?: string;
             name: string;
             /** @description Explicit permissions (overrides role) */
             permissions?: string[];
@@ -4929,8 +5034,14 @@ export interface components {
             email: string;
             has_trusted_device: boolean;
             mfa_enrolled: boolean;
+            mfa_pending: boolean;
             mfa_required: boolean;
             name: string;
+            /**
+             * @description Permissions are the caller's effective permissions (from their roles, or an API token's own
+             *     list) so clients can hide what the caller can't use. The server still enforces every request.
+             */
+            permissions: string[];
             preferred_mfa_method?: string;
             recent_step_up_expires_at?: string;
             roles: string[];

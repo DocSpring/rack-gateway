@@ -76,38 +76,24 @@ func (h *AdminHandler) handleTokenGenerationError(
 	details := map[string]interface{}{"name": tokenName}
 	action := audit.BuildAction(rbac.ResourceAPIToken.String(), rbac.ActionCreate.String())
 
+	status, msg := http.StatusInternalServerError, "failed to create token"
+	if nameMsg := tokenNameError(err); nameMsg != "" {
+		status, msg = http.StatusBadRequest, nameMsg
+	}
+	h.respondAuditError(c, status, action, targetEmail, msg, start, details)
+}
+
+// tokenNameError maps token name validation errors to a client message, or "" for any other error.
+func tokenNameError(err error) string {
 	switch {
 	case errors.Is(err, token.ErrAPITokenNameExists):
-		h.respondAuditError(
-			c,
-			http.StatusBadRequest,
-			action,
-			targetEmail,
-			"token name already exists",
-			start,
-			details,
-		)
+		return "token name already exists"
 	case errors.Is(err, token.ErrAPITokenNameRequired):
-		h.respondAuditError(
-			c,
-			http.StatusBadRequest,
-			action,
-			targetEmail,
-			"token name is required",
-			start,
-			details,
-		)
-	default:
-		h.respondAuditError(
-			c,
-			http.StatusInternalServerError,
-			action,
-			targetEmail,
-			"failed to create token",
-			start,
-			details,
-		)
+		return "token name is required"
+	case errors.Is(err, token.ErrAPITokenNameInvalid):
+		return "token name must not contain control characters"
 	}
+	return ""
 }
 
 func (h *AdminHandler) updateTokenNameIfChanged(
@@ -126,42 +112,12 @@ func (h *AdminHandler) updateTokenNameIfChanged(
 
 	if err := h.tokenService.UpdateTokenName(tokenID, name); err != nil {
 		action := audit.BuildAction(rbac.ResourceAPIToken.String(), rbac.ActionUpdate.String())
-
-		switch {
-		case errors.Is(err, token.ErrAPITokenNameExists):
-			h.respondAuditError(
-				c,
-				http.StatusBadRequest,
-				action,
-				tokenIDStr,
-				"token name already exists",
-				start,
-				map[string]interface{}{"name": name},
-			)
-			return err
-		case errors.Is(err, token.ErrAPITokenNameRequired):
-			h.respondAuditError(
-				c,
-				http.StatusBadRequest,
-				action,
-				tokenIDStr,
-				"token name is required",
-				start,
-				nil,
-			)
-			return err
-		default:
-			h.respondAuditError(
-				c,
-				http.StatusInternalServerError,
-				action,
-				tokenIDStr,
-				"failed to update token name",
-				start,
-				map[string]interface{}{"name": name},
-			)
-			return err
+		status, msg := http.StatusInternalServerError, "failed to update token name"
+		if nameMsg := tokenNameError(err); nameMsg != "" {
+			status, msg = http.StatusBadRequest, nameMsg
 		}
+		h.respondAuditError(c, status, action, tokenIDStr, msg, start, map[string]interface{}{"name": name})
+		return err
 	}
 
 	details["name"] = name
@@ -259,7 +215,7 @@ func (h *AdminHandler) validateUpdateAPITokenRequest(
 		h.respondAuditError(c, http.StatusInternalServerError, action, tokenIDStr, "failed to load token", start, nil)
 		return "", nil, nil, false
 	}
-	if existing == nil {
+	if !h.callerMayAccessToken(c, existing) {
 		h.respondAuditError(c, http.StatusNotFound, action, tokenIDStr, "token not found", start, nil)
 		return "", nil, nil, false
 	}

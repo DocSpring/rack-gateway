@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"strings"
+	"unicode"
 )
 
 // GenerateBackupCodes replaces the user's backup codes and returns the plaintext set.
@@ -40,4 +41,15 @@ func (s *Service) hashBackupCode(code string) string {
 	mac := hmac.New(sha256.New, s.backupCodePepper)
 	mac.Write([]byte(strings.TrimSpace(code)))
 	return hex.EncodeToString(mac.Sum(nil))
+}
+
+// normalizeBackupCode accepts a backup code the way people type it: in any case, with spaces or
+// dashes between the groups. Codes are generated as uppercase hex, so this is lossless.
+func normalizeBackupCode(code string) string {
+	return strings.ToUpper(strings.Map(func(r rune) rune {
+		if r == '-' || unicode.IsSpace(r) {
+			return -1
+		}
+		return r
+	}, code))
 }

@@ -28,11 +28,14 @@ import (
 )
 
 type authzEnv struct {
-	router   *gin.Engine
-	database *db.Database
-	tokens   *token.Service
-	sessions *auth.SessionManager
-	issued   []string
+	router      *gin.Engine
+	database    *db.Database
+	tokens      *token.Service
+	sessions    *auth.SessionManager
+	authService *auth.Service
+	rbac        rbac.Manager
+	mfaService  *mfa.Service
+	issued      []string
 }
 
 func newAuthzEnv(t *testing.T) *authzEnv {
@@ -42,6 +45,7 @@ func newAuthzEnv(t *testing.T) *authzEnv {
 	for userEmail, role := range map[string]string{
 		"admin@example.com":    "admin",
 		"deployer@example.com": "deployer",
+		"ops@example.com":      "ops",
 		"viewer@example.com":   "viewer",
 	} {
 		_, err := database.CreateUser(userEmail, userEmail, []string{role})
@@ -58,13 +62,20 @@ func newAuthzEnv(t *testing.T) *authzEnv {
 	mfaSvc, err := mfa.NewService(database, "Test", 24*time.Hour, 10*time.Minute, []byte("pepper"), "", "", "", "", nil)
 	require.NoError(t, err)
 
+	authService := auth.NewAuthService(tokenSvc, database, sessions)
 	router := gin.New()
 	Setup(router, &Config{Gateway: &deps.Gateway{
-		Config:          &config.Config{Domain: "gateway.example.com", GoogleAllowedDomain: "example.com"},
+		Config: &config.Config{
+			Domain:              "gateway.example.com",
+			GoogleAllowedDomain: "example.com",
+			Racks: map[string]config.RackConfig{
+				"default": {Name: "test", URL: "https://rack.invalid:5443", Enabled: true},
+			},
+		},
 		Database:        database,
 		RBACManager:     rbacMgr,
 		SessionManager:  sessions,
-		AuthService:     auth.NewAuthService(tokenSvc, database, sessions),
+		AuthService:     authService,
 		TokenService:    tokenSvc,
 		MFAService:      mfaSvc,
 		MFASettings:     mfaSettings,
@@ -72,7 +83,10 @@ func newAuthzEnv(t *testing.T) *authzEnv {
 		AuditLogger:     audit.NewLogger(database),
 		EmailSender:     email.NoopSender{},
 	}})
-	return &authzEnv{router: router, database: database, tokens: tokenSvc, sessions: sessions}
+	return &authzEnv{
+		router: router, database: database, tokens: tokenSvc, sessions: sessions,
+		authService: authService, rbac: rbacMgr, mfaService: mfaSvc,
+	}
 }
 
 // credentials returns request headers that authenticate as the caller.
@@ -130,21 +144,20 @@ type routeCall struct {
 }
 
 // adminOnlyCalls are admin endpoints that must reject every non-admin user and every API token.
+// Self-service routes appear here with another user's email.
 var adminOnlyCalls = []routeCall{
-	{http.MethodGet, "/api/v1/users", nil},
 	{http.MethodPost, "/api/v1/users", map[string]interface{}{
 		"email": "attacker@example.com", "name": "x", "roles": []string{"admin"},
 	}},
 	{http.MethodPut, "/api/v1/users/admin@example.com", map[string]interface{}{"roles": []string{"viewer"}}},
 	{http.MethodDelete, "/api/v1/users/admin@example.com", nil},
 	{http.MethodPost, "/api/v1/users/admin@example.com/lock", map[string]interface{}{"reason": "x"}},
+	{http.MethodGet, "/api/v1/users/admin@example.com", nil},
 	{http.MethodGet, "/api/v1/users/admin@example.com/sessions", nil},
+	{http.MethodPost, "/api/v1/users/admin@example.com/sessions/revoke_all", nil},
+	{http.MethodGet, "/api/v1/users/admin@example.com/audit-logs", nil},
 	{http.MethodGet, "/api/v1/audit-logs", nil},
 	{http.MethodGet, "/api/v1/audit-logs/export", nil},
-	{http.MethodGet, "/api/v1/api-tokens", nil},
-	{http.MethodPost, "/api/v1/api-tokens", map[string]interface{}{
-		"name": "pwn", "user_email": "admin@example.com", "permissions": []string{"convox:*:*"},
-	}},
 	{http.MethodPut, "/api/v1/settings/deploy-approvals", map[string]interface{}{"deploy_approvals_enabled": false}},
 	{http.MethodPut, "/api/v1/settings/mfa-configuration", map[string]interface{}{"mfa_require_all_users": false}},
 	{http.MethodPut, "/api/v1/apps/web/settings/protected-env-vars", []string{}},
@@ -190,29 +203,48 @@ func TestAdminEndpointsRejectNonAdmins(t *testing.T) {
 	require.Nil(t, attacker, "no user may have been created")
 }
 
-func TestAdminSessionPassesAuthorization(t *testing.T) {
+// humanOnlyCalls are routes every human role may use (for their own account) but API tokens may not,
+// including the token owner's own self-service routes.
+var humanOnlyCalls = []routeCall{
+	{http.MethodGet, "/api/v1/users", nil},
+	{http.MethodGet, "/api/v1/users/admin@example.com", nil},
+	{http.MethodGet, "/api/v1/users/admin@example.com/sessions", nil},
+	{http.MethodGet, "/api/v1/users/admin@example.com/audit-logs", nil},
+	{http.MethodGet, "/api/v1/api-tokens", nil},
+	{http.MethodPost, "/api/v1/api-tokens", map[string]interface{}{
+		"name": "pwn", "permissions": []string{"convox:app:list"},
+	}},
+}
+
+func TestAPITokensCannotUseHumanRoutes(t *testing.T) {
 	e := newAuthzEnv(t)
-	creds := e.webSession(t, "admin@example.com")
-	for _, call := range []routeCall{
-		{http.MethodGet, "/api/v1/users", nil},
-		{http.MethodGet, "/api/v1/audit-logs", nil},
-		{http.MethodGet, "/api/v1/api-tokens", nil},
-	} {
+	creds := e.apiToken(t, "admin@example.com", "convox:*:*", "gateway:*:*", "security:*:*")
+	for _, call := range humanOnlyCalls {
 		w := e.do(t, creds, call.method, call.path, call.body)
-		require.Falsef(t, isAuthzDenial(w), "%s %s => %d %s", call.method, call.path, w.Code, w.Body.String())
+		require.Equalf(t, http.StatusForbidden, w.Code, "%s %s => %s", call.method, call.path, w.Body.String())
+		require.Containsf(t, w.Body.String(), "API tokens cannot use this endpoint", "%s %s", call.method, call.path)
 	}
 }
 
 func TestCICDTokenKeepsDeployApprovalAccess(t *testing.T) {
 	e := newAuthzEnv(t)
 	creds := e.apiToken(t, "admin@example.com", rbacRolePermissions(t, "cicd")...)
-	for _, call := range []routeCall{
-		{http.MethodGet, "/api/v1/info", nil},
-		{http.MethodPost, "/api/v1/deploy-approval-requests", map[string]interface{}{}},
-		{http.MethodGet, "/api/v1/deploy-approval-requests/00000000-0000-0000-0000-000000000000", nil},
+	for _, tc := range []struct {
+		call routeCall
+		want int
+	}{
+		{routeCall{http.MethodGet, "/api/v1/info", nil}, http.StatusOK},
+		{
+			routeCall{http.MethodPost, "/api/v1/deploy-approval-requests", map[string]interface{}{}},
+			http.StatusBadRequest,
+		},
+		{
+			routeCall{http.MethodGet, "/api/v1/deploy-approval-requests/00000000-0000-0000-0000-000000000000", nil},
+			http.StatusNotFound,
+		},
 	} {
-		w := e.do(t, creds, call.method, call.path, call.body)
-		require.Falsef(t, isAuthzDenial(w), "%s %s => %d %s", call.method, call.path, w.Code, w.Body.String())
+		w := e.do(t, creds, tc.call.method, tc.call.path, tc.call.body)
+		require.Equalf(t, tc.want, w.Code, "%s %s => %s", tc.call.method, tc.call.path, w.Body.String())
 	}
 }
 

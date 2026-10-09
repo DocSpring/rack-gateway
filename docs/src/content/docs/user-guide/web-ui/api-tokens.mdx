@@ -8,12 +8,12 @@ import { Aside, Steps } from '@astrojs/starlight/components';
 API tokens provide programmatic access to the gateway for CI/CD pipelines and automation.
 
 <Aside type="note">
-The API Tokens page is visible to all users. Creating or editing tokens requires the **Admin** or **Deployer** role.
+Every user sees the tokens they own. **Deployers** can create, edit, and delete their own tokens. **Admins** see and manage every user's tokens and can create tokens for other users. A token can never be given more permissions than its owner's role grants, and it loses access as soon as its owner is demoted, locked, or suspended.
 </Aside>
 
 ## Viewing Tokens
 
-Navigate to **API Tokens** in the sidebar to see all tokens:
+Navigate to **API Tokens** in the sidebar to see your tokens (admins see every token):
 
 | Column | Description |
 |--------|-------------|
@@ -30,8 +30,8 @@ Navigate to **API Tokens** in the sidebar to see all tokens:
 
 1. Click **Create Token**
 2. Enter a descriptive name
-3. Choose permissions (or use a role shortcut like Viewer, Ops, Deployer, CI/CD, Admin)
-4. Click **Create**
+3. Choose permissions (or use a role shortcut like Viewer, Ops, Deployer, CI/CD, Admin). You can only choose permissions your own role has.
+4. Click **Create** and complete the MFA prompt
 5. Copy the token secret immediately
 
 </Steps>
@@ -69,8 +69,10 @@ curl -H "Authorization: Bearer rgw_..." \
 
 ## Editing or Deleting Tokens
 
-- **Edit** lets admins (or deployers who own the token) update name and permissions.
+- **Edit** lets the token's owner (if they are a deployer) or an admin update the name and permissions. New permissions must still be within the owner's role.
 - **Delete Token** permanently removes the token.
+
+Both need a fresh MFA check.
 
 ## Best Practices
 

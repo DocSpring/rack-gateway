@@ -45,6 +45,12 @@ The hierarchy uses inheritance: each role automatically includes all permissions
 | `convox:build:list` | List builds |
 | `convox:build:read` | View build details |
 | `convox:rack:read` | View rack configuration |
+| `gateway:user:list` | View the team directory |
+| `gateway:api_token:read` | See API tokens an admin has issued to them |
+
+<Aside type="note" title="Every role">
+Every user, whatever their role, can view their own profile, list and sign out their own sessions, read their own audit trail, and manage their own MFA methods.
+</Aside>
 
 ### Use Cases
 
@@ -146,6 +152,12 @@ Beyond all Ops permissions:
 | `convox:app:update` | Update application settings |
 | `gateway:deploy_approval_request:create` | Request deploy approval |
 | `gateway:deploy_approval_request:read` | View approval requests |
+| `gateway:api_token:create` | Create API tokens for themselves |
+| `gateway:api_token:update` | Edit their own API tokens |
+| `gateway:api_token:delete` | Delete their own API tokens |
+| `convox:deploy:deploy_with_approval` | Lets their CI tokens deploy with approval |
+
+Deployers can issue CI/CD tokens for their own pipelines. A token can't hold more than the deployer's role, and stops working if the deployer is demoted, locked, or suspended.
 
 ### Use Cases
 
@@ -176,8 +188,8 @@ rack-gateway releases promote RABCDEF -a myapp
 - Delete applications
 - Manage users and roles
 - Configure gateway settings
-- Access audit logs
-- Create API tokens for other users
+- Access other users' audit logs
+- Create or manage API tokens for other users
 
 ---
 
@@ -261,6 +273,7 @@ The Deployer role includes permissions CI/CD pipelines don't need:
 |------------|-------------|
 | `convox:*:*` | All Convox operations |
 | `gateway:*:*` | All Gateway operations |
+| `security:*:*` | Security operations (rack TLS certificate refresh) |
 
 The wildcard permissions grant access to everything, including:
 
@@ -285,9 +298,11 @@ The wildcard permissions grant access to everything, including:
 | Create users | `gateway:user:create` |
 | Delete users | `gateway:user:delete` |
 | Change user roles | `gateway:user:update` |
-| View all API tokens | `gateway:api_token:list` |
-| Delete any API token | `gateway:api_token:delete` |
-| View audit logs | `gateway:*:*` |
+| View, edit or delete any user's API tokens | `gateway:api_token:manage` |
+| View other users' details and sessions | `gateway:user:read` |
+| View and export everyone's audit logs | `gateway:audit_log:read` |
+| List deploy approval requests and approve them | `gateway:deploy_approval_request:list`, `:approve` |
+| Run processes with privileged options | `convox:process:run_privileged` |
 | Delete applications | `convox:app:delete` |
 | Configure gateway settings | `gateway:setting_group:*` |
 
@@ -311,9 +326,12 @@ Follow the principle of least privilege. Most teams should have only 2-3 admins.
 | Promote releases | No | No | Yes | No | Yes |
 | Set environment variables | No | No | Yes | No | Yes |
 | Request deploy approval | No | No | Yes | Yes | Yes |
-| Deploy with approval | No | No | No | Yes | Yes |
+| Deploy with approval (API tokens) | No | No | Own tokens | Yes | Yes |
+| View team directory | Yes | Yes | Yes | No | Yes |
+| View own profile, sessions and activity | Yes | Yes | Yes | No | Yes |
+| Create API tokens for themselves | No | No | Yes | No | Yes |
 | Manage users | No | No | No | No | Yes |
-| View audit logs | No | No | No | No | Yes |
+| View everyone's audit logs | No | No | No | No | Yes |
 | Delete applications | No | No | No | No | Yes |
 | Configure settings | No | No | No | No | Yes |
 

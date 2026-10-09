@@ -61,6 +61,7 @@ Resources specific to the gateway:
 | Resource | Description |
 |----------|-------------|
 | `api_token` | API tokens for automation |
+| `audit_log` | The gateway audit log |
 | `deploy_approval_request` | Deploy approval requests |
 | `integration` | Third-party integrations |
 | `job` | Background jobs |
@@ -170,6 +171,11 @@ Environment variables often contain secrets (API keys, database passwords). Only
 | `convox:process:start` | Start a process | ops, deployer, admin |
 | `convox:process:exec` | Execute command in container | ops, deployer, admin |
 | `convox:process:terminate` | Terminate a process | ops, deployer, admin |
+| `convox:process:run_privileged` | Start a process with options that escape the release (`Image`, `Volumes`, `Privileged`, node placement) | admin |
+
+<Aside type="note">
+`run_privileged` is checked in addition to `process:start` whenever a `run` request carries one of those options. API tokens can never send them, whatever their permissions.
+</Aside>
 
 </TabItem>
 <TabItem label="Infrastructure">
@@ -192,24 +198,31 @@ Environment variables often contain secrets (API keys, database passwords). Only
 
 | Permission | Description | Roles |
 |------------|-------------|-------|
-| `gateway:user:list` | List all users | admin |
-| `gateway:user:read` | View user details | admin |
+| `gateway:user:list` | View the team directory (names, emails, roles, locked status) | viewer, ops, deployer, admin |
+| `gateway:user:read` | View any user's details, sessions, lock reasons and MFA preferences | admin |
 | `gateway:user:create` | Create new user | admin |
-| `gateway:user:update` | Update user (roles, status) | admin |
+| `gateway:user:update` | Update user (roles, lock), revoke any user's sessions | admin |
+| `gateway:user:update_name` | Change a user's display name | admin |
 | `gateway:user:delete` | Delete user | admin |
+| `gateway:audit_log:read` | Read and export every user's audit log | admin |
+
+<Aside type="note">
+Every user may view their own details, list and revoke their own sessions, and read their own audit log without these permissions. API tokens can't use these endpoints at all.
+</Aside>
 
 </TabItem>
 <TabItem label="API Tokens">
 
 | Permission | Description | Roles |
 |------------|-------------|-------|
-| `gateway:api_token:list` | List all API tokens | admin |
-| `gateway:api_token:read` | View token details | admin |
-| `gateway:api_token:create` | Create new token | admin |
-| `gateway:api_token:delete` | Delete/revoke token | admin |
+| `gateway:api_token:read` | List and view your own tokens | viewer, ops, deployer, admin |
+| `gateway:api_token:create` | Create tokens for yourself | deployer, admin |
+| `gateway:api_token:update` | Rename or change permissions of your own tokens | deployer, admin |
+| `gateway:api_token:delete` | Delete your own tokens | deployer, admin |
+| `gateway:api_token:manage` | See and change every user's tokens, and create tokens for other users | admin |
 
 <Aside type="note">
-Users can always manage their own API tokens. These permissions control access to other users' tokens.
+A token's permissions must be within its owner's current role when it is created or edited, and every request a token makes is checked against both the token's permissions and the owner's current role. Tokens never manage tokens.
 </Aside>
 
 </TabItem>
@@ -219,8 +232,13 @@ Users can always manage their own API tokens. These permissions control access t
 |------------|-------------|-------|
 | `gateway:deploy_approval_request:create` | Create approval request | deployer, cicd, admin |
 | `gateway:deploy_approval_request:read` | View approval status | deployer, cicd, admin |
+| `gateway:deploy_approval_request:list` | List every request and its audit trail | admin |
 | `gateway:deploy_approval_request:approve` | Approve/reject request | admin |
-| `convox:deploy:deploy_with_approval` | Execute approved deploy | cicd, admin |
+| `convox:deploy:deploy_with_approval` | Execute approved deploy (API tokens) | deployer, cicd, admin |
+
+<Aside type="note">
+`deploy_with_approval` only matters for API tokens; it lets a token run the build, release and process actions of an approved deploy. Deployers hold it so they can issue CI tokens for themselves; it gates actions a deployer already has directly.
+</Aside>
 
 </TabItem>
 <TabItem label="Settings">
@@ -272,6 +290,7 @@ Admin role uses wildcard permissions:
 |------------|---------|
 | `convox:*:*` | All Convox operations |
 | `gateway:*:*` | All Gateway operations |
+| `security:*:*` | Security operations (e.g. refreshing the rack TLS certificate) |
 
 Wildcards match any value in that position:
 - `convox:app:*` would match all app actions
@@ -286,8 +305,8 @@ Wildcard permissions are reserved for the admin role. Custom roles cannot use wi
 When a request arrives, the gateway:
 
 1. **Identifies the user** from session or API token
-2. **Maps the endpoint** to a permission (e.g., `DELETE /apps/myapp` → `convox:app:delete`)
-3. **Checks role** against the required permission
+2. **Maps the endpoint** to a permission (e.g., `DELETE /apps/myapp` → `convox:app:delete`). Every gateway endpoint under `/api/v1` is declared in a route policy table with the permissions it needs; an endpoint that isn't in the table is refused.
+3. **Checks the caller's current roles** against the required permission. Roles are read from the database on every request, so a demotion takes effect immediately. An API token must hold the permission itself *and* its owner's current role must allow it.
 4. **Logs the decision** to audit trail
 
 ```mermaid

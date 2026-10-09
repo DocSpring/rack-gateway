@@ -10,8 +10,12 @@ export interface HandlersUserInfo {
   email: string;
   has_trusted_device: boolean;
   mfa_enrolled: boolean;
+  mfa_pending: boolean;
   mfa_required: boolean;
   name: string;
+  /** Permissions are the caller's effective permissions (from their roles, or an API token's own
+list) so clients can hide what the caller can't use. The server still enforces every request. */
+  permissions: string[];
   preferred_mfa_method?: string;
   recent_step_up_expires_at?: string;
   roles: string[];

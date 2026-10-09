@@ -222,6 +222,7 @@ func (h *AuthHandler) CLILoginMFASubmit(c *gin.Context) {
 	if !h.markCLILoginVerified(c, parsed.state, verification) {
 		return
 	}
+	h.completeBrowserSessionMFA(c, userRecord)
 
 	c.JSON(http.StatusOK, gin.H{"redirect": WebRoute("cli/auth/success")})
 }

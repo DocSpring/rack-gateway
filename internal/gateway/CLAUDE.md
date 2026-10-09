@@ -32,17 +32,34 @@ Key files:
 
 ### `/rbac` - Role-Based Access Control
 
-Database-backed RBAC with PostgreSQL:
+Casbin policies built from `rbac/roles_config.go`, checked against each caller's current database roles:
 
-- **Roles**: viewer, ops, deployer, admin
-- **Permissions**: `convox:{resource}:{action}` (e.g., `convox:apps:delete`)
+- **Roles**: viewer, ops, deployer, admin (people) and cicd (API tokens only)
+- **Permissions**: `{scope}:{resource}:{action}` (e.g., `convox:app:delete`, `gateway:user:read`)
 - **Admin role**: Wildcard access to all resources
+- **Principals**: `rbac.Authorize(principal, permission)`; an API token needs the permission itself AND
+  its owner's current role must allow it
+
+**Every authenticated `/api/v1` route MUST be declared in `rbac/gateway_routes.go`.** The `Authorize`
+middleware (`middleware/authorize.go`) denies any route missing from the table, and
+`routes/route_coverage_test.go` fails CI for a registered route without a policy (or a policy without a
+route). Use the builders in `rbac/http_routes.go`:
+
+- `newHTTPRoute` - humans holding every listed permission
+- `newTokenRoute` - same, and API tokens may call it (keep this list tiny; CI only)
+- `newSelfRoute` - any signed-in human; the handler must scope data to the caller
+- `newOwnUserRoute` - `/users/:email/...` routes a user may call for their own account; anyone else
+  needs the listed permissions
+
+Permissions on a route also select its MFA level (`rbac/mfa_requirements.go`). Handlers that act on
+another user's resources (e.g. API tokens) must still check ownership themselves.
 
 Key files:
 
-- `rbac/rbac.go` - RBAC manager interface
-- `rbac/postgres.go` - PostgreSQL implementation
-- `rbac/middleware.go` - RBAC enforcement middleware
+- `rbac/rbac.go` - RBAC manager (`Authorize`)
+- `rbac/roles_config.go` - Role permissions
+- `rbac/gateway_routes.go` - Route policy table
+- `middleware/authorize.go` - Route authorization middleware
 
 ### `/proxy` - Convox API Proxy
 
@@ -50,13 +67,20 @@ Request forwarding with WebSocket support:
 
 - Never exposes real Convox rack tokens to clients
 - Injects rack token from environment variables
-- Adds tracing headers: `X-User-Email`, `X-Request-ID`
+- Forwards only an allowlist of client headers (`proxy/forward_headers.go`); add a header there only
+  when the Convox API reads it. Privileged run options need `convox:process:run_privileged`
+- Forwards only the query parameters the Convox SDK sends (`proxy/forward_query.go`) and refuses
+  requests with any other: the rack reads options such as the exec command, release env and build
+  manifest from the query string too, which would bypass the gateway's checks
+- Sets `X-Convox-Actor` (user email or `token:<name>`); internal identity headers sent by clients are
+  stripped by `middleware/internal_headers.go`
 - Forwards all methods: GET, POST, PUT, PATCH, DELETE
 - Full WebSocket proxy support for `convox exec` and logs
 
 Key files:
 
-- `proxy/proxy.go` - HTTP proxy handler
+- `proxy/handler.go` - HTTP proxy handler
+- `proxy/forward_headers.go` - Header allowlist and gateway headers
 - `proxy/websocket.go` - WebSocket proxy
 
 ### `/audit` - Audit Logging

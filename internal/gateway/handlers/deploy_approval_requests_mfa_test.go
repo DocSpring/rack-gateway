@@ -409,6 +409,7 @@ func TestCreateAPIToken_AlwaysRequiresMFACode(t *testing.T) {
 				Session:    session,
 				MFAType:    "totp",
 				MFAValue:   code,
+				DBUser:     fixture.admin,
 			}
 			c.Request = c.Request.WithContext(context.WithValue(c.Request.Context(), auth.UserContextKey, authUser))
 			c.Set("user_email", fixture.admin.Email)

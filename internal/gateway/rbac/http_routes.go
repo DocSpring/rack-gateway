@@ -34,6 +34,10 @@ type RouteSpec struct {
 	Access RouteAccess
 	// AllowAPIToken permits API tokens on an HTTP route. Without it, only human users may call it.
 	AllowAPIToken bool
+	// SelfParam names a path parameter holding a user's email. When it equals the calling human
+	// user's email, the caller may use the route for their own account without the route's
+	// permissions. API tokens never qualify. Empty means the route has no self-service rule.
+	SelfParam string
 }
 
 // GetMFALevel returns the MFA level required for this route
@@ -104,6 +108,14 @@ func newTokenRoute(method, pattern string, permissions ...string) RouteSpec {
 func newSelfRoute(method, pattern string, mfaPermissions ...string) RouteSpec {
 	spec := newHTTPRoute(method, pattern, mfaPermissions...)
 	spec.Access = AccessAuthenticated
+	return spec
+}
+
+// newOwnUserRoute declares a /users/:email route that every human user may call for their own
+// account, and that requires every listed permission for anyone else's account.
+func newOwnUserRoute(method, pattern string, permissions ...string) RouteSpec {
+	spec := newHTTPRoute(method, pattern, permissions...)
+	spec.SelfParam = "email"
 	return spec
 }
 
