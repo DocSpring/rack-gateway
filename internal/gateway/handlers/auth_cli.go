@@ -397,13 +397,19 @@ func (h *AuthHandler) performMFAVerification(
 	case "totp":
 		verification, err = h.mfaService.VerifyTOTP(user, strings.TrimSpace(code), ipAddress, userAgent, nil)
 	case "webauthn":
+		// The challenge was started by this browser's web session; it must be consumed by the same one.
+		browserSession := h.cliBrowserSession(c, user)
+		if browserSession == nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "browser_mismatch"})
+			return nil, fmt.Errorf("browser_mismatch")
+		}
 		verification, err = h.mfaService.VerifyWebAuthnAssertion(
 			user,
 			[]byte(sessionData),
 			[]byte(assertionResponse),
 			ipAddress,
 			userAgent,
-			nil,
+			&browserSession.ID,
 		)
 	default:
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_method"})

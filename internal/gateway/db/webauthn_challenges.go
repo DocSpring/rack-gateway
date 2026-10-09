@@ -64,8 +64,8 @@ func (d *Database) CreateWebAuthnChallenge(
 	return id, nil
 }
 
-// ConsumeWebAuthnChallenge atomically deletes and returns an unexpired challenge owned by userID.
-// When the challenge was started from a session and sessionID is given, the sessions must match.
+// ConsumeWebAuthnChallenge atomically deletes and returns an unexpired challenge owned by userID that was
+// started by the same session (sessionID nil only matches a challenge started without a session).
 func (d *Database) ConsumeWebAuthnChallenge(
 	id string,
 	userID int64,
@@ -75,9 +75,9 @@ func (d *Database) ConsumeWebAuthnChallenge(
 	row := d.queryRow(`
 		DELETE FROM webauthn_challenges
 		WHERE id = ? AND user_id = ? AND purpose = ? AND expires_at > NOW()
-		  AND (session_id IS NULL OR ?::BIGINT IS NULL OR session_id = ?::BIGINT)
+		  AND session_id IS NOT DISTINCT FROM ?::BIGINT
 		RETURNING id, user_id, session_id, purpose, session_data`,
-		id, userID, purpose, nullableInt64(sessionID), nullableInt64(sessionID),
+		id, userID, purpose, nullableInt64(sessionID),
 	)
 	return scanWebAuthnChallenge(row)
 }

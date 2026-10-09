@@ -5178,6 +5178,7 @@ export interface components {
         };
         "handlers.VerifyWebAuthnAssertionRequest": {
             assertion_response: string;
+            /** @description SessionData is the challenge ID returned by /auth/mfa/webauthn/assertion/start. */
             session_data: string;
             trust_device?: boolean;
         };
@@ -5188,7 +5189,10 @@ export interface components {
         "handlers.WebAuthnAssertionStartResponse": {
             /** @description protocol.CredentialAssertion */
             options: unknown;
-            /** @description SessionData is the serialized session to send back with verification */
+            /**
+             * @description SessionData is an opaque, single-use challenge ID to send back with the assertion.
+             *     The challenge itself is stored server-side and expires after a few minutes.
+             */
             session_data: string;
         };
         "handlers.WebAuthnEnrollmentResponse": {

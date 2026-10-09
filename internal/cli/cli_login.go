@@ -2,7 +2,6 @@ package cli
 
 import (
 	"fmt"
-	"net"
 	"net/url"
 	"os"
 	"strings"
@@ -36,7 +35,12 @@ Provide both rack name and gateway URL to login to a new rack.`,
 }
 
 func loginCommandWithFlags(args []string, noOpen bool, authFile string) error {
-	rack, gatewayURL, err := resolveLoginTarget(args)
+	rack, rawGatewayURL, err := resolveLoginTarget(args)
+	if err != nil {
+		return err
+	}
+	// Refuses plain http to a non-loopback gateway before anything is sent to it.
+	gatewayURL, err := NormalizeGatewayURL(rawGatewayURL)
 	if err != nil {
 		return err
 	}
@@ -222,14 +226,6 @@ func validateAuthURL(authURL, gatewayURL string) error {
 		return nil
 	}
 	return fmt.Errorf("gateway returned a login URL that is not https: %q", parsed.Redacted())
-}
-
-func isLoopbackHost(host string) bool {
-	if host == "localhost" {
-		return true
-	}
-	ip := net.ParseIP(host)
-	return ip != nil && ip.IsLoopback()
 }
 
 func finalizeLogin(rack string, loginResp *LoginResponse) error {

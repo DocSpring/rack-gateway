@@ -6580,6 +6580,7 @@
                         "type": "string"
                     },
                     "session_data": {
+                        "description": "SessionData is the challenge ID returned by /auth/mfa/webauthn/assertion/start.",
                         "type": "string"
                     },
                     "trust_device": {
@@ -6613,7 +6614,7 @@
                         "description": "protocol.CredentialAssertion"
                     },
                     "session_data": {
-                        "description": "SessionData is the serialized session to send back with verification",
+                        "description": "SessionData is an opaque, single-use challenge ID to send back with the assertion.\nThe challenge itself is stored server-side and expires after a few minutes.",
                         "type": "string"
                     }
                 }

@@ -98,6 +98,10 @@ func TestWebAuthnAssertionRejectsForgedOrForeignChallenge(t *testing.T) {
 	_, _, err = f.assert(t, &sessionA, &sessionB)
 	require.ErrorIs(t, err, ErrWebAuthnChallenge)
 
+	// Nor can it be redeemed by a caller that names no session.
+	_, _, err = f.assert(t, &sessionA, nil)
+	require.ErrorIs(t, err, ErrWebAuthnChallenge)
+
 	// The owning session succeeds.
 	f.credential.Counter = 1
 	_, _, err = f.assert(t, &sessionA, &sessionA)

@@ -179,7 +179,7 @@ The integration tests create backups of the real Convox CLI configuration to pre
 3. Always print the login URL, then try to open the browser (only https URLs, or http to a loopback
    identity provider when the gateway is loopback)
 4. The gateway exchanges Google's code, binds the browser, runs MFA, and redirects the browser to the
-   loopback listener with a single-use login code (or `error=<code>`, e.g. `cancelled`)
+   loopback listener with a single-use login code (or `error=<code>`, e.g. `canceled`)
 5. Redeem the login code with the verifier at `POST /api/v1/auth/cli/complete` for a session token
 6. Token stored in config file
 

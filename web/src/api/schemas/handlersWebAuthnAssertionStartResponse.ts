@@ -9,6 +9,7 @@
 export interface HandlersWebAuthnAssertionStartResponse {
   /** protocol.CredentialAssertion */
   options: unknown;
-  /** SessionData is the serialized session to send back with verification */
+  /** SessionData is an opaque, single-use challenge ID to send back with the assertion.
+The challenge itself is stored server-side and expires after a few minutes. */
   session_data: string;
 }
