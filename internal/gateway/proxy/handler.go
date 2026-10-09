@@ -310,6 +310,9 @@ func (h *Handler) handleForwardError(
 }
 
 func (h *Handler) isAllowedConvoxRoute(r *http.Request, rackPath string) bool {
+	if !isSafeRackPath(rackPath) {
+		return false
+	}
 	methodForAllow := h.determineMethod(r)
 	_, _, ok := rbac.MatchRackRoute(methodForAllow, rackPath)
 	return ok

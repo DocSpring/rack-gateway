@@ -30,11 +30,12 @@ func _() {
 	_ = x[ActionUnset-19]
 	_ = x[ActionUpdate-20]
 	_ = x[ActionUpdateName-21]
+	_ = x[ActionRunPrivileged-22]
 }
 
-const _Action_name = "addapprovecreatedeletedeploy_with_approvalexecgenerateimportkeyrolllistmanagepromotereadremoverestartsetstartstopterminateunsetupdateupdate_name"
+const _Action_name = "addapprovecreatedeletedeploy_with_approvalexecgenerateimportkeyrolllistmanagepromotereadremoverestartsetstartstopterminateunsetupdateupdate_namerun_privileged"
 
-var _Action_index = [...]uint8{0, 3, 10, 16, 22, 42, 46, 54, 60, 67, 71, 77, 84, 88, 94, 101, 104, 109, 113, 122, 127, 133, 144}
+var _Action_index = [...]uint8{0, 3, 10, 16, 22, 42, 46, 54, 60, 67, 71, 77, 84, 88, 94, 101, 104, 109, 113, 122, 127, 133, 144, 158}
 
 func (i Action) String() string {
 	idx := int(i) - 0

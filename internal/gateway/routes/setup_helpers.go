@@ -13,6 +13,8 @@ import (
 )
 
 func setupGlobalMiddleware(router *gin.Engine, cfg *Config) {
+	router.Use(middleware.StripInternalHeaders())
+
 	if cfg.SentryEnabled {
 		options := sentrygin.Options{
 			Repanic:         true,
