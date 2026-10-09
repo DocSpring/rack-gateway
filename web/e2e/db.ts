@@ -514,7 +514,7 @@ export async function createPendingDeployApprovalRequest(): Promise<string> {
   return await withDbClient(async (client) => {
     // Get admin user ID for the token
     const adminResult = await client.query(
-      `SELECT id FROM users WHERE email = 'admin@example.com' LIMIT 1;`
+      "SELECT id FROM users WHERE email = 'admin@example.com' LIMIT 1;"
     )
     if (adminResult.rows.length === 0) {
       throw new Error('Admin user not found')
@@ -536,7 +536,7 @@ export async function createPendingDeployApprovalRequest(): Promise<string> {
     } else {
       // Token already exists, fetch it
       const existing = await client.query(
-        `SELECT id FROM api_tokens WHERE name = 'E2E Test Token' LIMIT 1;`
+        "SELECT id FROM api_tokens WHERE name = 'E2E Test Token' LIMIT 1;"
       )
       tokenId = existing.rows[0].id
     }
