@@ -171,14 +171,20 @@ The integration tests create backups of the real Convox CLI configuration to pre
 
 ### OAuth Flow
 
-The CLI uses PKCE (Proof Key for Code Exchange) for secure OAuth without client secrets:
+`rack-gateway login` uses the RFC 8252 loopback flow (`cli_login.go`, `login_loopback.go`):
 
-1. Generate code verifier and challenge
-2. Open browser to gateway OAuth endpoint
-3. User authenticates with Google
-4. Gateway validates and returns authorization code
-5. CLI exchanges code for session token
+1. Generate a PKCE verifier/challenge and a random state; listen on `http://127.0.0.1:<random port>/callback`
+2. `POST /api/v1/auth/cli/start` with the S256 challenge, state and loopback redirect URI; the gateway
+   returns only `auth_url` (a response with `state`/`code_verifier` means an older gateway → refuse)
+3. Always print the login URL, then try to open the browser (only https URLs, or http to a loopback
+   identity provider when the gateway is loopback)
+4. The gateway exchanges Google's code, binds the browser, runs MFA, and redirects the browser to the
+   loopback listener with a single-use login code (or `error=<code>`, e.g. `cancelled`)
+5. Redeem the login code with the verifier at `POST /api/v1/auth/cli/complete` for a session token
 6. Token stored in config file
+
+The browser must be on the same machine as the CLI (remote hosts: `ssh -L <port>:127.0.0.1:<port>`).
+The login times out after 10 minutes. A gateway upgrade to this flow needs a matching CLI build.
 
 ### Error Handling
 

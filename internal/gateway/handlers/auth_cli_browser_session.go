@@ -19,22 +19,30 @@ import (
 // guarantee the web challenge gives. Only a web session belonging to the verified user is touched.
 // Failures are logged rather than returned because the CLI login itself is already approved.
 func (h *AuthHandler) completeBrowserSessionMFA(c *gin.Context, user *db.User) {
-	if h.sessions == nil || user == nil {
-		return
-	}
-	token, err := c.Cookie("session_token")
-	if err != nil || strings.TrimSpace(token) == "" {
-		return
-	}
-	result, err := h.sessions.ValidateSession(token, c.ClientIP(), c.GetHeader("User-Agent"))
-	if err != nil || result == nil || result.Session == nil || result.User == nil {
-		return
-	}
-	session := result.Session
-	if result.User.ID != user.ID || session.Channel != "web" || session.MFAVerifiedAt != nil {
+	session := h.cliBrowserSession(c, user)
+	if session == nil || session.MFAVerifiedAt != nil {
 		return
 	}
 	if err := h.sessions.UpdateSessionMFAVerified(session.ID, time.Now(), nil); err != nil {
 		log.Printf("cli mfa: failed to verify browser session=%d user=%s: %v", session.ID, user.Email, err)
 	}
+}
+
+// cliBrowserSession returns this browser's web session when it belongs to user, or nil.
+func (h *AuthHandler) cliBrowserSession(c *gin.Context, user *db.User) *db.UserSession {
+	if h.sessions == nil || user == nil {
+		return nil
+	}
+	token, err := c.Cookie("session_token")
+	if err != nil || strings.TrimSpace(token) == "" {
+		return nil
+	}
+	result, err := h.sessions.ValidateSession(token, c.ClientIP(), c.GetHeader("User-Agent"))
+	if err != nil || result == nil || result.Session == nil || result.User == nil {
+		return nil
+	}
+	if result.User.ID != user.ID || result.Session.Channel != "web" {
+		return nil
+	}
+	return result.Session
 }

@@ -26,7 +26,6 @@ import { AppSettingsPage } from './pages/app-settings-page'
 import { AppsListPage } from './pages/apps-list-page'
 import { AuditPage } from './pages/audit-page'
 import { CallbackPage } from './pages/callback-page'
-import { CLIAuthSuccessPage } from './pages/cli-auth-success-page'
 import { DeployApprovalRequestDetailPage } from './pages/deploy-approval-request-detail-page'
 import { DeployApprovalRequestsPage } from './pages/deploy-approval-requests-page'
 import { InstancesPage } from './pages/instances-page'
@@ -77,11 +76,6 @@ function buildRouteTree() {
     getParentRoute: () => rootRoute,
     path: 'auth/mfa/challenge',
     component: MFAChallengePage,
-  })
-  const cliAuthSuccessRoute = createRoute({
-    getParentRoute: () => rootRoute,
-    path: 'cli/auth/success',
-    component: CLIAuthSuccessPage,
   })
 
   // App layout route with nested pages
@@ -259,7 +253,6 @@ function buildRouteTree() {
     callbackRoute,
     loginErrorRoute,
     mfaChallengeRoute,
-    cliAuthSuccessRoute,
     layoutRoute.addChildren(layoutChildren),
   ])
 }

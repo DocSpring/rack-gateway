@@ -48,11 +48,15 @@ For the complete, generated schema, use `GET /openapi.json`.
 
 ### OAuth + CLI Login
 
-- `POST /auth/cli/start`
-- `GET /auth/cli/callback`
-- `POST /auth/cli/complete`
-- `GET /auth/cli/mfa`
-- `POST /auth/cli/mfa`
+CLI login uses the RFC 8252 loopback flow (see [OAuth Flow](/security/authentication/oauth-flow/)):
+
+- `POST /auth/cli/start` - S256 code challenge, CLI state and loopback `redirect_uri`; returns `auth_url`
+- `GET /auth/cli/callback` - identity provider redirect; exchanges the code, then binds the browser
+- `GET /auth/cli/mfa` - continues the bound browser to MFA (or enrollment)
+- `POST /auth/cli/mfa` - submits an MFA code from the bound browser
+- `GET /auth/cli/return` - issues the single-use login code and redirects the browser to the CLI's loopback listener
+- `POST /auth/cli/cancel` - cancels the login from the bound browser; returns the loopback URL that tells the CLI
+- `POST /auth/cli/complete` - redeems the login code with the CLI's code verifier for a session token
 - `GET /auth/web/login` (also supports `HEAD`)
 - `GET /auth/web/callback`
 - `GET /auth/web/logout`

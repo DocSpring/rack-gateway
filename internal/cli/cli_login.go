@@ -1,11 +1,11 @@
 package cli
 
 import (
-	"errors"
 	"fmt"
+	"net"
+	"net/url"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/spf13/cobra"
 )
@@ -30,7 +30,7 @@ Provide both rack name and gateway URL to login to a new rack.`,
 	}
 
 	cmd.Flags().BoolVar(&noOpen, "no-open", false, "Don't open browser automatically")
-	cmd.Flags().StringVar(&authFile, "auth-file", "", "Write auth details to file for automation")
+	cmd.Flags().StringVar(&authFile, "auth-file", "", "Write the login URL to file for automation")
 
 	return cmd
 }
@@ -43,20 +43,7 @@ func loginCommandWithFlags(args []string, noOpen bool, authFile string) error {
 
 	fmt.Printf("Starting login for rack: %s via gateway: %s\n", rack, gatewayURL)
 
-	startResp, err := StartLogin(gatewayURL)
-	if err != nil {
-		return fmt.Errorf("failed to start login: %w", err)
-	}
-
-	fmt.Printf("Auth URL: %s\n", startResp.AuthURL)
-	if err := writeAuthFile(authFile, startResp); err != nil {
-		return err
-	}
-
-	notifyBrowser(startResp.AuthURL, noOpen)
-
-	deviceInfo := DetermineDeviceInfo()
-	loginResp, err := pollLoginCompletion(gatewayURL, startResp, deviceInfo)
+	loginResp, err := runLoopbackLogin(gatewayURL, noOpen, authFile)
 	if err != nil {
 		return err
 	}
@@ -67,6 +54,58 @@ func loginCommandWithFlags(args []string, noOpen bool, authFile string) error {
 
 	fmt.Printf("✓ Successfully logged in to %s as %s\n", rack, loginResp.Email)
 	return nil
+}
+
+// runLoopbackLogin performs an RFC 8252 loopback login: the browser hands a single-use login code
+// back to this process on 127.0.0.1, and only this process holds the PKCE verifier to redeem it.
+func runLoopbackLogin(gatewayURL string, noOpen bool, authFile string) (*LoginResponse, error) {
+	challenge, err := newPKCE()
+	if err != nil {
+		return nil, err
+	}
+	state, err := randomURLSafe(32)
+	if err != nil {
+		return nil, err
+	}
+
+	loopback, err := startLoopbackServer(state, gatewayURL)
+	if err != nil {
+		return nil, err
+	}
+	defer loopback.close()
+
+	deviceInfo := DetermineDeviceInfo()
+	startResp, err := StartLogin(gatewayURL, LoginStartRequest{
+		CodeChallenge:       challenge.challenge,
+		CodeChallengeMethod: "S256",
+		RedirectURI:         loopback.redirectURI,
+		State:               state,
+		DeviceName:          deviceInfo.Name,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to start login: %w", err)
+	}
+	if err := validateAuthURL(startResp.AuthURL, gatewayURL); err != nil {
+		return nil, err
+	}
+	if err := writeAuthFile(authFile, startResp); err != nil {
+		return nil, err
+	}
+
+	notifyBrowser(startResp.AuthURL, noOpen)
+	// The listener address matters when the browser is on another machine (forward it with ssh -L).
+	fmt.Printf("Waiting for the browser to return to %s ...\n", loopback.redirectURI)
+
+	loginCode, err := loopback.wait(loginTimeout)
+	if err != nil {
+		return nil, fmt.Errorf("login failed: %w", err)
+	}
+
+	loginResp, err := CompleteLogin(gatewayURL, loginCode, challenge.verifier, deviceInfo)
+	if err != nil {
+		return nil, fmt.Errorf("login failed: %w", err)
+	}
+	return loginResp, nil
 }
 
 func resolveLoginTarget(args []string) (string, string, error) {
@@ -138,59 +177,59 @@ func resolveLoginGatewayURL(rack string) (string, error) {
 	return LoadGatewayURL(rack)
 }
 
+// writeAuthFile records the login URL for automation (e.g. E2E tests drive the browser step).
+// It never contains the PKCE verifier or the CLI's state.
 func writeAuthFile(path string, startResp *LoginStartResponse) error {
 	if path == "" {
 		return nil
 	}
-	content := fmt.Sprintf(
-		"AUTH_URL=%s\nSTATE=%s\nCODE_VERIFIER=%s\n",
-		startResp.AuthURL,
-		startResp.State,
-		startResp.CodeVerifier,
-	)
+	content := fmt.Sprintf("AUTH_URL=%s\n", startResp.AuthURL)
 	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
 		return fmt.Errorf("failed to write auth file: %w", err)
 	}
 	return nil
 }
 
+// notifyBrowser always prints the login URL (the browser may open somewhere you can't see it, or not
+// at all, e.g. over SSH or from an agent), then tries to open it unless noOpen is set.
 func notifyBrowser(authURL string, noOpen bool) {
+	fmt.Printf("Open this URL in your browser to log in (on this machine):\n%s\n", authURL)
 	if noOpen {
 		return
 	}
-	fmt.Printf("Opening browser for authentication...\n")
 	if err := OpenBrowser(authURL); err != nil {
-		fmt.Printf("Please open this URL in your browser:\n%s\n", authURL)
+		fmt.Printf("Could not open a browser automatically: %v\n", err)
 	}
 }
 
-func pollLoginCompletion(
-	gatewayURL string,
-	startResp *LoginStartResponse,
-	deviceInfo DeviceInfo,
-) (*LoginResponse, error) {
-	deadline := time.Now().Add(2 * time.Minute)
-	pendingNotified := false
-	for {
-		resp, err := CompleteLogin(gatewayURL, startResp.State, startResp.CodeVerifier, deviceInfo)
-		if err == nil {
-			return resp, nil
-		}
-
-		if !errors.Is(err, ErrLoginPending) {
-			return nil, fmt.Errorf("login failed: %w", err)
-		}
-
-		if !pendingNotified {
-			fmt.Println("Waiting for multi-factor authentication to complete in your browser...")
-			pendingNotified = true
-		}
-
-		if time.Now().After(deadline) {
-			return nil, fmt.Errorf("login timed out waiting for browser authentication")
-		}
-		time.Sleep(1 * time.Second)
+// validateAuthURL lets the CLI open the identity provider's https sign-in page (Google, or the
+// gateway's configured OIDC issuer), or a loopback identity provider when the gateway itself is on a
+// loopback address (local development and tests). Other schemes and URLs with credentials are refused.
+func validateAuthURL(authURL, gatewayURL string) error {
+	parsed, err := url.Parse(authURL)
+	if err != nil {
+		return fmt.Errorf("gateway returned an invalid login URL: %w", err)
 	}
+	if parsed.User != nil || parsed.Hostname() == "" {
+		return fmt.Errorf("gateway returned an unexpected login URL %q", parsed.Redacted())
+	}
+	if parsed.Scheme == "https" {
+		return nil
+	}
+	gateway, err := url.Parse(buildGatewayAPIURL(gatewayURL, ""))
+	if err == nil && parsed.Scheme == "http" && isLoopbackHost(gateway.Hostname()) &&
+		isLoopbackHost(parsed.Hostname()) {
+		return nil
+	}
+	return fmt.Errorf("gateway returned a login URL that is not https: %q", parsed.Redacted())
+}
+
+func isLoopbackHost(host string) bool {
+	if host == "localhost" {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }
 
 func finalizeLogin(rack string, loginResp *LoginResponse) error {

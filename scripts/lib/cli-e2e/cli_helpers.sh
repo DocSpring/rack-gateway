@@ -33,26 +33,39 @@ login_cli_as() {
 
     local AUTH_URL STATE
     AUTH_URL=$(sed -n 's/^AUTH_URL=//p' "$AUTH_FILE")
-    STATE=$(sed -n 's/^STATE=//p' "$AUTH_FILE")
+    # The gateway's own OAuth state is a parameter of the identity provider URL. The browser
+    # (curl, holding the login's binding cookie) uses it to submit MFA for this login.
+    STATE=$(printf '%s' "$AUTH_URL" | sed -n 's/.*[?&]state=\([^&]*\).*/\1/p')
     if [[ -z "$AUTH_URL" || -z "$STATE" ]]; then
         echo -e "${RED}Auth URL or state not produced" >&2
         kill $CLI_PID || true
         exit 1
     fi
 
+    # The browser (curl) follows the redirects; without MFA they end at the CLI's loopback listener.
+    # It must stay on the gateway's own hostname (DOMAIN=localhost in the test stack): the login's
+    # binding cookie is scoped to that host, as it would be in a real browser.
     echo "  - Driving OAuth authorization for ${user_email} (headless)..."
     curl -s -L -c "$COOKIE_FILE" -b "$COOKIE_FILE" -o /dev/null "${AUTH_URL}&selected_user=${user_email}" || true
 
     if [[ -n "$secret" ]]; then
         local totp_code
         totp_code=$(generate_totp_code "$secret")
-        echo "    Sending MFA code for state: ${STATE}"
-        local mfa_response
+        echo "    Sending MFA code for the login"
+        local mfa_response return_path
         mfa_response=$(curl -s -c "$COOKIE_FILE" -b "$COOKIE_FILE" \
             -H "Content-Type: application/json" \
             --data "{\"state\":\"${STATE}\",\"code\":\"${totp_code}\"}" \
-            "http://127.0.0.1:${GATEWAY_PORT}/api/v1/auth/cli/mfa")
-        echo "    MFA response: $mfa_response"
+            "http://localhost:${GATEWAY_PORT}/api/v1/auth/cli/mfa")
+        return_path=$(printf '%s' "$mfa_response" | sed -n 's/.*"redirect":"\([^"]*\)".*/\1/p')
+        if [[ -z "$return_path" ]]; then
+            echo -e "${RED}MFA submission failed: ${mfa_response}${NC}" >&2
+            kill $CLI_PID 2>/dev/null || true
+            exit 1
+        fi
+        echo "  - Returning the browser to the CLI..."
+        curl -s -L -c "$COOKIE_FILE" -b "$COOKIE_FILE" -o /dev/null \
+            "http://localhost:${GATEWAY_PORT}${return_path}" || true
     fi
 
     echo "  - Waiting for CLI to complete..."
@@ -98,6 +111,8 @@ verify_command_status_and_output() {
     echo -e "${BLUE}Running: $shell_cmd...${NC}"
     set +e
     local output
+    # Never inherit the harness's stdin: `convox env set` (and similar) read extra input from a
+    # non-terminal stdin until EOF, which hangs forever if stdin is an open pipe.
     output=$(eval "$shell_cmd" 2>&1 </dev/null)
     local exit_status=$?
     set -e

@@ -1,6 +1,8 @@
 package routes_test
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -10,24 +12,38 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 )
 
-// startCLILogin creates a CLI login state whose OAuth exchange has completed for the user, as
-// CLILoginMFAForm leaves it before the browser shows the MFA challenge.
-func (e *mfaRouteEnv) startCLILogin(t *testing.T, state string, user *db.User) {
+// startCLILogin creates a CLI login whose browser has been bound after a successful identity provider
+// exchange for the user, as the callback leaves it before the MFA challenge. It returns the
+// browser-binding cookie value.
+func (e *mfaRouteEnv) startCLILogin(t *testing.T, state string, user *db.User) string {
 	t.Helper()
-	if err := e.database.StoreCLILoginState(state, "verifier"); err != nil {
+	err := e.database.CreateCLILoginState(db.NewCLILogin{
+		State:             state,
+		OAuthCodeVerifier: "verifier",
+		CLICodeChallenge:  "challenge",
+		CLIRedirectURI:    "http://127.0.0.1:43123/callback",
+		CLIState:          "cli-" + state,
+	})
+	if err != nil {
 		t.Fatal(err)
 	}
-	if err := e.database.SetCLILoginProfile(state, user.Email, user.Name); err != nil {
-		t.Fatal(err)
+	binding := "binding-" + state
+	sum := sha256.Sum256([]byte(binding))
+	bound, err := e.database.BindCLILoginBrowser(state, hex.EncodeToString(sum[:]), user.Email, user.Name)
+	if err != nil || !bound {
+		t.Fatalf("bind CLI login browser: bound=%v err=%v", bound, err)
 	}
+	return binding
 }
 
 func cliMFABody(state, code string) string {
 	return fmt.Sprintf(`{"state":%q,"method":"totp","code":%q}`, state, code)
 }
 
-func cookieOnly(s *webSession) map[string]string {
-	return map[string]string{"Cookie": s.headers["Cookie"]}
+// boundBrowser sends the browser's session cookie and the CLI login's binding cookie, as the browser
+// that approved the login does.
+func boundBrowser(s *webSession, binding string) map[string]string {
+	return map[string]string{"Cookie": s.headers["Cookie"] + "; rgw_cli_login=" + binding}
 }
 
 func (e *mfaRouteEnv) sessionVerified(t *testing.T, s *webSession) bool {
@@ -56,9 +72,10 @@ func typedBackupCode(code string) string {
 func TestCLILoginMFAVerifiesBrowserSession(t *testing.T) {
 	e := newMFARouteEnv(t, "cli-browser@example.com")
 	browser := e.newSession(t, e.user)
-	e.startCLILogin(t, "cli-state-browser", e.user)
+	binding := e.startCLILogin(t, "cli-state-browser", e.user)
 
-	w := e.do("POST", "/api/v1/auth/cli/mfa", cliMFABody("cli-state-browser", e.currentCode(t)), cookieOnly(browser))
+	w := e.do("POST", "/api/v1/auth/cli/mfa", cliMFABody("cli-state-browser", e.currentCode(t)),
+		boundBrowser(browser, binding))
 	assertStatus(t, w, http.StatusOK, "CLI MFA submit")
 
 	if !e.sessionVerified(t, browser) {
@@ -74,9 +91,10 @@ func TestCLILoginMFALeavesOtherUsersSessionsPending(t *testing.T) {
 		t.Fatal(err)
 	}
 	browser := e.newSession(t, bystander)
-	e.startCLILogin(t, "cli-state-other", e.user)
+	binding := e.startCLILogin(t, "cli-state-other", e.user)
 
-	w := e.do("POST", "/api/v1/auth/cli/mfa", cliMFABody("cli-state-other", e.currentCode(t)), cookieOnly(browser))
+	w := e.do("POST", "/api/v1/auth/cli/mfa", cliMFABody("cli-state-other", e.currentCode(t)),
+		boundBrowser(browser, binding))
 	assertStatus(t, w, http.StatusOK, "CLI MFA submit")
 
 	if e.sessionVerified(t, browser) {
@@ -146,13 +164,13 @@ func TestBackupCodeApprovesCLILoginOnce(t *testing.T) {
 	codes := e.backupCodes(t)
 	browser := e.newSession(t, e.user)
 
-	e.startCLILogin(t, "cli-state-backup-1", e.user)
+	binding := e.startCLILogin(t, "cli-state-backup-1", e.user)
 	w := e.do("POST", "/api/v1/auth/cli/mfa", cliMFABody("cli-state-backup-1", typedBackupCode(codes[0])),
-		cookieOnly(browser))
+		boundBrowser(browser, binding))
 	assertStatus(t, w, http.StatusOK, "CLI MFA submit with backup code")
 
-	e.startCLILogin(t, "cli-state-backup-2", e.user)
-	w = e.do("POST", "/api/v1/auth/cli/mfa", cliMFABody("cli-state-backup-2", codes[0]), cookieOnly(browser))
+	binding = e.startCLILogin(t, "cli-state-backup-2", e.user)
+	w = e.do("POST", "/api/v1/auth/cli/mfa", cliMFABody("cli-state-backup-2", codes[0]), boundBrowser(browser, binding))
 	assertStatus(t, w, http.StatusBadRequest, "CLI MFA submit with reused backup code")
 	if !strings.Contains(w.Body.String(), "invalid_code") {
 		t.Fatalf("expected invalid_code, got %s", w.Body.String())

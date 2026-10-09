@@ -77,13 +77,16 @@ The gateway supports two authentication channels:
 
 ### CLI Authentication
 
-1. User runs `rack-gateway login`
-2. CLI generates PKCE code verifier and challenge
-3. Browser opens to Google OAuth with challenge
-4. After approval, Google redirects back to the gateway callback
-5. CLI polls the gateway to complete login
-6. Gateway exchanges code + verifier for ID token and issues a session
+1. User runs `rack-gateway login`; the CLI listens on `http://127.0.0.1:<random port>/callback`
+2. CLI generates its PKCE code verifier and sends only the S256 challenge, its state and the loopback
+   redirect URI to the gateway
+3. Browser opens to Google OAuth (the URL is also printed in the terminal)
+4. The gateway exchanges Google's code at the callback, then binds the login to that browser
+5. After MFA, the browser is redirected to the CLI's loopback listener with a single-use login code
+6. The CLI redeems the login code with its code verifier and receives a session token
 7. Session token stored in `~/.config/rack-gateway/config.json`
+
+See [OAuth Flow](/security/authentication/oauth-flow/) for details.
 
 ## Session Management
 

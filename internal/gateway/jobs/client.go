@@ -55,6 +55,7 @@ func NewClient(pool *pgxpool.Pool, deps *Dependencies, auditAnchorConfig *AuditA
 	// Email workers - security notifications
 	river.AddWorker(workers, jobemail.NewFailedMFAWorker(deps.EmailSender))
 	river.AddWorker(workers, jobemail.NewFailedLoginWorker(deps.EmailSender))
+	river.AddWorker(workers, jobemail.NewNewCLISessionWorker(deps.EmailSender))
 	river.AddWorker(workers, jobemail.NewRateLimitUserWorker(deps.EmailSender))
 	river.AddWorker(workers, jobemail.NewRateLimitAdminWorker(deps.EmailSender))
 	river.AddWorker(workers, jobemail.NewSuspiciousActivityUserWorker(deps.EmailSender))

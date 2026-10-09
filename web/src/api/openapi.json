@@ -1562,17 +1562,16 @@
         },
         "/auth/cli/callback": {
             "get": {
-                "description": "Stores the OAuth authorization code for the CLI to finish login.",
+                "description": "Exchanges the authorization code and, only once that succeeds, binds the login to this browser.",
                 "tags": [
                     "Auth"
                 ],
-                "summary": "Complete CLI OAuth redirect",
+                "summary": "Identity provider redirect for CLI login",
                 "parameters": [
                     {
                         "description": "Authorization code",
                         "name": "code",
                         "in": "query",
-                        "required": true,
                         "schema": {
                             "type": "string"
                         }
@@ -1582,6 +1581,14 @@
                         "name": "state",
                         "in": "query",
                         "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "Identity provider error",
+                        "name": "error",
+                        "in": "query",
                         "schema": {
                             "type": "string"
                         }
@@ -1597,13 +1604,45 @@
                                 }
                             }
                         }
+                    }
+                }
+            }
+        },
+        "/auth/cli/cancel": {
+            "post": {
+                "description": "Ends the CLI login from the browser bound to it and returns the URL that tells the waiting CLI.",
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Cancel a CLI login",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/handlers.CLILoginCancelRequest"
+                            }
+                        }
+                    },
+                    "description": "Login state",
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.CLILoginRedirectResponse"
+                                }
+                            }
+                        }
                     },
                     "400": {
-                        "description": "Missing parameters",
+                        "description": "Bad Request",
                         "content": {
-                            "*/*": {
+                            "application/json": {
                                 "schema": {
-                                    "type": "string"
+                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
                                 }
                             }
                         }
@@ -1613,11 +1652,11 @@
         },
         "/auth/cli/complete": {
             "post": {
-                "description": "Exchanges the stored authorization code and PKCE verifier for a session token.",
+                "description": "Redeems the single-use login code delivered to the CLI's loopback listener, proving\npossession of the PKCE code verifier, and returns a CLI session token.",
                 "tags": [
                     "Auth"
                 ],
-                "summary": "Finalize CLI OAuth login",
+                "summary": "Finalize CLI login",
                 "requestBody": {
                     "content": {
                         "application/json": {
@@ -1665,11 +1704,11 @@
         },
         "/auth/cli/mfa": {
             "get": {
-                "description": "Displays the MFA challenge form for CLI login.",
+                "description": "Sends the bound browser to MFA (or MFA enrollment), or back to the CLI when MFA is satisfied.",
                 "tags": [
                     "Auth"
                 ],
-                "summary": "Display MFA challenge form",
+                "summary": "Continue CLI login in the browser",
                 "parameters": [
                     {
                         "description": "State",
@@ -1691,9 +1730,31 @@
                                 }
                             }
                         }
-                    },
-                    "400": {
-                        "description": "Missing parameters",
+                    }
+                }
+            }
+        },
+        "/auth/cli/return": {
+            "get": {
+                "description": "Issues a single-use login code and redirects the bound browser to the CLI's loopback listener.",
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Return the browser to the CLI",
+                "parameters": [
+                    {
+                        "description": "Login state",
+                        "name": "state",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "302": {
+                        "description": "Found",
                         "content": {
                             "*/*": {
                                 "schema": {
@@ -1707,18 +1768,39 @@
         },
         "/auth/cli/start": {
             "post": {
-                "description": "Initiates the CLI OAuth flow and returns PKCE parameters.",
+                "description": "Starts a loopback CLI login and returns the identity provider URL to open in the browser.",
                 "tags": [
                     "Auth"
                 ],
-                "summary": "Start CLI OAuth login",
+                "summary": "Start CLI login",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/handlers.CLILoginStartRequest"
+                            }
+                        }
+                    },
+                    "description": "CLI login parameters",
+                    "required": true
+                },
                 "responses": {
                     "200": {
                         "description": "OK",
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/auth.LoginStartResponse"
+                                    "$ref": "#/components/schemas/handlers.CLILoginStartResponse"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
                                 }
                             }
                         }
@@ -4930,25 +5012,6 @@
             }
         },
         "schemas": {
-            "auth.LoginStartResponse": {
-                "type": "object",
-                "required": [
-                    "auth_url",
-                    "code_verifier",
-                    "state"
-                ],
-                "properties": {
-                    "auth_url": {
-                        "type": "string"
-                    },
-                    "code_verifier": {
-                        "type": "string"
-                    },
-                    "state": {
-                        "type": "string"
-                    }
-                }
-            },
             "db.APIToken": {
                 "type": "object",
                 "properties": {
@@ -5354,11 +5417,22 @@
                     }
                 }
             },
+            "handlers.CLILoginCancelRequest": {
+                "type": "object",
+                "required": [
+                    "state"
+                ],
+                "properties": {
+                    "state": {
+                        "type": "string"
+                    }
+                }
+            },
             "handlers.CLILoginCompleteRequest": {
                 "type": "object",
                 "required": [
                     "code_verifier",
-                    "state"
+                    "login_code"
                 ],
                 "properties": {
                     "client_version": {
@@ -5376,7 +5450,18 @@
                     "device_os": {
                         "type": "string"
                     },
-                    "state": {
+                    "login_code": {
+                        "type": "string"
+                    }
+                }
+            },
+            "handlers.CLILoginRedirectResponse": {
+                "type": "object",
+                "required": [
+                    "redirect"
+                ],
+                "properties": {
+                    "redirect": {
                         "type": "string"
                     }
                 }
@@ -5415,6 +5500,43 @@
                         "type": "integer"
                     },
                     "token": {
+                        "type": "string"
+                    }
+                }
+            },
+            "handlers.CLILoginStartRequest": {
+                "type": "object",
+                "required": [
+                    "code_challenge",
+                    "code_challenge_method",
+                    "redirect_uri",
+                    "state"
+                ],
+                "properties": {
+                    "code_challenge": {
+                        "type": "string"
+                    },
+                    "code_challenge_method": {
+                        "type": "string"
+                    },
+                    "device_name": {
+                        "type": "string"
+                    },
+                    "redirect_uri": {
+                        "type": "string"
+                    },
+                    "state": {
+                        "type": "string"
+                    }
+                }
+            },
+            "handlers.CLILoginStartResponse": {
+                "type": "object",
+                "required": [
+                    "auth_url"
+                ],
+                "properties": {
+                    "auth_url": {
                         "type": "string"
                     }
                 }

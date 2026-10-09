@@ -6,7 +6,6 @@
  * OpenAPI spec version: 1.0
  */
 import type {
-  AuthLoginStartResponse,
   DbAPIToken,
   DbRackTLSCert,
   DbSlackIntegration,
@@ -25,6 +24,7 @@ import type {
   GetAuditLogsParams,
   GetAuthCliCallbackParams,
   GetAuthCliMfaParams,
+  GetAuthCliReturnParams,
   GetAuthWebCallbackParams,
   GetAuthWebLoginParams,
   GetCreatedBy200,
@@ -38,8 +38,12 @@ import type {
   GetUsersEmailAuditLogsParams,
   HandlersAuditLogsResponse,
   HandlersBackupCodesResponse,
+  HandlersCLILoginCancelRequest,
   HandlersCLILoginCompleteRequest,
+  HandlersCLILoginRedirectResponse,
   HandlersCLILoginResponse,
+  HandlersCLILoginStartRequest,
+  HandlersCLILoginStartResponse,
   HandlersConfirmTOTPEnrollmentRequest,
   HandlersConfirmWebAuthnEnrollmentRequest,
   HandlersCreateAPITokenRequest,
@@ -479,8 +483,8 @@ Secrets remain masked unless the user has secrets permissions.
   };
 
   /**
-   * Stores the OAuth authorization code for the CLI to finish login.
-   * @summary Complete CLI OAuth redirect
+   * Exchanges the authorization code and, only once that succeeds, binds the login to this browser.
+   * @summary Identity provider redirect for CLI login
    */
   const getAuthCliCallback = (
     params: GetAuthCliCallbackParams,
@@ -493,9 +497,31 @@ Secrets remain masked unless the user has secrets permissions.
   };
 
   /**
-   * Exchanges the stored authorization code and PKCE verifier for a session token.
-   * @summary Finalize CLI OAuth login
+   * Ends the CLI login from the browser bound to it and returns the URL that tells the waiting CLI.
+   * @summary Cancel a CLI login
    */
+  const postAuthCliCancel = (
+    handlersCLILoginCancelRequest: HandlersCLILoginCancelRequest,
+    options?: SecondParameter<
+      typeof createGatewayClient<HandlersCLILoginRedirectResponse>
+    >,
+  ) => {
+    return createGatewayClient<HandlersCLILoginRedirectResponse>(
+      {
+        url: `/auth/cli/cancel`,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        data: handlersCLILoginCancelRequest,
+      },
+      options,
+    );
+  };
+
+  /**
+ * Redeems the single-use login code delivered to the CLI's loopback listener, proving
+possession of the PKCE code verifier, and returns a CLI session token.
+ * @summary Finalize CLI login
+ */
   const postAuthCliComplete = (
     handlersCLILoginCompleteRequest: HandlersCLILoginCompleteRequest,
     options?: SecondParameter<
@@ -514,8 +540,8 @@ Secrets remain masked unless the user has secrets permissions.
   };
 
   /**
-   * Displays the MFA challenge form for CLI login.
-   * @summary Display MFA challenge form
+   * Sends the bound browser to MFA (or MFA enrollment), or back to the CLI when MFA is satisfied.
+   * @summary Continue CLI login in the browser
    */
   const getAuthCliMfa = (
     params: GetAuthCliMfaParams,
@@ -528,16 +554,36 @@ Secrets remain masked unless the user has secrets permissions.
   };
 
   /**
-   * Initiates the CLI OAuth flow and returns PKCE parameters.
-   * @summary Start CLI OAuth login
+   * Issues a single-use login code and redirects the bound browser to the CLI's loopback listener.
+   * @summary Return the browser to the CLI
+   */
+  const getAuthCliReturn = (
+    params: GetAuthCliReturnParams,
+    options?: SecondParameter<typeof createGatewayClient<unknown>>,
+  ) => {
+    return createGatewayClient<unknown>(
+      { url: `/auth/cli/return`, method: 'GET', params },
+      options,
+    );
+  };
+
+  /**
+   * Starts a loopback CLI login and returns the identity provider URL to open in the browser.
+   * @summary Start CLI login
    */
   const postAuthCliStart = (
+    handlersCLILoginStartRequest: HandlersCLILoginStartRequest,
     options?: SecondParameter<
-      typeof createGatewayClient<AuthLoginStartResponse>
+      typeof createGatewayClient<HandlersCLILoginStartResponse>
     >,
   ) => {
-    return createGatewayClient<AuthLoginStartResponse>(
-      { url: `/auth/cli/start`, method: 'POST' },
+    return createGatewayClient<HandlersCLILoginStartResponse>(
+      {
+        url: `/auth/cli/start`,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        data: handlersCLILoginStartRequest,
+      },
       options,
     );
   };
@@ -1397,8 +1443,10 @@ their own activity; reading another user's activity requires gateway:audit_log:r
     getAuditLogs,
     getAuditLogsExport,
     getAuthCliCallback,
+    postAuthCliCancel,
     postAuthCliComplete,
     getAuthCliMfa,
+    getAuthCliReturn,
     postAuthCliStart,
     postAuthMfaBackupCodesRegenerate,
     postAuthMfaEnrollTotpConfirm,
@@ -1578,6 +1626,9 @@ export type GetAuthCliCallbackResult = NonNullable<
     ReturnType<ReturnType<typeof getRackGatewayAPI>['getAuthCliCallback']>
   >
 >;
+export type PostAuthCliCancelResult = NonNullable<
+  Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>['postAuthCliCancel']>>
+>;
 export type PostAuthCliCompleteResult = NonNullable<
   Awaited<
     ReturnType<ReturnType<typeof getRackGatewayAPI>['postAuthCliComplete']>
@@ -1585,6 +1636,9 @@ export type PostAuthCliCompleteResult = NonNullable<
 >;
 export type GetAuthCliMfaResult = NonNullable<
   Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>['getAuthCliMfa']>>
+>;
+export type GetAuthCliReturnResult = NonNullable<
+  Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>['getAuthCliReturn']>>
 >;
 export type PostAuthCliStartResult = NonNullable<
   Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>['postAuthCliStart']>>

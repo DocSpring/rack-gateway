@@ -307,6 +307,15 @@ export const confirmWebAuthnEnrollment = (
 ): Promise<HandlersWebAuthnEnrollmentResponse> =>
   post<HandlersWebAuthnEnrollmentResponse>('/auth/mfa/enroll/webauthn/confirm', payload)
 
+// Cancels a CLI login from the browser bound to it; the response says where to send the browser so the
+// waiting CLI hears about it.
+export const cancelCliLogin = (payload: { state: string }): Promise<{ redirect: string }> =>
+  getHttpClientInstance()
+    .post<{ redirect: string }>('/auth/cli/cancel', payload, {
+      headers: { 'Content-Type': 'application/json' },
+    })
+    .then((res) => res.data)
+
 export const verifyCliMfa = (payload: {
   state: string
   method?: string

@@ -6,7 +6,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { useMutation } from '@/hooks/use-mutation'
-import { verifyCliMfa, verifyMFA, verifyWebAuthnAssertion } from '@/lib/api'
+import { cancelCliLogin, verifyCliMfa, verifyMFA, verifyWebAuthnAssertion } from '@/lib/api'
 import { authService } from '@/lib/auth'
 import { normalizeRedirectPath } from '@/lib/navigation'
 import { resolveWebRedirect, WebRoute } from '@/lib/routes'
@@ -16,6 +16,13 @@ type ChallengeMode = 'cli' | 'web'
 type CLICompletion = {
   redirect: string
 }
+
+const EXPIRED_MESSAGE =
+  'This login session has expired. Return to your terminal and start the login again.'
+const BROWSER_MISMATCH_MESSAGE =
+  'This login was started in a different browser. Finish it in the browser that opened from your terminal, or start the login again.'
+const MISSING_NEXT_STEP_MESSAGE =
+  'The gateway did not return the next login step. Return to your terminal and start the login again.'
 
 const CLI_ERROR_MESSAGES: Record<string, string> = {
   session_expired:
@@ -30,6 +37,8 @@ const CLI_ERROR_MESSAGES: Record<string, string> = {
   unauthorized: 'You do not have access to this gateway.',
   service_unavailable: 'Login approval is temporarily unavailable. Try again shortly.',
   persist_failure: 'Failed to finalise the login approval. Please try again.',
+  browser_mismatch: BROWSER_MISMATCH_MESSAGE,
+  expired: EXPIRED_MESSAGE,
 }
 
 const WEB_ERROR_MESSAGES: Record<string, string> = {
@@ -58,7 +67,9 @@ function mapQueryError(code: string | null): string | null {
     case 'load_failure':
       return 'We could not load the login session. Try again from your terminal.'
     case 'expired':
-      return 'This login session has expired. Return to your terminal and start the login again.'
+      return EXPIRED_MESSAGE
+    case 'browser_mismatch':
+      return BROWSER_MISMATCH_MESSAGE
     default:
       return code
   }
@@ -109,8 +120,16 @@ async function handleWebAuthnCLI(
     session_data: sessionData,
     assertion_response: assertionResponse,
   })
+  return cliNextStep(result)
+}
+
+// cliNextStep returns the gateway URL that hands the browser back to the waiting CLI.
+function cliNextStep(result: CLICompletion | null | undefined): string {
   const target = result?.redirect?.trim()
-  return target && target !== '' ? target : WebRoute('cli/auth/success')
+  if (!target) {
+    throw new Error(MISSING_NEXT_STEP_MESSAGE)
+  }
+  return target
 }
 
 async function handleWebAuthnWeb(
@@ -127,12 +146,28 @@ async function handleWebAuthnWeb(
   return resolveWebRedirect(redirectTarget)
 }
 
+// CLIInitiator shows where the CLI login was started so the user can spot a login they did not start.
+function CLIInitiator({ device, ipAddress }: { device: string | null; ipAddress: string | null }) {
+  if (!(device || ipAddress)) {
+    return null
+  }
+  const parts = [device, ipAddress ? `IP ${ipAddress}` : null].filter(Boolean).join(', ')
+  return (
+    <p className="text-center text-muted-foreground text-sm" data-testid="cli-login-initiator">
+      Login started from {parts}. If you did not just run <code>rack-gateway login</code>, cancel
+      this login.
+    </p>
+  )
+}
+
 export function MFAChallengePage() {
   const search = useMemo(() => new URLSearchParams(window.location.search), [])
   const state = extractParam(search, 'state')
   const channel = extractParam(search, 'channel') ?? extractParam(search, 'flow')
   const redirectParam = extractParam(search, 'redirect')
   const presetError = mapQueryError(extractParam(search, 'error'))
+  const initiatorDevice = extractParam(search, 'device')
+  const initiatorIP = extractParam(search, 'ip')
 
   const mode = resolveMode(channel, state)
   const redirectTarget = useMemo(() => normalizeRedirectPath(redirectParam), [redirectParam])
@@ -161,9 +196,11 @@ export function MFAChallengePage() {
     },
     onSuccess: (result) => {
       if (mode === 'cli') {
-        const target = result?.redirect?.trim()
-        const destination = target && target !== '' ? target : WebRoute('cli/auth/success')
-        window.location.assign(destination)
+        try {
+          window.location.assign(cliNextStep(result))
+        } catch (err) {
+          setError(mapServerError(mode, err))
+        }
         return
       }
 
@@ -179,7 +216,18 @@ export function MFAChallengePage() {
     authService.logout()
   }
 
-  const handleCancelCli = () => {
+  // Ends the login on the gateway and hands the browser to the waiting CLI, which then exits.
+  const handleCancelCli = async () => {
+    if (state) {
+      try {
+        const result = await cancelCliLogin({ state })
+        window.location.assign(cliNextStep(result))
+        return
+      } catch (err) {
+        setError(mapServerError(mode, err))
+        return
+      }
+    }
     if (window.opener) {
       window.close()
       return
@@ -194,6 +242,9 @@ export function MFAChallengePage() {
       <Card className="w-full max-w-xl">
         <CardHeader className="space-y-3 text-center">
           <CardTitle className="text-center">{title}</CardTitle>
+          {mode === 'cli' ? (
+            <CLIInitiator device={initiatorDevice} ipAddress={initiatorIP} />
+          ) : null}
         </CardHeader>
         <CardContent className="space-y-6">
           {error ? (

@@ -6,11 +6,10 @@
  * OpenAPI spec version: 1.0
  */
 
-export interface HandlersCLILoginCompleteRequest {
-  client_version?: string;
-  code_verifier: string;
-  device_id?: string;
+export interface HandlersCLILoginStartRequest {
+  code_challenge: string;
+  code_challenge_method: string;
   device_name?: string;
-  device_os?: string;
-  login_code: string;
+  redirect_uri: string;
+  state: string;
 }
