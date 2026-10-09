@@ -6,17 +6,9 @@
  * OpenAPI spec version: 1.0
  */
 
-export type GetAuthCliCallbackParams = {
+export type GetAuthCliReturnParams = {
   /**
-   * Authorization code
-   */
-  code?: string;
-  /**
-   * State
+   * Login state
    */
   state: string;
-  /**
-   * Identity provider error
-   */
-  error?: string;
 };

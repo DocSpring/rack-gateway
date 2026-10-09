@@ -151,9 +151,10 @@ func (n *Notifier) shouldSendEmail(recipient, subject, eventType string) bool {
 }
 
 // NewCLISession emails the user when a CLI session is created for their account, so a login they
-// did not start is noticed.
+// did not start is noticed. Repeats are suppressed per user and client IP (the device name is chosen
+// by the client, so it can't decide whether the email is sent).
 func (n *Notifier) NewCLISession(userEmail, userName, deviceName, ipAddress, userAgent string) {
-	n.enqueueSecurityNotification(userEmail, "New CLI Login", "cli_session:"+deviceName, jobemail.NewCLISessionArgs{
+	n.enqueueSecurityNotification(userEmail, "New CLI Login", "cli_session:"+ipAddress, jobemail.NewCLISessionArgs{
 		UserEmail:  userEmail,
 		UserName:   userName,
 		DeviceName: deviceName,

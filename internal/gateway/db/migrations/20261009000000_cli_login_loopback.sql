@@ -1,18 +1,18 @@
 -- CLI login now uses an RFC 8252 loopback redirect:
 --   * the CLI sends an S256 code challenge, its own state and a 127.0.0.1 redirect URI to /auth/cli/start
---   * the browser that completes Google OAuth is bound to the login with an HttpOnly cookie
+--   * the identity provider code is exchanged at the callback (never stored), and only then is the
+--     browser that completed the login bound to it with an HttpOnly cookie
 --   * after MFA the browser is redirected to the CLI's loopback listener with a single-use login code
 --   * /auth/cli/complete requires that login code AND the CLI's code verifier
 -- Login states only live for minutes, so existing rows are discarded.
 DELETE FROM cli_login_states;
 
-ALTER TABLE cli_login_states RENAME COLUMN code TO oauth_code;
 ALTER TABLE cli_login_states RENAME COLUMN code_verifier TO oauth_code_verifier;
 
 ALTER TABLE cli_login_states
+  DROP COLUMN code,
   DROP COLUMN login_token,
   DROP COLUMN login_expires_at,
-  ALTER COLUMN oauth_code TYPE TEXT,
   ADD COLUMN cli_code_challenge VARCHAR(64) NOT NULL,
   ADD COLUMN cli_redirect_uri VARCHAR(64) NOT NULL,
   ADD COLUMN cli_state VARCHAR(128) NOT NULL,

@@ -14,7 +14,6 @@ const cliLoginLive = "created_at > NOW() - INTERVAL '10 minutes'"
 // challenge, its loopback redirect URI and its own state value.
 type CLILoginState struct {
 	State              string
-	OAuthCode          sql.NullString
 	OAuthCodeVerifier  sql.NullString
 	CLICodeChallenge   string
 	CLIRedirectURI     string
@@ -43,7 +42,7 @@ type NewCLILogin struct {
 	InitiatorDevice   string
 }
 
-const cliLoginColumns = `state, oauth_code, oauth_code_verifier, cli_code_challenge, cli_redirect_uri, cli_state,
+const cliLoginColumns = `state, oauth_code_verifier, cli_code_challenge, cli_redirect_uri, cli_state,
                initiator_ip, initiator_device, browser_binding_hash, enrollment_required, login_email, login_name,
                mfa_verified_at, mfa_method_id, login_error, created_at, updated_at`
 
@@ -72,15 +71,20 @@ func (d *Database) CreateCLILoginState(login NewCLILogin) error {
 	return nil
 }
 
-// BindCLILoginBrowser stores the identity provider's authorization code and binds the login to
-// the browser that delivered it. It only succeeds once per login, so a replayed callback URL
-// cannot bind a second browser. Returns false when the login is unknown, expired or already bound.
-func (d *Database) BindCLILoginBrowser(state, oauthCode, bindingHash string) (bool, error) {
+// BindCLILoginBrowser binds the login to the browser that completed the identity provider login and
+// records who signed in. The gateway's own PKCE verifier is discarded once the exchange has succeeded.
+// It only succeeds once per login, so a replayed callback cannot bind a second browser. Returns false
+// when the login is unknown, expired or already bound.
+func (d *Database) BindCLILoginBrowser(state, bindingHash, email, name string) (bool, error) {
 	res, err := d.exec(`
         UPDATE cli_login_states
-        SET oauth_code = ?, browser_binding_hash = ?, updated_at = NOW()
+        SET browser_binding_hash = ?,
+            login_email = ?,
+            login_name = ?,
+            oauth_code_verifier = NULL,
+            updated_at = NOW()
         WHERE state = ? AND browser_binding_hash IS NULL AND `+cliLoginLive,
-		oauthCode, bindingHash, state)
+		bindingHash, email, name, state)
 	if err != nil {
 		return false, fmt.Errorf("failed to bind CLI login browser: %w", err)
 	}
@@ -89,24 +93,6 @@ func (d *Database) BindCLILoginBrowser(state, oauthCode, bindingHash string) (bo
 		return false, fmt.Errorf("failed to bind CLI login browser: %w", err)
 	}
 	return rows == 1, nil
-}
-
-// SetCLILoginProfile stores the identity provider result and discards the authorization code.
-func (d *Database) SetCLILoginProfile(state, email, name string) error {
-	_, err := d.exec(`
-        UPDATE cli_login_states
-        SET oauth_code = NULL,
-            oauth_code_verifier = NULL,
-            login_email = ?,
-            login_name = ?,
-            login_error = NULL,
-            updated_at = NOW()
-        WHERE state = ?
-    `, email, name, state)
-	if err != nil {
-		return fmt.Errorf("failed to store CLI login profile: %w", err)
-	}
-	return nil
 }
 
 // MarkCLILoginVerified records that the CLI login has satisfied MFA requirements.
@@ -163,14 +149,16 @@ func (d *Database) GetCLILoginState(state string) (*CLILoginState, error) {
 }
 
 // SetCLILoginCode stores the hash of a single-use login code for a verified CLI login.
-// The code is valid for two minutes. Returns false when the login is not live or not verified.
+// The code is valid for two minutes and is issued at most once per login. Returns false when the
+// login is not live, not verified, or already has a code.
 func (d *Database) SetCLILoginCode(state, codeHash string) (bool, error) {
 	res, err := d.exec(`
         UPDATE cli_login_states
         SET login_code_hash = ?,
             login_code_expires_at = NOW() + INTERVAL '2 minutes',
             updated_at = NOW()
-        WHERE state = ? AND mfa_verified_at IS NOT NULL AND login_error IS NULL AND `+cliLoginLive,
+        WHERE state = ? AND mfa_verified_at IS NOT NULL AND login_error IS NULL AND login_code_hash IS NULL
+          AND `+cliLoginLive,
 		codeHash, state)
 	if err != nil {
 		return false, fmt.Errorf("failed to store CLI login code: %w", err)
@@ -208,7 +196,6 @@ func scanCLILoginState(row *sql.Row) (*CLILoginState, error) {
 	var record CLILoginState
 	err := row.Scan(
 		&record.State,
-		&record.OAuthCode,
 		&record.OAuthCodeVerifier,
 		&record.CLICodeChallenge,
 		&record.CLIRedirectURI,

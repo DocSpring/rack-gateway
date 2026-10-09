@@ -1284,7 +1284,7 @@
         },
         "/auth/cli/callback": {
             "get": {
-                "description": "Stores the authorization code and binds the login to this browser.",
+                "description": "Exchanges the authorization code and, only once that succeeds, binds the login to this browser.",
                 "tags": [
                     "Auth"
                 ],
@@ -1294,8 +1294,7 @@
                         "type": "string",
                         "description": "Authorization code",
                         "name": "code",
-                        "in": "query",
-                        "required": true
+                        "in": "query"
                     },
                     {
                         "type": "string",
@@ -1303,6 +1302,12 @@
                         "name": "state",
                         "in": "query",
                         "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Identity provider error",
+                        "name": "error",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -1310,6 +1315,46 @@
                         "description": "Temporary Redirect",
                         "schema": {
                             "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/cli/cancel": {
+            "post": {
+                "description": "Ends the CLI login from the browser bound to it and returns the URL that tells the waiting CLI.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Cancel a CLI login",
+                "parameters": [
+                    {
+                        "description": "Login state",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.CLILoginCancelRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.CLILoginRedirectResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
                 }
@@ -1363,7 +1408,7 @@
         },
         "/auth/cli/mfa": {
             "get": {
-                "description": "Completes the identity provider exchange and sends the bound browser to MFA or back to the CLI.",
+                "description": "Sends the bound browser to MFA (or MFA enrollment), or back to the CLI when MFA is satisfied.",
                 "tags": [
                     "Auth"
                 ],
@@ -4429,6 +4474,17 @@
                 }
             }
         },
+        "handlers.CLILoginCancelRequest": {
+            "type": "object",
+            "required": [
+                "state"
+            ],
+            "properties": {
+                "state": {
+                    "type": "string"
+                }
+            }
+        },
         "handlers.CLILoginCompleteRequest": {
             "type": "object",
             "required": [
@@ -4452,6 +4508,17 @@
                     "type": "string"
                 },
                 "login_code": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.CLILoginRedirectResponse": {
+            "type": "object",
+            "required": [
+                "redirect"
+            ],
+            "properties": {
+                "redirect": {
                     "type": "string"
                 }
             }

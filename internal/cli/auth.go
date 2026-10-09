@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -13,14 +14,28 @@ import (
 	"github.com/google/uuid"
 )
 
+// errGatewayTooOld means the gateway predates the loopback login this CLI uses.
+var errGatewayTooOld = errors.New(
+	"the gateway is older than this CLI; upgrade the gateway or use an older rack-gateway CLI",
+)
+
 // StartLogin starts a loopback login and returns the identity provider URL to open.
 func StartLogin(gatewayURL string, req LoginStartRequest) (*LoginStartResponse, error) {
-	var result LoginStartResponse
+	// Gateways from before the loopback login answer with their own state and code verifier, and
+	// would never redirect the browser to this CLI.
+	var result struct {
+		AuthURL      string `json:"auth_url"`
+		State        string `json:"state"`
+		CodeVerifier string `json:"code_verifier"`
+	}
 	url := buildGatewayAPIURL(gatewayURL, "/api/v1/auth/cli/start")
 	if err := postLoginJSON(url, req, "login start failed: ", &result); err != nil {
 		return nil, err
 	}
-	return &result, nil
+	if result.State != "" || result.CodeVerifier != "" {
+		return nil, errGatewayTooOld
+	}
+	return &LoginStartResponse{AuthURL: result.AuthURL}, nil
 }
 
 // CompleteLogin redeems the single-use login code with the PKCE code verifier for a session token.

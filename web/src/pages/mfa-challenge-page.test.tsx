@@ -5,11 +5,14 @@ import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { MFAChallengePage } from './mfa-challenge-page'
 
-const { verifyCliMfa } = vi.hoisted(() => ({ verifyCliMfa: vi.fn() }))
+const { cancelCliLogin, verifyCliMfa } = vi.hoisted(() => ({
+  cancelCliLogin: vi.fn(),
+  verifyCliMfa: vi.fn(),
+}))
 
 vi.mock('../lib/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../lib/api')>()
-  return { ...actual, verifyCliMfa }
+  return { ...actual, cancelCliLogin, verifyCliMfa }
 })
 
 vi.mock('../components/mfa-verification-form', () => ({
@@ -72,6 +75,17 @@ describe('MFAChallengePage CLI login', () => {
       expect(assign).toHaveBeenCalledWith('/api/v1/auth/cli/return?state=gateway-state')
     )
     expect(verifyCliMfa).toHaveBeenCalledWith({ state: 'gateway-state', code: '123456' })
+  })
+
+  it('cancels the login on the gateway and hands the browser back to the CLI', async () => {
+    const loopback = 'http://127.0.0.1:54321/callback?error=cancelled&state=cli-state'
+    cancelCliLogin.mockResolvedValue({ redirect: loopback })
+    renderPage('?state=gateway-state')
+
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel Login' }))
+
+    await waitFor(() => expect(assign).toHaveBeenCalledWith(loopback))
+    expect(cancelCliLogin).toHaveBeenCalledWith({ state: 'gateway-state' })
   })
 
   it('shows an error instead of guessing the next step', async () => {

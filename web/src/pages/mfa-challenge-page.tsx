@@ -6,7 +6,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { useMutation } from '@/hooks/use-mutation'
-import { verifyCliMfa, verifyMFA, verifyWebAuthnAssertion } from '@/lib/api'
+import { cancelCliLogin, verifyCliMfa, verifyMFA, verifyWebAuthnAssertion } from '@/lib/api'
 import { authService } from '@/lib/auth'
 import { normalizeRedirectPath } from '@/lib/navigation'
 import { resolveWebRedirect, WebRoute } from '@/lib/routes'
@@ -216,7 +216,18 @@ export function MFAChallengePage() {
     authService.logout()
   }
 
-  const handleCancelCli = () => {
+  // Ends the login on the gateway and hands the browser to the waiting CLI, which then exits.
+  const handleCancelCli = async () => {
+    if (state) {
+      try {
+        const result = await cancelCliLogin({ state })
+        window.location.assign(cliNextStep(result))
+        return
+      } catch (err) {
+        setError(mapServerError(mode, err))
+        return
+      }
+    }
     if (window.opener) {
       window.close()
       return

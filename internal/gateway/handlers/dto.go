@@ -228,6 +228,16 @@ type CLILoginStartResponse struct {
 	AuthURL string `json:"auth_url" validate:"required"`
 }
 
+// CLILoginCancelRequest cancels a CLI login from the browser bound to it.
+type CLILoginCancelRequest struct {
+	State string `json:"state" binding:"required"`
+}
+
+// CLILoginRedirectResponse tells the browser where to go next in a CLI login.
+type CLILoginRedirectResponse struct {
+	Redirect string `json:"redirect" validate:"required"`
+}
+
 // CLILoginCompleteRequest represents the payload used to finish the CLI OAuth flow.
 type CLILoginCompleteRequest struct {
 	LoginCode     string `json:"login_code"     binding:"required"`

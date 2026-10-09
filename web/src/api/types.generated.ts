@@ -1285,16 +1285,18 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Complete CLI OAuth redirect
-         * @description Stores the OAuth authorization code for the CLI to finish login.
+         * Identity provider redirect for CLI login
+         * @description Exchanges the authorization code and, only once that succeeds, binds the login to this browser.
          */
         get: {
             parameters: {
                 query: {
                     /** @description Authorization code */
-                    code: string;
+                    code?: string;
                     /** @description State */
                     state: string;
+                    /** @description Identity provider error */
+                    error?: string;
                 };
                 header?: never;
                 path?: never;
@@ -1304,15 +1306,6 @@ export interface paths {
             responses: {
                 /** @description Temporary Redirect */
                 307: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "*/*": string;
-                    };
-                };
-                /** @description Missing parameters */
-                400: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -1330,6 +1323,59 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/cli/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel a CLI login
+         * @description Ends the CLI login from the browser bound to it and returns the URL that tells the waiting CLI.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            /** @description Login state */
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["handlers.CLILoginCancelRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.CLILoginRedirectResponse"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/cli/complete": {
         parameters: {
             query?: never;
@@ -1340,8 +1386,9 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Finalize CLI OAuth login
-         * @description Exchanges the stored authorization code and PKCE verifier for a session token.
+         * Finalize CLI login
+         * @description Redeems the single-use login code delivered to the CLI's loopback listener, proving
+         *     possession of the PKCE code verifier, and returns a CLI session token.
          */
         post: {
             parameters: {
@@ -1400,8 +1447,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Display MFA challenge form
-         * @description Displays the MFA challenge form for CLI login.
+         * Continue CLI login in the browser
+         * @description Sends the bound browser to MFA (or MFA enrollment), or back to the CLI when MFA is satisfied.
          */
         get: {
             parameters: {
@@ -1424,8 +1471,41 @@ export interface paths {
                         "*/*": string;
                     };
                 };
-                /** @description Missing parameters */
-                400: {
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/cli/return": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Return the browser to the CLI
+         * @description Issues a single-use login code and redirects the bound browser to the CLI's loopback listener.
+         */
+        get: {
+            parameters: {
+                query: {
+                    /** @description Login state */
+                    state: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Found */
+                302: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -1453,8 +1533,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Start CLI OAuth login
-         * @description Initiates the CLI OAuth flow and returns PKCE parameters.
+         * Start CLI login
+         * @description Starts a loopback CLI login and returns the identity provider URL to open in the browser.
          */
         post: {
             parameters: {
@@ -1463,7 +1543,12 @@ export interface paths {
                 path?: never;
                 cookie?: never;
             };
-            requestBody?: never;
+            /** @description CLI login parameters */
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["handlers.CLILoginStartRequest"];
+                };
+            };
             responses: {
                 /** @description OK */
                 200: {
@@ -1471,7 +1556,16 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["auth.LoginStartResponse"];
+                        "application/json": components["schemas"]["handlers.CLILoginStartResponse"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
                     };
                 };
                 /** @description Internal Server Error */
@@ -4623,11 +4717,6 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
-        "auth.LoginStartResponse": {
-            auth_url: string;
-            code_verifier: string;
-            state: string;
-        };
         "db.APIToken": {
             created_at?: string;
             created_by_email?: string;
@@ -4761,13 +4850,19 @@ export interface components {
         "handlers.BackupCodesResponse": {
             backup_codes: string[];
         };
+        "handlers.CLILoginCancelRequest": {
+            state: string;
+        };
         "handlers.CLILoginCompleteRequest": {
             client_version?: string;
             code_verifier: string;
             device_id?: string;
             device_name?: string;
             device_os?: string;
-            state: string;
+            login_code: string;
+        };
+        "handlers.CLILoginRedirectResponse": {
+            redirect: string;
         };
         "handlers.CLILoginResponse": {
             channel?: string;
@@ -4781,6 +4876,16 @@ export interface components {
             name?: string;
             session_id?: number;
             token?: string;
+        };
+        "handlers.CLILoginStartRequest": {
+            code_challenge: string;
+            code_challenge_method: string;
+            device_name?: string;
+            redirect_uri: string;
+            state: string;
+        };
+        "handlers.CLILoginStartResponse": {
+            auth_url: string;
         };
         "handlers.ConfirmTOTPEnrollmentRequest": {
             code: string;

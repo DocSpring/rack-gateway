@@ -12,6 +12,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -177,19 +178,62 @@ func cliMFARoute(state string) string {
 	return APIRoute("auth/cli/mfa") + "?state=" + url.QueryEscape(state)
 }
 
-// redirectToCLI sends the browser to the CLI's loopback listener with the CLI's state.
-func redirectToCLI(c *gin.Context, record *db.CLILoginState, params url.Values) {
+// cliLoopbackURL is the CLI's loopback listener URL (validated at /auth/cli/start) with the CLI's state.
+func cliLoopbackURL(record *db.CLILoginState, params url.Values) string {
 	params.Set("state", record.CLIState)
-	c.Redirect(http.StatusFound, record.CLIRedirectURI+"?"+params.Encode())
+	return record.CLIRedirectURI + "?" + params.Encode()
 }
 
-// failCLILogin ends the login and tells the waiting CLI why.
+// redirectToCLI sends the browser to the CLI's loopback listener with the CLI's state.
+func redirectToCLI(c *gin.Context, record *db.CLILoginState, params url.Values) {
+	c.Redirect(http.StatusFound, cliLoopbackURL(record, params))
+}
+
+// returnErrorToCLI tells a CLI on the same machine as this browser that the login failed, without
+// recording the failure: the request isn't proven to come from the browser bound to the login.
+func returnErrorToCLI(c *gin.Context, record *db.CLILoginState, errorCode string) {
+	redirectToCLI(c, record, url.Values{"error": {errorCode}})
+}
+
+// failCLILogin ends the login and tells the waiting CLI why. Only call it for the browser bound to the
+// login (or one that has just been bound).
 func (h *AuthHandler) failCLILogin(c *gin.Context, record *db.CLILoginState, errorCode string) {
+	h.endCLILogin(record, errorCode, c)
+	returnErrorToCLI(c, record, errorCode)
+}
+
+// endCLILogin records a terminal error on the login and clears the browser's binding cookie.
+func (h *AuthHandler) endCLILogin(record *db.CLILoginState, errorCode string, c *gin.Context) {
 	if h.database != nil {
 		_ = h.database.FailCLILoginState(record.State, errorCode)
 	}
 	h.setCLILoginCookie(c, "", -1)
-	redirectToCLI(c, record, url.Values{"error": {errorCode}})
+}
+
+// CLILoginCancel godoc
+// @Summary Cancel a CLI login
+// @Description Ends the CLI login from the browser bound to it and returns the URL that tells the waiting CLI.
+// @Tags Auth
+// @Accept json
+// @Produce json
+// @Param request body CLILoginCancelRequest true "Login state"
+// @Success 200 {object} CLILoginRedirectResponse
+// @Failure 400 {object} ErrorResponse
+// @Router /auth/cli/cancel [post]
+func (h *AuthHandler) CLILoginCancel(c *gin.Context) {
+	var req CLILoginCancelRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_request"})
+		return
+	}
+	record, errCode := h.loadBoundCLILogin(c, strings.TrimSpace(req.State))
+	if errCode != "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": errCode})
+		return
+	}
+	h.endCLILogin(record, "canceled", c)
+	redirect := cliLoopbackURL(record, url.Values{"error": {"canceled"}})
+	c.JSON(http.StatusOK, CLILoginRedirectResponse{Redirect: redirect})
 }
 
 // CLILoginReturn godoc
@@ -205,18 +249,23 @@ func (h *AuthHandler) CLILoginReturn(c *gin.Context) {
 	if !ok {
 		return
 	}
-	if !record.LoginEmail.Valid || !h.cliMFASatisfied(record) {
+	if !record.LoginEmail.Valid || !h.cliMFASatisfied(c, record) {
 		c.Redirect(http.StatusFound, cliMFARoute(state))
 		return
 	}
 
 	loginCode, err := newCLISecret()
 	if err != nil {
-		cliRedirectWithError(c, "persist_failure")
+		h.failCLILogin(c, record, "persist_failure")
 		return
 	}
 	stored, err := h.database.SetCLILoginCode(state, hashCLISecret(loginCode))
-	if err != nil || !stored {
+	if err != nil {
+		h.failCLILogin(c, record, "persist_failure")
+		return
+	}
+	if !stored {
+		// A login code was already issued for this login (codes are issued once).
 		cliRedirectWithError(c, "expired")
 		return
 	}
@@ -225,9 +274,10 @@ func (h *AuthHandler) CLILoginReturn(c *gin.Context) {
 }
 
 // cliMFASatisfied reports whether the login's MFA requirement is met. A user who had no factor when
-// the login reached MFA satisfies it by enrolling one during this login: confirming a new factor
-// requires a valid code from it.
-func (h *AuthHandler) cliMFASatisfied(record *db.CLILoginState) bool {
+// the login reached MFA satisfies it by enrolling one during this login, in this browser: confirming a
+// new factor requires a valid code from it, and re-verifies the session that confirmed it (enrolling a
+// first factor clears every other session's MFA state).
+func (h *AuthHandler) cliMFASatisfied(c *gin.Context, record *db.CLILoginState) bool {
 	if record.MFAVerifiedAt.Valid {
 		return true
 	}
@@ -235,23 +285,36 @@ func (h *AuthHandler) cliMFASatisfied(record *db.CLILoginState) bool {
 		return false
 	}
 	user, err := h.database.GetUser(record.LoginEmail.String)
-	if err != nil || user == nil || !h.enrolledDuringLogin(user, record) {
+	if err != nil || user == nil {
+		return false
+	}
+	enrolledAt, ok := h.enrolledDuringLogin(user, record)
+	if !ok {
+		return false
+	}
+	session := h.cliBrowserSession(c, user)
+	if session == nil || session.MFAVerifiedAt == nil || session.MFAVerifiedAt.Before(enrolledAt) {
 		return false
 	}
 	return h.database.MarkCLILoginVerified(record.State, nil) == nil
 }
 
 // enrolledDuringLogin reports whether every confirmed factor the user has was confirmed after the
-// login started (and there is at least one), i.e. the user had none before this login.
-func (h *AuthHandler) enrolledDuringLogin(user *db.User, record *db.CLILoginState) bool {
+// login started (and there is at least one), i.e. the user had none before this login. It returns
+// when the most recent factor was confirmed.
+func (h *AuthHandler) enrolledDuringLogin(user *db.User, record *db.CLILoginState) (time.Time, bool) {
 	methods, err := h.database.ListMFAMethods(user.ID)
 	if err != nil || len(methods) == 0 {
-		return false
+		return time.Time{}, false
 	}
+	var latest time.Time
 	for _, method := range methods {
 		if method.ConfirmedAt == nil || method.ConfirmedAt.Before(record.CreatedAt) {
-			return false
+			return time.Time{}, false
+		}
+		if method.ConfirmedAt.After(latest) {
+			latest = *method.ConfirmedAt
 		}
 	}
-	return true
+	return latest, true
 }

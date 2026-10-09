@@ -3,6 +3,7 @@ package handlers
 import (
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"net/url"
@@ -37,7 +38,7 @@ type cliMFASubmit struct {
 func (h *AuthHandler) CLILoginStart(c *gin.Context) {
 	var req CLILoginStartRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": cliStartBindError(err)})
 		return
 	}
 	deviceName, err := validateCLIStart(req)
@@ -74,18 +75,30 @@ func (h *AuthHandler) CLILoginStart(c *gin.Context) {
 	c.JSON(http.StatusOK, CLILoginStartResponse{AuthURL: resp.AuthURL})
 }
 
+// cliTooOldMessage answers CLIs that predate the loopback login: they start a login without sending
+// any login parameters.
+const cliTooOldMessage = "this rack-gateway CLI is too old for this gateway; " +
+	"upgrade the rack-gateway CLI and run login again"
+
+func cliStartBindError(err error) string {
+	if errors.Is(err, io.EOF) {
+		return cliTooOldMessage
+	}
+	return "invalid request"
+}
+
 // CLILoginCallback godoc
 // @Summary Identity provider redirect for CLI login
-// @Description Stores the authorization code and binds the login to this browser.
+// @Description Exchanges the authorization code and, only once that succeeds, binds the login to this browser.
 // @Tags Auth
-// @Param code query string true "Authorization code"
+// @Param code query string false "Authorization code"
 // @Param state query string true "State"
+// @Param error query string false "Identity provider error"
 // @Success 307 {string} string "Temporary Redirect"
 // @Router /auth/cli/callback [get]
 func (h *AuthHandler) CLILoginCallback(c *gin.Context) {
-	code := strings.TrimSpace(c.Query("code"))
 	state := strings.TrimSpace(c.Query("state"))
-	if code == "" || state == "" {
+	if state == "" {
 		cliRedirectWithError(c, "missing_state")
 		return
 	}
@@ -93,13 +106,71 @@ func (h *AuthHandler) CLILoginCallback(c *gin.Context) {
 		cliRedirectWithError(c, "service_unavailable")
 		return
 	}
+	record, err := h.database.GetCLILoginState(state)
+	if err != nil {
+		cliRedirectWithError(c, "load_failure")
+		return
+	}
+	if record == nil || record.BrowserBindingHash.Valid {
+		// Unknown, expired, or already being completed in another browser.
+		cliRedirectWithError(c, "expired")
+		return
+	}
 
+	// Nothing below proves this is the browser the CLI's user is using, so failures are not recorded
+	// on the login (that would let anyone holding the state end it). The browser is sent to the
+	// login's own loopback address, which only reaches a CLI on the same machine as the browser.
+	if providerError := strings.TrimSpace(c.Query("error")); providerError != "" {
+		returnErrorToCLI(c, record, cliProviderErrorCode(providerError))
+		return
+	}
+	code := strings.TrimSpace(c.Query("code"))
+	if code == "" {
+		cliRedirectWithError(c, "missing_state")
+		return
+	}
+	email, name, errCode := h.cliExchangeOAuthCode(code, record)
+	if errCode != "" {
+		returnErrorToCLI(c, record, errCode)
+		return
+	}
+	h.bindCLILoginBrowser(c, record, email, name)
+}
+
+// cliProviderErrorCode maps an identity provider error (e.g. the user declined consent) to a CLI error code.
+func cliProviderErrorCode(providerError string) string {
+	if providerError == "access_denied" {
+		return "access_denied"
+	}
+	return "identity_provider_error"
+}
+
+// cliExchangeOAuthCode exchanges the identity provider code for the signed-in identity.
+// Returns the email and name, or an error code for the CLI.
+func (h *AuthHandler) cliExchangeOAuthCode(code string, record *db.CLILoginState) (string, string, string) {
+	if !record.OAuthCodeVerifier.Valid {
+		return "", "", "session_incomplete"
+	}
+	loginResp, err := h.oauth.CompleteLogin(code, record.State, record.OAuthCodeVerifier.String)
+	if err != nil {
+		var domainErr *auth.DomainNotAllowedError
+		if errors.As(err, &domainErr) {
+			return "", "", "unauthorized"
+		}
+		return "", "", "exchange_failed"
+	}
+	return strings.TrimSpace(loginResp.Email), loginResp.Name, ""
+}
+
+// bindCLILoginBrowser binds the login to this browser, which has just completed the identity provider
+// login for it, and continues to MFA.
+func (h *AuthHandler) bindCLILoginBrowser(c *gin.Context, record *db.CLILoginState, email, name string) {
 	binding, err := newCLISecret()
 	if err != nil {
 		cliRedirectWithError(c, "persist_failure")
 		return
 	}
-	bound, err := h.database.BindCLILoginBrowser(state, code, hashCLISecret(binding))
+	bound, err := h.database.BindCLILoginBrowser(record.State, hashCLISecret(binding), email, name)
 	if err != nil {
 		cliRedirectWithError(c, "load_failure")
 		return
@@ -108,14 +179,13 @@ func (h *AuthHandler) CLILoginCallback(c *gin.Context) {
 		cliRedirectWithError(c, "expired")
 		return
 	}
-
 	h.setCLILoginCookie(c, binding, cliLoginCookieMaxAge)
-	c.Redirect(http.StatusTemporaryRedirect, cliMFARoute(state))
+	c.Redirect(http.StatusTemporaryRedirect, cliMFARoute(record.State))
 }
 
 // CLILoginMFAForm godoc
 // @Summary Continue CLI login in the browser
-// @Description Completes the identity provider exchange and sends the bound browser to MFA or back to the CLI.
+// @Description Sends the bound browser to MFA (or MFA enrollment), or back to the CLI when MFA is satisfied.
 // @Tags Auth
 // @Param state query string true "State"
 // @Success 307 {string} string "Temporary Redirect"
@@ -138,7 +208,7 @@ func (h *AuthHandler) CLILoginMFAForm(c *gin.Context) {
 
 	if !shouldEnforceMFA(h.mfaSettings, userRecord) {
 		if err := h.database.MarkCLILoginVerified(state, nil); err != nil {
-			cliRedirectWithError(c, "persist_failure")
+			h.failCLILogin(c, record, "persist_failure")
 			return
 		}
 		c.Redirect(http.StatusTemporaryRedirect, cliReturnRoute(state))
@@ -147,38 +217,32 @@ func (h *AuthHandler) CLILoginMFAForm(c *gin.Context) {
 
 	if _, err := h.createLoginSession(c, userRecord, "cli-mfa"); err != nil {
 		log.Printf("cli mfa session create failed: user=%s err=%v", userRecord.Email, err)
-		cliRedirectWithError(c, "session_failed")
+		h.failCLILogin(c, record, "session_failed")
 		return
 	}
 
 	if !userRecord.MFAEnrolled {
-		h.cliRedirectToEnrollment(c, state)
+		h.cliRedirectToEnrollment(c, record)
 		return
 	}
 
 	c.Redirect(http.StatusTemporaryRedirect, cliChallengeURL(record))
 }
 
-// cliResolveUser exchanges the identity provider code (once) and loads the gateway user.
-// On failure the login is ended and the browser is sent back to the CLI with the reason.
+// cliResolveUser loads the gateway user who signed in for the bound browser. On failure the login is
+// ended and the browser is sent back to the CLI with the reason.
 func (h *AuthHandler) cliResolveUser(c *gin.Context, record *db.CLILoginState) (*db.User, bool) {
 	email := ""
 	if record.LoginEmail.Valid {
 		email = strings.TrimSpace(record.LoginEmail.String)
 	}
 	if email == "" {
-		exchanged, errCode := h.cliExchangeOAuthCode(record)
-		if errCode != "" {
-			h.failCLILogin(c, record, errCode)
-			return nil, false
-		}
-		email = exchanged
-		record.LoginEmail.String, record.LoginEmail.Valid = exchanged, true
+		h.failCLILogin(c, record, "session_incomplete")
+		return nil, false
 	}
-
 	userRecord, err := h.database.GetUser(email)
 	if err != nil {
-		cliRedirectWithError(c, "load_failure")
+		h.failCLILogin(c, record, "load_failure")
 		return nil, false
 	}
 	if userRecord == nil {
@@ -189,36 +253,15 @@ func (h *AuthHandler) cliResolveUser(c *gin.Context, record *db.CLILoginState) (
 	return userRecord, true
 }
 
-// cliExchangeOAuthCode exchanges the stored identity provider code and records the profile.
-// Returns the login email, or an error code for the CLI.
-func (h *AuthHandler) cliExchangeOAuthCode(record *db.CLILoginState) (string, string) {
-	if !record.OAuthCode.Valid || !record.OAuthCodeVerifier.Valid {
-		return "", "session_incomplete"
-	}
-	loginResp, err := h.oauth.CompleteLogin(record.OAuthCode.String, record.State, record.OAuthCodeVerifier.String)
-	if err != nil {
-		var domainErr *auth.DomainNotAllowedError
-		if errors.As(err, &domainErr) {
-			return "", "unauthorized"
-		}
-		return "", "exchange_failed"
-	}
-	if err := h.database.SetCLILoginProfile(record.State, loginResp.Email, loginResp.Name); err != nil {
-		return "", "persist_failure"
-	}
-	record.LoginName.String, record.LoginName.Valid = loginResp.Name, true
-	return strings.TrimSpace(loginResp.Email), ""
-}
-
-func (h *AuthHandler) cliRedirectToEnrollment(c *gin.Context, state string) {
-	if err := h.database.MarkCLILoginEnrollmentRequired(state); err != nil {
-		cliRedirectWithError(c, "persist_failure")
+func (h *AuthHandler) cliRedirectToEnrollment(c *gin.Context, record *db.CLILoginState) {
+	if err := h.database.MarkCLILoginEnrollmentRequired(record.State); err != nil {
+		h.failCLILogin(c, record, "persist_failure")
 		return
 	}
 	params := url.Values{}
 	params.Set("enrollment", "required")
 	params.Set("channel", "cli")
-	params.Set("state", state)
+	params.Set("state", record.State)
 	c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s?%s", WebRoute("account/security"), params.Encode()))
 }
 

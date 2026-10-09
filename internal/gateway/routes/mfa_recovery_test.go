@@ -12,8 +12,8 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 )
 
-// startCLILogin creates a CLI login whose browser has been bound and whose OAuth exchange has
-// completed for the user, as the Google callback leaves it before the MFA challenge. It returns the
+// startCLILogin creates a CLI login whose browser has been bound after a successful identity provider
+// exchange for the user, as the callback leaves it before the MFA challenge. It returns the
 // browser-binding cookie value.
 func (e *mfaRouteEnv) startCLILogin(t *testing.T, state string, user *db.User) string {
 	t.Helper()
@@ -29,12 +29,9 @@ func (e *mfaRouteEnv) startCLILogin(t *testing.T, state string, user *db.User) s
 	}
 	binding := "binding-" + state
 	sum := sha256.Sum256([]byte(binding))
-	bound, err := e.database.BindCLILoginBrowser(state, "oauth-code", hex.EncodeToString(sum[:]))
+	bound, err := e.database.BindCLILoginBrowser(state, hex.EncodeToString(sum[:]), user.Email, user.Name)
 	if err != nil || !bound {
 		t.Fatalf("bind CLI login browser: bound=%v err=%v", bound, err)
-	}
-	if err := e.database.SetCLILoginProfile(state, user.Email, user.Name); err != nil {
-		t.Fatal(err)
 	}
 	return binding
 }

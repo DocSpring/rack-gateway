@@ -93,7 +93,8 @@ func runLoopbackLogin(gatewayURL string, noOpen bool, authFile string) (*LoginRe
 	}
 
 	notifyBrowser(startResp.AuthURL, noOpen)
-	fmt.Println("Waiting for you to finish logging in in your browser...")
+	// The listener address matters when the browser is on another machine (forward it with ssh -L).
+	fmt.Printf("Waiting for the browser to return to %s ...\n", loopback.redirectURI)
 
 	loginCode, err := loopback.wait(loginTimeout)
 	if err != nil {
@@ -189,33 +190,38 @@ func writeAuthFile(path string, startResp *LoginStartResponse) error {
 	return nil
 }
 
+// notifyBrowser always prints the login URL (the browser may open somewhere you can't see it, or not
+// at all, e.g. over SSH or from an agent), then tries to open it unless noOpen is set.
 func notifyBrowser(authURL string, noOpen bool) {
+	fmt.Printf("Open this URL in your browser to log in (on this machine):\n%s\n", authURL)
 	if noOpen {
-		fmt.Printf("Open this URL in your browser to log in:\n%s\n", authURL)
 		return
 	}
-	fmt.Printf("Opening browser for authentication...\n")
 	if err := OpenBrowser(authURL); err != nil {
-		fmt.Printf("Please open this URL in your browser:\n%s\n", authURL)
+		fmt.Printf("Could not open a browser automatically: %v\n", err)
 	}
 }
 
-// validateAuthURL only lets the CLI open Google's sign-in page, or a loopback identity provider
-// when the gateway itself is on a loopback address (local development and tests).
+// validateAuthURL lets the CLI open the identity provider's https sign-in page (Google, or the
+// gateway's configured OIDC issuer), or a loopback identity provider when the gateway itself is on a
+// loopback address (local development and tests). Other schemes and URLs with credentials are refused.
 func validateAuthURL(authURL, gatewayURL string) error {
 	parsed, err := url.Parse(authURL)
 	if err != nil {
 		return fmt.Errorf("gateway returned an invalid login URL: %w", err)
 	}
-	if parsed.Scheme == "https" && parsed.Hostname() == "accounts.google.com" {
+	if parsed.User != nil || parsed.Hostname() == "" {
+		return fmt.Errorf("gateway returned an unexpected login URL %q", parsed.Redacted())
+	}
+	if parsed.Scheme == "https" {
 		return nil
 	}
 	gateway, err := url.Parse(buildGatewayAPIURL(gatewayURL, ""))
-	if err == nil && isLoopbackHost(gateway.Hostname()) && isLoopbackHost(parsed.Hostname()) &&
-		(parsed.Scheme == "http" || parsed.Scheme == "https") {
+	if err == nil && parsed.Scheme == "http" && isLoopbackHost(gateway.Hostname()) &&
+		isLoopbackHost(parsed.Hostname()) {
 		return nil
 	}
-	return fmt.Errorf("gateway returned an unexpected login URL host %q", parsed.Host)
+	return fmt.Errorf("gateway returned a login URL that is not https: %q", parsed.Redacted())
 }
 
 func isLoopbackHost(host string) bool {

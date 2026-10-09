@@ -29,7 +29,8 @@ import {
 
 /**
  * Handles post-enrollment redirect based on the enrollment channel.
- * CLI mode redirects to the CLI success page, web mode redirects to the original destination.
+ * CLI mode sends the browser to the gateway's CLI return step (which hands it to the waiting CLI),
+ * web mode redirects to the original destination.
  */
 function handleEnrollmentRedirect(
   enrollmentChannel: string | undefined,

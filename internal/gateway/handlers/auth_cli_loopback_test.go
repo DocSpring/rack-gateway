@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -47,7 +48,10 @@ func (o *loopbackOAuth) StartLogin() (*auth.LoginStartResponse, error) {
 
 func (_ *loopbackOAuth) StartWebLogin() (string, string) { return "", "" }
 
-func (o *loopbackOAuth) CompleteLogin(_, _, _ string) (*auth.LoginResponse, error) {
+func (o *loopbackOAuth) CompleteLogin(code, _, _ string) (*auth.LoginResponse, error) {
+	if code != "google-code" {
+		return nil, errors.New("invalid authorization code")
+	}
 	return &auth.LoginResponse{Email: o.email, Name: "Loopback User"}, nil
 }
 
@@ -79,6 +83,7 @@ func newLoopbackEnv(t *testing.T, requireMFA bool) *loopbackEnv {
 	router.GET("/api/v1/auth/cli/mfa", handler.CLILoginMFAForm)
 	router.POST("/api/v1/auth/cli/mfa", handler.CLILoginMFASubmit)
 	router.GET("/api/v1/auth/cli/return", handler.CLILoginReturn)
+	router.POST("/api/v1/auth/cli/cancel", handler.CLILoginCancel)
 	router.POST("/api/v1/auth/cli/complete", handler.CLILoginComplete)
 	return &loopbackEnv{router: router, database: database, oauth: oauth, sessions: sessions}
 }
@@ -285,17 +290,146 @@ func TestCLILoginEnrollmentDuringLoginCompletesCLILogin(t *testing.T) {
 	res = e.send(t, http.MethodGet, cliReturnRoute(state), nil, binding, sessionCookie)
 	require.Equal(t, cliMFARoute(state), res.Header.Get("Location"))
 
-	// The user confirms a first factor during this login.
-	user, err := e.database.GetUser("user@example.com")
-	require.NoError(t, err)
-	method, err := e.database.CreateMFAMethod(user.ID, "totp", "Authenticator App", "SECRET", nil, nil, nil, nil)
-	require.NoError(t, err)
-	require.NoError(t, e.database.ConfirmMFAMethod(method.ID, time.Now()))
+	// The user confirms a first factor in this browser during this login: confirming re-verifies the
+	// session that did it.
+	e.confirmFirstFactor(t)
+	e.markSessionVerified(t, sessionCookie)
 
 	res = e.send(t, http.MethodGet, cliReturnRoute(state), nil, binding, sessionCookie)
 	require.Equal(t, http.StatusFound, res.StatusCode)
 	code := loopbackCode(t, res)
 	require.Equal(t, http.StatusOK, e.complete(t, code, loopbackTestVerifier).StatusCode)
+}
+
+// A first factor enrolled somewhere else (another session) doesn't satisfy the CLI login: someone
+// holding the user's Google login can't just wait for the user to enroll.
+func TestCLILoginEnrollmentInAnotherSessionDoesNotCompleteCLILogin(t *testing.T) {
+	e := newLoopbackEnv(t, true)
+	state, binding := e.startAndBind(t)
+	res := e.send(t, http.MethodGet, "/api/v1/auth/cli/mfa?state="+state, nil, binding)
+	sessionCookie := findCookie(res, "session_token")
+	require.NotNil(t, sessionCookie)
+
+	user, err := e.database.GetUser("user@example.com")
+	require.NoError(t, err)
+	otherToken, _, err := e.sessions.CreateSession(user, auth.SessionMetadata{Channel: "web"})
+	require.NoError(t, err)
+	e.confirmFirstFactor(t)
+	e.markSessionVerified(t, &http.Cookie{Name: "session_token", Value: otherToken})
+
+	res = e.send(t, http.MethodGet, cliReturnRoute(state), nil, binding, sessionCookie)
+	require.Equal(t, cliMFARoute(state), res.Header.Get("Location"), "no login code without enrolling here")
+}
+
+func (e *loopbackEnv) confirmFirstFactor(t *testing.T) {
+	t.Helper()
+	user, err := e.database.GetUser("user@example.com")
+	require.NoError(t, err)
+	method, err := e.database.CreateMFAMethod(user.ID, "totp", "Authenticator App", "SECRET", nil, nil, nil, nil)
+	require.NoError(t, err)
+	require.NoError(t, e.database.ConfirmMFAMethod(method.ID, time.Now()))
+}
+
+func (e *loopbackEnv) markSessionVerified(t *testing.T, sessionCookie *http.Cookie) {
+	t.Helper()
+	result, err := e.sessions.ValidateSession(sessionCookie.Value, "", "")
+	require.NoError(t, err)
+	require.NoError(t, e.database.UpdateSessionMFAVerified(result.Session.ID, time.Now(), nil))
+}
+
+// The browser is only bound once the identity provider code exchange has succeeded, so a junk code
+// from someone who learned the state can neither bind nor end the login.
+func TestCLILoginJunkCodeCannotBindOrBlockLogin(t *testing.T) {
+	e := newLoopbackEnv(t, false)
+	res := e.send(t, http.MethodPost, "/api/v1/auth/cli/start", validStartRequest())
+	require.Equal(t, http.StatusOK, res.StatusCode)
+	state := e.oauth.lastState
+
+	res = e.send(t, http.MethodGet, "/api/v1/auth/cli/callback?code=junk&state="+state, nil)
+	require.Equal(t, "exchange_failed", loopbackError(t, res))
+	require.Nil(t, findCookie(res, cliLoginCookie), "a failed exchange must not bind the browser")
+
+	res = e.send(t, http.MethodGet, "/api/v1/auth/cli/callback?code=google-code&state="+state, nil)
+	require.Equal(t, http.StatusTemporaryRedirect, res.StatusCode)
+	binding := findCookie(res, cliLoginCookie)
+	require.NotNil(t, binding)
+	require.NotEmpty(t, e.loginCodeFromBrowser(t, state, binding))
+}
+
+// An identity provider error (e.g. the user declined consent) is sent back to the CLI.
+func TestCLILoginProviderErrorReturnsToCLI(t *testing.T) {
+	e := newLoopbackEnv(t, false)
+	e.send(t, http.MethodPost, "/api/v1/auth/cli/start", validStartRequest())
+	state := e.oauth.lastState
+
+	res := e.send(t, http.MethodGet, "/api/v1/auth/cli/callback?error=access_denied&state="+state, nil)
+	require.Equal(t, "access_denied", loopbackError(t, res))
+	record, err := e.database.GetCLILoginState(state)
+	require.NoError(t, err)
+	require.False(t, record.LoginError.Valid, "an unauthenticated callback must not end the login")
+}
+
+func TestCLILoginCancelTellsTheCLI(t *testing.T) {
+	e := newLoopbackEnv(t, false)
+	state, binding := e.startAndBind(t)
+
+	res := e.send(t, http.MethodPost, "/api/v1/auth/cli/cancel", map[string]string{"state": state})
+	require.Equal(t, http.StatusBadRequest, res.StatusCode, "only the bound browser can cancel")
+
+	res = e.send(t, http.MethodPost, "/api/v1/auth/cli/cancel", map[string]string{"state": state}, binding)
+	require.Equal(t, http.StatusOK, res.StatusCode)
+	var body CLILoginRedirectResponse
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&body))
+	location, err := url.Parse(body.Redirect)
+	require.NoError(t, err)
+	require.Equal(t, "127.0.0.1:54321", location.Host)
+	require.Equal(t, "canceled", location.Query().Get("error"))
+	require.Equal(t, validStartRequest().State, location.Query().Get("state"))
+
+	res = e.send(t, http.MethodGet, cliReturnRoute(state), nil, binding)
+	require.Equal(t, "canceled", loopbackError(t, res), "a canceled login can't be completed")
+}
+
+func loopbackError(t *testing.T, res *http.Response) string {
+	t.Helper()
+	require.Equal(t, http.StatusFound, res.StatusCode)
+	location, err := url.Parse(res.Header.Get("Location"))
+	require.NoError(t, err)
+	require.Equal(t, loopbackTestRedirect, location.Scheme+"://"+location.Host+location.Path)
+	require.Equal(t, validStartRequest().State, location.Query().Get("state"))
+	require.Empty(t, location.Query().Get("code"))
+	return location.Query().Get("error")
+}
+
+// A login code is issued once; returning to /auth/cli/return again doesn't mint another.
+func TestCLILoginCodeIsIssuedOnce(t *testing.T) {
+	e := newLoopbackEnv(t, false)
+	state, binding := e.startAndBind(t)
+	code := e.loginCodeFromBrowser(t, state, binding)
+
+	res := e.send(t, http.MethodGet, cliReturnRoute(state), nil, binding)
+	require.Contains(t, res.Header.Get("Location"), "error=expired")
+	require.Equal(t, http.StatusOK, e.complete(t, code, loopbackTestVerifier).StatusCode)
+}
+
+func TestCLILoginBindingCookieAttributes(t *testing.T) {
+	t.Setenv("COOKIE_SECURE", "true")
+	e := newLoopbackEnv(t, false)
+	_, binding := e.startAndBind(t)
+	require.True(t, binding.Secure)
+	require.True(t, binding.HttpOnly)
+	require.Equal(t, http.SameSiteLaxMode, binding.SameSite)
+	require.Equal(t, "/api/v1/auth/cli", binding.Path)
+}
+
+// CLIs from before the loopback login post no login parameters; they're told to upgrade.
+func TestCLILoginStartTellsOldCLIsToUpgrade(t *testing.T) {
+	e := newLoopbackEnv(t, false)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/cli/start", http.NoBody)
+	w := httptest.NewRecorder()
+	e.router.ServeHTTP(w, req)
+	require.Equal(t, http.StatusBadRequest, w.Code)
+	require.Contains(t, w.Body.String(), "upgrade the rack-gateway CLI")
 }
 
 func TestCLILoginStartValidation(t *testing.T) {

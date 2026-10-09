@@ -6,17 +6,6 @@
  * OpenAPI spec version: 1.0
  */
 
-export type GetAuthCliCallbackParams = {
-  /**
-   * Authorization code
-   */
-  code?: string;
-  /**
-   * State
-   */
+export interface HandlersCLILoginCancelRequest {
   state: string;
-  /**
-   * Identity provider error
-   */
-  error?: string;
-};
+}

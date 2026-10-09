@@ -154,16 +154,22 @@ func (s *loopbackServer) writePage(w http.ResponseWriter, status int, title, mes
 	})
 }
 
-// loginErrorMessage maps the gateway's login error codes to messages for the terminal.
+// loginErrorMessages maps the gateway's login error codes to messages for the terminal.
+var loginErrorMessages = map[string]string{
+	"unauthorized":            "your account is not authorized for this gateway",
+	"exchange_failed":         "the identity provider login could not be completed",
+	"session_incomplete":      "the login session was incomplete; run rack-gateway login again",
+	"canceled":                "the login was canceled in the browser",
+	"access_denied":           "the identity provider login was canceled or denied",
+	"identity_provider_error": "the identity provider reported an error",
+	"session_failed":          "the gateway could not start a browser session; run rack-gateway login again",
+	"persist_failure":         "the gateway could not save the login; run rack-gateway login again",
+	"load_failure":            "the gateway could not load the login; run rack-gateway login again",
+}
+
 func loginErrorMessage(code string) string {
-	switch code {
-	case "unauthorized":
-		return "your account is not authorized for this gateway"
-	case "exchange_failed":
-		return "the identity provider login could not be completed"
-	case "session_incomplete":
-		return "the login session was incomplete; run rack-gateway login again"
-	default:
-		return fmt.Sprintf("the gateway could not complete the login (%s)", code)
+	if message, ok := loginErrorMessages[code]; ok {
+		return message
 	}
+	return fmt.Sprintf("the gateway could not complete the login (%s)", code)
 }

@@ -48,7 +48,8 @@ convox logs -a rack-gateway --since 10m
 
 ### CLI Login Hangs
 
-The CLI does not run a local callback server. It opens the browser and polls the gateway.
+The CLI listens on `http://127.0.0.1:<random port>/callback` and waits (up to 10 minutes) for the browser
+to be redirected there with a single-use login code.
 
 <Steps>
 
@@ -58,13 +59,19 @@ The CLI does not run a local callback server. It opens the browser and polls the
    curl https://gateway.example.com/api/v1/health
    ```
 
-2. **Use `--no-open` to capture the auth URL**
+2. **Use a browser on the same machine as the CLI**
+
+   The login code is delivered to `127.0.0.1`. For a remote host, forward the port from the CLI's
+   "Waiting for the browser to return to `http://127.0.0.1:<port>/callback`" line with
+   `ssh -L <port>:127.0.0.1:<port> <host>`. Local firewalls must allow connections to `127.0.0.1`.
+
+3. **Use `--no-open` to capture the auth URL**
 
    ```bash
    rack-gateway login production https://gateway.example.com --no-open
    ```
 
-3. **Complete the browser flow**
+4. **Complete the browser flow**
 
    Ensure the browser can reach the gateway and Google OAuth endpoints.
 

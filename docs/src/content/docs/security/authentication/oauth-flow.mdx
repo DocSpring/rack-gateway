@@ -83,9 +83,11 @@ sequenceDiagram
 | `prompt` | `select_account` | Always show account picker |
 | `hd` | Allowed domain | Filter to organization accounts |
 
-## CLI OAuth Flow (with PKCE)
+## CLI Login Flow (RFC 8252 loopback, with PKCE)
 
-The CLI uses OAuth 2.0 with PKCE (Proof Key for Code Exchange) for enhanced security:
+The CLI logs in with the [RFC 8252](https://www.rfc-editor.org/rfc/rfc8252) loopback flow. Two PKCE pairs
+are involved: the gateway's own pair for the Google leg, and the CLI's pair, which proves that only the
+CLI that started the login can finish it.
 
 ```mermaid
 sequenceDiagram
@@ -94,43 +96,67 @@ sequenceDiagram
     participant Browser
     participant Google
 
-    CLI->>Gateway: POST /api/v1/auth/cli/start
-    Gateway->>Gateway: Generate state + PKCE
-    Gateway-->>CLI: auth_url, state, code_verifier
+    CLI->>CLI: Listen on http://127.0.0.1:<random port>/callback
+    CLI->>Gateway: POST /api/v1/auth/cli/start (S256 challenge, CLI state, loopback redirect_uri)
+    Gateway-->>CLI: auth_url (only)
 
-    CLI->>Browser: Open auth_url
-    Browser->>Google: Authorization request + code_challenge
-    Note over Browser,Google: User authenticates
+    CLI->>Browser: Open auth_url (also printed in the terminal)
+    Browser->>Google: Authorization request (gateway PKCE)
+    Note over Browser,Google: User signs in
     Google-->>Browser: Redirect to callback
     Browser->>Gateway: GET /api/v1/auth/cli/callback?code=...&state=...
-    Gateway-->>Browser: Redirect to MFA/success page
-
-    CLI->>Gateway: POST /api/v1/auth/cli/complete
-    Note right of CLI: Includes state + code_verifier (polled)
-    Gateway->>Gateway: Validate state + MFA
-    Gateway->>Google: Exchange code + verifier
+    Gateway->>Google: Exchange code + gateway verifier
     Google-->>Gateway: ID token
-    Gateway->>Gateway: Verify + create session
+    Gateway-->>Browser: Bind this browser (HttpOnly cookie), continue to MFA
+
+    Browser->>Gateway: MFA challenge (or first-factor enrollment)
+    Browser->>Gateway: GET /api/v1/auth/cli/return
+    Gateway-->>Browser: Redirect to 127.0.0.1 loopback with single-use login code + CLI state
+    Browser->>CLI: GET /callback?code=...&state=...
+
+    CLI->>Gateway: POST /api/v1/auth/cli/complete (login_code + CLI code_verifier)
     Gateway-->>CLI: Session token
 ```
 
-### Why PKCE?
+### What protects the login
 
-PKCE prevents authorization code interception attacks:
+- **Loopback redirect only.** `/auth/cli/start` only accepts a redirect URI of the form
+  `http://127.0.0.1:<port>/callback` (or `http://[::1]:<port>/callback`). The login code is only ever sent to
+  that address, so a login link someone else started delivers its code to *your* machine, never theirs.
+- **Exchange before binding.** The gateway exchanges Google's authorization code at the callback, and only
+  when that succeeds binds the login to the browser with an HttpOnly, SameSite=Lax cookie (path
+  `/api/v1/auth/cli`). Every later browser step (MFA form, MFA submit, return, cancel) requires that cookie.
+  The Google code is never stored.
+- **Single-use login code.** The login code is 256 bits of randomness, stored only as a SHA-256 hash, valid
+  for 2 minutes, issued once per login, and deleted when redeemed (a failed redemption also burns it).
+- **CLI PKCE.** Redeeming the login code also requires the CLI's code verifier, which never leaves the CLI.
+- **Time limit.** The whole login must finish within 10 minutes.
+- **First-factor enrollment.** A user with no MFA factor can enroll one during the login, but only in the
+  browser bound to the login.
+- **Visible initiator.** The MFA page shows the device name and IP that started the login, and the user gets
+  a "New CLI Login" email when a CLI session is created. **Cancel Login** ends the login on the gateway and
+  tells the waiting CLI.
 
-1. **Code verifier**: High-entropy random string (128 bytes)
-2. **Code challenge**: SHA-256 hash of verifier
-3. **Verification**: Google verifies the verifier matches the challenge
-
-Even if an attacker intercepts the authorization code, they cannot exchange it without the code verifier.
-
-### PKCE Parameters
+### PKCE parameters (CLI pair)
 
 | Parameter | Description |
 |-----------|-------------|
-| `code_verifier` | 128-byte random string (base64url encoded) |
-| `code_challenge` | SHA-256(code_verifier), base64url encoded |
+| `code_verifier` | 64 random bytes, base64url encoded (86 characters); kept by the CLI |
+| `code_challenge` | SHA-256(code_verifier), base64url encoded (43 characters) |
 | `code_challenge_method` | Always `S256` |
+
+### Same-machine requirement
+
+The browser must run on the same machine as the CLI, because the login code is delivered to
+`127.0.0.1`. To log in from a remote host (for example over SSH), forward the CLI's port: start
+`rack-gateway login --no-open`, note the port in the printed "Waiting for the browser to return to
+http://127.0.0.1:<port>/callback" line, and run `ssh -L <port>:127.0.0.1:<port> <host>` from the machine with
+the browser before opening the printed login URL there.
+
+### Upgrading
+
+The gateway and CLI must both support the loopback flow. After upgrading the gateway, install the matching
+rack-gateway CLI: an older CLI is told to upgrade, and a newer CLI refuses to log in to an older gateway.
 
 ## Token Verification
 
