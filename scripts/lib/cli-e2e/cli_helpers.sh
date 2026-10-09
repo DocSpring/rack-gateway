@@ -98,7 +98,7 @@ verify_command_status_and_output() {
     echo -e "${BLUE}Running: $shell_cmd...${NC}"
     set +e
     local output
-    output=$(eval "$shell_cmd" 2>&1)
+    output=$(eval "$shell_cmd" 2>&1 </dev/null)
     local exit_status=$?
     set -e
     if [[ "$exit_status" == "$expected_status" ]]; then
