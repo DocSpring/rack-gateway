@@ -97,8 +97,10 @@ export function ServiceImagePatternsCard({
       </CardHeader>
       <CardContent className="space-y-4 pb-6">
         <p className="text-muted-foreground text-sm">
-          Per-service regex patterns for validating Docker images in convox.yml. Validates build
-          commands to ensure only images matching the pattern are allowed.
+          Per-service regex patterns for the Docker images in convox.yml, matched against the whole
+          image reference. Required for builds made under a deploy approval: every service needs a
+          pattern (its own or &quot;*&quot;) that names the image repository. {'{{GIT_COMMIT}}'} is
+          replaced with the approved commit.
         </p>
         <div>
           <Label htmlFor="service-image-patterns">JSON object (service name → regex)</Label>
@@ -108,7 +110,7 @@ export function ServiceImagePatternsCard({
               disabled={disabled}
               id="service-image-patterns"
               onChange={(event) => setValue(event.target.value)}
-              placeholder='{"web": "^ghcr.io/myorg/myapp:{{GIT_COMMIT}}$", "worker": "^.*$"}'
+              placeholder='{"*": "docker\\.io/myorg/app:{{GIT_COMMIT}}-amd64"}'
               value={displayValue}
             />
             <SourceIndicator setting={setting} />

@@ -51,9 +51,9 @@ func validateAndNormalizeDeployApprovalInput(
 	if app == "" {
 		return "", "", "", fmt.Errorf("app is required")
 	}
-	gitCommitHash = strings.TrimSpace(gitCommitHash)
-	if gitCommitHash == "" {
-		return "", "", "", fmt.Errorf("git_commit_hash is required")
+	gitCommitHash, ok := NormalizeCommitSHA(gitCommitHash)
+	if !ok {
+		return "", "", "", fmt.Errorf("git_commit_hash must be a full 40-character commit SHA")
 	}
 	if targetAPITokenID <= 0 {
 		return "", "", "", fmt.Errorf("target api token required")

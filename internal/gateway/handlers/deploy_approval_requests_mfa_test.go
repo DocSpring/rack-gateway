@@ -102,7 +102,7 @@ func TestApproveDeployApprovalRequest_RequiresMFACode(t *testing.T) {
 	req, err := database.CreateDeployApprovalRequest(
 		"Test deploy",
 		"test-app",
-		"abc123",
+		"abc123def4567890abc123def4567890abc123de",
 		"main",
 		"",                  // prURL
 		[]byte("{}"),        // ciMetadata - must be valid JSON
@@ -170,7 +170,7 @@ func TestApproveDeployApprovalRequest_RequiresMFACode(t *testing.T) {
 		req2, err := database.CreateDeployApprovalRequest(
 			"Test deploy 2",
 			"test-app-2",
-			"def456",
+			"def4567890abc123def4567890abc123def45678",
 			"main",
 			"",                  // prURL
 			[]byte("{}"),        // ciMetadata - must be valid JSON

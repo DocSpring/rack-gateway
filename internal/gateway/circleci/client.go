@@ -63,10 +63,12 @@ type ApprovalMetadata struct {
 }
 
 // ApproveJob approves a pending approval job in a CircleCI workflow.
+// The workflow's pipeline must be building the approved revision of the expected repository;
+// otherwise ErrPipelineMismatch is returned and nothing is approved.
 // It handles workflow reruns by finding the latest workflow with the same name in the pipeline.
-func (c *Client) ApproveJob(workflowID, pipelineNumber, jobName string) error {
-	if workflowID == "" {
-		return fmt.Errorf("workflow_id is required")
+func (c *Client) ApproveJob(workflowID, pipelineNumber, jobName string, expect ApprovalExpectation) error {
+	if err := ValidateWorkflowID(workflowID); err != nil {
+		return err
 	}
 	if pipelineNumber == "" {
 		return fmt.Errorf("pipeline_number is required")
@@ -79,6 +81,14 @@ func (c *Client) ApproveJob(workflowID, pipelineNumber, jobName string) error {
 	originalWorkflow, err := c.getWorkflowDetails(workflowID)
 	if err != nil {
 		return fmt.Errorf("failed to get workflow details: %w", err)
+	}
+
+	pipeline, err := c.getPipeline(originalWorkflow.PipelineID)
+	if err != nil {
+		return fmt.Errorf("failed to get pipeline: %w", err)
+	}
+	if err := verifyPipeline(pipeline, expect); err != nil {
+		return err
 	}
 
 	// Find the latest workflow with the same name in the pipeline
@@ -247,6 +257,9 @@ func ValidateMetadata(metadata map[string]interface{}) error {
 	workflowID, ok := metadata["workflow_id"].(string)
 	if !ok || strings.TrimSpace(workflowID) == "" {
 		return fmt.Errorf("ci_metadata.workflow_id is required")
+	}
+	if err := ValidateWorkflowID(workflowID); err != nil {
+		return fmt.Errorf("ci_metadata.workflow_id: %w", err)
 	}
 
 	pipelineNumber, ok := metadata["pipeline_number"].(string)

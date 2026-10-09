@@ -312,7 +312,7 @@ func (h *SettingsHandler) updateAppSettingValue(c *gin.Context, key string) {
 
 	ops := &appSettingsOps{service: h.settingsService}
 	if err := ops.setSetting(appName, key, value, uid); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to save setting: %s", key)})
+		respondSettingSaveError(c, key, err)
 		return
 	}
 

@@ -141,7 +141,7 @@ jobs:
               --app myapp \
               --git-commit "$CIRCLE_SHA1" \
               --branch "$CIRCLE_BRANCH" \
-              --ci-metadata "{\"workflow_id\":\"$CIRCLE_WORKFLOW_ID\",\"pipeline_number\":<< pipeline.number >>}" \
+              --ci-metadata "{\"workflow_id\":\"$CIRCLE_WORKFLOW_ID\",\"pipeline_number\":\"<< pipeline.number >>\"}" \
               --message "Deploy $CIRCLE_BRANCH@${CIRCLE_SHA1:0:7} to production"
           environment:
             RACK_GATEWAY_API_TOKEN: $RACK_GATEWAY_API_TOKEN
@@ -241,6 +241,12 @@ sequenceDiagram
     participant Gateway as Gateway
     participant CircleCI as CircleCI API
 
+    Gateway->>Gateway: Deploy approval still approved and unexpired?
+    Gateway->>CircleCI: GET /workflow/{workflow_id}
+    CircleCI-->>Gateway: pipeline_id
+    Gateway->>CircleCI: GET /pipeline/{pipeline_id}
+    CircleCI-->>Gateway: vcs.revision, repository URLs
+    Gateway->>Gateway: Revision = approved commit? Repository = vcs_repo? Not a fork?
     Gateway->>CircleCI: GET /workflow/{workflow_id}/job
     CircleCI-->>Gateway: List of jobs
     Gateway->>Gateway: Find job matching approval_job_name
@@ -248,12 +254,17 @@ sequenceDiagram
     CircleCI-->>Gateway: 202 Accepted
 ```
 
+The `ci_metadata` comes from the CI job that requested the approval, so the gateway doesn't trust it on its
+own: the hold job is only approved when the workflow's pipeline is building the approved commit of the app's
+repository, and the job is re-checked against the deploy approval on every attempt (retries can run later,
+after a rejection or expiry).
+
 ### What Gateway Needs
 
 | Source | Data |
 |--------|------|
-| CI metadata | `workflow_id` |
-| App settings | `circleci_approval_job_name` |
+| CI metadata | `workflow_id` (a CircleCI workflow UUID), `pipeline_number` (string) |
+| App settings | `circleci_approval_job_name`, `vcs_repo` (`owner/repo`) |
 | Gateway config | `CIRCLECI_TOKEN` |
 
 ## Pipeline URL Display
@@ -345,6 +356,8 @@ curl -H "Circle-Token: YOUR_TOKEN" https://circleci.com/api/v2/me
 - [ ] `ci_metadata` includes `workflow_id`
 - [ ] `CIRCLECI_TOKEN` has correct permissions
 - [ ] App `ci_provider` is set to `circleci`
+- [ ] App `vcs_repo` is set to the repository CircleCI builds (`owner/repo`)
+- [ ] The workflow was building the approved commit (not a later re-run of another commit)
 
 **Check gateway logs:**
 ```bash
@@ -358,6 +371,9 @@ convox logs --app rack-gateway | grep -i circleci
 | `approval job 'xxx' not found in workflow` | Job name mismatch |
 | `403 Forbidden` | Token lacks permissions or expired |
 | `workflow not found` | Invalid workflow_id in metadata |
+| `invalid CircleCI workflow_id` | `workflow_id` is not a UUID (the job is cancelled) |
+| `CircleCI pipeline does not match the deploy approval` | The pipeline builds another commit or repository, is a fork, or its repository can't be determined (the job is cancelled; approve the hold manually after checking) |
+| `deploy approval is no longer active` | The approval was rejected, expired or deployed before the job ran (the job is cancelled) |
 
 ### API Token Permissions
 

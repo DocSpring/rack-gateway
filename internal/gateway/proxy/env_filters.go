@@ -167,6 +167,8 @@ func (h *Handler) captureProcessCreation(_ *http.Request, body []byte, tracker *
 	}
 }
 
+// isCommandApproved reports whether command is in the app's approved_deploy_commands.
+// An empty list allows no commands under a deploy approval (fail closed).
 func (h *Handler) isCommandApproved(app, command string) bool {
 	if h.settingsService == nil {
 		return false
@@ -176,10 +178,6 @@ func (h *Handler) isCommandApproved(app, command string) bool {
 	if err != nil {
 		log.Printf("Failed to get approved commands for app %s: %v", logutil.SanitizeForLog(app), err)
 		return false
-	}
-
-	if len(approvedCommands) == 0 {
-		return true
 	}
 
 	for _, approved := range approvedCommands {

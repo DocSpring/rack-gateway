@@ -71,6 +71,9 @@ func (s *Service) GetAllAppSettings(appName string) (map[string]*Setting, error)
 
 // SetAppSetting saves an app-specific setting to the database.
 func (s *Service) SetAppSetting(appName, key string, value interface{}, updatedByUserID *int64) error {
+	if err := ValidateAppSettingValue(key, value); err != nil {
+		return err
+	}
 	return s.db.UpsertSetting(&appName, key, value, updatedByUserID)
 }
 
