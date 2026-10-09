@@ -49,6 +49,7 @@ export * from './getJobsParams';
 export * from './getRack200';
 export * from './getRoles200';
 export * from './getSettings200';
+export * from './getUsersEmailAuditLogsParams';
 export * from './handlersAuditLogsResponse';
 export * from './handlersBackupCodesResponse';
 export * from './handlersCLILoginCompleteRequest';

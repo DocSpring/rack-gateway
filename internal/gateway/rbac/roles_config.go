@@ -51,6 +51,9 @@ var roleConfigs = map[string]roleConfig{
 			Convox(ResourceBuild, ActionList),
 			Convox(ResourceBuild, ActionRead),
 			Convox(ResourceRack, ActionRead),
+			// Team directory, and the API tokens an admin has issued to this user.
+			Gateway(ResourceUser, ActionList),
+			Gateway(ResourceAPIToken, ActionRead),
 		},
 	},
 	"ops": {
@@ -77,6 +80,12 @@ var roleConfigs = map[string]roleConfig{
 			Convox(ResourceApp, ActionUpdate),
 			Gateway(ResourceDeployApprovalRequest, ActionCreate),
 			Gateway(ResourceDeployApprovalRequest, ActionRead),
+			// Deployers can issue CI tokens for themselves. deploy_with_approval only gates actions a
+			// deployer already holds directly, so a deployer-owned CI token stays within its owner's role.
+			Convox(ResourceDeploy, ActionDeployWithApproval),
+			Gateway(ResourceAPIToken, ActionCreate),
+			Gateway(ResourceAPIToken, ActionUpdate),
+			Gateway(ResourceAPIToken, ActionDelete),
 		},
 		Parents: []string{"ops"},
 	},

@@ -145,6 +145,11 @@ func (h *AuthHandler) StartYubiOTPEnrollment(c *gin.Context) {
 		return
 	}
 
+	// Enrolling a YubiKey verifies an OTP from it, so the session that enrolled it is MFA-verified.
+	if _, ok := h.updateSessionAfterMFA(c, ctx, ctx.authUser.Session.TrustedDeviceID, false); !ok {
+		return
+	}
+
 	h.logMFAEnrollmentCompletion(c, ctx.userRecord, "", "yubiotp")
 	c.JSON(http.StatusOK, result)
 }

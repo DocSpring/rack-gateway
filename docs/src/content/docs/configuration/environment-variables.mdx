@@ -6,6 +6,22 @@ description: Complete reference of all environment variables for Rack Gateway.
 This page provides a complete reference of Rack Gateway environment variables.
 For a shorter overview, see [Configuration](/configuration/).
 
+## Production Safety Check
+
+The first time a gateway starts against a database, it marks the database as `production` (or `development` when `DEV_MODE=true`). A gateway refuses to start against a production database while any development or test-only setting is present, because each one weakens a security control:
+
+| Variable | Why it's refused in production |
+|----------|--------------------------------|
+| `DEV_MODE=true` | Relaxes cookies, CSP and secret requirements |
+| `E2E_TEST_MODE=true` | Skips WebAuthn assertion checks |
+| `AWS_ENDPOINT_URL` | Sends every AWS call (S3 audit anchors, STS, KMS) to another endpoint |
+| `AWS_ENDPOINT_URL_S3` | Sends audit anchors to another S3 endpoint |
+| `AWS_ENDPOINT_URL_STS`, `AWS_ENDPOINT_URL_KMS` | Sends AWS credential exchange or key operations to another endpoint |
+| `POSTMARK_API_BASE` | Sends the Postmark token to another server |
+| `GOOGLE_OAUTH_BASE_URL` without `https://` | Accepts identity tokens over plain HTTP |
+
+The error names every offending variable. Remove them from the production environment and restart. `GOOGLE_ALLOWED_DOMAIN` is required whenever `DEV_MODE` is off.
+
 ## Core Server
 
 | Variable | Default | Description |

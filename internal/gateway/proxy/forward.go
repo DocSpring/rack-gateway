@@ -274,10 +274,8 @@ func (h *Handler) forwardRequest(
 		return 0, err
 	}
 
-	if disallowed := h.disallowedRunOptions(r, authUser); len(disallowed) > 0 {
-		msg := fmt.Sprintf("only admins can use these process options: %s", strings.Join(disallowed, ", "))
-		http.Error(w, msg, http.StatusForbidden)
-		return http.StatusForbidden, nil
+	if status := h.refuseUnforwardableOptions(w, r, authUser); status != 0 {
+		return status, nil
 	}
 
 	if strings.Contains(strings.ToLower(r.Header.Get("Connection")), "upgrade") &&

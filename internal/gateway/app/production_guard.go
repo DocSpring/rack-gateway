@@ -8,11 +8,14 @@ import (
 
 // testOnlyFlags and testOnlyEndpoints switch off or redirect security controls for the development and
 // E2E stacks (E2E_TEST_MODE skips WebAuthn assertion checks, DEV_MODE relaxes cookies/CSP/secrets, and the
-// endpoint overrides send audit anchors and the Postmark token elsewhere). They must never be active
-// against a database marked as production.
+// endpoint overrides send audit anchors, AWS credential exchange and the Postmark token elsewhere). They must
+// never be active against a database marked as production. AWS_ENDPOINT_URL redirects every AWS service the
+// SDK calls, so it is refused along with the per-service overrides the gateway uses.
 var (
 	testOnlyFlags     = []string{"DEV_MODE", "E2E_TEST_MODE"}
-	testOnlyEndpoints = []string{"AWS_ENDPOINT_URL_S3", "POSTMARK_API_BASE"}
+	testOnlyEndpoints = []string{
+		"AWS_ENDPOINT_URL", "AWS_ENDPOINT_URL_S3", "AWS_ENDPOINT_URL_STS", "AWS_ENDPOINT_URL_KMS", "POSTMARK_API_BASE",
+	}
 )
 
 // checkProductionSafety refuses to start a gateway whose database is marked production while any

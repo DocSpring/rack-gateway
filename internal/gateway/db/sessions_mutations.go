@@ -112,6 +112,20 @@ func (d *Database) UpdateSessionMFAVerified(sessionID int64, verifiedAt time.Tim
 	return nil
 }
 
+// ClearSessionsMFAVerification marks every active session of the user as not MFA-verified, so each one has to
+// complete an MFA challenge before it can be used again.
+func (d *Database) ClearSessionsMFAVerification(userID int64) error {
+	_, err := d.exec(
+		`UPDATE user_sessions SET mfa_verified_at = NULL, recent_step_up_at = NULL, updated_at = NOW()
+		WHERE user_id = ? AND revoked_at IS NULL`,
+		userID,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to clear session MFA verification: %w", err)
+	}
+	return nil
+}
+
 // UpdateSessionRecentStepUp records a recent step-up authentication timestamp for the session.
 func (d *Database) UpdateSessionRecentStepUp(sessionID int64, when time.Time) error {
 	gtwlog.DebugTopicf(

@@ -109,7 +109,7 @@ func (s *Service) ConfirmWebAuthnEnrollment(
 		return 0, err
 	}
 
-	if err := s.finalizeEnrollment(user.ID, methodID); err != nil {
+	if err := s.finalizeEnrollment(user, methodID); err != nil {
 		return 0, err
 	}
 

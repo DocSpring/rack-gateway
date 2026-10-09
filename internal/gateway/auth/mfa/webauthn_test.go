@@ -2,12 +2,14 @@ package mfa
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/go-webauthn/webauthn/protocol"
 	"github.com/go-webauthn/webauthn/webauthn"
 
+	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	"github.com/DocSpring/rack-gateway/internal/gateway/testutil/dbtest"
 	"github.com/DocSpring/rack-gateway/internal/gateway/testutil/webauthntest"
 )
@@ -385,9 +387,17 @@ func TestFinalizeEnrollment(t *testing.T) {
 
 	method, _ := database.CreateMFAMethod(user.ID, "totp", "Test", "secret", nil, nil, nil, nil)
 
-	err := service.finalizeEnrollment(user.ID, method.ID)
+	// A session from before the first enrollment was marked verified at login without proving a factor.
+	session := createVerifiedSession(t, database, user.ID, strings.Repeat("a", 64))
+
+	err := service.finalizeEnrollment(user, method.ID)
 	if err != nil {
 		t.Fatalf("finalize enrollment failed: %v", err)
+	}
+
+	cleared, _ := database.GetUserSessionByID(session.ID)
+	if cleared.MFAVerifiedAt != nil || cleared.RecentStepUpAt != nil {
+		t.Error("expected first enrollment to clear MFA verification on existing sessions")
 	}
 
 	// Verify method is confirmed
@@ -401,6 +411,31 @@ func TestFinalizeEnrollment(t *testing.T) {
 	if !updatedUser.MFAEnrolled {
 		t.Error("expected user to be MFA enrolled")
 	}
+
+	// Adding another factor keeps sessions that already proved one.
+	verified := createVerifiedSession(t, database, user.ID, strings.Repeat("b", 64))
+	second, _ := database.CreateMFAMethod(user.ID, "totp", "Second", "secret2", nil, nil, nil, nil)
+	if err := service.finalizeEnrollment(updatedUser, second.ID); err != nil {
+		t.Fatalf("second enrollment failed: %v", err)
+	}
+	kept, _ := database.GetUserSessionByID(verified.ID)
+	if kept.MFAVerifiedAt == nil {
+		t.Error("expected adding a second factor to keep verified sessions")
+	}
+}
+
+func createVerifiedSession(t *testing.T, database *db.Database, userID int64, tokenHash string) *db.UserSession {
+	t.Helper()
+	session, err := database.CreateUserSession(
+		userID, tokenHash, time.Now().Add(time.Hour), "web", "", "", "127.0.0.1", "test", nil, nil,
+	)
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+	if err := database.UpdateSessionMFAVerified(session.ID, time.Now(), nil); err != nil {
+		t.Fatalf("mark session verified: %v", err)
+	}
+	return session
 }
 
 func TestPrepareEnrollment_DeletesUnconfirmed(t *testing.T) {

@@ -19,6 +19,9 @@ docs
 # other repos checked out for reference
 reference/
 
+# Local agent state (Claude Code settings and worktrees)
+.claude/
+
 # Web app artifacts
 web/node_modules/
 web/dist

@@ -153,6 +153,23 @@ func TestProxyBlocksReleaseCreateWithSecretSetForDeployer(t *testing.T) {
 	// Will be denied before attempting to forward (since rack URL is dummy)
 	h.ProxyToRack(rr, req)
 	require.Equal(t, http.StatusForbidden, rr.Code)
+	require.Contains(t, rr.Body.String(), "You don't have permission to modify secrets: SECRET_KEY")
+}
+
+// Unsetting a secret is a secret change too.
+func TestMergeEnvRefusesSecretRemovalWithoutSecretSet(t *testing.T) {
+	h, _, _ := newProxyForEnvTest(t)
+	req := httptest.NewRequest(http.MethodPost, "/apps/app/releases", nil)
+	baseEnv := map[string]string{"SECRET_KEY": "abc", "PORT": "3000"}
+	posted := map[string]string{"PORT": "3000"}
+
+	_, _, err := h.mergeEnvAndComputeDiffs(req, "deployer@test.com", "app", posted, []string{"PORT"}, baseEnv, false)
+	require.EqualError(t, err, "You don't have permission to modify secrets: SECRET_KEY")
+
+	_, diffs, err := h.mergeEnvAndComputeDiffs(req, "admin@test.com", "app", posted, []string{"PORT"}, baseEnv, true)
+	require.NoError(t, err)
+	require.Len(t, diffs, 1)
+	require.Equal(t, "SECRET_KEY", diffs[0].Key)
 }
 
 // TestValidateProtectedKeysAllowsMaskedValues reproduces a bug where running
@@ -205,8 +222,10 @@ func TestValidateProtectedKeysBlocksActualChanges(t *testing.T) {
 	req.Header.Set("X-User-Name", "Admin")
 
 	err := h.validateProtectedKeys(req, "admin@test.com", appName, posted)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "protected key change denied")
+	require.EqualError(
+		t, err,
+		"ADMIN_PASSWORD is a protected env var for docspring. Unprotect it in rack-gateway settings to change it.",
+	)
 }
 
 // TestMergeEnvPreservesProtectedKeysNotInPosted reproduces a bug where running
@@ -282,6 +301,11 @@ func TestProxyBlocksProtectedEnvChangesAndAudits(t *testing.T) {
 	rr := httptest.NewRecorder()
 	h.ProxyToRack(rr, req)
 	require.Equal(t, http.StatusForbidden, rr.Code)
+	// The refusal names the key and how to change it, not a generic permission error.
+	require.Contains(
+		t, rr.Body.String(),
+		"DATABASE_URL is a protected env var for app. Unprotect it in rack-gateway settings to change it.",
+	)
 
 	logs, err := database.GetAuditLogs("admin@test.com", time.Time{}, 50)
 	require.NoError(t, err)
@@ -364,7 +388,7 @@ func TestEnvUnsetWithProtectedKeysFullFlow(t *testing.T) {
 
 	err = h.validateProtectedKeys(req, "admin@test.com", appName, postedWithReal)
 	require.Error(t, err, "validateProtectedKeys should block real protected key values")
-	require.Contains(t, err.Error(), "protected key change denied")
+	require.Contains(t, err.Error(), "ADMIN_DATABASE_URL_DIRECT is a protected env var")
 }
 
 // TestFilterEnvironmentEndpointResponse tests that the /apps/{app}/environment
