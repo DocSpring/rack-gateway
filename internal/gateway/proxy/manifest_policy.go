@@ -30,11 +30,31 @@ func (p imagePolicy) validate(manifest *convoxManifest) error {
 		if err := validateImagesTaggedWithCommit(manifest, p.commit); err != nil {
 			return err
 		}
+		// The commit tag doesn't pin the repository, so every service needs a pattern that does.
+		if err := requirePatternForEveryService(manifest, p.patterns); err != nil {
+			return err
+		}
 	}
 	if len(p.patterns) == 0 {
 		return nil
 	}
 	return validateServiceImages(manifest, p.patterns)
+}
+
+// requirePatternForEveryService fails when a service has neither its own pattern nor a "*" pattern.
+func requirePatternForEveryService(manifest *convoxManifest, patterns map[string]string) error {
+	if _, ok := patterns["*"]; ok {
+		return nil
+	}
+	for _, name := range sortedServiceNames(manifest) {
+		if _, ok := patterns[name]; !ok {
+			return fmt.Errorf(
+				`service %s has no image pattern; add one for it or a "*" pattern to service_image_patterns`,
+				name,
+			)
+		}
+	}
+	return nil
 }
 
 // substituteCommit replaces {{GIT_COMMIT}} in each pattern with the regex-escaped commit.

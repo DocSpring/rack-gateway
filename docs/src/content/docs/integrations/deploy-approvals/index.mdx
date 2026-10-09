@@ -207,7 +207,7 @@ rack-gateway deploy-approval request \
   --app myapp \
   --git-commit "$CIRCLE_SHA1" \
   --branch "$CIRCLE_BRANCH" \
-  --ci-metadata '{"workflow_id":"abc-123","pipeline_number":"42"}' \
+  --ci-metadata "{\"workflow_id\":\"$CIRCLE_WORKFLOW_ID\",\"pipeline_number\":\"42\"}" \
   --message "Deploy to production"
 ```
 
@@ -230,7 +230,7 @@ rack-gateway deploy-approval list --status pending
 
 ```bash
 rack-gateway deploy-approval request \
-  --git-commit abc123f \
+  --git-commit "$CIRCLE_SHA1" \
   --message "Deploy" \
   --wait \
   --timeout 20m

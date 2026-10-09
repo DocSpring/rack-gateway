@@ -80,6 +80,9 @@ func TestApproveJobRefusesMismatchedPipelines(t *testing.T) {
 			revision: approvedSHA, targetRepo: docspringRepo, originRepo: "https://github.com/attacker/docspring",
 		},
 		"different project slug": {revision: approvedSHA, slug: "gh/attacker/other"},
+		// A GitHub App project slug doesn't name the repository; with no repository URL either, it
+		// can't be checked, so it isn't approved.
+		"unknown repository": {revision: approvedSHA, slug: "circleci/org-id/project-id"},
 	}
 	for name, pipeline := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -106,4 +109,11 @@ func TestParseMetadataRequiresUUIDWorkflowID(t *testing.T) {
 		"workflow_id": "not-a-uuid", "pipeline_number": "1", "approval_job_name": "hold",
 	})
 	require.ErrorIs(t, err, ErrInvalidWorkflowID)
+}
+
+// Jobs queued before the approved revision was stored have no revision to check and are never approved.
+func TestVerifyPipelineRequiresApprovedRevision(t *testing.T) {
+	pipeline := &pipelineDetails{}
+	pipeline.VCS.Revision = approvedSHA
+	require.ErrorIs(t, verifyPipeline(pipeline, ApprovalExpectation{}), ErrPipelineMismatch)
 }

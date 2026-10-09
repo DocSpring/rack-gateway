@@ -5,10 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/riverqueue/river"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/circleci"
+	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 )
 
 // ApproveJobArgs contains parameters for CircleCI job approval.
@@ -27,23 +29,41 @@ type ApproveJobArgs struct {
 // Kind returns the unique identifier for this job type
 func (ApproveJobArgs) Kind() string { return "circleci:approve_job" }
 
+// ApprovalStore loads deploy approval requests.
+type ApprovalStore interface {
+	GetDeployApprovalRequest(id int64) (*db.DeployApprovalRequest, error)
+}
+
+// errApprovalNotActive means the deploy approval was rejected, expired or used since the job was queued.
+var errApprovalNotActive = errors.New("deploy approval is no longer active")
+
 // ApproveJobWorker approves CircleCI jobs
 type ApproveJobWorker struct {
 	river.WorkerDefaults[ApproveJobArgs]
-	token string
+	approvals ApprovalStore
+	token     string
+	now       func() time.Time
 }
 
 // NewApproveJobWorker creates a new CircleCI approve job worker using the given API token.
-func NewApproveJobWorker(token string) *ApproveJobWorker {
-	return &ApproveJobWorker{token: token}
+func NewApproveJobWorker(approvals ApprovalStore, token string) *ApproveJobWorker {
+	return &ApproveJobWorker{approvals: approvals, token: token, now: time.Now}
 }
 
-// Work approves the CircleCI job after verifying its pipeline matches the deploy approval.
+// Work approves the CircleCI job after checking the deploy approval is still approved and the
+// workflow's pipeline matches it. Retries can run hours after the job was queued, so the approval is
+// re-checked on every attempt.
 func (w *ApproveJobWorker) Work(_ context.Context, job *river.Job[ApproveJobArgs]) error {
 	if strings.TrimSpace(w.token) == "" {
 		return river.JobCancel(fmt.Errorf("CircleCI token not configured"))
 	}
 	args := job.Args
+	if err := w.ensureApprovalActive(args.DeployApprovalRequestID); err != nil {
+		if errors.Is(err, errApprovalNotActive) {
+			return river.JobCancel(err)
+		}
+		return err
+	}
 	client := circleci.NewClient(w.token)
 	expect := circleci.ApprovalExpectation{Revision: args.ExpectedRevision, Repo: args.ExpectedRepo}
 
@@ -56,6 +76,31 @@ func (w *ApproveJobWorker) Work(_ context.Context, job *river.Job[ApproveJobArgs
 		return fmt.Errorf("failed to approve CircleCI job: %w", err)
 	}
 
+	return nil
+}
+
+// ensureApprovalActive returns an errApprovalNotActive error unless the deploy approval is approved and
+// unexpired. Other errors (e.g. the database being unavailable) are returned as-is so the job retries.
+func (w *ApproveJobWorker) ensureApprovalActive(id int64) error {
+	if w.approvals == nil {
+		return fmt.Errorf("deploy approval store not configured")
+	}
+	if id == 0 {
+		return fmt.Errorf("%w: job has no deploy approval request", errApprovalNotActive)
+	}
+	approval, err := w.approvals.GetDeployApprovalRequest(id)
+	if approval == nil && (err == nil || errors.Is(err, db.ErrDeployApprovalRequestNotFound)) {
+		return fmt.Errorf("%w: deploy approval request %d not found", errApprovalNotActive, id)
+	}
+	if err != nil {
+		return fmt.Errorf("failed to load deploy approval request %d: %w", id, err)
+	}
+	if approval.Status != db.DeployApprovalRequestStatusApproved {
+		return fmt.Errorf("%w: deploy approval %s is %s", errApprovalNotActive, approval.PublicID, approval.Status)
+	}
+	if approval.ApprovalExpiresAt != nil && w.now().After(*approval.ApprovalExpiresAt) {
+		return fmt.Errorf("%w: deploy approval %s has expired", errApprovalNotActive, approval.PublicID)
+	}
 	return nil
 }
 

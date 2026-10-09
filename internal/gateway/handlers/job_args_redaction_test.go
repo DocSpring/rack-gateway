@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/riverqueue/river/rivertype"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -39,4 +40,16 @@ func TestRedactJobArgs(t *testing.T) {
 func TestRedactJobArgsWithholdsUnparseableArgs(t *testing.T) {
 	assert.Nil(t, redactJobArgs(json.RawMessage(`not json "token":"x"`)))
 	assert.Nil(t, redactJobArgs(nil))
+}
+
+// Every jobs API response goes through toJobResponse, so job args never reach the client unredacted.
+func TestJobResponseRedactsArgs(t *testing.T) {
+	job := &rivertype.JobRow{
+		ID: 1, Kind: "circleci:approve_job", State: rivertype.JobStateAvailable,
+		EncodedArgs: []byte(`{"circleci_token":"leaked","workflow_id":"w"}`),
+	}
+	encoded, err := json.Marshal(toJobResponse(job).Args)
+	require.NoError(t, err)
+	assert.NotContains(t, string(encoded), "leaked")
+	assert.Contains(t, string(encoded), `"workflow_id":"w"`)
 }

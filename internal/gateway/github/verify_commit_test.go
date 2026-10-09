@@ -91,4 +91,6 @@ func TestBranchNamesArePathEscaped(t *testing.T) {
 		VerifyCommitOptions{Mode: settings.VerifyGitCommitModeBranch},
 	)
 	require.Error(t, err, "path traversal in a branch name must not reach another endpoint")
+	require.Contains(t, *paths, "/repos/DocSpring/docspring/branches/..%2F..%2Fother%2Frepo",
+		"the branch name must stay inside the branches path")
 }

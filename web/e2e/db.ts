@@ -507,6 +507,9 @@ export async function setupBothMfaMethodsForUser(email: string) {
   })
 }
 
+// Deploy approvals are bound to full 40-character commit SHAs.
+const E2E_DEPLOY_COMMIT_SHA = 'abc123de'.repeat(5)
+
 export async function createPendingDeployApprovalRequest(): Promise<string> {
   return await withDbClient(async (client) => {
     // Get admin user ID for the token
@@ -549,7 +552,7 @@ export async function createPendingDeployApprovalRequest(): Promise<string> {
          status
        )
        VALUES (
-         'abc123def4567890abc123def4567890abc123de',
+         $2,
          'main',
          'E2E Test Deploy Request',
          'docspring',
@@ -557,7 +560,7 @@ export async function createPendingDeployApprovalRequest(): Promise<string> {
          'pending'
        )
        RETURNING public_id;`,
-      [tokenId]
+      [tokenId, E2E_DEPLOY_COMMIT_SHA]
     )
 
     return result.rows[0].public_id

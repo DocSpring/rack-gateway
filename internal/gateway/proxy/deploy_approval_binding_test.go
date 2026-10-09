@@ -240,3 +240,50 @@ func TestApprovedDeployCommandsFailClosedWhenEmpty(t *testing.T) {
 	require.False(t, h.isCommandApproved("docspring", "bin/rails console"),
 		"an empty approved_deploy_commands list must not approve every command")
 }
+
+// Per-service patterns pin only the services they name; any other service must be covered too, or its
+// image could come from any repository that has an image tagged with the approved commit.
+func TestTokenBuildRequiresAPatternForEveryService(t *testing.T) {
+	f := newBindingFixture(t)
+	f.setImagePatterns(t, map[string]string{"svca": `docker\.io/docspringcom/app:{{GIT_COMMIT}}`})
+
+	f.manifest = imageManifest("docker.io/docspringcom/app:" + approvedCommit)
+	require.NoError(t, f.build(t, "url="+approvedObjectURL))
+
+	f.manifest = imageManifest("docker.io/docspringcom/app:"+approvedCommit, "ghcr.io/attacker/payload:"+approvedCommit)
+	require.ErrorContains(t, f.build(t, "url="+approvedObjectURL), "service svcb has no image pattern")
+}
+
+// A prefix of the approved commit is not the approved commit.
+func TestTokenBuildRejectsPrefixGitSHA(t *testing.T) {
+	f := newBindingFixture(t)
+	f.manifest = imageManifest("docker.io/docspringcom/app:" + approvedCommit)
+	err := f.build(t, "url="+approvedObjectURL+"&git-sha="+approvedCommit[:7])
+	require.ErrorContains(t, err, "does not match the approved commit")
+}
+
+// DocSpring's real manifest shape after CI rewrites the image tags, with the production pattern.
+func TestTokenBuildAcceptsDocSpringManifest(t *testing.T) {
+	f := newBindingFixture(t)
+	f.setImagePatterns(t, map[string]string{"*": `docker\.io/docspringcom/app:{{GIT_COMMIT}}-amd64`})
+	image := "docker.io/docspringcom/app:" + approvedCommit + "-amd64"
+	f.manifest = "appSettings:\n  awsLogs: true\n" +
+		"services:\n" +
+		"  web:\n    image: " + image + "\n    port: 3000\n    environment:\n      - DATABASE_URL\n" +
+		"  worker:\n    image: " + image + "\n    command: bundle exec sidekiq\n" +
+		"  worker-gj:\n    image: " + image + "\n" +
+		"  command:\n    image: " + image + "\n" +
+		"timers:\n  cleanup:\n    schedule: \"0 3 * * ?\"\n    command: bin/rails cleanup\n    service: command\n"
+	require.NoError(t, f.build(t, "url="+approvedObjectURL))
+}
+
+func TestApprovedDeployCommandsAllowOnlyListedCommands(t *testing.T) {
+	h, database := newProxyForDeployApprovalTest(t)
+	app := "docspring"
+	require.NoError(t, database.UpsertSetting(
+		&app, "approved_deploy_commands", []string{"bin/pre_release_checks migrate"}, nil,
+	))
+	require.True(t, h.isCommandApproved("docspring", "bin/pre_release_checks migrate"))
+	require.False(t, h.isCommandApproved("docspring", "bin/rails console"))
+	require.False(t, h.isCommandApproved("docspring", "bin/pre_release_checks migrate; bin/rails console"))
+}

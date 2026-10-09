@@ -72,7 +72,7 @@ func (h *Handler) validateTokenBuildBinding(r *http.Request, vals url.Values, tr
 	if len(patterns) == 0 {
 		return fmt.Errorf(
 			"deploy approvals for app %s require service_image_patterns to pin the image repository "+
-				`(e.g. {"*": "docker.io/org/app:{{GIT_COMMIT}}-amd64"})`,
+				`(e.g. {"*": "docker\\.io/org/app:{{GIT_COMMIT}}-amd64"})`,
 			tracker.app,
 		)
 	}

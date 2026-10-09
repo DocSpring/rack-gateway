@@ -82,7 +82,11 @@ func verifyPipeline(pipeline *pipelineDetails, expect ApprovalExpectation) error
 	if actual == "" {
 		actual = repoFromProjectSlug(pipeline.ProjectSlug)
 	}
-	if actual != "" && !strings.EqualFold(actual, expectedRepo) {
+	if actual == "" {
+		return fmt.Errorf("%w: cannot determine the pipeline's repository (expected %s)",
+			ErrPipelineMismatch, expectedRepo)
+	}
+	if !strings.EqualFold(actual, expectedRepo) {
 		return fmt.Errorf("%w: pipeline repository %s, expected %s", ErrPipelineMismatch, actual, expectedRepo)
 	}
 	return nil

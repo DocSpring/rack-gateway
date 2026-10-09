@@ -297,6 +297,28 @@ aws rds restore-db-instance-from-db-snapshot \
 # Deploy previous version
 ```
 
+## Release Notes That Need Action
+
+### Deploy approvals bound to commits (v0.1.3)
+
+Approval-bound CI builds now have to use pre-built images tagged with the approved commit, from a repository
+pinned by `service_image_patterns`. Builds are refused until the patterns are set, so plan the rollout:
+
+1. **Set `service_image_patterns` right after the new version is live, not before.** Earlier versions require
+   the build's `git-sha` once patterns are configured, and a CI build from a directory that isn't a git
+   checkout sends none, so setting them first breaks deploys on the old version. Avoid running CI deploys
+   until the patterns are set: a build refused in that window has already used up its approval's archive
+   upload, so the request has to be rejected (or left to expire) and requested again.
+2. **Check `approved_deploy_commands` is a JSON array of strings** for every app. An empty list (or a value of
+   any other shape) now allows no commands, where it used to allow every command. The settings API refuses
+   other shapes from this version on.
+3. **Check `vcs_repo`** is `owner/repo` for apps using CircleCI auto-approval. Hold jobs are only approved when
+   the workflow's pipeline builds the approved commit of that repository.
+4. CircleCI approval jobs queued by the previous version are cancelled rather than run; approve those holds in
+   CircleCI by hand.
+5. Earlier versions stored `CIRCLECI_TOKEN` and `GITHUB_TOKEN` in background job arguments. Once the old
+   version is fully drained, remove them from `river_job.args` and rotate both tokens.
+
 ## Version Compatibility
 
 ### API Compatibility

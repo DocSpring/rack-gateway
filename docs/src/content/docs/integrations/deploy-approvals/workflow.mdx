@@ -59,7 +59,7 @@ rack-gateway deploy-approval request \
   --app myapp \
   --git-commit "$CIRCLE_SHA1" \
   --branch "$CIRCLE_BRANCH" \
-  --ci-metadata '{"workflow_id":"$CIRCLE_WORKFLOW_ID","pipeline_number":<< pipeline.number >>}' \
+  --ci-metadata "{\"workflow_id\":\"$CIRCLE_WORKFLOW_ID\",\"pipeline_number\":\"<< pipeline.number >>\"}" \
   --message "Deploy $CIRCLE_BRANCH to production"
 ```
 
@@ -222,18 +222,25 @@ graph TD
 
 ### Image Tag Pattern
 
-Default pattern: `.*:{{GIT_COMMIT}}`
+There is no default: an approval-bound build is refused until the app's `service_image_patterns` setting
+gives every service a pattern (its own, or `"*"`), and each pattern should name the image repository:
+
+```json
+{"*": "docker\\.io/myorg/app:{{GIT_COMMIT}}-amd64"}
+```
 
 ```yaml
 # convox.yml
 services:
   web:
-    image: myorg/app:abc123f-amd64  # Must match approved commit
+    image: docker.io/myorg/app:0123456789abcdef0123456789abcdef01234567-amd64
   worker:
-    image: myorg/app:abc123f-amd64
+    image: docker.io/myorg/app:0123456789abcdef0123456789abcdef01234567-amd64
 ```
 
-The gateway replaces `{{GIT_COMMIT}}` with the approved commit hash and validates all service images match.
+Every service must use a pre-built image tagged with the full approved commit (`<sha>` or `<sha>-<suffix>`).
+The gateway replaces `{{GIT_COMMIT}}` with the approved commit (regex-escaped) and requires each image to match
+its pattern exactly. The commit always comes from the approval, never from the client.
 
 ### What Gets Tracked
 
