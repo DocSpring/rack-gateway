@@ -51,12 +51,15 @@ var httpRouteSpecs = []RouteSpec{
 	{Method: "GET", Pattern: "/api/v1/info", Access: AccessAuthenticated, AllowAPIToken: true},
 	newSelfRoute("GET", "/api/v1/created-by"),
 	newTokenRoute("GET", "/api/v1/rack", Convox(ResourceRack, ActionRead)),
-	newHTTPRoute("GET", "/api/v1/deploy-approval-requests", Gateway(ResourceDeployApprovalRequest, ActionApprove)),
+	// Listing every request (and a request's audit trail) is for approvers. The handlers also check
+	// approver permission; the route uses the read-level :list permission so these reads don't
+	// inherit :approve's MFAAlways requirement.
+	newHTTPRoute("GET", "/api/v1/deploy-approval-requests", Gateway(ResourceDeployApprovalRequest, ActionList)),
 	newTokenRoute("GET", "/api/v1/deploy-approval-requests/:id", Gateway(ResourceDeployApprovalRequest, ActionRead)),
 	newHTTPRoute(
 		"GET",
 		"/api/v1/deploy-approval-requests/:id/audit-logs",
-		Gateway(ResourceDeployApprovalRequest, ActionApprove),
+		Gateway(ResourceDeployApprovalRequest, ActionList),
 	),
 	newTokenRoute("POST", "/api/v1/deploy-approval-requests", Gateway(ResourceDeployApprovalRequest, ActionCreate)),
 	newHTTPRoute(

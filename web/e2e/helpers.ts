@@ -8,6 +8,7 @@ import {
   expireStepUpForAllSessions,
   getPendingTotpSecret,
   getUserMfaSecret,
+  markSessionsMfaVerified,
   resetMfaForUser,
   setupBothMfaMethodsForUser,
   setupTotpMfaForUser,
@@ -102,9 +103,60 @@ export async function login(page: Page, options: LoginOptions = {}) {
 
   await page.waitForURL(/app(?:\/|$)/, { timeout: 15_000 })
 
+  // A user who already has MFA lands on the challenge page. Complete it like a real user would,
+  // otherwise the session stays unverified and every API call is refused.
+  if (isOnMfaChallenge(page)) {
+    const secret = await getUserMfaSecret(email)
+    if (!secret) {
+      throw new Error(`Login for ${email} reached the MFA challenge but no TOTP secret exists`)
+    }
+    await completeMfaChallenge(page, secret)
+  }
+
   if (autoEnrollMfa) {
     await ensureMfaEnrollment(page, { email })
   }
+}
+
+export function isOnMfaChallengeUrl(url: URL): boolean {
+  return url.pathname.includes('/auth/mfa/challenge')
+}
+
+export function isOnMfaChallenge(page: Page): boolean {
+  return isOnMfaChallengeUrl(new URL(page.url()))
+}
+
+/**
+ * Completes the MFA challenge page with a TOTP code, the way a user would, and waits until the
+ * browser has left the challenge page.
+ */
+export async function completeMfaChallenge(
+  page: Page,
+  secret: string,
+  options: { trustDevice?: boolean } = {}
+) {
+  await clearMfaAttempts()
+
+  const codeInput = page.getByLabel('Verification code')
+  const useTotpButton = page.getByRole('button', { name: /Use authenticator app instead/i })
+  await expect(codeInput.or(useTotpButton).first()).toBeVisible({ timeout: 10_000 })
+  if (await useTotpButton.isVisible().catch(() => false)) {
+    await useTotpButton.click()
+  }
+  await expect(codeInput).toBeVisible({ timeout: 5000 })
+
+  if (options.trustDevice) {
+    const trustCheckbox = page.getByLabel(/Trust this/i)
+    if (
+      (await trustCheckbox.isVisible().catch(() => false)) &&
+      !(await trustCheckbox.isChecked().catch(() => false))
+    ) {
+      await trustCheckbox.check()
+    }
+  }
+
+  await typeOtpCode(page, page, authenticator.generate(secret))
+  await page.waitForURL((url) => !isOnMfaChallengeUrl(url), { timeout: 30_000 })
 }
 
 export async function resetMfaFor(email: string) {
@@ -192,8 +244,10 @@ export async function ensureMfaEnrollment(
     return secret
   }
 
-  // Use DB helper for fast setup instead of UI flow
+  // Use DB helper for fast setup instead of UI flow. A real enrollment also completes the
+  // session's MFA challenge, so mark the already-open session as verified.
   await setupTotpMfaForUser(email)
+  await markSessionsMfaVerified(email)
 
   // Reload page to ensure frontend picks up the new MFA status (e.g. mfa_enrolled flag in user object)
   // Only reload if we are not already navigating/redirecting significantly

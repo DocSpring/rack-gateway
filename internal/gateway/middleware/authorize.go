@@ -32,14 +32,14 @@ func Authorize(manager rbac.Manager) gin.HandlerFunc {
 			return
 		}
 
-		allowed, err := routeAllowed(manager, spec, authUser.Principal())
+		allowed, missing, err := routeAllowed(manager, spec, authUser.Principal())
 		if err != nil {
 			gtwlog.Errorf("authz: failed to check permissions for %s %s: %v", spec.Method, spec.Pattern, err)
 			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "failed to check permissions"})
 			return
 		}
 		if !allowed {
-			abortForbidden(c, "insufficient permissions")
+			abortForbidden(c, insufficientPermissionsMessage(missing))
 			return
 		}
 
@@ -47,25 +47,39 @@ func Authorize(manager rbac.Manager) gin.HandlerFunc {
 	}
 }
 
-func routeAllowed(manager rbac.Manager, spec rbac.RouteSpec, principal rbac.Principal) (bool, error) {
+// routeAllowed reports whether the principal may use the route and, when denied, the first
+// permission it lacks (empty when the route has no usable policy).
+func routeAllowed(manager rbac.Manager, spec rbac.RouteSpec, principal rbac.Principal) (bool, string, error) {
 	switch spec.Access {
 	case rbac.AccessAuthenticated:
-		return true, nil
+		return true, "", nil
 	case rbac.AccessPermissions:
 		permissions := spec.PermissionStrings()
 		if len(permissions) == 0 {
-			return false, nil
+			return false, "", nil
 		}
 		for _, permission := range permissions {
 			allowed, err := manager.Authorize(principal, permission)
-			if err != nil || !allowed {
-				return false, err
+			if err != nil {
+				return false, "", err
+			}
+			if !allowed {
+				return false, permission, nil
 			}
 		}
-		return true, nil
+		return true, "", nil
 	default:
-		return false, nil
+		return false, "", nil
 	}
+}
+
+// insufficientPermissionsMessage names the missing permission so CLI and UI users can tell
+// what access they need.
+func insufficientPermissionsMessage(missing string) string {
+	if missing == "" {
+		return "insufficient permissions"
+	}
+	return "insufficient permissions: requires " + missing
 }
 
 func abortForbidden(c *gin.Context, message string) {

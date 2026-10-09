@@ -15,7 +15,11 @@
  */
 import { authenticator } from 'otplib'
 import { APIRoute, WebRoute } from '@/lib/routes'
-import { createPendingDeployApprovalRequest, deleteDeployApprovalRequest } from './db'
+import {
+  clearMfaAttempts,
+  createPendingDeployApprovalRequest,
+  deleteDeployApprovalRequest,
+} from './db'
 import { expect, test } from './fixtures'
 import { ensureMfaEnrollment, resetMfaFor } from './helpers'
 
@@ -108,6 +112,9 @@ test.describe('CLI login to WebUI flow', () => {
       // The approve endpoint requires inline MFA with every request.
       // The WebUI's MFA dialog handles this by prompting for TOTP and sending X-MFA-TOTP header.
       // Here we simulate that by generating a TOTP code and sending it with the request.
+      // Other tests on this shard may have used admin's current TOTP time step; clear replay state
+      // so this code isn't rejected as a replay.
+      await clearMfaAttempts()
       const totpCode = authenticator.generate(secret)
 
       const approveResponse = await page.evaluate(

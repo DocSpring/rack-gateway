@@ -195,8 +195,8 @@ export const HTTP_ROUTE_MFA_REQUIREMENTS: HttpRouteMfaRequirement[] = [
   {
     method: "GET",
     pattern: "/api/v1/deploy-approval-requests",
-    permissions: ["gateway:deploy_approval_request:approve"],
-    mfaLevel: "always",
+    permissions: ["gateway:deploy_approval_request:list"],
+    mfaLevel: "none",
   },
   {
     method: "GET",
@@ -207,8 +207,8 @@ export const HTTP_ROUTE_MFA_REQUIREMENTS: HttpRouteMfaRequirement[] = [
   {
     method: "GET",
     pattern: "/api/v1/deploy-approval-requests/:id/audit-logs",
-    permissions: ["gateway:deploy_approval_request:approve"],
-    mfaLevel: "always",
+    permissions: ["gateway:deploy_approval_request:list"],
+    mfaLevel: "none",
   },
   {
     method: "GET",

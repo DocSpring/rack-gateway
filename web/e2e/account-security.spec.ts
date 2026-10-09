@@ -6,7 +6,10 @@ import { expect, test } from './fixtures'
 import {
   clearStepUpSessions,
   clickLoginButton,
+  completeMfaChallenge,
   enforceMfaFor,
+  isOnMfaChallenge,
+  isOnMfaChallengeUrl,
   login,
   resetMfaFor,
   satisfyMFAStepUpModal,
@@ -81,33 +84,10 @@ async function performLoginWithMfa(page: Page, secret: string, trustDevice: bool
     })
     .toBeTruthy()
 
-  // Wait to see if we're redirected to MFA challenge page or directly to app
-  try {
-    await page.waitForURL(/auth\/mfa\/challenge/, { timeout: 10_000 })
-    // We're on the MFA challenge page - fill in the code
-    const verificationInput = page.getByLabel('Verification code')
-    await expect(verificationInput).toBeVisible({ timeout: 5000 })
-
-    if (trustDevice) {
-      const trustCheckbox = page.getByLabel(/Trust this/i)
-      const checkboxExists = await trustCheckbox.isVisible().catch(() => false)
-      if (checkboxExists) {
-        const currentlyChecked = await trustCheckbox.isChecked().catch(() => false)
-        if (!currentlyChecked) {
-          await trustCheckbox.check()
-        }
-      }
-    }
-
-    // Type the code digit by digit to trigger auto-submit
-    const code = authenticator.generate(secret)
-    await typeOtpCode(page, page, code)
-
-    // Auto-submits on 6-digit code, wait for redirect
-    await page.waitForURL(/app(?:\/|$)/, { timeout: 30_000 })
-  } catch {
-    // Not redirected to MFA challenge - might already be at /app or trusted device
-    await page.waitForURL(/app(?:\/|$)/, { timeout: 30_000 })
+  // A trusted device skips the challenge and goes straight to the app.
+  await page.waitForURL(/app(?:\/|$)/, { timeout: 30_000 })
+  if (isOnMfaChallenge(page)) {
+    await completeMfaChallenge(page, secret, { trustDevice })
   }
 }
 
@@ -392,7 +372,7 @@ test.describe('Account security', () => {
     const code = authenticator.generate(secret)
     await typeOtpCode(page, page, code)
 
-    await page.waitForURL(/app(?:\/|$)/, { timeout: 15_000 })
+    await page.waitForURL((url) => !isOnMfaChallengeUrl(url), { timeout: 15_000 })
   })
 
   test('user can set and persist preferred MFA method', async ({ page }) => {

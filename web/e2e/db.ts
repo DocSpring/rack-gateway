@@ -467,6 +467,24 @@ export async function setupTotpMfaForUser(email: string) {
   })
 }
 
+/**
+ * Marks the user's active sessions as having completed their MFA challenge, which is the state a
+ * real UI enrollment or challenge leaves behind. Use after enrolling MFA directly in the database
+ * for a user who is already logged in. The step-up timestamp is left alone so step-up prompts
+ * still appear where a test expects them.
+ */
+export async function markSessionsMfaVerified(email: string) {
+  await withDbClient(async (client) => {
+    await client.query(
+      `UPDATE user_sessions
+          SET mfa_verified_at = COALESCE(mfa_verified_at, NOW())
+        WHERE user_id = (SELECT id FROM users WHERE email = $1)
+          AND revoked_at IS NULL;`,
+      [email]
+    )
+  })
+}
+
 export async function setupBothMfaMethodsForUser(email: string) {
   await withDbClient(async (client) => {
     await resetMfaAndSetupTotp(client, email)
