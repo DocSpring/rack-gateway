@@ -64,7 +64,7 @@ func (s *Service) ConfirmTOTP(user *db.User, methodID int64, code string) error 
 		return err
 	}
 
-	return s.finalizeEnrollment(user.ID, method.ID)
+	return s.finalizeEnrollment(user, method.ID)
 }
 
 // VerifyTOTP validates a TOTP or backup code during login or step-up.

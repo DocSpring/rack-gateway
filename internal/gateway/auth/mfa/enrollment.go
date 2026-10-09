@@ -31,13 +31,22 @@ func (s *Service) backupCodesForEnrollment(user *db.User) ([]string, error) {
 	return s.GenerateBackupCodes(user.ID)
 }
 
-// finalizeEnrollment confirms the method and marks user as MFA enrolled
-func (s *Service) finalizeEnrollment(userID, methodID int64) error {
+// finalizeEnrollment confirms the method and marks user as MFA enrolled. user is the record loaded before
+// enrollment. On a first enrollment every existing session loses its MFA-verified state: those sessions were
+// marked verified at login only because the user had no factor, and must now prove one. The caller re-verifies
+// the session that completed the enrollment.
+func (s *Service) finalizeEnrollment(user *db.User, methodID int64) error {
 	now := s.now()
 	if err := s.db.ConfirmMFAMethod(methodID, now); err != nil {
 		return err
 	}
-	return s.db.SetUserMFAEnrolled(userID, true)
+	if err := s.db.SetUserMFAEnrolled(user.ID, true); err != nil {
+		return err
+	}
+	if user.MFAEnrolled {
+		return nil
+	}
+	return s.db.ClearSessionsMFAVerification(user.ID)
 }
 
 // prepareEnrollment deletes unconfirmed methods to prevent clutter
