@@ -43,6 +43,7 @@ func Setup(router *gin.Engine, cfg *Config) {
 	authenticated := api.Group("")
 	authenticated.Use(middleware.Authenticated(cfg.AuthService, cfg.RBACManager))
 	authenticated.Use(middleware.RequireMFAEnrollmentWeb(cfg.Database, cfg.MFASettings))
+	authenticated.Use(middleware.RequireVerifiedMFASession(cfg.MFAService, cfg.Database, cfg.MFASettings))
 	authenticated.Use(middleware.EnforceMFARequirements(cfg.MFAService, cfg.Database, cfg.MFASettings))
 
 	registerMFARoutes(authenticated, cfg, h)

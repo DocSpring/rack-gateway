@@ -2,6 +2,8 @@ package mfa
 
 import (
 	"fmt"
+
+	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 )
 
 // ensureBackupCodes generates backup codes if the user doesn't have any yet.
@@ -14,15 +16,19 @@ func (s *Service) ensureBackupCodes(userID int64) ([]string, error) {
 	if len(existing) > 0 {
 		return nil, nil
 	}
+	return s.GenerateBackupCodes(userID)
+}
 
-	codes, hashes, err := s.genBackupCodes()
-	if err != nil {
-		return nil, err
+// backupCodesForEnrollment returns backup codes to show while a factor is being enrolled.
+// A user who is not enrolled yet gets a fresh set: their codes protect nothing until the first
+// factor is confirmed, and a restarted enrollment must show codes again. An enrolled user's
+// existing codes are never replaced here (regeneration is a separate step-up protected action);
+// they only get codes if they have none.
+func (s *Service) backupCodesForEnrollment(user *db.User) ([]string, error) {
+	if user.MFAEnrolled {
+		return s.ensureBackupCodes(user.ID)
 	}
-	if err := s.db.ReplaceBackupCodes(userID, hashes); err != nil {
-		return nil, err
-	}
-	return codes, nil
+	return s.GenerateBackupCodes(user.ID)
 }
 
 // finalizeEnrollment confirms the method and marks user as MFA enrolled

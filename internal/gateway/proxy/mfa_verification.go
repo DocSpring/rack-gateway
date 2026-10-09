@@ -28,6 +28,17 @@ func (h *Handler) verifyMFAIfRequired(
 	rackConfig *config.RackConfig,
 	start time.Time,
 ) error {
+	if h.sessionAwaitingMFA(authUser) {
+		w.Header().Set("X-MFA-Required", "true")
+		h.logMFADenial(
+			r, w, authUser, rackConfig, start,
+			"Multi-factor authentication must be completed for this session",
+			http.StatusUnauthorized,
+			fmt.Errorf("session has not completed MFA"),
+		)
+		return fmt.Errorf("session has not completed MFA")
+	}
+
 	if h.mfaService == nil || h.sessionManager == nil {
 		return nil
 	}
@@ -50,6 +61,22 @@ func (h *Handler) verifyMFAIfRequired(
 	}
 
 	return h.checkSessionStepUp(r, w, authUser, rackConfig, mfaLevel, start)
+}
+
+// sessionAwaitingMFA reports whether a session token is being used before its MFA challenge
+// was completed (e.g. a web session cookie value replayed as a Bearer token on the CLI proxy).
+// Missing MFA settings are treated as enforced, so this fails closed.
+func (h *Handler) sessionAwaitingMFA(authUser *auth.User) bool {
+	if authUser == nil || authUser.IsAPIToken || authUser.Session == nil {
+		return false
+	}
+	var settings *db.MFASettings
+	if h.settingsService != nil {
+		if loaded, err := h.settingsService.GetMFASettings(); err == nil {
+			settings = loaded
+		}
+	}
+	return db.SessionAwaitingMFA(settings, authUser.DBUser, authUser.Session)
 }
 
 func determineMFALevel(resource rbac.Resource, action rbac.Action) rbac.MFALevel {

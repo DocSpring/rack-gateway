@@ -35,20 +35,9 @@ func (s *Service) StartTOTPEnrollment(user *db.User) (*StartTOTPEnrollmentResult
 		return nil, err
 	}
 
-	backupCodes, err := s.ensureBackupCodes(user.ID)
+	backupCodes, err := s.backupCodesForEnrollment(user)
 	if err != nil {
 		return nil, err
-	}
-	// TOTP always generates backup codes on first enrollment
-	if backupCodes == nil {
-		codes, hashes, err := s.genBackupCodes()
-		if err != nil {
-			return nil, err
-		}
-		if err := s.db.ReplaceBackupCodes(user.ID, hashes); err != nil {
-			return nil, err
-		}
-		backupCodes = codes
 	}
 
 	return &StartTOTPEnrollmentResult{
