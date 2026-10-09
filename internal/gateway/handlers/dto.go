@@ -169,6 +169,7 @@ type UserInfo struct {
 	PreferredMFAMethod    *string    `json:"preferred_mfa_method,omitempty"`
 	RecentStepUpExpiresAt *time.Time `json:"recent_step_up_expires_at,omitempty"`
 	HasTrustedDevice      bool       `json:"has_trusted_device"                  validate:"required"`
+	MFAPending            bool       `json:"mfa_pending"                         validate:"required"`
 }
 
 // IntegrationsInfo describes which external integrations are configured

@@ -4691,6 +4691,8 @@ export interface components {
             method_id: number;
         };
         "handlers.CreateAPITokenRequest": {
+            /** @description Optional expiry; the token stops working after this time */
+            expires_at?: string;
             name: string;
             /** @description Explicit permissions (overrides role) */
             permissions?: string[];
@@ -4929,6 +4931,7 @@ export interface components {
             email: string;
             has_trusted_device: boolean;
             mfa_enrolled: boolean;
+            mfa_pending: boolean;
             mfa_required: boolean;
             name: string;
             preferred_mfa_method?: string;

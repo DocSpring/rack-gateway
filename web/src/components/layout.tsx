@@ -18,8 +18,9 @@ import {
   TerminalSquare,
   Users,
 } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../contexts/auth-context'
+import { redirectToMfaChallenge } from '../lib/mfa-challenge-redirect'
 import { cn } from '../lib/utils'
 import { CliSetupDialog } from './cli-setup-dialog'
 import { ThemeToggle } from './theme-toggle'
@@ -183,6 +184,11 @@ function getRedirectTarget({
     return null
   }
 
+  // A session that still owes its login MFA can't load page data; Layout sends it to the challenge
+  if (user?.mfa_pending) {
+    return null
+  }
+
   // Redirect to MFA enrollment if needed
   if (needsMfaEnrollment && pathname !== '/account/security') {
     return buildMfaEnrollmentUrl(pathname, search)
@@ -295,6 +301,13 @@ export function Layout() {
     const nav = buildNavigationItems(user?.roles, setShowCliDialog)
     return needsMfaEnrollment ? applyMfaEnrollmentRestrictions(nav) : nav
   }, [needsMfaEnrollment, user?.roles])
+
+  const mfaPending = Boolean(user?.mfa_pending)
+  useEffect(() => {
+    if (mfaPending) {
+      redirectToMfaChallenge()
+    }
+  }, [mfaPending])
 
   const currentUserHref = useMemo(() => {
     if (!user?.email) {

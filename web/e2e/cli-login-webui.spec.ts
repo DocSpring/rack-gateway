@@ -19,9 +19,12 @@ import {
   clearMfaAttempts,
   createPendingDeployApprovalRequest,
   deleteDeployApprovalRequest,
+  ensureAdminUser,
+  getUserMfaSecret,
+  setupTotpMfaForUser,
 } from './db'
 import { expect, test } from './fixtures'
-import { ensureMfaEnrollment, resetMfaFor } from './helpers'
+import { ensureMfaEnrollment, isOnMfaChallengeUrl, resetMfaFor, typeOtpCode } from './helpers'
 
 const ADMIN_EMAIL = 'admin@example.com'
 
@@ -276,5 +279,43 @@ test.describe('CLI login to WebUI flow', () => {
         `Body: ${JSON.stringify(postResult.body)}. ` +
         'This indicates CLI login sessions are not properly authenticating POST requests.'
     ).toBeTruthy()
+  })
+
+  test('enrolled user can use the WebUI after approving a CLI login', async ({ page, request }) => {
+    await ensureAdminUser()
+    await setupTotpMfaForUser(ADMIN_EMAIL)
+    const secret = await getUserMfaSecret(ADMIN_EMAIL)
+    expect(secret).toBeTruthy()
+
+    const startResponse = await request.post(APIRoute('auth/cli/start'))
+    expect(startResponse.ok()).toBeTruthy()
+    const startData = await startResponse.json()
+    await page.goto(startData.auth_url)
+
+    const userCard = page.locator('text=Admin User').first()
+    await expect(userCard).toBeVisible({ timeout: 5000 })
+    await userCard.click()
+
+    // The CLI login signs this browser in too; approving it on the MFA challenge page must also
+    // complete MFA for that browser session.
+    await page.waitForURL((url) => isOnMfaChallengeUrl(url), { timeout: 10_000 })
+    await clearMfaAttempts()
+    await typeOtpCode(page, page, authenticator.generate(secret as string))
+    await expect(page).toHaveURL(/\/app\/cli\/auth\/success/, { timeout: 15_000 })
+
+    await page.getByRole('link', { name: /Open Web UI/i }).click()
+    await page.waitForURL(/\/app\/(rack)?$/, { timeout: 10_000 })
+    await expect(page.getByRole('dialog', { name: /Multi-Factor Authentication/i })).toHaveCount(0)
+
+    const session = await page.evaluate(
+      async ({ infoUrl, usersUrl }) => {
+        const info = await fetch(infoUrl, { credentials: 'include' })
+        const users = await fetch(usersUrl, { credentials: 'include' })
+        const body = (await info.json()) as { user?: { mfa_pending?: boolean } }
+        return { mfaPending: body.user?.mfa_pending, usersStatus: users.status }
+      },
+      { infoUrl: APIRoute('info'), usersUrl: APIRoute('users') }
+    )
+    expect(session).toEqual({ mfaPending: false, usersStatus: 200 })
   })
 })

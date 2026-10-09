@@ -10,6 +10,7 @@ export interface HandlersUserInfo {
   email: string;
   has_trusted_device: boolean;
   mfa_enrolled: boolean;
+  mfa_pending: boolean;
   mfa_required: boolean;
   name: string;
   preferred_mfa_method?: string;

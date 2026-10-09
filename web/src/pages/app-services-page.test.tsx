@@ -139,13 +139,11 @@ describe('AppServicesPage', () => {
     fireEvent.change(scaleInput, { target: { value: '3' } })
     fireEvent.click(screen.getByTestId('service-save-worker-gj'))
 
-    await waitFor(() =>
-      expect(mockApiPut).toHaveBeenCalledWith(
-        '/api/v1/convox/apps/rack-gateway/services/worker-gj',
-        undefined,
-        { params: { count: 3 } }
-      )
-    )
+    await waitFor(() => expect(mockApiPut).toHaveBeenCalledTimes(1))
+    const [scalePath, scaleBody] = mockApiPut.mock.calls[0]
+    expect(scalePath).toBe('/api/v1/convox/apps/rack-gateway/services/worker-gj')
+    // Sent as a form body like the Convox SDK, not as a query parameter
+    expect(String(scaleBody)).toBe('count=3')
     await waitFor(() => expect(mockFetchAppServices).toHaveBeenCalledTimes(2))
     await waitFor(() => expect(mockFetchAppProcesses).toHaveBeenCalledTimes(2))
 

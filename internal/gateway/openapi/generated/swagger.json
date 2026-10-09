@@ -5257,6 +5257,7 @@
                 "email",
                 "has_trusted_device",
                 "mfa_enrolled",
+                "mfa_pending",
                 "mfa_required",
                 "name",
                 "roles"
@@ -5269,6 +5270,9 @@
                     "type": "boolean"
                 },
                 "mfa_enrolled": {
+                    "type": "boolean"
+                },
+                "mfa_pending": {
                     "type": "boolean"
                 },
                 "mfa_required": {

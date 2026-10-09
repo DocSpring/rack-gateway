@@ -105,6 +105,9 @@ func (h *APIHandler) buildUserInfo(
 	}
 
 	h.enrichUserInfoWithSession(email, authUser, &userInfo)
+	if authUser != nil {
+		userInfo.MFAPending = db.SessionAwaitingMFA(h.mfaSettings, dbUser, authUser.Session)
+	}
 	return userInfo
 }
 

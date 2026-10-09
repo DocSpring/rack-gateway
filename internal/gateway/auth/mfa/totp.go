@@ -199,7 +199,7 @@ func (s *Service) verifyBackupCodes(
 	code, ipAddress, userAgent string,
 	sessionID *int64,
 ) (*VerificationResult, error) {
-	used, err := s.db.MarkBackupCodeUsed(userID, s.hashBackupCode(code))
+	used, err := s.db.MarkBackupCodeUsed(userID, s.hashBackupCode(normalizeBackupCode(code)))
 	if err != nil {
 		return nil, err
 	}

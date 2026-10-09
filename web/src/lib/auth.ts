@@ -15,6 +15,8 @@ export type User = {
   preferred_mfa_method?: string | null
   recent_step_up_expires_at?: string | null
   has_trusted_device?: boolean
+  // The session still owes its login MFA challenge (see GET /api/v1/info)
+  mfa_pending?: boolean
   integrations: {
     slack: boolean
     github: boolean
@@ -89,6 +91,7 @@ class AuthService {
         preferred_mfa_method: userInfo?.preferred_mfa_method ?? null,
         recent_step_up_expires_at: userInfo?.recent_step_up_expires_at ?? null,
         has_trusted_device: Boolean(userInfo?.has_trusted_device),
+        mfa_pending: Boolean(userInfo?.mfa_pending),
         integrations: {
           slack: Boolean(data?.integrations?.slack),
           github: Boolean(data?.integrations?.github),

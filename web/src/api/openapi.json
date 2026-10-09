@@ -5313,6 +5313,10 @@
                     "name"
                 ],
                 "properties": {
+                    "expires_at": {
+                        "description": "Optional expiry; the token stops working after this time",
+                        "type": "string"
+                    },
                     "name": {
                         "type": "string"
                     },
@@ -6156,6 +6160,7 @@
                     "email",
                     "has_trusted_device",
                     "mfa_enrolled",
+                    "mfa_pending",
                     "mfa_required",
                     "name",
                     "roles"
@@ -6168,6 +6173,9 @@
                         "type": "boolean"
                     },
                     "mfa_enrolled": {
+                        "type": "boolean"
+                    },
+                    "mfa_pending": {
                         "type": "boolean"
                     },
                     "mfa_required": {

@@ -26,6 +26,17 @@ describe('getCurrentUser', () => {
     expect(user?.email).toBe('admin@example.com')
   })
 
+  it('reports whether the session still owes its login MFA', async () => {
+    vi.mocked(axios.get).mockResolvedValueOnce({
+      data: {
+        user: { email: 'admin@example.com', name: 'Admin', roles: ['admin'], mfa_pending: true },
+      },
+    } as unknown as never)
+
+    const user = await authService.getCurrentUser()
+    expect(user?.mfa_pending).toBe(true)
+  })
+
   it('returns null on error', async () => {
     vi.mocked(axios.get).mockRejectedValueOnce(new Error('nope'))
     const user = await authService.getCurrentUser()
