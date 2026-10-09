@@ -231,7 +231,7 @@ func (h *Handler) dialWithRedirects(
 	var resp *http.Response
 	var err error
 
-	rackHost := wsURL.Host
+	rackHost, rackScheme := wsURL.Host, wsURL.Scheme
 	for i := 0; i < 3; i++ {
 		conn, resp, err = dialer.Dial(wsURL.String(), header)
 		if err == nil {
@@ -246,9 +246,13 @@ func (h *Handler) dialWithRedirects(
 		if parseErr != nil {
 			break
 		}
-		// The dial carries the rack credential; never send it anywhere but the configured rack.
-		if !strings.EqualFold(newURL.Host, rackHost) {
-			return nil, nil, fmt.Errorf("refusing websocket redirect from %s to %s", rackHost, newURL.Host)
+		// The dial carries the rack credential; never send it anywhere but the configured rack,
+		// and never over a weaker scheme (a wss -> ws redirect would send it in cleartext).
+		if !strings.EqualFold(newURL.Host, rackHost) || !strings.EqualFold(newURL.Scheme, rackScheme) {
+			return nil, nil, fmt.Errorf(
+				"refusing websocket redirect from %s://%s to %s://%s",
+				rackScheme, rackHost, newURL.Scheme, newURL.Host,
+			)
 		}
 		wsURL = newURL
 	}

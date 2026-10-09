@@ -238,3 +238,27 @@ func TestWebSocketDialRefusesCrossHostRedirect(t *testing.T) {
 	require.Contains(t, err.Error(), "refusing websocket redirect")
 	require.False(t, elsewhereHit, "rack credential must not be sent to another host")
 }
+
+func TestWebSocketDialRefusesTLSDowngradeRedirect(t *testing.T) {
+	rackServer := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Location", "ws://"+r.Host+"/cleartext")
+		w.WriteHeader(http.StatusFound)
+	}))
+	defer rackServer.Close()
+
+	wsURL, err := url.Parse(strings.Replace(rackServer.URL, "https://", "wss://", 1) + "/apps/a/processes/p/exec")
+	require.NoError(t, err)
+	transport, ok := rackServer.Client().Transport.(*http.Transport)
+	require.True(t, ok)
+	dialer := &websocket.Dialer{HandshakeTimeout: 2 * time.Second, TLSClientConfig: transport.TLSClientConfig}
+	h := &Handler{}
+	conn, resp, err := h.dialWithRedirects(dialer, wsURL, http.Header{"Authorization": {"Basic secret"}})
+	if conn != nil {
+		_ = conn.Close()
+	}
+	if resp != nil && resp.Body != nil {
+		_ = resp.Body.Close()
+	}
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "refusing websocket redirect from wss://")
+}
