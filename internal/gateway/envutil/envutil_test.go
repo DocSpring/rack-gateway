@@ -1,6 +1,9 @@
 package envutil
 
-import "testing"
+import (
+	"errors"
+	"testing"
+)
 
 func TestMergeEnvMaskedSecretRequiresExistingValue(t *testing.T) {
 	base := map[string]string{}
@@ -65,5 +68,42 @@ func TestMergeEnvMaskedSecretByViewerNoSecretPermission(t *testing.T) {
 
 	if len(diffs) != 1 || diffs[0].Key != "FOO" {
 		t.Fatalf("expected single diff for FOO, got %#v", diffs)
+	}
+}
+
+func TestMergeEnvRejectsLineBreakInjection(t *testing.T) {
+	base := map[string]string{"DATABASE_URL": "postgres://real/db"}
+	protected := func(key string) bool { return key == "DATABASE_URL" }
+
+	for name, set := range map[string]map[string]string{
+		"newline in value":         {"ZZZ_NOTE": "x\nDATABASE_URL=postgres://evil/x"},
+		"carriage return in value": {"ZZZ_NOTE": "x\rDATABASE_URL=postgres://evil/x"},
+		"NUL in value":             {"ZZZ_NOTE": "x\x00y"},
+		"equals in key":            {"A=B": "x"},
+		"newline in key":           {"A\nDATABASE_URL": "x"},
+		"leading digit key":        {"1ABC": "x"},
+	} {
+		_, _, err := MergeEnv(base, set, nil, MergeOptions{IsProtectedKey: protected})
+		if !errors.Is(err, ErrInvalidEnvEntry) {
+			t.Fatalf("%s: expected ErrInvalidEnvEntry, got %v", name, err)
+		}
+	}
+
+	_, _, err := MergeEnv(base, nil, []string{"BAD KEY"}, MergeOptions{})
+	if !errors.Is(err, ErrInvalidEnvEntry) {
+		t.Fatalf("remove with invalid key: expected ErrInvalidEnvEntry, got %v", err)
+	}
+}
+
+func TestMergeEnvAllowsOrdinaryValues(t *testing.T) {
+	merged, _, err := MergeEnv(map[string]string{}, map[string]string{
+		"_PRIVATE":  "ok",
+		"FEATURE_X": "a=b; c, d=\"e\" \t tab",
+	}, nil, MergeOptions{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if merged["FEATURE_X"] != "a=b; c, d=\"e\" \t tab" {
+		t.Fatalf("value changed: %q", merged["FEATURE_X"])
 	}
 }
