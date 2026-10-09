@@ -271,7 +271,7 @@ func (h *Handler) prepareProxyRequest(
 	}
 
 	envDiffs, err := h.prepareReleaseIfNeeded(
-		r, w, allowed, rackPath, rackConfig, authUser.Email, resource, action, start,
+		r, w, allowed, rackPath, rackConfig, authUser.Email, start,
 	)
 	if err != nil {
 		return r, config.RackConfig{}, nil, false, nil, nil, err
@@ -413,31 +413,28 @@ func (h *Handler) prepareReleaseIfNeeded(
 	rackPath string,
 	rackConfig config.RackConfig,
 	userEmail string,
-	resource rbac.Resource,
-	action rbac.Action,
 	start time.Time,
 ) ([]envutil.EnvDiff, error) {
 	if !allowed || r.Method != http.MethodPost || !strings.Contains(rackPath, "/releases") {
 		return nil, nil
 	}
 
-	ok, diffs, err := h.prepareReleaseCreate(r, rackConfig, userEmail)
-	if err != nil {
-		if fpErr, ok := rackcert.AsFingerprintMismatch(err); ok {
-			logRackTLSMismatch("env_fetch", fpErr)
-			h.handleError(w, r, "rack certificate verification failed", http.StatusBadGateway, rackConfig.Name, start)
-			return nil, err
-		}
-		h.handleError(w, r, err.Error(), http.StatusBadRequest, rackConfig.Name, start)
+	diffs, err := h.prepareReleaseCreate(r, rackConfig, userEmail)
+	if err == nil {
+		return diffs, nil
+	}
+	var denied *envChangeDeniedError
+	if errors.As(err, &denied) {
+		http.Error(w, denied.Error(), http.StatusForbidden)
 		return nil, err
 	}
-
-	if !ok {
-		http.Error(w, forbiddenMessage(resource, action), http.StatusForbidden)
-		return nil, errors.New("release preparation denied")
+	if fpErr, ok := rackcert.AsFingerprintMismatch(err); ok {
+		logRackTLSMismatch("env_fetch", fpErr)
+		h.handleError(w, r, "rack certificate verification failed", http.StatusBadGateway, rackConfig.Name, start)
+		return nil, err
 	}
-
-	return diffs, nil
+	h.handleError(w, r, err.Error(), http.StatusBadRequest, rackConfig.Name, start)
+	return nil, err
 }
 
 func (h *Handler) enforceDestructivePolicy(
