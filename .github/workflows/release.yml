@@ -96,10 +96,11 @@ jobs:
           no-cache: true
           build-args: |
             COMMIT_SHA=${{ github.sha }}
+          # Prerelease versions (vX.Y.Z-rc.1) don't move :latest.
           tags: |
             ${{ env.IMAGE }}:v${{ env.VERSION }}
             ${{ env.IMAGE }}:${{ env.SHORT_SHA }}
-            ${{ env.IMAGE }}:latest
+            ${{ !contains(env.VERSION, '-') && format('{0}:latest', env.IMAGE) || '' }}
 
       - name: Attest image build provenance
         uses: actions/attest-build-provenance@96278af6caaf10aea03fd8d33a09a777ca52d62f # v3.2.0

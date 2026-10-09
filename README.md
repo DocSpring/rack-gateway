@@ -478,10 +478,13 @@ The GitHub Actions release workflow (triggered only by `v*` tags):
 - Publishes signed build provenance attestations for the image and the CLI archive
 - Creates a GitHub release with the CLI archive and its checksum
 
-After the release completes, deploy. `convox.yml` already references the new version tag:
+After the release completes, deploy. `convox.yml` already references the new version tag. The deploy script
+builds, runs database migrations against the new release, then promotes it (production never migrates on
+startup):
 
 ```bash
-convox deploy
+./scripts/deploy_all.sh        # every rack: staging -> eu -> us
+./scripts/deploy.sh staging    # or one rack
 ```
 
 Verify what you deployed:

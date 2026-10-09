@@ -560,8 +560,10 @@ The Release workflow (`.github/workflows/release.yml`):
 - Publishes signed build provenance attestations for the image and the CLI archive
 - Creates a GitHub release with the CLI archive and checksum
 
-**Deployment to Convox:** once the Release workflow has published `:vX.Y.Z`, run `convox deploy` from the repo root.
-`convox.yml` already points at that tag.
+**Deployment to Convox:** once the Release workflow has published `:vX.Y.Z`, run `./scripts/deploy_all.sh` from the
+repo root (staging → eu → us). For each rack it builds (`convox.yml` already points at the new tag), runs
+`./rack-gateway-api migrate` against the new release, then promotes. Production never migrates on startup, so plain
+`convox deploy` would skip migrations. To deploy one rack: `./scripts/deploy.sh <rack>`.
 
 **Verifying a release:**
 ```bash
