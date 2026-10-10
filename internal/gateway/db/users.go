@@ -166,6 +166,24 @@ func (d *Database) UpdateUserName(email, name string) error {
 	return nil
 }
 
+// FillUserName sets a user's display name only when it's empty, so a name set in the gateway is never overwritten.
+// It reports whether the name was set.
+func (d *Database) FillUserName(email, name string) (bool, error) {
+	res, err := d.exec(
+		"UPDATE users SET name = ?, updated_at = CURRENT_TIMESTAMP WHERE email = ? AND name = ''",
+		name,
+		email,
+	)
+	if err != nil {
+		return false, fmt.Errorf("failed to fill user name: %w", err)
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("failed to fill user name: %w", err)
+	}
+	return rows > 0, nil
+}
+
 // UpdateUserEmail updates a user's email address
 func (d *Database) UpdateUserEmail(oldEmail, newEmail string) error {
 	user, err := d.GetUser(oldEmail)

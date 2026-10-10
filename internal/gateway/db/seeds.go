@@ -24,26 +24,26 @@ type SeedConfig struct {
 func (d *Database) SeedDatabase(cfg *SeedConfig) error {
 	seed := buildSeedInputs(cfg)
 
+	// Seeded users have no name until they first sign in, when it's filled from the identity provider.
 	if len(seed.adminUsers) > 0 {
-		if err := d.InitializeAdmin(seed.adminUsers[0], "Admin User"); err != nil {
+		if err := d.InitializeAdmin(seed.adminUsers[0], ""); err != nil {
 			return fmt.Errorf("failed to initialize admin user: %w", err)
 		}
 	}
 
 	roleSeeds := []struct {
-		emails      []string
-		defaultName string
-		roles       []string
+		emails []string
+		roles  []string
 	}{
-		{seed.adminUsers, "Admin User", []string{"admin"}},
-		{seed.viewerUsers, "Viewer User", []string{"viewer"}},
-		{seed.deployerUsers, "Deployer User", []string{"deployer"}},
-		{seed.operationsUsers, "Ops User", []string{"ops"}},
+		{seed.adminUsers, []string{"admin"}},
+		{seed.viewerUsers, []string{"viewer"}},
+		{seed.deployerUsers, []string{"deployer"}},
+		{seed.operationsUsers, []string{"ops"}},
 	}
 
 	for _, rs := range roleSeeds {
 		for _, email := range rs.emails {
-			if err := d.ensureUserWithRoles(email, rs.defaultName, rs.roles); err != nil {
+			if err := d.ensureUserWithRoles(email, rs.roles); err != nil {
 				return err
 			}
 		}
@@ -81,7 +81,8 @@ func (d *Database) InitializeAdmin(email, name string) error {
 	return nil
 }
 
-func (d *Database) ensureUserWithRoles(email, defaultName string, roles []string) error {
+// ensureUserWithRoles creates the user, or sets their roles. It never changes an existing user's name.
+func (d *Database) ensureUserWithRoles(email string, roles []string) error {
 	if email == "" {
 		return nil
 	}
@@ -92,31 +93,18 @@ func (d *Database) ensureUserWithRoles(email, defaultName string, roles []string
 		return fmt.Errorf("failed to load user %s: %w", email, err)
 	}
 
-	name := strings.TrimSpace(defaultName)
-	if name == "" {
-		name = email
-	}
-
 	if existing == nil {
-		if _, err := d.CreateUser(email, name, roles); err != nil {
+		if _, err := d.CreateUser(email, "", roles); err != nil {
 			return fmt.Errorf("failed to create user %s: %w", email, err)
 		}
 		return nil
 	}
 
-	currentRoles := normalizeRoles(existing.Roles)
-	if !equalStringSlices(currentRoles, roles) {
+	if !equalStringSlices(normalizeRoles(existing.Roles), roles) {
 		if err := d.UpdateUserRoles(email, roles); err != nil {
 			return fmt.Errorf("failed to update roles for %s: %w", email, err)
 		}
 	}
-
-	if name != "" && name != existing.Name {
-		if err := d.UpdateUserName(email, name); err != nil {
-			return fmt.Errorf("failed to update name for %s: %w", email, err)
-		}
-	}
-
 	return nil
 }
 

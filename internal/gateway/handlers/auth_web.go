@@ -132,6 +132,7 @@ func (h *AuthHandler) WebLoginCallback(c *gin.Context) {
 		h.handleWebLoginUnauthorized(c, resp.Email, resp.Name)
 		return
 	}
+	h.fillUserName(userRecord, resp.Name)
 
 	session, err := h.createLoginSession(c, userRecord, "web")
 	if err != nil {
