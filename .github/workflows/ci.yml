@@ -19,10 +19,25 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
+      # setup-go's cache is shared with the lint job, which saves it first without any -race test builds, so
+      # compiling the test binaries took most of this job. This job keeps its own build cache: main saves it,
+      # and branches restore main's. It also holds Go's test results, so unchanged packages report (cached).
       - name: Setup Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version: "1.26.9"
+          cache: false
+
+      - name: Restore Go test cache
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: go-tests-${{ runner.os }}-${{ hashFiles('go.sum') }}-${{ github.sha }}
+          restore-keys: |
+            go-tests-${{ runner.os }}-${{ hashFiles('go.sum') }}-
+            go-tests-${{ runner.os }}-
 
       - name: Install libfido2 dependencies
         run: |
@@ -43,6 +58,15 @@ jobs:
 
       - name: Go tests
         run: task go:test
+
+      - name: Save Go test cache
+        if: ${{ !cancelled() && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: go-tests-${{ runner.os }}-${{ hashFiles('go.sum') }}-${{ github.sha }}
 
   lint:
     runs-on: ubuntu-latest
@@ -130,6 +154,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      # The typecheck regenerates the OpenAPI spec and TypeScript types with Go tools.
+      - name: Setup Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version: "1.26.9"
 
       - name: Setup Node
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0

@@ -147,7 +147,8 @@ tasks:
       - bun.lock
       - playwright.config.ts
     cmds:
-      - bunx playwright install --with-deps || bunx playwright install
+      # playwright.config.ts only runs Chromium
+      - bunx playwright install --with-deps chromium || bunx playwright install chromium
 
   e2e:
     dir: web

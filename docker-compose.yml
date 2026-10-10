@@ -59,7 +59,8 @@ x-gateway-test-service: &gateway_test_service
       condition: service_started
     mock-oauth-test:
       condition: service_healthy
-  restart: unless-stopped
+  # No restart policy: a gateway crash should fail the tests, and a leftover test stack shouldn't come back
+  # (without its mocks) after Docker restarts.
   healthcheck: *gateway_healthcheck
   networks:
     - gateway-net
@@ -99,6 +100,7 @@ services:
     profiles: [test]
     build:
       context: ./mock-oauth
+    image: rack-gateway-mock-oauth:test
     environment:
       PORT: ${TEST_MOCK_OAUTH_PORT:-9345}
       MOCK_OAUTH_PORT: ${TEST_MOCK_OAUTH_PORT:-9345}
@@ -124,6 +126,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.mock-convox
+    image: rack-gateway-mock-convox:test
     environment:
       MOCK_CONVOX_PORT: ${TEST_MOCK_CONVOX_PORT:-6443}
       LOG_LEVEL: debug

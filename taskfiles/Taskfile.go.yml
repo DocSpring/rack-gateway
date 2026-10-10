@@ -172,23 +172,38 @@ tasks:
       - go build -buildvcs=false -o bin/totp-gen ./cmd/totp-gen/
 
   test:
-    desc: Run Go unit and integration tests safely
-    env:
+    desc: Run Go unit and integration tests
+    cmds:
+      # One after the other: safe-test.sh backs up and restores the real Convox CLI config around each run.
+      - task: test:unit
+      - task: test:integration
+
+  test:unit:
+    desc: Run Go unit tests
+    env: &go_test_env
       CGO_CFLAGS: "-Wno-deprecated-declarations"
       TEST_DATABASE_URL: "{{.ENV.TEST_DATABASE_URL}}"
       DATABASE_URL: "{{if .ENV.TEST_DATABASE_URL}}{{.ENV.TEST_DATABASE_URL}}{{else}}{{.ENV.DATABASE_URL}}{{end}}"
-    deps: [deps, build, ":db:ensure:test"]
-    sources:
+    deps: [deps]
+    sources: &go_test_sources
       - Taskfile.go.yml
       - go.*
       - cmd/**/*.go
       - internal/**/*.go
+      - internal/gateway/db/migrations/**/*.sql
       - scripts/**/*.sh
     cmds:
-      # -timeout is a per-package hang guard. The handlers and proxy packages take close to 2 minutes on their own,
-      # so 2m failed whenever the machine was busy.
-      - ./scripts/safe-test.sh -v -race -short -timeout 5m ./cmd/gateway/... ./cmd/rack-gateway/... ./cmd/mock-convox/... ./internal/cli/... ./internal/gateway/... ./internal/integration/...
-      - ./scripts/safe-test.sh -v -race -tags=integration -timeout 5m ./internal/integration/...
+      # -timeout is a per-package hang guard for slow or busy machines.
+      - ./scripts/safe-test.sh -v -race -short -timeout 5m ./cmd/... ./internal/cli/... ./internal/gateway/...
+
+  test:integration:
+    desc: Run Go integration tests against the built binaries (bin/)
+    env: *go_test_env
+    deps: [deps, build]
+    sources: *go_test_sources
+    cmds:
+      # -count=1: Go's test cache can't see the bin/ binaries these tests exec, so never reuse a result.
+      - ./scripts/safe-test.sh -v -race -count=1 -tags=integration -timeout 5m ./internal/integration/...
 
   format:
     desc: Format Go code with gofmt

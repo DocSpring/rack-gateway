@@ -21,6 +21,7 @@ module.exports = async function waitForChecks({
     "mock-oauth-tests",
     // E2E workflow jobs
     "build-image",
+    "build-mocks",
     "web-e2e",
     "cli-e2e",
   ];
@@ -51,7 +52,15 @@ module.exports = async function waitForChecks({
       per_page: 100,
     });
 
-    const runs = allRuns.filter((run) => checkSet.has(run.name));
+    // A re-run job adds another check run with the same name: only the latest one counts.
+    const latestByName = new Map();
+    for (const run of allRuns) {
+      const latest = latestByName.get(run.name);
+      if (checkSet.has(run.name) && (!latest || run.id > latest.id)) {
+        latestByName.set(run.name, run);
+      }
+    }
+    const runs = [...latestByName.values()];
 
     if (runs.length === checkSet.size) {
       const incomplete = runs.filter((run) => run.status !== "completed");
