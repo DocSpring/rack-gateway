@@ -364,6 +364,19 @@ EOF
         "releases promote $release_id --app rack-gateway" \
         "OK"
 
+    # The mock streams promote responses like a real rack, so this covers the path production takes.
+    local approval_status
+    approval_status=$(psql_query "SELECT status FROM deploy_approval_requests WHERE git_commit_hash = '$git_commit_hash' ORDER BY id DESC LIMIT 1;")
+    if [[ "$approval_status" != "deployed" ]]; then
+        echo -e "${RED}Expected the approval to be deployed after promote, got '$approval_status'${NC}" >&2
+        exit 1
+    fi
+    echo -e "${GREEN}✓ Promote marked the approval deployed${NC}"
+
+    verify_rgw_command_failure \
+        "releases promote $release_id --app rack-gateway" \
+        "already been deployed"
+
     verify_rgw_command_failure "run web --release $release_id 'echo rake db:migrate'" \
         "Error: You don't have permission to run processes"
 

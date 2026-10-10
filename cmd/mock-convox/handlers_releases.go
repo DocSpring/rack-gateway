@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+
+	mclog "github.com/DocSpring/rack-gateway/cmd/mock-convox/logging"
 )
 
 func handleReleases(w http.ResponseWriter, r *http.Request) {
@@ -74,6 +76,9 @@ func promoteRelease(w http.ResponseWriter, r *http.Request) {
 	app := vars["app"]
 	id := vars["id"]
 	currentReleaseByApp[app] = id
-	w.Header().Set("Content-Type", "application/json")
-	writeJSON(w, map[string]string{"id": id, "status": "promoting"})
+	// Like a real rack (stdapi's RenderOK): a plain "ok" body, not JSON. The gateway streams non-JSON
+	// responses, so E2E covers the path production promotes take.
+	if _, err := w.Write([]byte("ok\n")); err != nil {
+		mclog.Errorf("failed to write promote response: %v", err)
+	}
 }
