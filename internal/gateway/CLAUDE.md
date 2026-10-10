@@ -153,7 +153,7 @@ See `docs/DATABASE_MAINTENANCE.md` for details.
 task go:test
 ```
 
-Uses isolated test database (`gateway_test`).
+Each test gets its own copy of a migrated template database (`testutil/dbtest`), so tests never share data.
 
 ### E2E Tests
 

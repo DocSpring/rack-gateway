@@ -52,11 +52,15 @@ module.exports = async function waitForChecks({
       per_page: 100,
     });
 
-    // A re-run job adds another check run with the same name: only the latest one counts.
+    // Only GitHub Actions runs count: another app (e.g. a code scanner) can post a check with the same name.
+    // A re-run job adds another check run with the same name, and only the latest one counts.
     const latestByName = new Map();
     for (const run of allRuns) {
+      if (!checkSet.has(run.name) || run.app?.slug !== "github-actions") {
+        continue;
+      }
       const latest = latestByName.get(run.name);
-      if (checkSet.has(run.name) && (!latest || run.id > latest.id)) {
+      if (!latest || run.id > latest.id) {
         latestByName.set(run.name, run);
       }
     }

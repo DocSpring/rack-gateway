@@ -13,6 +13,7 @@ jobs:
   go-tests:
     runs-on: ubuntu-latest
     env:
+      GOFLAGS: -count=1
       DATABASE_URL: postgres://postgres:postgres@localhost:55432/gateway_test?sslmode=disable
       TEST_DATABASE_URL: postgres://postgres:postgres@localhost:55432/gateway_test?sslmode=disable
       GOLANGCI_LINT_VERSION: v2.11.1
@@ -21,7 +22,8 @@ jobs:
 
       # setup-go's cache is shared with the lint job, which saves it first without any -race test builds, so
       # compiling the test binaries took most of this job. This job keeps its own build cache: main saves it,
-      # and branches restore main's. It also holds Go's test results, so unchanged packages report (cached).
+      # and branches restore main's. Tests always run (GOFLAGS=-count=1): Go's test cache can't see the
+      # Postgres server, so a cached pass could hide a Postgres change.
       - name: Setup Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:

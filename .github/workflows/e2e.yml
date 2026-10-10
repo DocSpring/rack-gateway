@@ -82,7 +82,7 @@ jobs:
   web-e2e:
     runs-on: ubuntu-latest
     needs: [build-image, build-mocks]
-    # Run (and fail at "Download images") when a build failed: a skipped job would pass as a required check.
+    # Run (and fail at "Load images") when a build failed: a skipped job would pass as a required check.
     if: ${{ !cancelled() }}
     env:
       WEB_PORT: 9447
@@ -122,8 +122,11 @@ jobs:
           merge-multiple: true
           path: ${{ runner.temp }}/images
 
+      # Compose would build any image that's missing, so check that all three were loaded.
       - name: Load images
-        run: for image in "${RUNNER_TEMP}"/images/*.tar; do docker load --input "$image"; done
+        run: |
+          for image in "${RUNNER_TEMP}"/images/*.tar; do docker load --input "$image"; done
+          docker image inspect "$GATEWAY_TEST_IMAGE" rack-gateway-mock-oauth:test rack-gateway-mock-convox:test >/dev/null
 
       - name: Start stack (gateway serves UI)
         run: task docker:test:up
@@ -203,8 +206,11 @@ jobs:
           merge-multiple: true
           path: ${{ runner.temp }}/images
 
+      # Compose would build any image that's missing, so check that all three were loaded.
       - name: Load images
-        run: for image in "${RUNNER_TEMP}"/images/*.tar; do docker load --input "$image"; done
+        run: |
+          for image in "${RUNNER_TEMP}"/images/*.tar; do docker load --input "$image"; done
+          docker image inspect "$GATEWAY_TEST_IMAGE" rack-gateway-mock-oauth:test rack-gateway-mock-convox:test >/dev/null
 
       - name: Start stack (gateway serves UI)
         run: task docker:test:up

@@ -134,7 +134,8 @@ print(parts.hostname or '')
 print(parts.port or '')
 PY
 )"
-    { read -r db_name; read -r admin_uri; read -r host; read -r port; } <<<"$parsed"
+    # $(...) drops the trailing empty lines for a URL without a host or port, so those reads may hit the end.
+    { read -r db_name; read -r admin_uri; read -r host || true; read -r port || true; } <<<"$parsed"
 
     if [ -z "$db_name" ] || [ -z "$admin_uri" ]; then
         return

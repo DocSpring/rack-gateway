@@ -51,8 +51,8 @@ func ensureTemplate(t *testing.T, admin *sql.DB, baseDSN string) string {
 	ctx := context.Background()
 
 	conn := adminConn(ctx, t, admin)
-	// Advisory locks belong to the session, so lock and unlock on this connection. Closing it also releases
-	// the lock if the test fails part way.
+	// Advisory locks belong to the session, so lock and unlock on this connection. If a test fails part way, the
+	// deferred unlock still runs.
 	if _, err := conn.ExecContext(ctx, "SELECT pg_advisory_lock(hashtext($1))", name); err != nil {
 		t.Fatalf("lock template %s: %v", name, err)
 	}
@@ -72,7 +72,7 @@ func ensureTemplate(t *testing.T, admin *sql.DB, baseDSN string) string {
 		return name
 	case err == nil:
 		// A build that never finished (e.g. an interrupted test run): start again.
-		if _, err := conn.ExecContext(ctx, "DROP DATABASE "+pqQuoteIdent(name)); err != nil {
+		if _, err := conn.ExecContext(ctx, "DROP DATABASE "+pqQuoteIdent(name)+" WITH (FORCE)"); err != nil {
 			t.Fatalf("drop unfinished template %s: %v", name, err)
 		}
 	case !errors.Is(err, sql.ErrNoRows):

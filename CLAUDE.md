@@ -75,7 +75,7 @@ IMPORTANT: Read [docs/legacy/CONVOX_REFERENCE.md](docs/legacy/CONVOX_REFERENCE.m
 - File length check (`task file-length`)
 - Zero biome-ignore comments (`task web:check-ignores`)
 
-**There is no pre-push hook, and no hook runs tests.** The full suite (lint, Go unit and integration tests, web
+**There is no pre-push hook, and no hook runs the Go, web or E2E test suites.** The full suite (lint, Go unit and integration tests, web
 tests, web and CLI E2E, builds) is too slow to run locally on every push. CI runs it on GitHub for every push, and
 `main` only takes PRs with green CI.
 
