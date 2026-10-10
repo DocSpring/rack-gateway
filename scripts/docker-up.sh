@@ -192,7 +192,8 @@ fi
 echo "Waiting for postgres and ensuring databases exist..."
 if docker ps --format '{{.Names}}' | grep -q '^rack-gateway-postgres-1$'; then
   for _ in $(seq 1 20); do
-    if docker compose exec -T postgres pg_isready -U postgres >/dev/null 2>&1; then
+    # Over TCP: the image's temporary init server only listens on the Unix socket, then restarts.
+    if docker compose exec -T postgres pg_isready -U postgres -h 127.0.0.1 >/dev/null 2>&1; then
       # The migrations need the cluster-wide audit roles.
       docker compose exec -T postgres psql -U postgres -d postgres -v ON_ERROR_STOP=1 -q <"$SCRIPT_DIR/audit-roles.sql"
       for dbname in "${DATABASES[@]}"; do

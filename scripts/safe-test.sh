@@ -147,7 +147,7 @@ PY
                 if [ "${port:-}" = "55432" ]; then
                     compose_cmd up -d postgres >/dev/null 2>&1 || true
                     for _ in $(seq 1 20); do
-                        if compose_cmd exec -T postgres pg_isready -U postgres >/dev/null 2>&1; then
+                        if compose_cmd exec -T postgres pg_isready -U postgres -h 127.0.0.1 >/dev/null 2>&1; then
                             use_docker=true
                             break
                         fi
