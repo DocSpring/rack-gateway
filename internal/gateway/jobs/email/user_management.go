@@ -3,6 +3,7 @@ package email
 import (
 	"context"
 	"fmt"
+	"html"
 	"strings"
 
 	"github.com/riverqueue/river"
@@ -62,7 +63,7 @@ Welcome aboard!`,
 		args.BaseURL,
 	)
 
-	html := fmt.Sprintf(`<p>Hello %s,</p>
+	htmlBody := fmt.Sprintf(`<p>Hello %s,</p>
 <p>You have been added to the %s Rack Gateway by %s.</p>
 <p><strong>Your assigned roles:</strong> %s</p>
 <p>You can access the gateway at:<br>
@@ -70,15 +71,15 @@ Welcome aboard!`,
 <p>Please log in with your Google Workspace account to get started.</p>
 <p>If you have any questions, please contact your administrator.</p>
 <p>Welcome aboard!</p>`,
-		args.Name,
-		args.Rack,
-		args.InviterEmail,
-		rolesText,
-		args.BaseURL,
-		args.BaseURL,
+		html.EscapeString(args.Name),
+		html.EscapeString(args.Rack),
+		html.EscapeString(args.InviterEmail),
+		html.EscapeString(rolesText),
+		html.EscapeString(args.BaseURL),
+		html.EscapeString(args.BaseURL),
 	)
 
-	if err := w.emailSender.Send(args.Email, subject, text, html); err != nil {
+	if err := w.emailSender.Send(args.Email, subject, text, htmlBody); err != nil {
 		return fmt.Errorf("failed to send welcome email: %w", err)
 	}
 
@@ -132,21 +133,22 @@ This is an automated notification from Rack Gateway.`,
 		job.CreatedAt.Format("2006-01-02 15:04:05 MST"),
 	)
 
-	html := fmt.Sprintf(`<p><strong>Admin Notification: A new user has been added to the %s Rack Gateway.</strong></p>
+	htmlBody := fmt.Sprintf(
+		`<p><strong>Admin Notification: A new user has been added to the %s Rack Gateway.</strong></p>
 <p><strong>New User:</strong> %s (%s)</p>
 <p><strong>Roles:</strong> %s</p>
 <p><strong>Added by:</strong> %s</p>
 <p><strong>Time:</strong> %s</p>
 <p><em>This is an automated notification from Rack Gateway.</em></p>`,
-		args.Rack,
-		args.NewUserEmail,
-		args.NewUserName,
-		rolesText,
-		args.CreatorEmail,
-		job.CreatedAt.Format("2006-01-02 15:04:05 MST"),
+		html.EscapeString(args.Rack),
+		html.EscapeString(args.NewUserEmail),
+		html.EscapeString(args.NewUserName),
+		html.EscapeString(rolesText),
+		html.EscapeString(args.CreatorEmail),
+		html.EscapeString(job.CreatedAt.Format("2006-01-02 15:04:05 MST")),
 	)
 
-	if err := w.emailSender.SendMany(args.AdminEmails, subject, text, html); err != nil {
+	if err := w.emailSender.SendMany(args.AdminEmails, subject, text, htmlBody); err != nil {
 		return fmt.Errorf("failed to send user added admin emails: %w", err)
 	}
 

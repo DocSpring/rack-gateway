@@ -78,3 +78,25 @@ func TestIdentifiedSenderWithoutIdentity(t *testing.T) {
 	require.Equal(t, "Rack Gateway: Subject", inner.sent[0].subject)
 	require.Equal(t, "Text\n\n--\nSent by the Rack Gateway.\n", inner.sent[0].text)
 }
+
+func TestIdentifiedSenderPlacesFooterCorrectlyAfterNonASCIIText(t *testing.T) {
+	// Lowercasing these changes their UTF-8 length (Ⱥ grows, the Kelvin sign and İ shrink), which must not move
+	// the footer or panic.
+	for _, text := range []string{strings.Repeat("Ⱥ", 50), strings.Repeat("\u212a", 50), strings.Repeat("İ", 50)} {
+		inner := &recordingSender{}
+		sender := NewIdentifiedSender(inner, Identity{Name: "US", URL: "https://gw.example.com"})
+
+		body := "<html><body><p>" + text + "</p></BODY></html>"
+		require.NotPanics(t, func() { require.NoError(t, sender.Send("a@example.com", "S", "T", body)) })
+		got := inner.sent[0].htmlStr
+		require.True(t, strings.HasPrefix(got, "<html><body><p>"+text+"</p><hr "), got)
+		require.True(t, strings.HasSuffix(got, "</p></BODY></html>"), got)
+	}
+}
+
+func TestLastBodyCloseTag(t *testing.T) {
+	require.Equal(t, 3, lastBodyCloseTag("ab </BoDy>"))
+	require.Equal(t, 10, lastBodyCloseTag("</body>xyz</body>"))
+	require.Equal(t, -1, lastBodyCloseTag("<body>"))
+	require.Equal(t, -1, lastBodyCloseTag(""))
+}

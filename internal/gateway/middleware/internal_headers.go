@@ -20,7 +20,7 @@ var gatewayInternalHeaders = []string{
 }
 
 // StripInternalHeaders removes client-supplied copies of gateway-internal headers.
-// It must run before any other middleware.
+// It must run before any middleware that reads them (only ClientIP, which reads none, runs earlier).
 func StripInternalHeaders() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		for _, name := range gatewayInternalHeaders {

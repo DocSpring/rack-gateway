@@ -61,10 +61,40 @@ func (s *IdentifiedSender) identifyHTML(body string) string {
 	}
 	footer := `<hr style="border:none;border-top:1px solid #e5e5e5;margin:24px 0;"/>` +
 		`<p style="font-size:12px;color:#555;">` + s.footerHTML() + `</p>`
-	if i := strings.LastIndex(strings.ToLower(body), "</body>"); i >= 0 {
+	if i := lastBodyCloseTag(body); i >= 0 {
 		return body[:i] + footer + body[i:]
 	}
 	return body + footer
+}
+
+const bodyCloseTag = "</body>"
+
+// lastBodyCloseTag returns the byte index of the last </body> in s, ignoring ASCII case, or -1.
+// It compares bytes in place: lowercasing s first would shift the index whenever s contains non-ASCII letters
+// whose lowercase form has a different UTF-8 length (e.g. 'Ⱥ', the Kelvin sign).
+func lastBodyCloseTag(s string) int {
+	for i := len(s) - len(bodyCloseTag); i >= 0; i-- {
+		if equalASCIIFold(s[i:i+len(bodyCloseTag)], bodyCloseTag) {
+			return i
+		}
+	}
+	return -1
+}
+
+func equalASCIIFold(a, b string) bool {
+	for i := 0; i < len(a); i++ {
+		if lowerASCII(a[i]) != lowerASCII(b[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+func lowerASCII(c byte) byte {
+	if 'A' <= c && c <= 'Z' {
+		return c + ('a' - 'A')
+	}
+	return c
 }
 
 func (s *IdentifiedSender) gatewayName() string {

@@ -419,6 +419,12 @@ func (a *App) setupRouter() {
 		log.Printf("failed to configure trusted proxies: %v", err)
 		panic(fmt.Sprintf("failed to configure trusted proxies: %v", err))
 	}
+	// Only X-Forwarded-For, and only from TRUSTED_PROXY_CIDRS (see middleware.ClientIP).
+	router.RemoteIPHeaders = []string{"X-Forwarded-For"}
+	if len(a.Config.TrustedProxies) == 0 && !a.Config.DevMode {
+		log.Printf("TRUSTED_PROXY_CIDRS is not set: client IPs are the TCP peer. " +
+			"Set it if the gateway runs behind a proxy, or audit logs and rate limits will only see the proxy.")
+	}
 
 	// Set up routes with all dependencies
 	routes.Setup(router, &routes.Config{
