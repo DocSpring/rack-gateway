@@ -4,6 +4,9 @@ on:
   push:
     branches: [main]
     paths: ["docs/**"]
+  # Build (but don't deploy) docs changes in PRs, so MDX errors fail before merge
+  pull_request:
+    paths: ["docs/**"]
   workflow_dispatch:
 
 permissions:
@@ -34,15 +37,18 @@ jobs:
         run: cd docs && bun run build
 
       - name: Setup Pages
+        if: github.event_name != 'pull_request'
         uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5.0.0
 
       - name: Upload artifact
+        if: github.event_name != 'pull_request'
         uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3.0.1
         with:
           path: docs/dist
 
   deploy:
     needs: build
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     # Only the deploy job may publish to GitHub Pages
     permissions:

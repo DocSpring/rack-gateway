@@ -150,7 +150,7 @@ sequenceDiagram
 The browser must run on the same machine as the CLI, because the login code is delivered to
 `127.0.0.1`. To log in from a remote host (for example over SSH), forward the CLI's port: start
 `rack-gateway login --no-open`, note the port in the printed "Waiting for the browser to return to
-http://127.0.0.1:<port>/callback" line, and run `ssh -L <port>:127.0.0.1:<port> <host>` from the machine with
+`http://127.0.0.1:<port>/callback`" line, and run `ssh -L <port>:127.0.0.1:<port> <host>` from the machine with
 the browser before opening the printed login URL there.
 
 ### Upgrading
