@@ -182,6 +182,8 @@ The integration tests create backups of the real Convox CLI configuration to pre
    loopback listener with a single-use login code (or `error=<code>`, e.g. `canceled`)
 5. Redeem the login code with the verifier at `POST /api/v1/auth/cli/complete` for a session token
 6. Token stored in config file
+7. The loopback listener holds the browser until then, and finally redirects it to the SPA's
+   `/app/cli/auth/success` or `/app/cli/auth/error?error=<code>` page. The CLI never renders HTML itself
 
 The browser must be on the same machine as the CLI (remote hosts: `ssh -L <port>:127.0.0.1:<port>`).
 The login times out after 10 minutes. A gateway upgrade to this flow needs a matching CLI build.

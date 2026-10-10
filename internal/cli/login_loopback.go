@@ -8,10 +8,11 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"html/template"
 	"net"
 	"net/http"
+	"net/url"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -19,6 +20,14 @@ import (
 const loginTimeout = 10 * time.Minute
 
 var errLoginTimedOut = errors.New("login timed out waiting for browser authentication")
+
+// Error codes the CLI itself ends a login with on the gateway's result page (the gateway's own codes
+// are passed through). The page maps each code to a message.
+const (
+	loginErrorStateMismatch = "state_mismatch"
+	loginErrorMissingCode   = "missing_code"
+	loginErrorIncomplete    = "cli_incomplete"
+)
 
 // pkce holds an RFC 7636 code verifier and its S256 challenge.
 type pkce struct {
@@ -50,12 +59,20 @@ type loopbackResult struct {
 
 // loopbackServer receives the browser redirect that carries the single-use login code (RFC 8252).
 // It only listens on 127.0.0.1 and only accepts the redirect carrying this login's state.
+//
+// The browser is held on the callback until the terminal has redeemed the login code and saved the
+// session, then sent to the gateway's result page, so the browser shows how the login really ended.
 type loopbackServer struct {
 	redirectURI string
 	state       string
 	gatewayURL  string
 	server      *http.Server
 	results     chan loopbackResult
+
+	finishOnce sync.Once
+	finished   chan struct{}
+	// outcome is the result page error code ("" for success); set before finished is closed.
+	outcome string
 }
 
 func startLoopbackServer(state, gatewayURL string) (*loopbackServer, error) {
@@ -74,6 +91,7 @@ func startLoopbackServer(state, gatewayURL string) (*loopbackServer, error) {
 		state:       state,
 		gatewayURL:  gatewayURL,
 		results:     make(chan loopbackResult, 1),
+		finished:    make(chan struct{}),
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/callback", s.handleCallback)
@@ -86,24 +104,26 @@ func (s *loopbackServer) handleCallback(w http.ResponseWriter, r *http.Request) 
 	query := r.URL.Query()
 	if subtle.ConstantTimeCompare([]byte(query.Get("state")), []byte(s.state)) != 1 {
 		// Not our login: ignore it and keep waiting for the real redirect.
-		s.writePage(w, http.StatusBadRequest, "Login link mismatch",
-			"This login does not match the rack-gateway login waiting in your terminal.")
+		s.redirectToResult(w, r, loginErrorStateMismatch)
 		return
 	}
 	if errCode := strings.TrimSpace(query.Get("error")); errCode != "" {
-		message := loginErrorMessage(errCode)
-		s.writePage(w, http.StatusOK, "Login failed", message+". Return to your terminal.")
-		s.deliver(loopbackResult{err: errors.New(message)})
+		s.deliver(loopbackResult{err: errors.New(loginErrorMessage(errCode))})
+		s.redirectToResult(w, r, errCode)
 		return
 	}
 	code := strings.TrimSpace(query.Get("code"))
 	if code == "" {
-		s.writePage(w, http.StatusBadRequest, "Login failed", "The login code is missing. Return to your terminal.")
 		s.deliver(loopbackResult{err: errors.New("the gateway did not return a login code")})
+		s.redirectToResult(w, r, loginErrorMissingCode)
 		return
 	}
-	s.writePage(w, http.StatusOK, "Login approved", "You can close this tab and return to your terminal.")
 	s.deliver(loopbackResult{code: code})
+	select {
+	case <-s.finished:
+		s.redirectToResult(w, r, s.outcome)
+	case <-r.Context().Done():
+	}
 }
 
 func (s *loopbackServer) deliver(result loopbackResult) {
@@ -125,33 +145,34 @@ func (s *loopbackServer) wait(timeout time.Duration) (string, error) {
 	}
 }
 
+// finish records how the login ended (errorCode "" for success) and releases the browser waiting on
+// the callback. Only the first call counts.
+func (s *loopbackServer) finish(errorCode string) {
+	s.finishOnce.Do(func() {
+		s.outcome = errorCode
+		close(s.finished)
+	})
+}
+
 func (s *loopbackServer) close() {
+	// A browser still waiting here means the login ended without being finished.
+	s.finish(loginErrorIncomplete)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	_ = s.server.Shutdown(ctx)
 }
 
-var loopbackPage = template.Must(template.New("loopback").Parse(`<!doctype html>
-<html lang="en">
-<head><meta charset="utf-8"><title>{{.Title}}</title></head>
-<body>
-<h1>{{.Title}}</h1>
-<p>{{.Message}}</p>
-<p><a href="{{.WebURL}}">Open the Rack Gateway web UI</a></p>
-</body>
-</html>`))
-
-func (s *loopbackServer) writePage(w http.ResponseWriter, status int, title, message string) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Header().Set("Content-Security-Policy", "default-src 'none'")
+// redirectToResult sends the browser to the gateway's CLI login result page (errorCode "" for success).
+func (s *loopbackServer) redirectToResult(w http.ResponseWriter, r *http.Request, errorCode string) {
+	target := buildGatewayAPIURL(s.gatewayURL, "/app/cli/auth/success")
+	if errorCode != "" {
+		query := url.Values{"error": {errorCode}}
+		target = buildGatewayAPIURL(s.gatewayURL, "/app/cli/auth/error") + "?" + query.Encode()
+	}
+	// The callback URL carries the login code, so it must not leak as a referrer.
 	w.Header().Set("Referrer-Policy", "no-referrer")
 	w.Header().Set("Cache-Control", "no-store")
-	w.WriteHeader(status)
-	_ = loopbackPage.Execute(w, map[string]string{
-		"Title":   title,
-		"Message": message,
-		"WebURL":  buildGatewayAPIURL(s.gatewayURL, "/app/"),
-	})
+	http.Redirect(w, r, target, http.StatusSeeOther)
 }
 
 // loginErrorMessages maps the gateway's login error codes to messages for the terminal.
