@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"os"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -37,6 +38,14 @@ func New() (*App, error) {
 		return nil, err
 	}
 	if err := database.EnsureEnvironment(cfg.DevMode); err != nil {
+		database.Close() //nolint:errcheck,gosec // G104: cleanup on init failure
+		return nil, err
+	}
+	dbEnvironment, err := database.CurrentEnvironment()
+	if err == nil {
+		err = checkProductionSafety(dbEnvironment, os.Getenv)
+	}
+	if err != nil {
 		database.Close() //nolint:errcheck,gosec // G104: cleanup on init failure
 		return nil, err
 	}

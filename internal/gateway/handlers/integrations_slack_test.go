@@ -26,30 +26,7 @@ func newDenyAllRBAC() *denyAllRBAC {
 	return &denyAllRBAC{}
 }
 
-func (_ *denyAllRBAC) Enforce(
-	_ string,
-	_ rbac.Scope,
-	_ rbac.Resource,
-	_ rbac.Action,
-) (bool, error) {
-	return false, nil
-}
-
-func (_ *denyAllRBAC) EnforceUser(
-	_ *db.User,
-	_ rbac.Scope,
-	_ rbac.Resource,
-	_ rbac.Action,
-) (bool, error) {
-	return false, nil
-}
-
-func (_ *denyAllRBAC) EnforceForAPIToken(
-	_ int64,
-	_ rbac.Scope,
-	_ rbac.Resource,
-	_ rbac.Action,
-) (bool, error) {
+func (_ *denyAllRBAC) Authorize(_ rbac.Principal, _ string) (bool, error) {
 	return false, nil
 }
 

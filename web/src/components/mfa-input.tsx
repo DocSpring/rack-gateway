@@ -28,7 +28,7 @@ export const MFAInput = forwardRef<HTMLFieldSetElement, MFAInputProps>(
       onChange,
       onComplete,
       maxLength = 6,
-      autoFocus,
+      focusOnMount,
       placeholder,
       id,
       required,
@@ -58,7 +58,7 @@ export const MFAInput = forwardRef<HTMLFieldSetElement, MFAInputProps>(
     return (
       <OTPInput
         {...rest}
-        autoFocus={autoFocus}
+        focusOnMount={focusOnMount}
         id={id}
         length={maxLength}
         onChange={handleChange}

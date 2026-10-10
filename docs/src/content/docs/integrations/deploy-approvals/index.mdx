@@ -94,11 +94,14 @@ graph TB
 
 ### Git Commit Verification
 
-Every approval is tied to a specific git commit hash:
+Every approval is tied to a specific full (40-character) git commit SHA. An API token deploying under an approval must:
 
-- Approval cannot be reused for different code
-- Manifest validation ensures deployed images match approved commit
-- Prevents deploying arbitrary code even with compromised CI/CD token
+- Build the archive it uploaded under that approval (one upload and one build per approval)
+- Send no `git-sha`, or one equal to the approved commit (the gateway always uses the approved commit, never the client's)
+- Reference only pre-built images, each tagged with the approved commit (`<sha>` or `<sha>-<suffix>`, e.g. `<sha>-amd64`) and matching the app's `service_image_patterns`
+- Run only commands listed in `approved_deploy_commands` (an empty list allows none)
+
+`service_image_patterns` is required for approval-bound builds: the commit tag alone does not pin the image repository.
 
 ### MFA Step-Up
 
@@ -183,7 +186,9 @@ Configure via UI or environment variables:
 | `vcs_repo` | Repository in org/repo format |
 | `ci_provider` | CI system (circleci) |
 | `circleci_approval_job_name` | CircleCI approval job name |
-| `circleci_auto_approve_on_approval` | Enable auto-approval |
+| `circleci_auto_approve_on_approval` | Enable auto-approval (the gateway first checks the workflow's pipeline builds the approved commit of `vcs_repo`) |
+| `service_image_patterns` | **Required.** Map of service name (or `*`) to an anchored regex; `{{GIT_COMMIT}}` is replaced with the approved commit, e.g. `{"*": "docker\\.io/org/app:{{GIT_COMMIT}}-amd64"}` |
+| `approved_deploy_commands` | Exact commands a token may run under an approval (e.g. migrations); empty allows none |
 
 <Aside type="tip">
 Configure per-app settings via environment variables:
@@ -202,7 +207,7 @@ rack-gateway deploy-approval request \
   --app myapp \
   --git-commit "$CIRCLE_SHA1" \
   --branch "$CIRCLE_BRANCH" \
-  --ci-metadata '{"workflow_id":"abc-123","pipeline_number":"42"}' \
+  --ci-metadata "{\"workflow_id\":\"$CIRCLE_WORKFLOW_ID\",\"pipeline_number\":\"42\"}" \
   --message "Deploy to production"
 ```
 
@@ -225,7 +230,7 @@ rack-gateway deploy-approval list --status pending
 
 ```bash
 rack-gateway deploy-approval request \
-  --git-commit abc123f \
+  --git-commit "$CIRCLE_SHA1" \
   --message "Deploy" \
   --wait \
   --timeout 20m

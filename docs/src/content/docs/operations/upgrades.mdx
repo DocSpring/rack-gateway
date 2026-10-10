@@ -64,11 +64,19 @@ pg_dump $DATABASE_URL > backup_pre_upgrade.sql
    convox env -a rack-gateway
    ```
 
-3. **Deploy**
+3. **Build, migrate, then promote**
+
+   The gateway doesn't run migrations on startup in production, so run them against the new release
+   before promoting it:
 
    ```bash
-   convox deploy -a rack-gateway
+   convox build -a rack-gateway                 # note the release ID it prints
+   convox run admin -a rack-gateway --release RELEASE_ID ./rack-gateway-api migrate
+   convox releases promote RELEASE_ID -a rack-gateway --wait
    ```
+
+   `scripts/deploy.sh <rack>` does these three steps through the gateway, and `scripts/deploy_all.sh`
+   runs them for every rack in turn.
 
 4. **Verify deployment**
 
@@ -224,27 +232,14 @@ services:
 
 ## Database Migrations
 
-Migrations run automatically or can be run manually:
-
-### Automatic (Recommended)
-
-Configure the gateway to run migrations on startup:
-```bash
-# Migrations run before server starts
-# This is the default behavior
-```
-
-### Manual
-
-For more control, run migrations separately:
+Migrations run automatically on startup only in development (`DEV_MODE=true`). In production, run them
+against the new release before promoting it:
 
 ```bash
-# Run migration job
-convox run gateway rack-gateway migrate
-
-# Then deploy
-convox deploy
+convox run admin -a rack-gateway --release RELEASE_ID ./rack-gateway-api migrate
 ```
+
+Migrations are idempotent; running them again is safe.
 
 ### Rollback Migrations
 
@@ -296,6 +291,28 @@ aws rds restore-db-instance-from-db-snapshot \
 # Update DATABASE_URL to point to restored instance
 # Deploy previous version
 ```
+
+## Release Notes That Need Action
+
+### Deploy approvals bound to commits (v0.1.3)
+
+Approval-bound CI builds now have to use pre-built images tagged with the approved commit, from a repository
+pinned by `service_image_patterns`. Builds are refused until the patterns are set, so plan the rollout:
+
+1. **Set `service_image_patterns` right after the new version is live, not before.** Earlier versions require
+   the build's `git-sha` once patterns are configured, and a CI build from a directory that isn't a git
+   checkout sends none, so setting them first breaks deploys on the old version. Avoid running CI deploys
+   until the patterns are set: a build refused in that window has already used up its approval's archive
+   upload, so the request has to be rejected (or left to expire) and requested again.
+2. **Check `approved_deploy_commands` is a JSON array of strings** for every app. An empty list (or a value of
+   any other shape) now allows no commands, where it used to allow every command. The settings API refuses
+   other shapes from this version on.
+3. **Check `vcs_repo`** is `owner/repo` for apps using CircleCI auto-approval. Hold jobs are only approved when
+   the workflow's pipeline builds the approved commit of that repository.
+4. CircleCI approval jobs queued by the previous version are cancelled rather than run; approve those holds in
+   CircleCI by hand.
+5. Earlier versions stored `CIRCLECI_TOKEN` and `GITHUB_TOKEN` in background job arguments. Once the old
+   version is fully drained, remove them from `river_job.args` and rotate both tokens.
 
 ## Version Compatibility
 
@@ -358,7 +375,7 @@ convox logs -a rack-gateway --since 5m
 
 ```bash
 # Test health endpoint directly
-convox run gateway -- curl localhost:8443/api/v1/health
+convox run gateway -a rack-gateway -- wget -q -O - http://localhost:8080/api/v1/health
 
 # Check startup logs
 convox logs -a rack-gateway | grep -i "start\|error"

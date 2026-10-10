@@ -355,8 +355,17 @@ func testProxyWithInvalidToken(t *testing.T, s *TestServers) {
 }
 
 func testOAuthLoginFlow(t *testing.T, s *TestServers) {
-	// Test login start endpoint
-	resp, err := s.client.Post("http://localhost:"+gatewayPort+"/api/v1/auth/cli/start", "application/json", nil)
+	startURL := "http://localhost:" + gatewayPort + "/api/v1/auth/cli/start"
+
+	// The CLI must supply its own PKCE challenge, state and loopback redirect.
+	resp, err := s.client.Post(startURL, "application/json", nil)
+	require.NoError(t, err)
+	resp.Body.Close()
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+
+	body := `{"code_challenge":"E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM","code_challenge_method":"S256",` +
+		`"redirect_uri":"http://127.0.0.1:54321/callback","state":"integration-state-0123456789"}`
+	resp, err = s.client.Post(startURL, "application/json", strings.NewReader(body))
 	require.NoError(t, err)
 	defer resp.Body.Close()
 
@@ -366,8 +375,8 @@ func testOAuthLoginFlow(t *testing.T, s *TestServers) {
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&loginStart))
 
 	assert.NotEmpty(t, loginStart["auth_url"])
-	assert.NotEmpty(t, loginStart["state"])
-	assert.NotEmpty(t, loginStart["code_verifier"])
+	assert.NotContains(t, loginStart, "state", "the gateway state must not be returned to the CLI")
+	assert.NotContains(t, loginStart, "code_verifier", "the verifier must never leave the CLI")
 }
 
 func testAdminEndpointProtection(t *testing.T, s *TestServers) {
@@ -864,8 +873,8 @@ func testCLIWebAuthnMFA(t *testing.T, s *TestServers) {
 	require.Equal(t, http.StatusOK, startResp.StatusCode)
 
 	var startResponse struct {
-		Options     map[string]interface{} `json:"options"`
-		SessionData string                 `json:"session_data"`
+		Options     json.RawMessage `json:"options"`
+		SessionData string          `json:"session_data"`
 	}
 	err = json.NewDecoder(startResp.Body).Decode(&startResponse)
 	startResp.Body.Close()
@@ -874,7 +883,7 @@ func testCLIWebAuthnMFA(t *testing.T, s *TestServers) {
 
 	// Step 2: Generate valid assertion using mock credential
 	// Use the same origin as the gateway (http://localhost:8448 in dev mode)
-	assertionJSON, err := credential.GenerateAssertionForSession([]byte(startResponse.SessionData), "http://localhost:"+gatewayPort)
+	assertionJSON, err := credential.GenerateAssertionFromOptionsJSON(startResponse.Options, "http://localhost:"+gatewayPort)
 	require.NoError(t, err, "failed to generate assertion")
 
 	// Step 3: Format assertion the way CLI does (base64-encoded JSON with session_data and assertion_response)

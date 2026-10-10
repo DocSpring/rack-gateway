@@ -25,6 +25,8 @@ func registerAuthRoutes(api *gin.RouterGroup, cfg *Config, h *handlerSet) {
 	authGroup.POST("/auth/cli/complete", h.auth.CLILoginComplete)
 	authGroup.GET("/auth/cli/mfa", h.auth.CLILoginMFAForm)
 	authGroup.POST("/auth/cli/mfa", h.auth.CLILoginMFASubmit)
+	authGroup.GET("/auth/cli/return", h.auth.CLILoginReturn)
+	authGroup.POST("/auth/cli/cancel", h.auth.CLILoginCancel)
 	authGroup.GET("/auth/web/login", h.auth.WebLoginStart)
 	authGroup.HEAD("/auth/web/login", h.auth.WebLoginStart)
 	authGroup.GET("/auth/web/callback", h.auth.WebLoginCallback)
@@ -156,6 +158,7 @@ func registerUserManagementRoutes(authenticated *gin.RouterGroup, cfg *Config, h
 	users.GET("/:email/sessions", h.admin.ListUserSessions)
 	users.POST("/:email/sessions/:sessionID/revoke", h.admin.RevokeUserSession)
 	users.POST("/:email/sessions/revoke_all", h.admin.RevokeAllUserSessions)
+	users.GET("/:email/audit-logs", h.admin.ListUserAuditLogs)
 	users.POST("/:email/lock", h.admin.LockUser)
 	users.POST("/:email/unlock", h.admin.UnlockUser)
 

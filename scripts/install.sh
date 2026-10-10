@@ -81,7 +81,7 @@ go mod download
 # Embed version and build time into the binary
 VERSION="$(git describe --tags --always --dirty=-modified 2>/dev/null || echo dev)"
 BUILDTIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-LDFLAGS="-s -w -X main.Version=${VERSION} -X main.BuildTime=${BUILDTIME}"
+LDFLAGS="-s -w -X main.version=${VERSION} -X main.buildTime=${BUILDTIME}"
 
 echo "Building CLI (version: $VERSION)..."
 GOFLAGS="${GOFLAGS:-}"

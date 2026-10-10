@@ -19,7 +19,7 @@
                         "SessionCookie": []
                     }
                 ],
-                "description": "Returns all API tokens configured in the system.",
+                "description": "Returns the caller's own API tokens, or every token when the caller holds\ngateway:api_token:manage.",
                 "produces": [
                     "application/json"
                 ],
@@ -54,7 +54,7 @@
                         "CSRFToken": []
                     }
                 ],
-                "description": "Generates a new API token for automation or CI/CD use.",
+                "description": "Generates a new API token for automation or CI/CD use. The token belongs to the caller\nunless user_email names someone else, which requires gateway:api_token:manage. Its\npermissions must be within the owner's current role.",
                 "consumes": [
                     "application/json"
                 ],
@@ -85,6 +85,12 @@
                     },
                     "400": {
                         "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
                         "schema": {
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
@@ -233,6 +239,12 @@
                     },
                     "400": {
                         "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
                         "schema": {
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
@@ -1272,18 +1284,17 @@
         },
         "/auth/cli/callback": {
             "get": {
-                "description": "Stores the OAuth authorization code for the CLI to finish login.",
+                "description": "Exchanges the authorization code and, only once that succeeds, binds the login to this browser.",
                 "tags": [
                     "Auth"
                 ],
-                "summary": "Complete CLI OAuth redirect",
+                "summary": "Identity provider redirect for CLI login",
                 "parameters": [
                     {
                         "type": "string",
                         "description": "Authorization code",
                         "name": "code",
-                        "in": "query",
-                        "required": true
+                        "in": "query"
                     },
                     {
                         "type": "string",
@@ -1291,6 +1302,12 @@
                         "name": "state",
                         "in": "query",
                         "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Identity provider error",
+                        "name": "error",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -1299,19 +1316,13 @@
                         "schema": {
                             "type": "string"
                         }
-                    },
-                    "400": {
-                        "description": "Missing parameters",
-                        "schema": {
-                            "type": "string"
-                        }
                     }
                 }
             }
         },
-        "/auth/cli/complete": {
+        "/auth/cli/cancel": {
             "post": {
-                "description": "Exchanges the stored authorization code and PKCE verifier for a session token.",
+                "description": "Ends the CLI login from the browser bound to it and returns the URL that tells the waiting CLI.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1321,7 +1332,47 @@
                 "tags": [
                     "Auth"
                 ],
-                "summary": "Finalize CLI OAuth login",
+                "summary": "Cancel a CLI login",
+                "parameters": [
+                    {
+                        "description": "Login state",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.CLILoginCancelRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.CLILoginRedirectResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/cli/complete": {
+            "post": {
+                "description": "Redeems the single-use login code delivered to the CLI's loopback listener, proving\npossession of the PKCE code verifier, and returns a CLI session token.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Finalize CLI login",
                 "parameters": [
                     {
                         "description": "CLI login payload",
@@ -1357,11 +1408,11 @@
         },
         "/auth/cli/mfa": {
             "get": {
-                "description": "Displays the MFA challenge form for CLI login.",
+                "description": "Sends the bound browser to MFA (or MFA enrollment), or back to the CLI when MFA is satisfied.",
                 "tags": [
                     "Auth"
                 ],
-                "summary": "Display MFA challenge form",
+                "summary": "Continue CLI login in the browser",
                 "parameters": [
                     {
                         "type": "string",
@@ -1377,9 +1428,29 @@
                         "schema": {
                             "type": "string"
                         }
-                    },
-                    "400": {
-                        "description": "Missing parameters",
+                    }
+                }
+            }
+        },
+        "/auth/cli/return": {
+            "get": {
+                "description": "Issues a single-use login code and redirects the bound browser to the CLI's loopback listener.",
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Return the browser to the CLI",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Login state",
+                        "name": "state",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "302": {
+                        "description": "Found",
                         "schema": {
                             "type": "string"
                         }
@@ -1389,19 +1460,39 @@
         },
         "/auth/cli/start": {
             "post": {
-                "description": "Initiates the CLI OAuth flow and returns PKCE parameters.",
+                "description": "Starts a loopback CLI login and returns the identity provider URL to open in the browser.",
+                "consumes": [
+                    "application/json"
+                ],
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "Auth"
                 ],
-                "summary": "Start CLI OAuth login",
+                "summary": "Start CLI login",
+                "parameters": [
+                    {
+                        "description": "CLI login parameters",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.CLILoginStartRequest"
+                        }
+                    }
+                ],
                 "responses": {
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/auth.LoginStartResponse"
+                            "$ref": "#/definitions/handlers.CLILoginStartResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     },
                     "500": {
@@ -3260,7 +3351,7 @@
                         "SessionCookie": []
                     }
                 ],
-                "description": "Returns every user configured in the gateway along with role assignments.",
+                "description": "Returns every user configured in the gateway along with role assignments.\nCallers without gateway:user:read get the team directory: lock reasons, who locked\nthe account, and MFA preferences are omitted.",
                 "produces": [
                     "application/json"
                 ],
@@ -3495,6 +3586,106 @@
                         "description": "No Content",
                         "schema": {
                             "type": "string"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/users/{email}/audit-logs": {
+            "get": {
+                "security": [
+                    {
+                        "SessionCookie": []
+                    }
+                ],
+                "description": "Returns paginated audit logs for actions performed by one user. Every user may read\ntheir own activity; reading another user's activity requires gateway:audit_log:read.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Audit"
+                ],
+                "summary": "List a user's audit logs",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "User email",
+                        "name": "email",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Text search",
+                        "name": "search",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Action type filter",
+                        "name": "action_type",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Resource type filter",
+                        "name": "resource_type",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Status filter",
+                        "name": "status",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page number",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page size",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "ISO8601 start time",
+                        "name": "start",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "ISO8601 end time",
+                        "name": "end",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Relative range (e.g. 24h, 7d, custom)",
+                        "name": "range",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.AuditLogsResponse"
                         }
                     },
                     "400": {
@@ -3878,25 +4069,6 @@
         }
     },
     "definitions": {
-        "auth.LoginStartResponse": {
-            "type": "object",
-            "required": [
-                "auth_url",
-                "code_verifier",
-                "state"
-            ],
-            "properties": {
-                "auth_url": {
-                    "type": "string"
-                },
-                "code_verifier": {
-                    "type": "string"
-                },
-                "state": {
-                    "type": "string"
-                }
-            }
-        },
         "db.APIToken": {
             "type": "object",
             "properties": {
@@ -4302,11 +4474,22 @@
                 }
             }
         },
+        "handlers.CLILoginCancelRequest": {
+            "type": "object",
+            "required": [
+                "state"
+            ],
+            "properties": {
+                "state": {
+                    "type": "string"
+                }
+            }
+        },
         "handlers.CLILoginCompleteRequest": {
             "type": "object",
             "required": [
                 "code_verifier",
-                "state"
+                "login_code"
             ],
             "properties": {
                 "client_version": {
@@ -4324,7 +4507,18 @@
                 "device_os": {
                     "type": "string"
                 },
-                "state": {
+                "login_code": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.CLILoginRedirectResponse": {
+            "type": "object",
+            "required": [
+                "redirect"
+            ],
+            "properties": {
+                "redirect": {
                     "type": "string"
                 }
             }
@@ -4363,6 +4557,43 @@
                     "type": "integer"
                 },
                 "token": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.CLILoginStartRequest": {
+            "type": "object",
+            "required": [
+                "code_challenge",
+                "code_challenge_method",
+                "redirect_uri",
+                "state"
+            ],
+            "properties": {
+                "code_challenge": {
+                    "type": "string"
+                },
+                "code_challenge_method": {
+                    "type": "string"
+                },
+                "device_name": {
+                    "type": "string"
+                },
+                "redirect_uri": {
+                    "type": "string"
+                },
+                "state": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.CLILoginStartResponse": {
+            "type": "object",
+            "required": [
+                "auth_url"
+            ],
+            "properties": {
+                "auth_url": {
                     "type": "string"
                 }
             }
@@ -4410,6 +4641,10 @@
                 "name"
             ],
             "properties": {
+                "expires_at": {
+                    "description": "Optional expiry; the token stops working after this time",
+                    "type": "string"
+                },
                 "name": {
                     "type": "string"
                 },
@@ -5253,8 +5488,10 @@
                 "email",
                 "has_trusted_device",
                 "mfa_enrolled",
+                "mfa_pending",
                 "mfa_required",
                 "name",
+                "permissions",
                 "roles"
             ],
             "properties": {
@@ -5267,11 +5504,21 @@
                 "mfa_enrolled": {
                     "type": "boolean"
                 },
+                "mfa_pending": {
+                    "type": "boolean"
+                },
                 "mfa_required": {
                     "type": "boolean"
                 },
                 "name": {
                     "type": "string"
+                },
+                "permissions": {
+                    "description": "Permissions are the caller's effective permissions (from their roles, or an API token's own\nlist) so clients can hide what the caller can't use. The server still enforces every request.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 },
                 "preferred_mfa_method": {
                     "type": "string"
@@ -5390,6 +5637,7 @@
                     "type": "string"
                 },
                 "session_data": {
+                    "description": "SessionData is the challenge ID returned by /auth/mfa/webauthn/assertion/start.",
                     "type": "string"
                 },
                 "trust_device": {
@@ -5423,7 +5671,7 @@
                     "description": "protocol.CredentialAssertion"
                 },
                 "session_data": {
-                    "description": "SessionData is the serialized session to send back with verification",
+                    "description": "SessionData is an opaque, single-use challenge ID to send back with the assertion.\nThe challenge itself is stored server-side and expires after a few minutes.",
                     "type": "string"
                 }
             }

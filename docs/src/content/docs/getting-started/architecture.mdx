@@ -71,7 +71,7 @@ rack-gateway apps
 4. Gateway validates session token
 5. Gateway checks MFA requirements (if enabled)
 6. Gateway checks RBAC permissions for `convox:app:list`
-7. If authorized, gateway forwards to real Convox rack
+7. If authorized, gateway forwards to real Convox rack. Only the request headers the Convox API uses (an allowlist) are forwarded; cookies, CSRF and MFA headers and any client-supplied identity headers are dropped. The gateway authenticates to the rack with its own credential and sets `X-Convox-Actor` to the signed-in user (or `token:<name>`), so the rack's own logs name the real caller. Query parameters are limited to the ones the Convox SDK sends; a request with any other is refused, because the rack would read options such as an exec command or release env from the query string without the gateway checking them.
 8. Gateway logs the action to audit log
 9. Response returned to user
 

@@ -50,6 +50,7 @@ func (u *webAuthnUser) WebAuthnCredentials() []webauthn.Credential {
 			AttestationType: "",
 			Transport:       convertTransports(method.Transports),
 			Flags:           extractCredentialFlags(method.Metadata),
+			Authenticator:   webauthn.Authenticator{SignCount: method.SignCount},
 		})
 	}
 	return creds

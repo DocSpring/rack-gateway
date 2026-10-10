@@ -22,6 +22,15 @@ WebAuthn (passkeys and security keys) provides phishing-resistant MFA.
 You can register multiple WebAuthn methods (recommended for redundancy).
 </Aside>
 
+## Requirements
+
+- **User verification is required.** Every registration and sign-in needs the key's PIN or a biometric
+  (Touch ID, Windows Hello). Set a PIN on a hardware key before registering it.
+- **Challenges are single-use and expire after 5 minutes.** The gateway stores each challenge, ties it to
+  your session, and deletes it when it's used, so a captured response can't be replayed.
+- **Signature counters are checked.** If a key reports a counter that didn't increase, the sign-in is refused
+  because the key may have been cloned. Passkeys that always report 0 are fine.
+
 ## Using WebAuthn
 
 ### Web UI
@@ -39,6 +48,9 @@ The CLI can use WebAuthn methods marked **CLI Compatible**:
 ```bash
 rack-gateway deploy -a myapp --mfa-method webauthn
 ```
+
+A CLI command asks for one key touch; the step-up window it starts covers the rest of the command. See
+[MFA Verification](/user-guide/cli/mfa-verification/#one-key-touch-per-command).
 
 ## Managing Methods
 

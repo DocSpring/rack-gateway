@@ -33,6 +33,21 @@ vi.mock('@tanstack/react-router', () => ({
   }),
 }))
 
+const ADMIN_AUTH = {
+  user: {
+    email: 'admin@example.com',
+    roles: ['admin'],
+    permissions: ['convox:*:*', 'gateway:*:*', 'security:*:*'],
+  },
+}
+const VIEWER_AUTH = {
+  user: { email: 'viewer@example.com', roles: ['viewer'], permissions: ['gateway:user:list'] },
+}
+const mockUseAuth = vi.fn(() => ADMIN_AUTH)
+vi.mock('../contexts/auth-context', () => ({
+  useAuth: () => mockUseAuth(),
+}))
+
 // Mock the API
 vi.mock('../lib/api', async () => {
   const actual = await vi.importActual<typeof import('../lib/api')>('../lib/api')
@@ -156,6 +171,7 @@ const makeResponse = (
 describe('AuditPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockUseAuth.mockReturnValue(ADMIN_AUTH)
     localStorage.clear()
     window.history.replaceState(null, '', '/')
   })
@@ -715,6 +731,23 @@ describe('AuditPage', () => {
       await waitFor(() => {
         expect(screen.getByText(FAILED_LOAD_REGEX)).toBeInTheDocument()
       })
+    })
+  })
+
+  describe('Own activity', () => {
+    it('reads one user through the per-user endpoint and disables export without audit access', async () => {
+      mockUseAuth.mockReturnValue(VIEWER_AUTH)
+      vi.mocked(api.get).mockResolvedValueOnce(makeResponse(mockLogs))
+
+      const Wrapper = createWrapper()
+      render(<AuditPage userEmail="viewer@example.com" />, { wrapper: Wrapper })
+
+      await waitFor(() => {
+        expect(api.get).toHaveBeenCalledWith(
+          expect.stringContaining('/api/v1/users/viewer%40example.com/audit-logs?')
+        )
+      })
+      expect(screen.getByText('Export CSV').closest('button')).toBeDisabled()
     })
   })
 

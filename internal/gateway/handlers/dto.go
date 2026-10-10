@@ -66,15 +66,17 @@ type VerifyMFAResponse struct {
 	TrustedDeviceCookie   bool      `json:"trusted_device_cookie"     validate:"required"`
 }
 
-// WebAuthnAssertionStartResponse contains WebAuthn assertion options and session data.
+// WebAuthnAssertionStartResponse contains WebAuthn assertion options and the challenge ID.
 type WebAuthnAssertionStartResponse struct {
 	Options interface{} `json:"options"      validate:"required"` // protocol.CredentialAssertion
-	// SessionData is the serialized session to send back with verification
+	// SessionData is an opaque, single-use challenge ID to send back with the assertion.
+	// The challenge itself is stored server-side and expires after a few minutes.
 	SessionData string `json:"session_data" validate:"required"`
 }
 
 // VerifyWebAuthnAssertionRequest contains the WebAuthn assertion response to verify.
 type VerifyWebAuthnAssertionRequest struct {
+	// SessionData is the challenge ID returned by /auth/mfa/webauthn/assertion/start.
 	SessionData       string `json:"session_data"       binding:"required"`
 	AssertionResponse string `json:"assertion_response" binding:"required"`
 	TrustDevice       bool   `json:"trust_device"`
@@ -169,6 +171,10 @@ type UserInfo struct {
 	PreferredMFAMethod    *string    `json:"preferred_mfa_method,omitempty"`
 	RecentStepUpExpiresAt *time.Time `json:"recent_step_up_expires_at,omitempty"`
 	HasTrustedDevice      bool       `json:"has_trusted_device"                  validate:"required"`
+	MFAPending            bool       `json:"mfa_pending"                         validate:"required"`
+	// Permissions are the caller's effective permissions (from their roles, or an API token's own
+	// list) so clients can hide what the caller can't use. The server still enforces every request.
+	Permissions []string `json:"permissions" validate:"required"`
 }
 
 // IntegrationsInfo describes which external integrations are configured
@@ -209,9 +215,34 @@ type UpdateEnvValuesResponse struct {
 	ReleaseID string            `json:"release_id,omitempty"`
 }
 
+// CLILoginStartRequest starts a loopback CLI login. The CLI keeps the PKCE code verifier and
+// receives a single-use login code on its loopback redirect URI.
+type CLILoginStartRequest struct {
+	CodeChallenge       string `json:"code_challenge"        binding:"required"`
+	CodeChallengeMethod string `json:"code_challenge_method" binding:"required"`
+	RedirectURI         string `json:"redirect_uri"          binding:"required"`
+	State               string `json:"state"                 binding:"required"`
+	DeviceName          string `json:"device_name"`
+}
+
+// CLILoginStartResponse returns the identity provider URL for the CLI to open in the browser.
+type CLILoginStartResponse struct {
+	AuthURL string `json:"auth_url" validate:"required"`
+}
+
+// CLILoginCancelRequest cancels a CLI login from the browser bound to it.
+type CLILoginCancelRequest struct {
+	State string `json:"state" binding:"required"`
+}
+
+// CLILoginRedirectResponse tells the browser where to go next in a CLI login.
+type CLILoginRedirectResponse struct {
+	Redirect string `json:"redirect" validate:"required"`
+}
+
 // CLILoginCompleteRequest represents the payload used to finish the CLI OAuth flow.
 type CLILoginCompleteRequest struct {
-	State         string `json:"state"          binding:"required"`
+	LoginCode     string `json:"login_code"     binding:"required"`
 	CodeVerifier  string `json:"code_verifier"  binding:"required"`
 	DeviceID      string `json:"device_id"`
 	DeviceName    string `json:"device_name"`
@@ -263,10 +294,11 @@ type UpdateUserNameRequest struct {
 
 // CreateAPITokenRequest represents the request body for creating a new API token.
 type CreateAPITokenRequest struct {
-	Name        string   `json:"name"        binding:"required"`
-	UserEmail   string   `json:"user_email"`
-	Role        string   `json:"role"`        // Role shortcut (viewer, ops, deployer, cicd, admin)
-	Permissions []string `json:"permissions"` // Explicit permissions (overrides role)
+	Name        string     `json:"name"        binding:"required"`
+	UserEmail   string     `json:"user_email"`
+	Role        string     `json:"role"`        // Role shortcut (viewer, ops, deployer, cicd, admin)
+	Permissions []string   `json:"permissions"` // Explicit permissions (overrides role)
+	ExpiresAt   *time.Time `json:"expires_at"`  // Optional expiry; the token stops working after this time
 }
 
 // CreateAPITokenResponse represents the response body for API token creation.

@@ -6,7 +6,6 @@ import (
 	"log"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
 
@@ -98,7 +97,7 @@ func (h *AuthHandler) ConfirmTOTPEnrollment(c *gin.Context) {
 		return
 	}
 
-	h.logMFAEnrollmentCompletion(ctx, req.Label, "totp")
+	h.logMFAEnrollmentCompletion(c, ctx.userRecord, req.Label, "totp")
 
 	response := VerifyMFAResponse{
 		MFAVerifiedAt:         now,
@@ -146,6 +145,12 @@ func (h *AuthHandler) StartYubiOTPEnrollment(c *gin.Context) {
 		return
 	}
 
+	// Enrolling a YubiKey verifies an OTP from it, so the session that enrolled it is MFA-verified.
+	if _, ok := h.updateSessionAfterMFA(c, ctx, ctx.authUser.Session.TrustedDeviceID, false); !ok {
+		return
+	}
+
+	h.logMFAEnrollmentCompletion(c, ctx.userRecord, "", "yubiotp")
 	c.JSON(http.StatusOK, result)
 }
 
@@ -168,7 +173,13 @@ func (h *AuthHandler) StartWebAuthnEnrollment(c *gin.Context) {
 		return
 	}
 
-	result, sessionData, err := h.mfaService.StartWebAuthnEnrollment(ctx.userRecord)
+	sessionID, ok := auth.GetSessionID(c.Request.Context())
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "session not found"})
+		return
+	}
+
+	result, err := h.mfaService.StartWebAuthnEnrollment(ctx.userRecord, sessionID)
 	if err != nil {
 		log.Printf(
 			`{"level":"error","event":"webauthn_start_failed","user":%q,"error":%q}`,
@@ -176,24 +187,6 @@ func (h *AuthHandler) StartWebAuthnEnrollment(c *gin.Context) {
 			err.Error(),
 		)
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	// Store WebAuthn session data in the user's HTTP session metadata
-	sessionID, ok := auth.GetSessionID(c.Request.Context())
-	if !ok {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "session not found"})
-		return
-	}
-
-	// Update session metadata with WebAuthn session
-	metadata := map[string]interface{}{
-		"webauthn_enrollment_session": sessionData,
-		"webauthn_enrollment_expires": time.Now().Add(5 * time.Minute).Unix(),
-	}
-	if err := h.database.UpdateSessionMetadata(sessionID, metadata); err != nil {
-		log.Printf("failed to store webauthn session: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to store session"})
 		return
 	}
 
@@ -239,8 +232,9 @@ func (h *AuthHandler) ConfirmWebAuthnEnrollment(c *gin.Context) {
 		return
 	}
 
-	sessionID, sessionDataStr, ok := h.retrieveWebAuthnEnrollmentSession(c)
+	sessionID, ok := auth.GetSessionID(c.Request.Context())
 	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "session not found"})
 		return
 	}
 
@@ -258,8 +252,8 @@ func (h *AuthHandler) ConfirmWebAuthnEnrollment(c *gin.Context) {
 
 	methodID, err := h.mfaService.ConfirmWebAuthnEnrollment(
 		ctx.userRecord,
+		sessionID,
 		req.MethodID,
-		[]byte(sessionDataStr),
 		credentialJSON,
 		label,
 	)
@@ -268,14 +262,12 @@ func (h *AuthHandler) ConfirmWebAuthnEnrollment(c *gin.Context) {
 		return
 	}
 
-	h.clearWebAuthnEnrollmentSession(sessionID)
-
 	_, ok = h.updateSessionAfterMFA(c, ctx, ctx.authUser.Session.TrustedDeviceID, false)
 	if !ok {
 		return
 	}
 
-	h.logMFAEnrollmentCompletion(ctx, label, "webauthn")
+	h.logMFAEnrollmentCompletion(c, ctx.userRecord, label, "webauthn")
 
 	c.JSON(http.StatusOK, gin.H{"status": "enrolled", "method_id": methodID})
 }
@@ -299,93 +291,27 @@ func (h *AuthHandler) updateMFAMethodLabel(methodID int64, label, defaultLabel s
 	}
 }
 
-func (h *AuthHandler) logMFAEnrollmentCompletion(ctx *mfaContext, label, resourceType string) {
-	if h.database == nil {
-		return
-	}
+func (h *AuthHandler) logMFAEnrollmentCompletion(c *gin.Context, user *db.User, label, methodType string) {
 	methodLabel := strings.TrimSpace(label)
 	if methodLabel == "" {
-		if resourceType == "totp" {
-			methodLabel = "Authenticator App"
-		} else {
-			methodLabel = "Security Key"
-		}
+		methodLabel = defaultMFAMethodLabel(methodType)
 	}
-	details, _ := json.Marshal(map[string]interface{}{
-		"label": methodLabel,
+	h.auditMFAEvent(c, user, mfaAuditEvent{
+		scope:        audit.ActionScopeMFAMethod,
+		verb:         audit.ActionVerbEnroll,
+		resourceType: "mfa_method",
+		resource:     methodType,
+		details:      map[string]interface{}{"label": methodLabel},
 	})
-	if err := h.auditLogger.LogDBEntry(&db.AuditLog{
-		UserEmail:    ctx.userRecord.Email,
-		UserName:     ctx.userRecord.Name,
-		ActionType:   "auth",
-		Action:       audit.BuildAction(audit.ActionScopeMFAMethod, audit.ActionVerbEnroll),
-		ResourceType: "mfa_method",
-		Resource:     resourceType,
-		Details:      string(details),
-		Status:       "success",
-		IPAddress:    ctx.ipAddress,
-		UserAgent:    ctx.userAgent,
-	}); err != nil {
-		log.Printf(
-			`{"level":"error","event":"audit_log_failed",`+
-				`"action":audit.BuildAction(audit.ActionScopeMFAMethod, audit.ActionVerbEnroll),"error":%q}`,
-			err,
-		)
-	}
 }
 
-func (h *AuthHandler) retrieveWebAuthnEnrollmentSession(c *gin.Context) (int64, string, bool) {
-	sessionID, ok := auth.GetSessionID(c.Request.Context())
-	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "session not found"})
-		return 0, "", false
-	}
-
-	session, err := h.database.GetSessionByID(sessionID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load session"})
-		return 0, "", false
-	}
-
-	var sessionMeta map[string]interface{}
-	if len(session.Metadata) > 0 {
-		if err := json.Unmarshal(session.Metadata, &sessionMeta); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid session metadata"})
-			return 0, "", false
-		}
-	}
-
-	sessionDataStr, ok := sessionMeta["webauthn_enrollment_session"].(string)
-	if !ok || sessionDataStr == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "webauthn session not found or expired"})
-		return 0, "", false
-	}
-
-	expiresFloat, ok := sessionMeta["webauthn_enrollment_expires"].(float64)
-	if ok && time.Now().Unix() > int64(expiresFloat) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "webauthn session expired"})
-		return 0, "", false
-	}
-
-	return sessionID, sessionDataStr, true
-}
-
-func (h *AuthHandler) clearWebAuthnEnrollmentSession(sessionID int64) {
-	session, err := h.database.GetSessionByID(sessionID)
-	if err != nil {
-		return
-	}
-
-	var sessionMeta map[string]interface{}
-	if len(session.Metadata) > 0 {
-		if err := json.Unmarshal(session.Metadata, &sessionMeta); err != nil {
-			return
-		}
-	}
-
-	delete(sessionMeta, "webauthn_enrollment_session")
-	delete(sessionMeta, "webauthn_enrollment_expires")
-	if err := h.database.UpdateSessionMetadata(sessionID, sessionMeta); err != nil {
-		log.Printf("failed to clear webauthn session: %v", err)
+func defaultMFAMethodLabel(methodType string) string {
+	switch methodType {
+	case "totp":
+		return "Authenticator App"
+	case "yubiotp":
+		return "Yubikey"
+	default:
+		return "Security Key"
 	}
 }

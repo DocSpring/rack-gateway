@@ -12,5 +12,5 @@ export interface HandlersCLILoginCompleteRequest {
   device_id?: string;
   device_name?: string;
   device_os?: string;
-  state: string;
+  login_code: string;
 }

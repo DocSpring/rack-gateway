@@ -2,12 +2,14 @@ package mfa
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/go-webauthn/webauthn/protocol"
 	"github.com/go-webauthn/webauthn/webauthn"
 
+	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	"github.com/DocSpring/rack-gateway/internal/gateway/testutil/dbtest"
 	"github.com/DocSpring/rack-gateway/internal/gateway/testutil/webauthntest"
 )
@@ -61,19 +63,19 @@ func TestMockCredentialGeneratesValidAssertion(t *testing.T) {
 		t.Fatalf("failed to confirm MFA method: %v", err)
 	}
 
-	_, sessionData, err := service.StartWebAuthnAssertion(user)
+	options, challengeID, err := service.StartWebAuthnAssertion(user, nil)
 	if err != nil {
 		t.Fatalf("failed to start assertion: %v", err)
 	}
 
-	assertionJSON, err := credential.GenerateAssertionForSession(sessionData, "http://localhost")
+	assertionJSON, err := credential.GenerateAssertion(options, "http://localhost")
 	if err != nil {
 		t.Fatalf("failed to generate assertion: %v", err)
 	}
 
 	result, err := service.VerifyWebAuthnAssertion(
 		user,
-		sessionData,
+		[]byte(challengeID),
 		[]byte(assertionJSON),
 		"127.0.0.1",
 		"test-agent",
@@ -111,8 +113,9 @@ func TestWebAuthnEnrollment_Success(t *testing.T) {
 	}
 
 	user, _ := database.CreateUser("webauthn@example.com", "WebAuthn Test", []string{"admin"})
+	sessionID := newTestSession(t, database, user.ID)
 
-	result, sessionData, err := service.StartWebAuthnEnrollment(user)
+	result, err := service.StartWebAuthnEnrollment(user, sessionID)
 	if err != nil {
 		t.Fatalf("expected successful enrollment start, got error: %v", err)
 	}
@@ -125,14 +128,20 @@ func TestWebAuthnEnrollment_Success(t *testing.T) {
 		t.Error("expected public key options to be returned")
 	}
 
-	if sessionData == "" {
-		t.Error("expected session data to be returned")
+	// The registration challenge is stored server-side for this session, with an expiry
+	challenge, err := database.ConsumeSessionWebAuthnChallenge(user.ID, sessionID, "registration")
+	if err != nil {
+		t.Fatalf("expected stored registration challenge: %v", err)
 	}
-
-	// Verify session data is valid JSON
 	var session webauthn.SessionData
-	if err := json.Unmarshal([]byte(sessionData), &session); err != nil {
-		t.Errorf("session data should be valid JSON: %v", err)
+	if err := json.Unmarshal(challenge.SessionData, &session); err != nil {
+		t.Errorf("stored session data should be valid JSON: %v", err)
+	}
+	if session.Expires.IsZero() {
+		t.Error("stored registration session must have an expiry")
+	}
+	if session.UserVerification != protocol.VerificationRequired {
+		t.Errorf("registration must require user verification, got %q", session.UserVerification)
 	}
 
 	// Verify backup codes are generated on first enrollment
@@ -162,7 +171,7 @@ func TestWebAuthnEnrollment_NotConfigured(t *testing.T) {
 
 	user, _ := database.CreateUser("webauthn2@example.com", "WebAuthn Test", []string{"admin"})
 
-	_, _, err := serviceWithoutWebAuthn.StartWebAuthnEnrollment(user)
+	_, err := serviceWithoutWebAuthn.StartWebAuthnEnrollment(user, newTestSession(t, database, user.ID))
 	if err == nil {
 		t.Error("expected error when WebAuthn not configured")
 	}
@@ -192,9 +201,11 @@ func TestWebAuthnEnrollment_CleanupUnconfirmed(t *testing.T) {
 
 	user, _ := database.CreateUser("webauthn3@example.com", "WebAuthn Test", []string{"admin"})
 
+	sessionID := newTestSession(t, database, user.ID)
+
 	// Start enrollment twice to ensure cleanup works
-	result1, _, _ := service.StartWebAuthnEnrollment(user)
-	result2, _, _ := service.StartWebAuthnEnrollment(user)
+	result1, _ := service.StartWebAuthnEnrollment(user, sessionID)
+	result2, _ := service.StartWebAuthnEnrollment(user, sessionID)
 
 	// Second enrollment should have cleaned up first
 	if result1.MethodID == result2.MethodID {
@@ -376,9 +387,17 @@ func TestFinalizeEnrollment(t *testing.T) {
 
 	method, _ := database.CreateMFAMethod(user.ID, "totp", "Test", "secret", nil, nil, nil, nil)
 
-	err := service.finalizeEnrollment(user.ID, method.ID)
+	// A session from before the first enrollment was marked verified at login without proving a factor.
+	session := createVerifiedSession(t, database, user.ID, strings.Repeat("a", 64))
+
+	err := service.finalizeEnrollment(user, method.ID)
 	if err != nil {
 		t.Fatalf("finalize enrollment failed: %v", err)
+	}
+
+	cleared, _ := database.GetUserSessionByID(session.ID)
+	if cleared.MFAVerifiedAt != nil || cleared.RecentStepUpAt != nil {
+		t.Error("expected first enrollment to clear MFA verification on existing sessions")
 	}
 
 	// Verify method is confirmed
@@ -392,6 +411,31 @@ func TestFinalizeEnrollment(t *testing.T) {
 	if !updatedUser.MFAEnrolled {
 		t.Error("expected user to be MFA enrolled")
 	}
+
+	// Adding another factor keeps sessions that already proved one.
+	verified := createVerifiedSession(t, database, user.ID, strings.Repeat("b", 64))
+	second, _ := database.CreateMFAMethod(user.ID, "totp", "Second", "secret2", nil, nil, nil, nil)
+	if err := service.finalizeEnrollment(updatedUser, second.ID); err != nil {
+		t.Fatalf("second enrollment failed: %v", err)
+	}
+	kept, _ := database.GetUserSessionByID(verified.ID)
+	if kept.MFAVerifiedAt == nil {
+		t.Error("expected adding a second factor to keep verified sessions")
+	}
+}
+
+func createVerifiedSession(t *testing.T, database *db.Database, userID int64, tokenHash string) *db.UserSession {
+	t.Helper()
+	session, err := database.CreateUserSession(
+		userID, tokenHash, time.Now().Add(time.Hour), "web", "", "", "127.0.0.1", "test", nil, nil,
+	)
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+	if err := database.UpdateSessionMFAVerified(session.ID, time.Now(), nil); err != nil {
+		t.Fatalf("mark session verified: %v", err)
+	}
+	return session
 }
 
 func TestPrepareEnrollment_DeletesUnconfirmed(t *testing.T) {

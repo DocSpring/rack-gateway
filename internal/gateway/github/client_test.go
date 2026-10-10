@@ -2,7 +2,6 @@ package github
 
 import (
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -235,29 +234,6 @@ func TestDoRequestServerError(t *testing.T) {
 	expectedError := "GitHub API returned status 500: {\"message\": \"Internal Server Error\"}"
 	if err.Error() != expectedError {
 		t.Errorf("Expected error '%s', got '%s'", expectedError, err.Error())
-	}
-}
-
-// TestVerifyCommitOnBranchIntegration tests verifyCommitOnBranch using doRequest
-func TestVerifyCommitOnBranchIntegration(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Verify it's a compare request
-		if !strings.Contains(r.URL.Path, "/compare/") {
-			t.Errorf("Expected compare API path, got: %s", r.URL.Path)
-		}
-
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"status": "behind"}`))
-	}))
-	defer server.Close()
-
-	client := NewClient("test-token")
-
-	// Override URL for testing by calling doRequest directly with test server
-	url := fmt.Sprintf("%s/repos/owner/repo/compare/abc123...def456", server.URL)
-	err := client.doRequest("GET", url, nil, http.StatusOK, "commit abc123 not found or not on branch main", nil)
-	if err != nil {
-		t.Fatalf("Expected no error, got: %v", err)
 	}
 }
 

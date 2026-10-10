@@ -52,8 +52,19 @@ func newProxyForEnvTest(t *testing.T) (*Handler, *db.Database, rbac.Manager) {
 	return h, database, mgr
 }
 
+// requestAs returns a request authenticated as the stored user with the given email.
+func requestAs(t *testing.T, database *db.Database, userEmail string) *http.Request {
+	t.Helper()
+	user, err := database.GetUser(userEmail)
+	require.NoError(t, err)
+	require.NotNil(t, user)
+	authUser := &auth.User{Email: user.Email, Name: user.Name, Roles: user.Roles, DBUser: user}
+	req := httptest.NewRequest(http.MethodGet, "/apps/testapp/releases/R1", nil)
+	return req.WithContext(context.WithValue(req.Context(), auth.UserContextKey, authUser))
+}
+
 func TestFilterReleaseEnvForUser(t *testing.T) {
-	h, _, mgr := newProxyForEnvTest(t)
+	h, database, mgr := newProxyForEnvTest(t)
 	// Users
 	require.NoError(t, mgr.SaveUser("admin@test.com", &rbac.UserConfig{Name: "Admin", Roles: []string{"admin"}}))
 	require.NoError(t, mgr.SaveUser("ops@test.com", &rbac.UserConfig{Name: "Ops", Roles: []string{"ops"}}))
@@ -66,13 +77,13 @@ func TestFilterReleaseEnvForUser(t *testing.T) {
 	body := `{"id":"R1","env":"DATABASE_URL=postgres://...\nSECRET_KEY=abc\nREDIS_URL=redis://...\nPORT=3000\n"}`
 
 	// Admin should still see masked secrets
-	out := h.filterReleaseEnvForUser("admin@test.com", []byte(body), "testapp")
+	out := h.filterReleaseEnvForUser(requestAs(t, database, "admin@test.com"), []byte(body), "testapp")
 	s := string(out)
 	require.Contains(t, s, "SECRET_KEY=********************")
 	require.Contains(t, s, "DATABASE_URL=********************")
 
 	// Ops sees masked sensitive values
-	out = h.filterReleaseEnvForUser("ops@test.com", []byte(body), "testapp")
+	out = h.filterReleaseEnvForUser(requestAs(t, database, "ops@test.com"), []byte(body), "testapp")
 	s = string(out)
 	require.Contains(t, s, "SECRET_KEY=********************")
 	require.Contains(t, s, "DATABASE_URL=********************")
@@ -80,18 +91,18 @@ func TestFilterReleaseEnvForUser(t *testing.T) {
 	require.Contains(t, s, "PORT=3000")
 
 	// Deployer same as ops
-	out = h.filterReleaseEnvForUser("deployer@test.com", []byte(body), "testapp")
+	out = h.filterReleaseEnvForUser(requestAs(t, database, "deployer@test.com"), []byte(body), "testapp")
 	s = string(out)
 	require.Contains(t, s, "SECRET_KEY=*********")
 }
 
 func TestFilterReleaseEnv_NoEnvViewMasksAll(t *testing.T) {
-	h, _, mgr := newProxyForEnvTest(t)
+	h, database, mgr := newProxyForEnvTest(t)
 	require.NoError(t, mgr.SaveUser("viewer@test.com", &rbac.UserConfig{Name: "Viewer", Roles: []string{"viewer"}}))
 
 	body := `{"id":"R1","env":"DATABASE_URL=postgres://...\nSECRET_KEY=abc\nREDIS_URL=redis://...\nPORT=3000\n"}`
 
-	out := h.filterReleaseEnvForUser("viewer@test.com", []byte(body), "testapp")
+	out := h.filterReleaseEnvForUser(requestAs(t, database, "viewer@test.com"), []byte(body), "testapp")
 	s := string(out)
 	// Should contain env, but all values masked
 	require.Contains(t, s, "DATABASE_URL=********************")
@@ -124,40 +135,8 @@ func TestAuditLogsForEnvChanges_MultipleRows(t *testing.T) {
 	require.GreaterOrEqual(t, count, 2)
 }
 
-func TestEnvSetPermissions(t *testing.T) {
-	h, _, mgr := newProxyForEnvTest(t)
-	// Users
-	require.NoError(t, mgr.SaveUser("admin@test.com", &rbac.UserConfig{Name: "Admin", Roles: []string{"admin"}}))
-	require.NoError(
-		t,
-		mgr.SaveUser("deployer@test.com", &rbac.UserConfig{Name: "Deployer", Roles: []string{"deployer"}}),
-	)
-
-	// Request with headers Env containing mixed keys
-	req := httptest.NewRequest(http.MethodPost, "/apps/app/releases", nil)
-	req.Header.Add("Env", strings.Join([]string{
-		"PORT=3000",
-		"SECRET_KEY=abc",
-		"DATABASE_URL=postgres://...",
-	}, "\n"))
-
-	// Deployer should be denied due to secret keys
-	ok := h.checkEnvSetPermissions(req, "deployer@test.com")
-	require.False(t, ok)
-
-	// Admin allowed
-	ok = h.checkEnvSetPermissions(req, "admin@test.com")
-	require.True(t, ok)
-
-	// Deployer with non-secret only should be allowed
-	req2 := httptest.NewRequest(http.MethodPost, "/apps/app/releases", nil)
-	req2.Header.Set("Env", "PORT=3000\nNODE_ENV=production")
-	ok = h.checkEnvSetPermissions(req2, "deployer@test.com")
-	require.True(t, ok)
-}
-
 func TestProxyBlocksReleaseCreateWithSecretSetForDeployer(t *testing.T) {
-	h, _, mgr := newProxyForEnvTest(t)
+	h, database, mgr := newProxyForEnvTest(t)
 	require.NoError(
 		t,
 		mgr.SaveUser("deployer@test.com", &rbac.UserConfig{Name: "Deployer", Roles: []string{"deployer"}}),
@@ -168,13 +147,29 @@ func TestProxyBlocksReleaseCreateWithSecretSetForDeployer(t *testing.T) {
 	form.Set("env", "SECRET_KEY=abc\nPORT=3000")
 	req := httptest.NewRequest(http.MethodPost, "/apps/app/releases", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	au := &auth.User{Email: "deployer@test.com", Name: "Deployer"}
-	req = req.WithContext(context.WithValue(req.Context(), auth.UserContextKey, au))
+	req = req.WithContext(requestAs(t, database, "deployer@test.com").Context())
 
 	rr := httptest.NewRecorder()
 	// Will be denied before attempting to forward (since rack URL is dummy)
 	h.ProxyToRack(rr, req)
 	require.Equal(t, http.StatusForbidden, rr.Code)
+	require.Contains(t, rr.Body.String(), "You don't have permission to modify secrets: SECRET_KEY")
+}
+
+// Unsetting a secret is a secret change too.
+func TestMergeEnvRefusesSecretRemovalWithoutSecretSet(t *testing.T) {
+	h, _, _ := newProxyForEnvTest(t)
+	req := httptest.NewRequest(http.MethodPost, "/apps/app/releases", nil)
+	baseEnv := map[string]string{"SECRET_KEY": "abc", "PORT": "3000"}
+	posted := map[string]string{"PORT": "3000"}
+
+	_, _, err := h.mergeEnvAndComputeDiffs(req, "deployer@test.com", "app", posted, []string{"PORT"}, baseEnv, false)
+	require.EqualError(t, err, "You don't have permission to modify secrets: SECRET_KEY")
+
+	_, diffs, err := h.mergeEnvAndComputeDiffs(req, "admin@test.com", "app", posted, []string{"PORT"}, baseEnv, true)
+	require.NoError(t, err)
+	require.Len(t, diffs, 1)
+	require.Equal(t, "SECRET_KEY", diffs[0].Key)
 }
 
 // TestValidateProtectedKeysAllowsMaskedValues reproduces a bug where running
@@ -227,8 +222,10 @@ func TestValidateProtectedKeysBlocksActualChanges(t *testing.T) {
 	req.Header.Set("X-User-Name", "Admin")
 
 	err := h.validateProtectedKeys(req, "admin@test.com", appName, posted)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "protected key change denied")
+	require.EqualError(
+		t, err,
+		"ADMIN_PASSWORD is a protected env var for docspring. Unprotect it in rack-gateway settings to change it.",
+	)
 }
 
 // TestMergeEnvPreservesProtectedKeysNotInPosted reproduces a bug where running
@@ -300,11 +297,15 @@ func TestProxyBlocksProtectedEnvChangesAndAudits(t *testing.T) {
 	form.Set("env", "DATABASE_URL=abc\nPORT=3000")
 	req := httptest.NewRequest(http.MethodPost, "/apps/app/releases", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	au := &auth.User{Email: "admin@test.com", Name: "Admin"}
-	req = req.WithContext(context.WithValue(req.Context(), auth.UserContextKey, au))
+	req = req.WithContext(requestAs(t, database, "admin@test.com").Context())
 	rr := httptest.NewRecorder()
 	h.ProxyToRack(rr, req)
 	require.Equal(t, http.StatusForbidden, rr.Code)
+	// The refusal names the key and how to change it, not a generic permission error.
+	require.Contains(
+		t, rr.Body.String(),
+		"DATABASE_URL is a protected env var for app. Unprotect it in rack-gateway settings to change it.",
+	)
 
 	logs, err := database.GetAuditLogs("admin@test.com", time.Time{}, 50)
 	require.NoError(t, err)
@@ -350,7 +351,7 @@ func TestEnvUnsetWithProtectedKeysFullFlow(t *testing.T) {
 	require.NoError(t, err)
 
 	// Use the new filterEnvironmentMapResponse which handles the /environment format
-	filteredBody := h.filterEnvironmentMapResponse("admin@test.com", envGetBody, appName)
+	filteredBody := h.filterEnvironmentMapResponse(requestAs(t, database, "admin@test.com"), envGetBody, appName)
 
 	// Parse the filtered response
 	var filteredEnv map[string]string
@@ -387,7 +388,7 @@ func TestEnvUnsetWithProtectedKeysFullFlow(t *testing.T) {
 
 	err = h.validateProtectedKeys(req, "admin@test.com", appName, postedWithReal)
 	require.Error(t, err, "validateProtectedKeys should block real protected key values")
-	require.Contains(t, err.Error(), "protected key change denied")
+	require.Contains(t, err.Error(), "ADMIN_DATABASE_URL_DIRECT is a protected env var")
 }
 
 // TestFilterEnvironmentEndpointResponse tests that the /apps/{app}/environment
@@ -405,7 +406,7 @@ func TestFilterEnvironmentEndpointResponse(t *testing.T) {
 	envResponse := `{"ADMIN_PASSWORD":"real_secret_password","PORT":"3000","NODE_ENV":"production"}`
 
 	// Use filterEnvironmentMapResponse (the fix for the /environment endpoint)
-	filtered := h.filterEnvironmentMapResponse("admin@test.com", []byte(envResponse), appName)
+	filtered := h.filterEnvironmentMapResponse(requestAs(t, database, "admin@test.com"), []byte(envResponse), appName)
 
 	var result map[string]string
 	require.NoError(t, json.Unmarshal(filtered, &result))
@@ -440,7 +441,7 @@ func TestFilterReleaseEnvMasksAppSpecificProtectedKeys(t *testing.T) {
 
 	// Filter the release response for the admin user
 	// We need to pass the app name so it can look up app-specific protected keys
-	filtered := h.filterReleaseEnvForUser("admin@test.com", []byte(releaseBody), "docspring")
+	filtered := h.filterReleaseEnvForUser(requestAs(t, database, "admin@test.com"), []byte(releaseBody), "docspring")
 
 	// Parse the filtered response
 	var result map[string]interface{}
@@ -475,7 +476,7 @@ func TestFilterEnvironmentMasksSecretKeys(t *testing.T) {
 	// These keys should be masked by default (secretNames configured in handler)
 	envResponse := `{"DATABASE_URL":"postgres://secret@localhost","REDIS_URL":"redis://secret@localhost","PORT":"3000"}`
 
-	filtered := h.filterEnvironmentMapResponse("admin@test.com", []byte(envResponse), appName)
+	filtered := h.filterEnvironmentMapResponse(requestAs(t, database, "admin@test.com"), []byte(envResponse), appName)
 
 	var result map[string]string
 	require.NoError(t, json.Unmarshal(filtered, &result))

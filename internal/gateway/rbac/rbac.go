@@ -15,8 +15,6 @@ import (
 // Database defines the database operations needed by the RBAC manager.
 type Database interface {
 	GetUser(email string) (*db.User, error)
-	GetAPITokenByID(id int64) (*db.APIToken, error)
-	HasActiveDeployApprovalForApp(tokenID int64, app string) (bool, error)
 	ListUsers() ([]*db.User, error)
 	CreateUser(email, name string, roles []string) (*db.User, error)
 	UpdateUserRoles(email string, roles []string) error
@@ -71,85 +69,35 @@ func NewDBManager(database *db.Database, domain string) (*DBManager, error) {
 		domain:   domain,
 	}
 
-	// Policies are already loaded via the adapter in NewEnforcer
-	// Just sync users from database
-	if err := manager.syncUsersFromDB(); err != nil {
-		return nil, fmt.Errorf("failed to sync users: %w", err)
-	}
-
 	return manager, nil
 }
 
-// syncUsersFromDB loads user-role mappings from the database
-func (m *DBManager) syncUsersFromDB() error {
-	users, err := m.db.ListUsers()
-	if err != nil {
-		return fmt.Errorf("failed to list users: %w", err)
-	}
-
-	// Add user-role mappings from database
-	for _, user := range users {
-		if user.Suspended {
-			continue // Skip suspended users
-		}
-		for _, role := range user.Roles {
-			if _, err := m.enforcer.AddGroupingPolicy(user.Email, role); err != nil {
-				return fmt.Errorf("failed to assign role %s to %s: %w", role, user.Email, err)
-			}
-		}
-	}
-
-	return nil
-}
-
-// Enforce checks if a user has permission to perform an action
-func (m *DBManager) Enforce(userEmail string, scope Scope, resource Resource, action Action) (bool, error) {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-	return m.enforceWithEmailLocked(userEmail, scope, resource, action)
-}
-
-// EnforceUser checks permissions for a preloaded user without additional database access.
-func (m *DBManager) EnforceUser(user *db.User, scope Scope, resource Resource, action Action) (bool, error) {
-	if user == nil {
+// Authorize reports whether the principal holds the permission.
+//
+// Human users are checked against the roles on their current database record, so role changes take
+// effect on the next request. API tokens must hold the permission themselves AND their owner's
+// current roles must allow it. Suspended or locked users (and tokens they own) are always denied.
+func (m *DBManager) Authorize(p Principal, permission string) (bool, error) {
+	user := p.User
+	if user == nil || user.Suspended || user.LockedAt != nil {
 		return false, nil
 	}
-	if user.Suspended {
+	if p.APIToken && !matchesAnyPermission(p.TokenPermissions, permission) {
 		return false, nil
 	}
+
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	return m.enforceWithEmailLocked(user.Email, scope, resource, action)
-}
-
-func (m *DBManager) enforceWithEmailLocked(email string, scope Scope, resource Resource, action Action) (bool, error) {
-	permission := Permission(scope, resource, action)
-	ok, err := m.enforcer.Enforce(email, permission, "*")
-	if err != nil {
-		return false, fmt.Errorf("failed to enforce: %w", err)
+	for _, role := range user.Roles {
+		ok, err := m.enforcer.Enforce(role, permission, "*")
+		if err != nil {
+			return false, fmt.Errorf("failed to enforce: %w", err)
+		}
+		if ok {
+			return true, nil
+		}
 	}
-	return ok, nil
-}
-
-// EnforceForAPIToken checks if an API token has permission to perform an action
-func (m *DBManager) EnforceForAPIToken(tokenID int64, scope Scope, resource Resource, action Action) (bool, error) {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-
-	// Get the API token
-	token, err := m.db.GetAPITokenByID(tokenID)
-	if err != nil {
-		return false, fmt.Errorf("failed to get API token: %w", err)
-	}
-	if token == nil {
-		return false, nil // Token doesn't exist
-	}
-
-	// Build permission string from enum types
-	permission := Permission(scope, resource, action)
-
-	// Check if permission is directly granted (with wildcard support)
-	return matchesAnyPermission(token.Permissions, permission), nil
+	return false, nil
 }
 
 // matchesAnyPermission checks if the requested permission matches any in the list
@@ -244,31 +192,14 @@ func (m *DBManager) GetUsers() (map[string]*UserConfig, error) {
 
 // SaveUser saves or updates a user in the database
 func (m *DBManager) SaveUser(email string, user *UserConfig) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	// Check if user exists
 	existing, err := m.db.GetUser(email)
 	if err != nil {
 		return fmt.Errorf("failed to check existing user: %w", err)
 	}
-
 	if existing != nil {
-		if err := m.updateExistingUser(email, user, existing); err != nil {
-			return err
-		}
-	} else {
-		if err := m.createNewUser(email, user); err != nil {
-			return err
-		}
+		return m.updateExistingUser(email, user, existing)
 	}
-
-	// Resync users to update Casbin policies
-	if err := m.syncUsersFromDB(); err != nil {
-		return fmt.Errorf("failed to sync users: %w", err)
-	}
-
-	return nil
+	return m.createNewUser(email, user)
 }
 
 func (m *DBManager) updateExistingUser(email string, user *UserConfig, existing *db.User) error {
@@ -294,18 +225,9 @@ func (m *DBManager) createNewUser(email string, user *UserConfig) error {
 
 // DeleteUser removes a user from the database
 func (m *DBManager) DeleteUser(email string) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
 	if err := m.db.DeleteUser(email); err != nil {
 		return fmt.Errorf("failed to delete user: %w", err)
 	}
-
-	// Resync users to update Casbin policies
-	if err := m.syncUsersFromDB(); err != nil {
-		return fmt.Errorf("failed to sync users: %w", err)
-	}
-
 	return nil
 }
 

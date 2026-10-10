@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -13,67 +14,66 @@ import (
 	"github.com/google/uuid"
 )
 
-// StartLogin initiates the OAuth login flow
-func StartLogin(gatewayURL string) (*LoginStartResponse, error) {
+// errGatewayTooOld means the gateway predates the loopback login this CLI uses.
+var errGatewayTooOld = errors.New(
+	"the gateway is older than this CLI; upgrade the gateway or use an older rack-gateway CLI",
+)
+
+// StartLogin starts a loopback login and returns the identity provider URL to open.
+func StartLogin(gatewayURL string, req LoginStartRequest) (*LoginStartResponse, error) {
+	// Gateways from before the loopback login answer with their own state and code verifier, and
+	// would never redirect the browser to this CLI.
+	var result struct {
+		AuthURL      string `json:"auth_url"`
+		State        string `json:"state"`
+		CodeVerifier string `json:"code_verifier"`
+	}
 	url := buildGatewayAPIURL(gatewayURL, "/api/v1/auth/cli/start")
-
-	resp, err := sendGatewayRequest(http.MethodPost, url, nil)
-	if err != nil {
+	if err := postLoginJSON(url, req, "login start failed: ", &result); err != nil {
 		return nil, err
 	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("login start failed: %s", string(body))
+	if result.State != "" || result.CodeVerifier != "" {
+		return nil, errGatewayTooOld
 	}
-
-	var result LoginStartResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, err
-	}
-
-	return &result, nil
+	return &LoginStartResponse{AuthURL: result.AuthURL}, nil
 }
 
-// CompleteLogin polls the server to complete the OAuth login flow
-func CompleteLogin(gatewayURL, state, codeVerifier string, device DeviceInfo) (*LoginResponse, error) {
-	url := buildGatewayAPIURL(gatewayURL, "/api/v1/auth/cli/complete")
-
+// CompleteLogin redeems the single-use login code with the PKCE code verifier for a session token.
+func CompleteLogin(gatewayURL, loginCode, codeVerifier string, device DeviceInfo) (*LoginResponse, error) {
 	payload := map[string]string{
-		"state":          state,
+		"login_code":     loginCode,
 		"code_verifier":  codeVerifier,
 		"device_id":      device.ID,
 		"device_name":    device.Name,
 		"device_os":      device.OS,
 		"client_version": device.ClientVersion,
 	}
-
-	data, err := json.Marshal(payload)
-	if err != nil {
+	var result LoginResponse
+	url := buildGatewayAPIURL(gatewayURL, "/api/v1/auth/cli/complete")
+	if err := postLoginJSON(url, payload, "", &result); err != nil {
 		return nil, err
 	}
+	return &result, nil
+}
 
+// postLoginJSON POSTs payload as JSON to an unauthenticated login endpoint and decodes the response
+// into out. Non-200 responses become errors carrying errPrefix and the gateway's error message.
+func postLoginJSON(url string, payload interface{}, errPrefix string, out interface{}) error {
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
 	resp, err := sendGatewayRequest(http.MethodPost, url, bytes.NewReader(data))
 	if err != nil {
-		return nil, err
+		return err
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	if resp.StatusCode == http.StatusAccepted {
-		return nil, ErrLoginPending
-	}
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("%s", RenderGatewayError(body))
+		return fmt.Errorf("%s%s", errPrefix, RenderGatewayError(body))
 	}
-
-	var result LoginResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, err
-	}
-
-	return &result, nil
+	return json.NewDecoder(resp.Body).Decode(out)
 }
 
 // DetermineDeviceInfo gathers information about the current CLI client device

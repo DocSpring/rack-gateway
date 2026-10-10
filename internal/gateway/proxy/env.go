@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"sort"
 	"strings"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
@@ -43,115 +44,54 @@ func (h *Handler) logDeniedRBACAction(
 	})
 }
 
-func (h *Handler) checkEnvSetPermissions(r *http.Request, email string) bool {
-	// Extract keys from known headers
-	keys := h.extractEnvKeysFromHeaders(r.Header)
-	if len(keys) == 0 {
-		// No explicit env changes detected; allow
-		return true
-	}
-	// Require env:set for any env changes
-	canEnvSet, _ := h.rbacManager.Enforce(email, rbac.ScopeConvox, rbac.ResourceEnv, rbac.ActionSet)
-	if !canEnvSet {
-		return false
-	}
-	// For secret keys, require secrets:set
-	canSecretsSet, _ := h.rbacManager.Enforce(email, rbac.ScopeConvox, rbac.ResourceSecret, rbac.ActionSet)
-	if !canSecretsSet {
-		for _, k := range keys {
-			if h.isSecretKey(k) {
-				return false
-			}
-		}
-	}
-	return true
-}
-
-func (_ *Handler) extractEnvKeysFromHeaders(hdr http.Header) []string {
-	keys := make([]string, 0)
-	for name, vals := range hdr {
-		if !isEnvHeader(name) {
-			continue
-		}
-		keys = append(keys, extractKeysFromHeaderValues(vals)...)
-	}
-	return keys
-}
-
-func isEnvHeader(name string) bool {
-	ln := strings.ToLower(name)
-	return ln == "env" || ln == "environment" || ln == "release-env"
-}
-
-func extractKeysFromHeaderValues(vals []string) []string {
-	keys := make([]string, 0, len(vals))
-	for _, v := range vals {
-		keys = append(keys, extractKeysFromEnvString(v)...)
-	}
-	return keys
-}
-
-func extractKeysFromEnvString(envStr string) []string {
-	keys := make([]string, 0)
-	for _, line := range strings.Split(envStr, "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" {
-			continue
-		}
-		parts := strings.SplitN(line, "=", 2)
-		k := strings.TrimSpace(parts[0])
-		if k != "" {
-			keys = append(keys, k)
-		}
-	}
-	return keys
-}
-
+// prepareReleaseCreate checks the env in a release create request against the caller's permissions and the
+// app's protected keys, merges masked values with the current env, and rewrites the request body. Refused
+// changes are returned as *envChangeDeniedError.
 func (h *Handler) prepareReleaseCreate(
 	r *http.Request,
 	rack config.RackConfig,
 	email string,
-) (bool, []envutil.EnvDiff, error) {
+) ([]envutil.EnvDiff, error) {
 	bodyBuf, vals, err := readAndParseRequestBody(r)
 	if err != nil {
-		return false, nil, err
+		return nil, err
 	}
 
 	envStr := vals.Get("env")
 	if envStr == "" {
 		r.Body = io.NopCloser(bytes.NewReader(bodyBuf))
-		return true, nil, nil
+		return nil, nil
 	}
 
 	app := extractAppFromPath(r.URL.Path)
 	if app == "" {
 		r.Body = io.NopCloser(bytes.NewReader(bodyBuf))
-		return false, nil, fmt.Errorf("could not infer app name from path")
+		return nil, fmt.Errorf("could not infer app name from path")
 	}
 
 	posted, order := parsePostedEnv(envStr)
 
 	if err := h.validateSecretsPermissions(r, email, app, posted, order); err != nil {
-		return false, nil, nil
+		return nil, err
 	}
 
 	if err := h.validateProtectedKeys(r, email, app, posted); err != nil {
-		return false, nil, nil
+		return nil, err
 	}
 
 	baseEnv, err := h.fetchBaseEnv(r, rack, app, bodyBuf)
 	if err != nil {
-		return false, nil, err
+		return nil, err
 	}
 
 	if err := h.validateEnvPermissions(r, email, app, order); err != nil {
-		return false, nil, nil
+		return nil, err
 	}
 
-	canSecretsSet, _ := h.rbacManager.Enforce(email, rbac.ScopeConvox, rbac.ResourceSecret, rbac.ActionSet)
+	canSecretsSet := h.callerCan(r, rbac.ResourceSecret, rbac.ActionSet)
 	merged, diffs, err := h.mergeEnvAndComputeDiffs(r, email, app, posted, order, baseEnv, canSecretsSet)
 	if err != nil {
-		return false, nil, nil
+		return nil, err
 	}
 
 	newEnvString := recomposeEnvString(merged, order, baseEnv, diffs)
@@ -159,7 +99,7 @@ func (h *Handler) prepareReleaseCreate(
 	newBody := []byte(vals.Encode())
 	r.Body = io.NopCloser(bytes.NewReader(newBody))
 	r.ContentLength = int64(len(newBody))
-	return true, diffs, nil
+	return diffs, nil
 }
 
 func readAndParseRequestBody(r *http.Request) ([]byte, url.Values, error) {
@@ -212,7 +152,7 @@ func (h *Handler) validateSecretsPermissions(
 	posted map[string]string,
 	order []string,
 ) error {
-	canSecretsSet, _ := h.rbacManager.Enforce(email, rbac.ScopeConvox, rbac.ResourceSecret, rbac.ActionSet)
+	canSecretsSet := h.callerCan(r, rbac.ResourceSecret, rbac.ActionSet)
 	if canSecretsSet {
 		return nil
 	}
@@ -233,7 +173,7 @@ func (h *Handler) validateSecretsPermissions(
 			"secret", fmt.Sprintf("%s/%s", app, key), "{}",
 		)
 	}
-	return fmt.Errorf("secrets permission denied")
+	return secretsDenied(offending)
 }
 
 func (h *Handler) validateProtectedKeys(
@@ -241,23 +181,13 @@ func (h *Handler) validateProtectedKeys(
 	email, app string,
 	posted map[string]string,
 ) error {
+	var changed []string
 	for k, v := range posted {
-		if !h.isProtectedKeyForApp(k, app) {
-			continue
+		if h.isProtectedKeyForApp(k, app) && v != maskedSecret {
+			changed = append(changed, k)
 		}
-		if v == maskedSecret {
-			continue
-		}
-		userName := r.Header.Get("X-User-Name")
-		h.logDeniedRBACAction(
-			r, email, userName,
-			rbac.ResourceEnv, rbac.ActionSet,
-			"env", fmt.Sprintf("%s/%s", app, k),
-			"{\"error\":\"protected key change denied\"}",
-		)
-		return fmt.Errorf("protected key change denied")
 	}
-	return nil
+	return h.denyProtectedKeys(r, email, app, changed)
 }
 
 func (h *Handler) fetchBaseEnv(
@@ -287,7 +217,7 @@ func (h *Handler) validateEnvPermissions(
 	email, app string,
 	order []string,
 ) error {
-	canEnvSet, _ := h.rbacManager.Enforce(email, rbac.ScopeConvox, rbac.ResourceEnv, rbac.ActionSet)
+	canEnvSet := h.callerCan(r, rbac.ResourceEnv, rbac.ActionSet)
 	if canEnvSet {
 		return nil
 	}
@@ -299,7 +229,8 @@ func (h *Handler) validateEnvPermissions(
 			"env", fmt.Sprintf("%s/%s", app, key), "{}",
 		)
 	}
-	return fmt.Errorf("env permission denied")
+	return &envChangeDeniedError{message: "You don't have permission to change environment variables: " +
+		strings.Join(order, ", ")}
 }
 
 func (h *Handler) mergeEnvAndComputeDiffs(
@@ -322,7 +253,7 @@ func (h *Handler) mergeEnvAndComputeDiffs(
 			continue
 		}
 		if isSecret && !canSecretsSet && val != base {
-			return nil, nil, fmt.Errorf("secret change denied")
+			return nil, nil, secretsDenied([]string{key})
 		}
 		merged[key] = val
 		if val != base {
@@ -330,18 +261,11 @@ func (h *Handler) mergeEnvAndComputeDiffs(
 		}
 	}
 
-	for key, base := range baseEnv {
-		if _, ok := posted[key]; ok {
-			continue
-		}
-		// Protected keys not in posted should be preserved, not treated as deletions.
-		// This handles the case where the CLI doesn't include protected keys in the post.
-		if h.isProtectedKeyForApp(key, app) {
-			merged[key] = base
-			continue
-		}
-		diffs = append(diffs, envutil.EnvDiff{Key: key, OldVal: base, NewVal: "", Secret: h.isSecretKey(key)})
+	removed, err := h.removedKeyDiffs(app, posted, baseEnv, merged, canSecretsSet)
+	if err != nil {
+		return nil, nil, err
 	}
+	diffs = append(diffs, removed...)
 
 	if err := h.validateProtectedDiffs(r, email, app, diffs); err != nil {
 		return nil, nil, err
@@ -350,34 +274,62 @@ func (h *Handler) mergeEnvAndComputeDiffs(
 	return merged, diffs, nil
 }
 
+// removedKeyDiffs returns diffs for keys in the current env that the request leaves out, i.e. removes.
+// Protected keys left out are kept (copied into merged): the CLI does not post them back. Removing a secret
+// needs secret:set.
+func (h *Handler) removedKeyDiffs(
+	app string,
+	posted, baseEnv, merged map[string]string,
+	canSecretsSet bool,
+) ([]envutil.EnvDiff, error) {
+	var diffs []envutil.EnvDiff
+	for key, base := range baseEnv {
+		if _, ok := posted[key]; ok {
+			continue
+		}
+		if h.isProtectedKeyForApp(key, app) {
+			merged[key] = base
+			continue
+		}
+		isSecret := h.isSecretKey(key)
+		if isSecret && !canSecretsSet {
+			return nil, secretsDenied([]string{key})
+		}
+		diffs = append(diffs, envutil.EnvDiff{Key: key, OldVal: base, NewVal: "", Secret: isSecret})
+	}
+	return diffs, nil
+}
+
 func (h *Handler) validateProtectedDiffs(
 	r *http.Request,
 	email, app string,
 	diffs []envutil.EnvDiff,
 ) error {
+	var changed []string
 	for _, d := range diffs {
-		if !h.isProtectedKeyForApp(d.Key, app) {
-			continue
+		if h.isProtectedKeyForApp(d.Key, app) {
+			changed = append(changed, d.Key)
 		}
-		userName := r.Header.Get("X-User-Name")
-		_ = h.logAudit(r, &db.AuditLog{
-			UserEmail:      email,
-			UserName:       userName,
-			ActionType:     "convox",
-			Action:         audit.BuildAction(rbac.ResourceEnv.String(), rbac.ActionSet.String()),
-			ResourceType:   "env",
-			Resource:       fmt.Sprintf("%s/%s", app, d.Key),
-			Details:        "{\"error\":\"protected key change denied\"}",
-			IPAddress:      clientIPFromRequest(r),
-			UserAgent:      r.UserAgent(),
-			Status:         "denied",
-			RBACDecision:   "deny",
-			HTTPStatus:     http.StatusForbidden,
-			ResponseTimeMs: 0,
-		})
-		return fmt.Errorf("protected key change denied")
 	}
-	return nil
+	return h.denyProtectedKeys(r, email, app, changed)
+}
+
+// denyProtectedKeys audits and refuses changes to the app's protected keys. It returns nil when keys is empty.
+func (h *Handler) denyProtectedKeys(r *http.Request, email, app string, keys []string) error {
+	if len(keys) == 0 {
+		return nil
+	}
+	sort.Strings(keys)
+	userName := r.Header.Get("X-User-Name")
+	for _, key := range keys {
+		h.logDeniedRBACAction(
+			r, email, userName,
+			rbac.ResourceEnv, rbac.ActionSet,
+			"env", fmt.Sprintf("%s/%s", app, key),
+			"{\"error\":\"protected key change denied\"}",
+		)
+	}
+	return protectedKeysDenied(app, keys)
 }
 
 func recomposeEnvString(

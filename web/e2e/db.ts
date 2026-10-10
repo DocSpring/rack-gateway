@@ -467,6 +467,24 @@ export async function setupTotpMfaForUser(email: string) {
   })
 }
 
+/**
+ * Marks the user's active sessions as having completed their MFA challenge, which is the state a
+ * real UI enrollment or challenge leaves behind. Use after enrolling MFA directly in the database
+ * for a user who is already logged in. The step-up timestamp is left alone so step-up prompts
+ * still appear where a test expects them.
+ */
+export async function markSessionsMfaVerified(email: string) {
+  await withDbClient(async (client) => {
+    await client.query(
+      `UPDATE user_sessions
+          SET mfa_verified_at = COALESCE(mfa_verified_at, NOW())
+        WHERE user_id = (SELECT id FROM users WHERE email = $1)
+          AND revoked_at IS NULL;`,
+      [email]
+    )
+  })
+}
+
 export async function setupBothMfaMethodsForUser(email: string) {
   await withDbClient(async (client) => {
     await resetMfaAndSetupTotp(client, email)
@@ -489,11 +507,14 @@ export async function setupBothMfaMethodsForUser(email: string) {
   })
 }
 
+// Deploy approvals are bound to full 40-character commit SHAs.
+const E2E_DEPLOY_COMMIT_SHA = 'abc123de'.repeat(5)
+
 export async function createPendingDeployApprovalRequest(): Promise<string> {
   return await withDbClient(async (client) => {
     // Get admin user ID for the token
     const adminResult = await client.query(
-      `SELECT id FROM users WHERE email = 'admin@example.com' LIMIT 1;`
+      "SELECT id FROM users WHERE email = 'admin@example.com' LIMIT 1;"
     )
     if (adminResult.rows.length === 0) {
       throw new Error('Admin user not found')
@@ -515,7 +536,7 @@ export async function createPendingDeployApprovalRequest(): Promise<string> {
     } else {
       // Token already exists, fetch it
       const existing = await client.query(
-        `SELECT id FROM api_tokens WHERE name = 'E2E Test Token' LIMIT 1;`
+        "SELECT id FROM api_tokens WHERE name = 'E2E Test Token' LIMIT 1;"
       )
       tokenId = existing.rows[0].id
     }
@@ -531,7 +552,7 @@ export async function createPendingDeployApprovalRequest(): Promise<string> {
          status
        )
        VALUES (
-         'abc123def456',
+         $2,
          'main',
          'E2E Test Deploy Request',
          'docspring',
@@ -539,7 +560,7 @@ export async function createPendingDeployApprovalRequest(): Promise<string> {
          'pending'
        )
        RETURNING public_id;`,
-      [tokenId]
+      [tokenId, E2E_DEPLOY_COMMIT_SHA]
     )
 
     return result.rows[0].public_id

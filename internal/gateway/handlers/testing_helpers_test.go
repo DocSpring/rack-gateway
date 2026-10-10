@@ -21,30 +21,7 @@ func newAllowAllRBAC(users ...*db.User) *allowAllRBAC {
 	return &allowAllRBAC{users: m}
 }
 
-func (_ *allowAllRBAC) Enforce(
-	_ string,
-	_ rbac.Scope,
-	_ rbac.Resource,
-	_ rbac.Action,
-) (bool, error) {
-	return true, nil
-}
-
-func (_ *allowAllRBAC) EnforceUser(
-	_ *db.User,
-	_ rbac.Scope,
-	_ rbac.Resource,
-	_ rbac.Action,
-) (bool, error) {
-	return true, nil
-}
-
-func (_ *allowAllRBAC) EnforceForAPIToken(
-	_ int64,
-	_ rbac.Scope,
-	_ rbac.Resource,
-	_ rbac.Action,
-) (bool, error) {
+func (_ *allowAllRBAC) Authorize(_ rbac.Principal, _ string) (bool, error) {
 	return true, nil
 }
 

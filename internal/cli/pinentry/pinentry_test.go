@@ -97,3 +97,12 @@ func TestDescribeCommandTruncatesLongCommands(t *testing.T) {
 		t.Fatalf("describeCommand length = %d, want %d ending in ...", len(got), maxCommandLength+3)
 	}
 }
+
+func TestDialogScriptActivatesBeforeShowingDialog(t *testing.T) {
+	activate := strings.Index(dialogScript, "\tactivate\n")
+	dialog := strings.Index(dialogScript, "display dialog")
+	if activate < 0 || activate > dialog {
+		t.Fatalf("dialog script must activate osascript before the dialog so the PIN field has focus:\n%s",
+			dialogScript)
+	}
+}

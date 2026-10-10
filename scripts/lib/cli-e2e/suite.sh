@@ -73,34 +73,38 @@ enforce_mfa_and_validate_cli_blocking() {
         sleep 0.1
     done
 
-    local auth_url state
+    local auth_url
     auth_url=$(sed -n 's/^AUTH_URL=//p' "$auth_file")
-    state=$(sed -n 's/^STATE=//p' "$auth_file")
-    if [[ -z "$auth_url" || -z "$state" ]]; then
-        echo -e "${RED}CLI login did not produce AUTH_URL/STATE${NC}" >&2
+    if [[ -z "$auth_url" ]]; then
+        echo -e "${RED}CLI login did not produce AUTH_URL${NC}" >&2
         kill $cli_pid || true
         exit 1
     fi
 
-    curl -s -L -c "$cookie_file" -b "$cookie_file" "${auth_url}&selected_user=admin@example.com" -o /dev/null || true
+    # Without an MFA factor the browser is sent to enrollment instead of back to the CLI.
+    local final_url
+    final_url=$(curl -s -L -c "$cookie_file" -b "$cookie_file" -o /dev/null -w '%{url_effective}' \
+        "${auth_url}&selected_user=admin@example.com" || true)
 
+    local cli_running=true
+    kill -0 $cli_pid 2>/dev/null || cli_running=false
+    kill $cli_pid 2>/dev/null || true
     set +e
-    wait $cli_pid
-    local cli_status=$?
+    wait $cli_pid 2>/dev/null
     set -e
     set +m
     local cli_output
     cli_output=$(cat "$output_file")
     rm -f "$auth_file" "$output_file" "$cookie_file"
 
-    if [[ $cli_status -eq 0 ]]; then
-        echo -e "${RED}CLI login succeeded unexpectedly when MFA enrollment is required.${NC}" >&2
+    if [[ "$final_url" != *"/app/account/security"*"enrollment=required"* ]]; then
+        echo -e "${RED}Browser was not sent to MFA enrollment (ended at: ${final_url}).${NC}" >&2
         echo "$cli_output" >&2
         exit 1
     fi
 
-    if ! echo "$cli_output" | grep -Fq "Error: login failed: You must set up multi-factor authentication before you can continue using the CLI."; then
-        echo -e "${RED}CLI did not report MFA enrollment error as expected.${NC}" >&2
+    if [[ "$cli_running" != true ]] || echo "$cli_output" | grep -Fq "Successfully logged in"; then
+        echo -e "${RED}CLI login finished before MFA enrollment.${NC}" >&2
         echo "$cli_output" >&2
         exit 1
     fi

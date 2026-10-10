@@ -3,13 +3,16 @@ package handlers
 import (
 	"log"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	gtwlog "github.com/DocSpring/rack-gateway/internal/gateway/logging"
+	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 )
 
 // RegenerateBackupCodes godoc
@@ -35,6 +38,13 @@ func (h *AuthHandler) RegenerateBackupCodes(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	h.auditMFAEvent(c, ctx.userRecord, mfaAuditEvent{
+		scope:        audit.ActionScopeMFABackupCodes,
+		verb:         rbac.ActionGenerate.String(),
+		resourceType: "mfa_backup_codes",
+		resource:     strconv.FormatInt(ctx.userRecord.ID, 10),
+		details:      map[string]interface{}{"count": len(codes)},
+	})
 	c.JSON(http.StatusOK, BackupCodesResponse{BackupCodes: codes})
 }
 
@@ -155,6 +165,13 @@ func (h *AuthHandler) DeleteMFAMethod(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete mfa method"})
 		return
 	}
+	h.auditMFAEvent(c, userCtx.userRecord, mfaAuditEvent{
+		scope:        audit.ActionScopeMFAMethod,
+		verb:         rbac.ActionDelete.String(),
+		resourceType: "mfa_method",
+		resource:     strconv.FormatInt(method.ID, 10),
+		details:      map[string]interface{}{"type": method.Type, "label": method.Label},
+	})
 
 	h.handleMFADisablement(userCtx.userRecord.ID)
 	c.JSON(http.StatusOK, StatusResponse{Status: "deleted"})

@@ -124,3 +124,16 @@ func TestWebConvoxMutationRoutesHavePrecisePermissions(t *testing.T) {
 		}
 	})
 }
+
+// TestReadRoutesDoNotRequireInlineMFA ensures plain GET routes never inherit a write permission's
+// MFA level. A GET mapped to an MFAAlways permission would demand a fresh MFA code on every page load.
+func TestReadRoutesDoNotRequireInlineMFA(t *testing.T) {
+	for _, spec := range HTTPRouteSpecs() {
+		if spec.Method != "GET" {
+			continue
+		}
+		if level := spec.GetMFALevel(); level == MFAAlways {
+			t.Errorf("GET %s requires MFAAlways via %v", spec.Pattern, spec.Permissions)
+		}
+	}
+}

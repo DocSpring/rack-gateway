@@ -35,20 +35,9 @@ func (s *Service) StartTOTPEnrollment(user *db.User) (*StartTOTPEnrollmentResult
 		return nil, err
 	}
 
-	backupCodes, err := s.ensureBackupCodes(user.ID)
+	backupCodes, err := s.backupCodesForEnrollment(user)
 	if err != nil {
 		return nil, err
-	}
-	// TOTP always generates backup codes on first enrollment
-	if backupCodes == nil {
-		codes, hashes, err := s.genBackupCodes()
-		if err != nil {
-			return nil, err
-		}
-		if err := s.db.ReplaceBackupCodes(user.ID, hashes); err != nil {
-			return nil, err
-		}
-		backupCodes = codes
 	}
 
 	return &StartTOTPEnrollmentResult{
@@ -75,7 +64,7 @@ func (s *Service) ConfirmTOTP(user *db.User, methodID int64, code string) error 
 		return err
 	}
 
-	return s.finalizeEnrollment(user.ID, method.ID)
+	return s.finalizeEnrollment(user, method.ID)
 }
 
 // VerifyTOTP validates a TOTP or backup code during login or step-up.
@@ -210,7 +199,7 @@ func (s *Service) verifyBackupCodes(
 	code, ipAddress, userAgent string,
 	sessionID *int64,
 ) (*VerificationResult, error) {
-	used, err := s.db.MarkBackupCodeUsed(userID, s.hashBackupCode(code))
+	used, err := s.db.MarkBackupCodeUsed(userID, s.hashBackupCode(normalizeBackupCode(code)))
 	if err != nil {
 		return nil, err
 	}

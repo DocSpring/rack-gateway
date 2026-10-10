@@ -3,8 +3,19 @@ package rbac
 import (
 	"strings"
 
-	"github.com/DocSpring/rack-gateway/internal/gateway/settings"
 	"github.com/DocSpring/rack-gateway/internal/util/stringset"
+)
+
+// RouteAccess selects how an authenticated gateway route is authorized.
+type RouteAccess uint8
+
+const (
+	// AccessPermissions requires the caller to hold every permission in RouteSpec.Permissions.
+	// A route with this access and no permissions is denied.
+	AccessPermissions RouteAccess = iota
+	// AccessAuthenticated allows any authenticated caller (self-service endpoints).
+	// Permissions on these routes only select the MFA level.
+	AccessAuthenticated
 )
 
 // RouteSpec defines a known Convox API route and the canonical resource/action it maps to.
@@ -15,10 +26,18 @@ type RouteSpec struct {
 	Pattern string
 	// Permissions contains explicit permission strings for this route. Rack routes set
 	// this to the canonical convox:<resource>:<action> permission; HTTP routes supply
-	// gateway/auth specific permissions or leave the slice empty for MFANone.
+	// the gateway/auth permissions that authorize the route and select its MFA level.
 	Permissions []string
 	Resource    Resource
 	Action      Action
+	// Access selects how an HTTP route is authorized (see RouteAccess).
+	Access RouteAccess
+	// AllowAPIToken permits API tokens on an HTTP route. Without it, only human users may call it.
+	AllowAPIToken bool
+	// SelfParam names a path parameter holding a user's email. When it equals the calling human
+	// user's email, the caller may use the route for their own account without the route's
+	// permissions. API tokens never qualify. Empty means the route has no self-service rule.
+	SelfParam string
 }
 
 // GetMFALevel returns the MFA level required for this route
@@ -68,12 +87,36 @@ func newRackRoute(method, pattern string, resource Resource, action Action) Rout
 	}
 }
 
+// newHTTPRoute declares a gateway route for human users that requires every listed permission.
 func newHTTPRoute(method, pattern string, permissions ...string) RouteSpec {
 	return RouteSpec{
 		Method:      method,
 		Pattern:     pattern,
 		Permissions: permissions,
 	}
+}
+
+// newTokenRoute declares a gateway route that requires every listed permission and also accepts API tokens.
+func newTokenRoute(method, pattern string, permissions ...string) RouteSpec {
+	spec := newHTTPRoute(method, pattern, permissions...)
+	spec.AllowAPIToken = true
+	return spec
+}
+
+// newSelfRoute declares a self-service route open to any authenticated human user.
+// mfaPermissions only select the MFA level; handlers scope the data to the caller.
+func newSelfRoute(method, pattern string, mfaPermissions ...string) RouteSpec {
+	spec := newHTTPRoute(method, pattern, mfaPermissions...)
+	spec.Access = AccessAuthenticated
+	return spec
+}
+
+// newOwnUserRoute declares a /users/:email route that every human user may call for their own
+// account, and that requires every listed permission for anyone else's account.
+func newOwnUserRoute(method, pattern string, permissions ...string) RouteSpec {
+	spec := newHTTPRoute(method, pattern, permissions...)
+	spec.SelfParam = "email"
+	return spec
 }
 
 // Route specs for proxied Convox rack requests (rack-proxy endpoints and audit helpers).
@@ -136,237 +179,6 @@ var rackRouteSpecs = []RouteSpec{
 	newRackRoute("GET", "/system/releases", ResourceRack, ActionRead),
 }
 
-func routeSlug(segment string) string {
-	return strings.ReplaceAll(segment, "_", "-")
-}
-
-func appSettingPath(key settings.AppSettingKey) string {
-	return "/api/v1/apps/:app/settings/" + routeSlug(key.String())
-}
-
-func appSettingsGroupPath(group settings.AppSettingGroup) string {
-	return "/api/v1/apps/:app/settings/" + routeSlug(string(group))
-}
-
-func globalSettingsGroupPath(group settings.GlobalSettingGroup) string {
-	return "/api/v1/settings/" + routeSlug(string(group))
-}
-
-func settingsActionPath(segment string) string {
-	return "/api/v1/settings/" + routeSlug(segment)
-}
-
-var httpRouteSpecs = []RouteSpec{
-	// MFA management
-	newHTTPRoute("GET", "/api/v1/auth/mfa/status"),
-	newHTTPRoute("POST", "/api/v1/auth/mfa/enroll/totp/start", Auth(ResourceMFAMethod, ActionCreate)),
-	newHTTPRoute("POST", "/api/v1/auth/mfa/enroll/totp/confirm", Auth(ResourceMFAMethod, ActionCreate)),
-	newHTTPRoute("POST", "/api/v1/auth/mfa/enroll/yubiotp/start", Auth(ResourceMFAMethod, ActionCreate)),
-	newHTTPRoute("POST", "/api/v1/auth/mfa/enroll/webauthn/start", Auth(ResourceMFAMethod, ActionCreate)),
-	newHTTPRoute("POST", "/api/v1/auth/mfa/enroll/webauthn/confirm", Auth(ResourceMFAMethod, ActionCreate)),
-	newHTTPRoute("POST", "/api/v1/auth/mfa/verify", Auth(ResourceMFAVerification, ActionCreate)),
-	newHTTPRoute("POST", "/api/v1/auth/mfa/webauthn/assertion/start", Auth(ResourceMFAVerification, ActionCreate)),
-	newHTTPRoute("POST", "/api/v1/auth/mfa/webauthn/assertion/verify", Auth(ResourceMFAVerification, ActionCreate)),
-	newHTTPRoute("PUT", "/api/v1/auth/mfa/preferred-method", Auth(ResourceMFAPreferences, ActionUpdate)),
-	newHTTPRoute("PUT", "/api/v1/auth/mfa/methods/:methodID", Auth(ResourceMFAMethod, ActionUpdate)),
-	newHTTPRoute("POST", "/api/v1/auth/mfa/backup-codes/regenerate", Auth(ResourceMFABackupCodes, ActionGenerate)),
-	newHTTPRoute("POST", "/api/v1/auth/mfa/trusted-devices/trust", Auth(ResourceTrustedDevice, ActionCreate)),
-	newHTTPRoute("DELETE", "/api/v1/auth/mfa/trusted-devices/:deviceID", Auth(ResourceTrustedDevice, ActionDelete)),
-	newHTTPRoute("DELETE", "/api/v1/auth/mfa/methods/:methodID", Auth(ResourceMFAMethod, ActionDelete)),
-
-	// Authenticated info
-	newHTTPRoute("GET", "/api/v1/info"),
-	newHTTPRoute("GET", "/api/v1/created-by"),
-	newHTTPRoute("GET", "/api/v1/rack", Convox(ResourceRack, ActionRead)),
-	newHTTPRoute("GET", "/api/v1/deploy-approval-requests", Gateway(ResourceDeployApprovalRequest, ActionRead)),
-	newHTTPRoute("GET", "/api/v1/deploy-approval-requests/:id", Gateway(ResourceDeployApprovalRequest, ActionRead)),
-	newHTTPRoute(
-		"GET",
-		"/api/v1/deploy-approval-requests/:id/audit-logs",
-		Gateway(ResourceDeployApprovalRequest, ActionRead),
-	),
-	newHTTPRoute("POST", "/api/v1/deploy-approval-requests", Gateway(ResourceDeployApprovalRequest, ActionCreate)),
-	newHTTPRoute(
-		"POST",
-		"/api/v1/deploy-approval-requests/:id/approve",
-		Gateway(ResourceDeployApprovalRequest, ActionApprove),
-	),
-	newHTTPRoute(
-		"POST",
-		"/api/v1/deploy-approval-requests/:id/reject",
-		Gateway(ResourceDeployApprovalRequest, ActionApprove),
-	),
-	newHTTPRoute(
-		"POST",
-		"/api/v1/deploy-approval-requests/:id/extend",
-		Gateway(ResourceDeployApprovalRequest, ActionApprove),
-	),
-	newHTTPRoute("GET", "/api/v1/apps/:app/env", Convox(ResourceEnv, ActionRead)),
-	newHTTPRoute("PUT", "/api/v1/apps/:app/env", Convox(ResourceEnv, ActionSet)),
-
-	// Web-safe Convox proxies
-	newHTTPRoute("GET", "/api/v1/convox/apps", Convox(ResourceApp, ActionList)),
-	newHTTPRoute("GET", "/api/v1/convox/apps/*path", Convox(ResourceApp, ActionRead)),
-	newHTTPRoute("PUT", "/api/v1/convox/apps/:app/services/:name", Convox(ResourceApp, ActionUpdate)),
-	newHTTPRoute(
-		"DELETE",
-		"/api/v1/convox/apps/:app/processes/:pid",
-		Convox(ResourceProcess, ActionTerminate),
-	),
-	newHTTPRoute("GET", "/api/v1/convox/instances", Convox(ResourceInstance, ActionList)),
-	newHTTPRoute("GET", "/api/v1/convox/system/processes", Convox(ResourceRack, ActionRead)),
-
-	// Configuration & diagnostics
-	newHTTPRoute("GET", "/api/v1/settings"),
-	newHTTPRoute(
-		"PUT",
-		globalSettingsGroupPath(settings.GlobalSettingGroupMFAConfiguration),
-		GatewayGlobalSettingGroup(settings.GlobalSettingGroupMFAConfiguration),
-	),
-	newHTTPRoute(
-		"DELETE",
-		globalSettingsGroupPath(settings.GlobalSettingGroupMFAConfiguration),
-		GatewayGlobalSettingGroup(settings.GlobalSettingGroupMFAConfiguration),
-	),
-	newHTTPRoute(
-		"PUT",
-		globalSettingsGroupPath(settings.GlobalSettingGroupAllowDestructive),
-		GatewayGlobalSettingGroup(settings.GlobalSettingGroupAllowDestructive),
-	),
-	newHTTPRoute(
-		"DELETE",
-		globalSettingsGroupPath(settings.GlobalSettingGroupAllowDestructive),
-		GatewayGlobalSettingGroup(settings.GlobalSettingGroupAllowDestructive),
-	),
-	newHTTPRoute(
-		"PUT",
-		globalSettingsGroupPath(settings.GlobalSettingGroupVCSAndCIDefaults),
-		GatewayGlobalSettingGroup(settings.GlobalSettingGroupVCSAndCIDefaults),
-	),
-	newHTTPRoute(
-		"DELETE",
-		globalSettingsGroupPath(settings.GlobalSettingGroupVCSAndCIDefaults),
-		GatewayGlobalSettingGroup(settings.GlobalSettingGroupVCSAndCIDefaults),
-	),
-	newHTTPRoute(
-		"PUT",
-		globalSettingsGroupPath(settings.GlobalSettingGroupDeployApprovals),
-		GatewayGlobalSettingGroup(settings.GlobalSettingGroupDeployApprovals),
-	),
-	newHTTPRoute(
-		"DELETE",
-		globalSettingsGroupPath(settings.GlobalSettingGroupDeployApprovals),
-		GatewayGlobalSettingGroup(settings.GlobalSettingGroupDeployApprovals),
-	),
-	newHTTPRoute(
-		"PUT",
-		globalSettingsGroupPath(settings.GlobalSettingGroupSessionConfiguration),
-		GatewayGlobalSettingGroup(settings.GlobalSettingGroupSessionConfiguration),
-	),
-	newHTTPRoute(
-		"DELETE",
-		globalSettingsGroupPath(settings.GlobalSettingGroupSessionConfiguration),
-		GatewayGlobalSettingGroup(settings.GlobalSettingGroupSessionConfiguration),
-	),
-	newHTTPRoute("POST", settingsActionPath("rack_tls_cert/refresh"), Security(ResourceSecret, ActionUpdate)),
-	newHTTPRoute("POST", "/api/v1/diagnostics/sentry", Gateway(ResourceIntegration, ActionUpdate)),
-
-	// Users & roles
-	newHTTPRoute("GET", "/api/v1/roles"),
-	newHTTPRoute("GET", "/api/v1/users"),
-	newHTTPRoute("GET", "/api/v1/users/:email"),
-	newHTTPRoute("POST", "/api/v1/users", Gateway(ResourceUser, ActionCreate)),
-	newHTTPRoute("DELETE", "/api/v1/users/:email", Gateway(ResourceUser, ActionDelete)),
-	newHTTPRoute("PUT", "/api/v1/users/:email", Gateway(ResourceUser, ActionUpdate)),
-	newHTTPRoute("PUT", "/api/v1/users/:email/name", Gateway(ResourceUser, ActionUpdateName)),
-	newHTTPRoute("GET", "/api/v1/users/:email/sessions"),
-	newHTTPRoute("POST", "/api/v1/users/:email/sessions/:sessionID/revoke", Gateway(ResourceUser, ActionUpdate)),
-	newHTTPRoute("POST", "/api/v1/users/:email/sessions/revoke_all", Gateway(ResourceUser, ActionUpdate)),
-	newHTTPRoute("POST", "/api/v1/users/:email/lock", Gateway(ResourceUser, ActionUpdate)),
-	newHTTPRoute("POST", "/api/v1/users/:email/unlock", Gateway(ResourceUser, ActionUpdate)),
-
-	// Audit logs
-	newHTTPRoute("GET", "/api/v1/audit-logs", Gateway(ResourceDeployApprovalRequest, ActionRead)),
-	newHTTPRoute("GET", "/api/v1/audit-logs/export", Gateway(ResourceDeployApprovalRequest, ActionRead)),
-
-	// API tokens
-	newHTTPRoute("GET", "/api/v1/api-tokens", Gateway(ResourceAPIToken, ActionRead)),
-	newHTTPRoute("GET", "/api/v1/api-tokens/permissions"),
-	newHTTPRoute("GET", "/api/v1/api-tokens/:tokenID", Gateway(ResourceAPIToken, ActionRead)),
-	newHTTPRoute("POST", "/api/v1/api-tokens", Gateway(ResourceAPIToken, ActionCreate)),
-	newHTTPRoute("PUT", "/api/v1/api-tokens/:tokenID", Gateway(ResourceAPIToken, ActionUpdate)),
-	newHTTPRoute("DELETE", "/api/v1/api-tokens/:tokenID", Gateway(ResourceAPIToken, ActionDelete)),
-
-	// Background jobs
-	newHTTPRoute("GET", "/api/v1/jobs", Gateway(ResourceJob, ActionList)),
-	newHTTPRoute("GET", "/api/v1/jobs/:id", Gateway(ResourceJob, ActionRead)),
-	newHTTPRoute("DELETE", "/api/v1/jobs/:id", Gateway(ResourceJob, ActionDelete)),
-	newHTTPRoute("POST", "/api/v1/jobs/:id/retry", Gateway(ResourceJob, ActionUpdate)),
-
-	// Integrations
-	newHTTPRoute("GET", "/api/v1/integrations/slack", Gateway(ResourceIntegration, ActionRead)),
-	newHTTPRoute("POST", "/api/v1/integrations/slack/oauth/authorize", Gateway(ResourceIntegration, ActionCreate)),
-	newHTTPRoute("GET", "/api/v1/integrations/slack/oauth/callback", Gateway(ResourceIntegration, ActionCreate)),
-	newHTTPRoute("PUT", "/api/v1/integrations/slack/channels", Gateway(ResourceIntegration, ActionUpdate)),
-	newHTTPRoute("PUT", "/api/v1/integrations/slack/alerts", Gateway(ResourceIntegration, ActionUpdate)),
-	newHTTPRoute("DELETE", "/api/v1/integrations/slack", Gateway(ResourceIntegration, ActionDelete)),
-	newHTTPRoute("GET", "/api/v1/integrations/slack/channels/list", Gateway(ResourceIntegration, ActionRead)),
-	newHTTPRoute("POST", "/api/v1/integrations/slack/test", Gateway(ResourceIntegration, ActionUpdate)),
-
-	// App-specific settings
-	newHTTPRoute("GET", "/api/v1/apps/:app/settings"),
-	newHTTPRoute(
-		"PUT",
-		appSettingsGroupPath(settings.AppSettingGroupVCSCIDeploy),
-		GatewayAppSettingGroup(settings.AppSettingGroupVCSCIDeploy),
-	),
-	newHTTPRoute(
-		"DELETE",
-		appSettingsGroupPath(settings.AppSettingGroupVCSCIDeploy),
-		GatewayAppSettingGroup(settings.AppSettingGroupVCSCIDeploy),
-	),
-	newHTTPRoute(
-		"PUT",
-		appSettingPath(settings.AppSettingProtectedEnvVars),
-		GatewayAppSetting(settings.AppSettingProtectedEnvVars),
-	),
-	newHTTPRoute(
-		"DELETE",
-		appSettingPath(settings.AppSettingProtectedEnvVars),
-		GatewayAppSetting(settings.AppSettingProtectedEnvVars),
-	),
-	newHTTPRoute(
-		"PUT",
-		appSettingPath(settings.AppSettingSecretEnvVars),
-		GatewayAppSetting(settings.AppSettingSecretEnvVars),
-	),
-	newHTTPRoute(
-		"DELETE",
-		appSettingPath(settings.AppSettingSecretEnvVars),
-		GatewayAppSetting(settings.AppSettingSecretEnvVars),
-	),
-	newHTTPRoute(
-		"PUT",
-		appSettingPath(settings.AppSettingApprovedDeployCommands),
-		GatewayAppSetting(settings.AppSettingApprovedDeployCommands),
-	),
-	newHTTPRoute(
-		"DELETE",
-		appSettingPath(settings.AppSettingApprovedDeployCommands),
-		GatewayAppSetting(settings.AppSettingApprovedDeployCommands),
-	),
-	newHTTPRoute(
-		"PUT",
-		appSettingPath(settings.AppSettingServiceImagePatterns),
-		GatewayAppSetting(settings.AppSettingServiceImagePatterns),
-	),
-	newHTTPRoute(
-		"DELETE",
-		appSettingPath(settings.AppSettingServiceImagePatterns),
-		GatewayAppSetting(settings.AppSettingServiceImagePatterns),
-	),
-}
-
 var httpRouteIndex map[string]RouteSpec
 
 func init() {
@@ -379,6 +191,12 @@ func init() {
 
 func httpRouteKey(method, pattern string) string {
 	return strings.ToUpper(method) + " " + pattern
+}
+
+// LookupHTTPRoute returns the route spec declared for an authenticated gateway route.
+func LookupHTTPRoute(method, pattern string) (RouteSpec, bool) {
+	spec, ok := httpRouteIndex[httpRouteKey(method, pattern)]
+	return spec, ok
 }
 
 // HTTPMFAPermissions returns the declared permissions for an authenticated gateway route.

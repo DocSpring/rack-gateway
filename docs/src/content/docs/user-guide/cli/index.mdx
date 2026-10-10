@@ -17,7 +17,8 @@ With Gateway:     rack-gateway → Gateway (OAuth session) → Rack API
 ```
 
 The `rack-gateway` CLI:
-- Handles OAuth authentication flow (opens browser, gateway receives callback, CLI polls for completion)
+- Handles OAuth authentication flow (opens the browser, receives a single-use login code on a local
+  `127.0.0.1` listener, and redeems it with its PKCE verifier)
 - Stores session tokens securely per-rack
 - Wraps Convox commands
 - Manages MFA verification when required

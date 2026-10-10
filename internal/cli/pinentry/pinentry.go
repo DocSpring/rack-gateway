@@ -31,8 +31,10 @@ const (
 )
 
 // dialogScript shows the message passed as the first argument (never interpolated into the script)
-// and prints the entered PIN to stdout.
+// and prints the entered PIN to stdout. `activate` brings osascript to the front first: when the CLI
+// runs in the background (e.g. from an agent) the dialog otherwise opens without keyboard focus.
 const dialogScript = `on run argv
+	activate
 	set reply to display dialog (item 1 of argv) with title "rack-gateway" default answer "" ¬
 		with hidden answer buttons {"Cancel", "Approve"} default button "Approve" cancel button "Cancel" ¬
 		with icon caution giving up after 170

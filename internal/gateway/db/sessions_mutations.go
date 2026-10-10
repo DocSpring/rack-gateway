@@ -1,7 +1,6 @@
 package db
 
 import (
-	"encoding/json"
 	"fmt"
 	"time"
 
@@ -113,6 +112,20 @@ func (d *Database) UpdateSessionMFAVerified(sessionID int64, verifiedAt time.Tim
 	return nil
 }
 
+// ClearSessionsMFAVerification marks every active session of the user as not MFA-verified, so each one has to
+// complete an MFA challenge before it can be used again.
+func (d *Database) ClearSessionsMFAVerification(userID int64) error {
+	_, err := d.exec(
+		`UPDATE user_sessions SET mfa_verified_at = NULL, recent_step_up_at = NULL, updated_at = NOW()
+		WHERE user_id = ? AND revoked_at IS NULL`,
+		userID,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to clear session MFA verification: %w", err)
+	}
+	return nil
+}
+
 // UpdateSessionRecentStepUp records a recent step-up authentication timestamp for the session.
 func (d *Database) UpdateSessionRecentStepUp(sessionID int64, when time.Time) error {
 	gtwlog.DebugTopicf(
@@ -144,44 +157,6 @@ func (d *Database) AttachTrustedDeviceToSession(sessionID int64, trustedDeviceID
 	)
 	if err != nil {
 		return fmt.Errorf("failed to attach trusted device to session: %w", err)
-	}
-	return nil
-}
-
-// UpdateSessionMetadata merges new metadata into an existing session's metadata field.
-func (d *Database) UpdateSessionMetadata(sessionID int64, metadata map[string]interface{}) error {
-	if len(metadata) == 0 {
-		return nil
-	}
-
-	session, err := d.GetSessionByID(sessionID)
-	if err != nil {
-		return fmt.Errorf("failed to get session: %w", err)
-	}
-	if session == nil {
-		return fmt.Errorf("session not found")
-	}
-
-	existingMeta := make(map[string]interface{})
-	if len(session.Metadata) > 0 {
-		if err := json.Unmarshal(session.Metadata, &existingMeta); err != nil {
-			return fmt.Errorf("failed to parse existing metadata: %w", err)
-		}
-	}
-
-	for k, v := range metadata {
-		existingMeta[k] = v
-	}
-
-	metaJSON := marshalJSONMap(existingMeta)
-
-	_, err = d.exec(
-		"UPDATE user_sessions SET metadata = ?, updated_at = NOW() WHERE id = ?",
-		metaJSON,
-		sessionID,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to update session metadata: %w", err)
 	}
 	return nil
 }

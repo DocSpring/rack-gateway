@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 
@@ -141,10 +142,16 @@ func (h *SettingsHandler) updateSettings(c *gin.Context, ops settingsOperations,
 		}
 	}
 
+	// Check every value before saving any, so a bad value doesn't leave a partial update
+	if err := validateSettingValues(updates); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
 	// Save all settings
 	for key, value := range updates {
 		if err := ops.setSetting(appName, key, value, uid); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to save setting: %s", key)})
+			respondSettingSaveError(c, key, err)
 			return
 		}
 	}
@@ -206,4 +213,22 @@ func (_ *SettingsHandler) getSingleSettingResponse(c *gin.Context, ops settingsO
 	}
 
 	c.JSON(http.StatusOK, result)
+}
+
+// respondSettingSaveError answers 400 for a value with the wrong shape and 500 for anything else.
+func respondSettingSaveError(c *gin.Context, key string, err error) {
+	if errors.Is(err, settings.ErrInvalidSettingValue) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to save setting: %s", key)})
+}
+
+func validateSettingValues(updates map[string]interface{}) error {
+	for key, value := range updates {
+		if err := settings.ValidateAppSettingValue(key, value); err != nil {
+			return err
+		}
+	}
+	return nil
 }

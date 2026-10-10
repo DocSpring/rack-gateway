@@ -62,3 +62,14 @@ func TestLoadProductionRequiresSecret(t *testing.T) {
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "APP_SECRET_KEY is required in production")
 }
+
+func TestLoadProductionRequiresAllowedDomain(t *testing.T) {
+	t.Setenv("DEV_MODE", "false")
+	t.Setenv("APP_SECRET_KEY", "secret")
+	t.Setenv("GOOGLE_ALLOWED_DOMAIN", "")
+
+	cfg, err := Load()
+	assert.Nil(t, cfg)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "GOOGLE_ALLOWED_DOMAIN is required in production")
+}

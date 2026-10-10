@@ -63,10 +63,16 @@ func newJSONContext(body []byte) (*gin.Context, *httptest.ResponseRecorder) {
 	return c, w
 }
 
-func attachUser(c *gin.Context, email, name string) {
+func attachUser(t *testing.T, c *gin.Context, database *db.Database, email, name string) {
+	t.Helper()
+	dbUser, err := database.GetUser(email)
+	if err != nil || dbUser == nil {
+		t.Fatalf("load user %s: %v", email, err)
+	}
 	c.Set("user_email", email)
 	c.Set("user_name", name)
-	ctx := context.WithValue(c.Request.Context(), auth.UserContextKey, &auth.User{Email: email, Name: name})
+	authUser := &auth.User{Email: email, Name: name, Roles: dbUser.Roles, DBUser: dbUser}
+	ctx := context.WithValue(c.Request.Context(), auth.UserContextKey, authUser)
 	c.Request = c.Request.WithContext(ctx)
 }
 
@@ -109,7 +115,7 @@ func TestUpdateEnvValuesSuccess(t *testing.T) {
 	body, _ := json.Marshal(payload)
 	c, w := newJSONContext(body)
 	c.Params = gin.Params{{Key: "app", Value: "myapp"}}
-	attachUser(c, "deployer@example.com", "Deployer User")
+	attachUser(t, c, database, "deployer@example.com", "Deployer User")
 
 	handler.UpdateEnvValues(c)
 
@@ -171,7 +177,7 @@ func TestUpdateEnvValuesRequiresEnvSetPermission(t *testing.T) {
 	body, _ := json.Marshal(payload)
 	c, w := newJSONContext(body)
 	c.Params = gin.Params{{Key: "app", Value: "myapp"}}
-	attachUser(c, "viewer@example.com", "Viewer User")
+	attachUser(t, c, database, "viewer@example.com", "Viewer User")
 
 	handler.UpdateEnvValues(c)
 
@@ -211,7 +217,7 @@ func TestUpdateEnvValuesSecretRequiresPermission(t *testing.T) {
 	body, _ := json.Marshal(payload)
 	c, w := newJSONContext(body)
 	c.Params = gin.Params{{Key: "app", Value: "myapp"}}
-	attachUser(c, "deployer@example.com", "Deployer User")
+	attachUser(t, c, database, "deployer@example.com", "Deployer User")
 
 	handler.UpdateEnvValues(c)
 
@@ -255,7 +261,7 @@ func TestUpdateEnvValuesMaskedSecretWithoutExistingValueFails(t *testing.T) {
 	body, _ := json.Marshal(payload)
 	c, w := newJSONContext(body)
 	c.Params = gin.Params{{Key: "app", Value: "myapp"}}
-	attachUser(c, "admin@example.com", "Admin User")
+	attachUser(t, c, database, "admin@example.com", "Admin User")
 
 	handler.UpdateEnvValues(c)
 
@@ -311,7 +317,7 @@ func TestUpdateEnvValuesProtectedKeyDenied(t *testing.T) {
 	body, _ := json.Marshal(payload)
 	c, w := newJSONContext(body)
 	c.Params = gin.Params{{Key: "app", Value: "myapp"}}
-	attachUser(c, "admin@example.com", "Admin User")
+	attachUser(t, c, database, "admin@example.com", "Admin User")
 
 	handler.UpdateEnvValues(c)
 
@@ -332,7 +338,7 @@ func TestUpdateEnvValuesLogsAuditEvenWhenNoChanges(t *testing.T) {
 		t.Fatalf("failed to seed user: %v", err)
 	}
 
-	resp := executeUpdateEnvNoChange(t, handler)
+	resp := executeUpdateEnvNoChange(t, handler, database)
 
 	// No release should be created when there are no changes
 	if resp.ReleaseID != "" {
@@ -356,7 +362,11 @@ func mockEnvTestServer(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func executeUpdateEnvNoChange(t *testing.T, handler *handlers.APIHandler) handlers.UpdateEnvValuesResponse {
+func executeUpdateEnvNoChange(
+	t *testing.T,
+	handler *handlers.APIHandler,
+	database *db.Database,
+) handlers.UpdateEnvValuesResponse {
 	t.Helper()
 	// Set FOO to "bar" - the same value it already has
 	payload := map[string]interface{}{
@@ -365,7 +375,7 @@ func executeUpdateEnvNoChange(t *testing.T, handler *handlers.APIHandler) handle
 	body, _ := json.Marshal(payload)
 	c, w := newJSONContext(body)
 	c.Params = gin.Params{{Key: "app", Value: "myapp"}}
-	attachUser(c, "deployer@example.com", "Deployer User")
+	attachUser(t, c, database, "deployer@example.com", "Deployer User")
 
 	handler.UpdateEnvValues(c)
 

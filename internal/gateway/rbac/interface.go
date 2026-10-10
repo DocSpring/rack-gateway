@@ -1,7 +1,5 @@
 package rbac
 
-import "github.com/DocSpring/rack-gateway/internal/gateway/db"
-
 // UserWithID extends UserConfig with database ID
 type UserWithID struct {
 	ID    int64    `json:"id"`
@@ -11,14 +9,8 @@ type UserWithID struct {
 
 // Manager defines the interface for RBAC operations.
 type Manager interface {
-	// Enforce checks if a user has permission to perform an action
-	Enforce(userEmail string, scope Scope, resource Resource, action Action) (bool, error)
-
-	// EnforceUser checks permissions using a preloaded user record (no additional DB query)
-	EnforceUser(user *db.User, scope Scope, resource Resource, action Action) (bool, error)
-
-	// EnforceForAPIToken checks if an API token has permission to perform an action
-	EnforceForAPIToken(tokenID int64, scope Scope, resource Resource, action Action) (bool, error)
+	// Authorize reports whether the principal (a user or an API token) holds the permission.
+	Authorize(p Principal, permission string) (bool, error)
 
 	// GetAllowedDomain returns the configured domain
 	GetAllowedDomain() string

@@ -207,6 +207,13 @@ export type AuditLogQuery = Partial<{
 export const listAuditLogs = (params: AuditLogQuery): Promise<AuditLogsResponse> =>
   unwrap(gateway.getAuditLogs(params))
 
+// One user's activity. Every user may read their own; other users' need gateway:audit_log:read.
+export const listUserAuditLogs = (
+  email: string,
+  params: Omit<AuditLogQuery, 'user' | 'user_id'>
+): Promise<AuditLogsResponse> =>
+  unwrap(gateway.getUsersEmailAuditLogs(encodeURIComponent(email), params))
+
 export const exportAuditLogs = (
   params: Parameters<typeof gateway.getAuditLogsExport>[0]
 ): Promise<Blob> => unwrap(gateway.getAuditLogsExport(params))
@@ -299,6 +306,15 @@ export const confirmWebAuthnEnrollment = (
   payload: HandlersConfirmWebAuthnEnrollmentRequest
 ): Promise<HandlersWebAuthnEnrollmentResponse> =>
   post<HandlersWebAuthnEnrollmentResponse>('/auth/mfa/enroll/webauthn/confirm', payload)
+
+// Cancels a CLI login from the browser bound to it; the response says where to send the browser so the
+// waiting CLI hears about it.
+export const cancelCliLogin = (payload: { state: string }): Promise<{ redirect: string }> =>
+  getHttpClientInstance()
+    .post<{ redirect: string }>('/auth/cli/cancel', payload, {
+      headers: { 'Content-Type': 'application/json' },
+    })
+    .then((res) => res.data)
 
 export const verifyCliMfa = (payload: {
   state: string
@@ -439,6 +455,7 @@ export const api = {
   unlockUser,
   getUserSessions: listUserSessions,
   listAuditLogs,
+  listUserAuditLogs,
   exportAuditLogs,
   listRoles,
   getTokenPermissionMetadata,

@@ -76,7 +76,7 @@ export function AppSettingsPage() {
         <div className="grid grid-cols-2 gap-12">
           <StringArrayCard
             app={app}
-            description="Commands that a CI/CD token can run during an approved deploy request."
+            description="The exact commands a CI/CD token can run during an approved deploy request. An empty list allows none."
             disabled={!isAdmin}
             pathSegment="approved-deploy-commands"
             placeholder="e.g. bundle exec rake db:migrate"

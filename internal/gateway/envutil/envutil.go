@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -28,7 +29,21 @@ var (
 	// ErrMaskedSecretWithoutBase is returned when a masked secret value is provided without an existing
 	// value to preserve.
 	ErrMaskedSecretWithoutBase = errors.New("masked secret provided without existing value")
+	// ErrInvalidEnvEntry is returned for keys that aren't valid env var names, or values containing line
+	// breaks or NUL. The rack API takes env as newline-separated KEY=VALUE lines, so a line break in a
+	// value would inject extra variables.
+	ErrInvalidEnvEntry = errors.New("invalid environment variable name or value")
 )
+
+var envKeyPattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+
+// ValidateEnvEntry checks that key is a valid env var name and value cannot break the KEY=VALUE line format.
+func ValidateEnvEntry(key, value string) error {
+	if !envKeyPattern.MatchString(key) || strings.ContainsAny(value, "\r\n\x00") {
+		return ErrInvalidEnvEntry
+	}
+	return nil
+}
 
 // EnvDiff describes a change applied to an environment variable.
 type EnvDiff struct {
@@ -98,6 +113,9 @@ func processRemovals(
 		if key == "" {
 			continue
 		}
+		if err := ValidateEnvEntry(key, ""); err != nil {
+			return nil, err
+		}
 		if opts.IsProtectedKey != nil && opts.IsProtectedKey(key) {
 			return nil, ErrProtectedEnvModification
 		}
@@ -152,6 +170,9 @@ func processSetOperation(
 	removedOld map[string]string,
 	opts MergeOptions,
 ) (*EnvDiff, error) {
+	if err := ValidateEnvEntry(key, value); err != nil {
+		return nil, err
+	}
 	if err := validateProtectedKey(key, value, merged, removedOld, opts); err != nil {
 		return nil, err
 	}

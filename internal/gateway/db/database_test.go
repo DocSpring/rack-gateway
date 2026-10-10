@@ -1,6 +1,7 @@
 package db_test
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -585,16 +586,24 @@ func TestDeployApprovalShortCommitHashMatching(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, results, 1, "should find request with full commit hash")
 
-	// Test 3: FindDeployApprovalRequest with short commit hash
+	// Test 3: FindDeployApprovalRequest binds to the exact full commit, never a prefix
 	found, err := db.FindDeployApprovalRequest(gwdb.DeployApprovalLookup{
+		TokenID:       token.ID,
+		GitCommitHash: fullCommitHash,
+		App:           "myapp",
+		StatusFilter:  "pending",
+	})
+	require.NoError(t, err)
+	require.NotNil(t, found)
+	assert.Equal(t, fullCommitHash, found.GitCommitHash)
+
+	_, err = db.FindDeployApprovalRequest(gwdb.DeployApprovalLookup{
 		TokenID:       token.ID,
 		GitCommitHash: shortHash,
 		App:           "myapp",
 		StatusFilter:  "pending",
 	})
-	require.NoError(t, err)
-	require.NotNil(t, found, "should find request with short commit hash via FindDeployApprovalRequest")
-	assert.Equal(t, fullCommitHash, found.GitCommitHash)
+	require.ErrorIs(t, err, gwdb.ErrDeployApprovalRequestNotFound, "short hashes must not match a lookup")
 
 	// Test 4: Non-matching short hash returns no results
 	results, err = db.ListDeployApprovalRequests(gwdb.DeployApprovalRequestListOptions{
@@ -603,4 +612,32 @@ func TestDeployApprovalShortCommitHashMatching(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.Len(t, results, 0, "should not find request with non-matching prefix")
+
+	// Test 5: LIKE wildcards in the prefix are literal
+	for _, wildcard := range []string{"%", "_", "abc%", "a_c"} {
+		results, err = db.ListDeployApprovalRequests(gwdb.DeployApprovalRequestListOptions{
+			GitCommitHash: wildcard,
+			App:           "myapp",
+		})
+		require.NoError(t, err)
+		assert.Len(t, results, 0, "wildcard %q must not match", wildcard)
+	}
+}
+
+func TestDeployApprovalRequiresFullCommitSHA(t *testing.T) {
+	db := dbtest.NewDatabase(t)
+	user, err := db.CreateUser("deployer@example.com", "Deployer", []string{"deployer"})
+	require.NoError(t, err)
+	token, err := db.CreateAPIToken(strings.Repeat("e", 64), "ci-token", user.ID, nil, nil, nil)
+	require.NoError(t, err)
+
+	for _, commit := range []string{"abc123", "a", strings.Repeat("g", 40), strings.Repeat("a", 41)} {
+		_, err = db.CreateDeployApprovalRequest("msg", "myapp", commit, "branch", "", nil, user.ID, nil, token.ID)
+		require.Error(t, err, "commit %q must be rejected", commit)
+	}
+
+	upper := strings.ToUpper("abc123def456789012345678901234567890abcd")
+	created, err := db.CreateDeployApprovalRequest("msg", "myapp", upper, "branch", "", nil, user.ID, nil, token.ID)
+	require.NoError(t, err)
+	assert.Equal(t, strings.ToLower(upper), created.GitCommitHash, "commits are stored lowercase")
 }

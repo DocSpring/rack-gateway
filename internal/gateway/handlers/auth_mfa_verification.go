@@ -81,20 +81,20 @@ func (h *AuthHandler) StartWebAuthnAssertion(c *gin.Context) {
 		return
 	}
 
-	options, sessionJSON, err := h.mfaService.StartWebAuthnAssertion(ctx.userRecord)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
 	if ctx.authUser.Session == nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "session missing"})
 		return
 	}
 
+	options, challengeID, err := h.mfaService.StartWebAuthnAssertion(ctx.userRecord, &ctx.authUser.Session.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
 	c.JSON(http.StatusOK, WebAuthnAssertionStartResponse{
 		Options:     options,
-		SessionData: string(sessionJSON),
+		SessionData: challengeID,
 	})
 }
 

@@ -10,9 +10,13 @@ export type GetAuthCliCallbackParams = {
   /**
    * Authorization code
    */
-  code: string;
+  code?: string;
   /**
    * State
    */
   state: string;
+  /**
+   * Identity provider error
+   */
+  error?: string;
 };

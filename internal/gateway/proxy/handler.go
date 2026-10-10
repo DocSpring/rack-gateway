@@ -19,6 +19,7 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/email"
 	"github.com/DocSpring/rack-gateway/internal/gateway/envutil"
 	"github.com/DocSpring/rack-gateway/internal/gateway/httpclient"
+	gtwlog "github.com/DocSpring/rack-gateway/internal/gateway/logging"
 	"github.com/DocSpring/rack-gateway/internal/gateway/logutil"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rackcert"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
@@ -270,7 +271,7 @@ func (h *Handler) prepareProxyRequest(
 	}
 
 	envDiffs, err := h.prepareReleaseIfNeeded(
-		r, w, allowed, rackPath, rackConfig, authUser.Email, resource, action, start,
+		r, w, allowed, rackPath, rackConfig, authUser.Email, start,
 	)
 	if err != nil {
 		return r, config.RackConfig{}, nil, false, nil, nil, err
@@ -309,6 +310,9 @@ func (h *Handler) handleForwardError(
 }
 
 func (h *Handler) isAllowedConvoxRoute(r *http.Request, rackPath string) bool {
+	if !isSafeRackPath(rackPath) {
+		return false
+	}
 	methodForAllow := h.determineMethod(r)
 	_, _, ok := rbac.MatchRackRoute(methodForAllow, rackPath)
 	return ok
@@ -354,14 +358,20 @@ func (h *Handler) checkUserPermissions(
 	resource rbac.Resource,
 	action rbac.Action,
 ) (bool, error) {
-	if authUser != nil && authUser.DBUser != nil {
-		return h.rbacManager.EnforceUser(authUser.DBUser, rbac.ScopeConvox, resource, action)
+	if authUser == nil {
+		return false, nil
 	}
-	allowed, err := h.rbacManager.Enforce(authUser.Email, rbac.ScopeConvox, resource, action)
+	return h.rbacManager.Authorize(authUser.Principal(), rbac.Convox(resource, action))
+}
+
+// callerCan reports whether the authenticated caller on r holds convox:<resource>:<action>.
+func (h *Handler) callerCan(r *http.Request, resource rbac.Resource, action rbac.Action) bool {
+	allowed, err := auth.Authorize(r.Context(), h.rbacManager, rbac.Convox(resource, action))
 	if err != nil {
-		return false, err
+		gtwlog.Errorf("proxy: permission check failed for %s: %v", rbac.Convox(resource, action), err)
+		return false
 	}
-	return allowed, nil
+	return allowed
 }
 
 func (h *Handler) handlePermissionError(
@@ -403,31 +413,28 @@ func (h *Handler) prepareReleaseIfNeeded(
 	rackPath string,
 	rackConfig config.RackConfig,
 	userEmail string,
-	resource rbac.Resource,
-	action rbac.Action,
 	start time.Time,
 ) ([]envutil.EnvDiff, error) {
 	if !allowed || r.Method != http.MethodPost || !strings.Contains(rackPath, "/releases") {
 		return nil, nil
 	}
 
-	ok, diffs, err := h.prepareReleaseCreate(r, rackConfig, userEmail)
-	if err != nil {
-		if fpErr, ok := rackcert.AsFingerprintMismatch(err); ok {
-			logRackTLSMismatch("env_fetch", fpErr)
-			h.handleError(w, r, "rack certificate verification failed", http.StatusBadGateway, rackConfig.Name, start)
-			return nil, err
-		}
-		h.handleError(w, r, err.Error(), http.StatusBadRequest, rackConfig.Name, start)
+	diffs, err := h.prepareReleaseCreate(r, rackConfig, userEmail)
+	if err == nil {
+		return diffs, nil
+	}
+	var denied *envChangeDeniedError
+	if errors.As(err, &denied) {
+		http.Error(w, denied.Error(), http.StatusForbidden)
 		return nil, err
 	}
-
-	if !ok {
-		http.Error(w, forbiddenMessage(resource, action), http.StatusForbidden)
-		return nil, errors.New("release preparation denied")
+	if fpErr, ok := rackcert.AsFingerprintMismatch(err); ok {
+		logRackTLSMismatch("env_fetch", fpErr)
+		h.handleError(w, r, "rack certificate verification failed", http.StatusBadGateway, rackConfig.Name, start)
+		return nil, err
 	}
-
-	return diffs, nil
+	h.handleError(w, r, err.Error(), http.StatusBadRequest, rackConfig.Name, start)
+	return nil, err
 }
 
 func (h *Handler) enforceDestructivePolicy(

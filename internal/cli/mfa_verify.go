@@ -205,7 +205,10 @@ func buildAssertionOptions(
 	}
 
 	origin := fmt.Sprintf("%s://%s", parsedURL.Scheme, parsedURL.Host)
-	rpID := parsedURL.Hostname()
+	rpID, err := resolveRPID(parsedURL.Hostname(), start.Options.PublicKey.RPID)
+	if err != nil {
+		return webauthn.AssertionOptions{}, err
+	}
 
 	return webauthn.AssertionOptions{
 		Challenge:        start.Options.PublicKey.Challenge,
@@ -215,6 +218,24 @@ func buildAssertionOptions(
 		UserVerification: start.Options.PublicKey.UserVerification,
 		Origin:           origin,
 	}, nil
+}
+
+// resolveRPID returns the relying party ID to sign for. It is derived from the configured gateway host;
+// a server-sent RP ID is only accepted if it is that host or a parent domain of it, so a malicious or
+// spoofed gateway can't get an assertion (or a credential listing) for an unrelated site.
+func resolveRPID(gatewayHost, serverRPID string) (string, error) {
+	host := strings.ToLower(strings.TrimSpace(gatewayHost))
+	requested := strings.ToLower(strings.TrimSpace(serverRPID))
+	if requested == "" || requested == host {
+		return host, nil
+	}
+	if strings.Contains(requested, ".") && strings.HasSuffix(host, "."+requested) {
+		return requested, nil
+	}
+	return "", fmt.Errorf(
+		"gateway asked for a security key assertion for %q, which doesn't match the gateway host %q; refusing",
+		serverRPID, gatewayHost,
+	)
 }
 
 func submitWebAuthnAssertion(baseURL, sessionToken, sessionData, assertionJSON string) error {

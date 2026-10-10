@@ -5,10 +5,10 @@ description: "Managing users in the Rack Gateway web interface."
 
 import { Aside, Steps } from '@astrojs/starlight/components';
 
-The Users page lists all gateway users and links to individual user detail pages. Admins can add, edit, lock, and delete users.
+The Users page lists all gateway users. Admins can add, edit, lock, and delete users, and open any user's detail page.
 
 <Aside type="note">
-All authenticated users can view the user list. Only admins can change user accounts.
+Every role can see the team directory: names, emails, roles, and whether an account is locked. Lock reasons and MFA preferences are only shown to admins. Everyone can open their own detail page; only admins can open other people's.
 </Aside>
 
 ## Viewing Users
@@ -80,6 +80,8 @@ Click a user to view their details. The page includes:
 - Role badges and account status
 - Active sessions with **Sign Out Everywhere**
 - User-specific audit logs
+
+Every user can open their own page (click your name at the bottom of the sidebar) to review their sessions, sign out a session they don't recognize (or all of them), and see their own activity. Signing out sessions needs a fresh MFA check. **My Activity** in the sidebar opens your own audit log; admins see **Audit Logs** with everyone's activity instead.
 
 ## Related
 

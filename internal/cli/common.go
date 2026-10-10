@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"reflect"
 	"strings"
@@ -21,15 +22,18 @@ import (
 //   - No MFA: abc123def456...
 //   - TOTP:   abc123def456....totp.123456
 //   - WebAuthn: abc123def456....webauthn.base64_assertion
-func buildRackURL(gatewayURL, auth string) string {
-	// Add /api/v1/rack-proxy prefix to the gateway URL
-	base := strings.TrimSuffix(gatewayURL, "/") + "/api/v1/rack-proxy"
-
-	// Inject auth as basic auth password
-	if strings.HasPrefix(base, "http://") {
-		return fmt.Sprintf("http://convox:%s@%s", auth, strings.TrimPrefix(base, "http://"))
+//
+// The gateway URL is parsed and validated first (see parseGatewayURL), and the credential is set on the parsed
+// URL, so no error can echo the session token.
+func buildRackURL(gatewayURL, auth string) (string, error) {
+	u, err := parseGatewayURL(gatewayURL)
+	if err != nil {
+		return "", err
 	}
-	return fmt.Sprintf("https://convox:%s@%s", auth, strings.TrimPrefix(base, "https://"))
+	u.User = url.UserPassword("convox", auth)
+	u.Path = strings.TrimSuffix(u.Path, "/") + "/api/v1/rack-proxy"
+	u.RawPath = ""
+	return u.String(), nil
 }
 
 // Global flags that should NEVER be forwarded to the Convox SDK
@@ -63,10 +67,16 @@ func SetupConvoxCommandWithMFA(
 	if err != nil {
 		return nil, nil, err
 	}
-
-	client, err := sdk.New(buildRackURL(gatewayURL, auth))
+	rackURL, err := buildRackURL(gatewayURL, auth)
 	if err != nil {
 		return nil, nil, err
+	}
+
+	secureConvoxSDK()
+	client, err := sdk.New(rackURL)
+	if err != nil {
+		// The error would quote rackURL, which carries the session token.
+		return nil, nil, fmt.Errorf("failed to configure the Convox client for %s", gatewayURL)
 	}
 
 	engine := newStdCLIEngine(cobraCmd)

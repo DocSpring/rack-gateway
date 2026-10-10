@@ -102,7 +102,7 @@ func TestApproveDeployApprovalRequest_RequiresMFACode(t *testing.T) {
 	req, err := database.CreateDeployApprovalRequest(
 		"Test deploy",
 		"test-app",
-		"abc123",
+		"abc123def4567890abc123def4567890abc123de",
 		"main",
 		"",                  // prURL
 		[]byte("{}"),        // ciMetadata - must be valid JSON
@@ -170,7 +170,7 @@ func TestApproveDeployApprovalRequest_RequiresMFACode(t *testing.T) {
 		req2, err := database.CreateDeployApprovalRequest(
 			"Test deploy 2",
 			"test-app-2",
-			"def456",
+			"def4567890abc123def4567890abc123def45678",
 			"main",
 			"",                  // prURL
 			[]byte("{}"),        // ciMetadata - must be valid JSON
@@ -409,6 +409,7 @@ func TestCreateAPIToken_AlwaysRequiresMFACode(t *testing.T) {
 				Session:    session,
 				MFAType:    "totp",
 				MFAValue:   code,
+				DBUser:     fixture.admin,
 			}
 			c.Request = c.Request.WithContext(context.WithValue(c.Request.Context(), auth.UserContextKey, authUser))
 			c.Set("user_email", fixture.admin.Email)

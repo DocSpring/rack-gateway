@@ -79,8 +79,9 @@ func enforceAlwaysMFA(c *gin.Context, mfaService MFAVerifier, database *db.Datab
 		denyMFA(c)
 		return
 	}
-	// API tokens don't have MFA
-	if authUser.IsAPIToken {
+	// API tokens don't have MFA. A request whose inline MFA just completed the session's
+	// pending MFA challenge has already proven a factor.
+	if authUser.IsAPIToken || c.GetBool(pendingMFAInlineVerifiedKey) {
 		c.Next()
 		return
 	}

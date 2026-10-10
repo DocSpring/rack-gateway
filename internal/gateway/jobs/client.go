@@ -38,6 +38,10 @@ type Dependencies struct {
 	Database      *db.Database
 	EmailSender   email.Sender
 	SlackNotifier *slack.Notifier
+	// CircleCIToken and GitHubToken are used by the CI/GitHub workers. They are never stored in job
+	// arguments, which are persisted in river_job and returned by the jobs API.
+	CircleCIToken string
+	GitHubToken   string
 }
 
 // AuditAnchorConfig holds configuration for WORM S3 anchor writer
@@ -55,6 +59,7 @@ func NewClient(pool *pgxpool.Pool, deps *Dependencies, auditAnchorConfig *AuditA
 	// Email workers - security notifications
 	river.AddWorker(workers, jobemail.NewFailedMFAWorker(deps.EmailSender))
 	river.AddWorker(workers, jobemail.NewFailedLoginWorker(deps.EmailSender))
+	river.AddWorker(workers, jobemail.NewNewCLISessionWorker(deps.EmailSender))
 	river.AddWorker(workers, jobemail.NewRateLimitUserWorker(deps.EmailSender))
 	river.AddWorker(workers, jobemail.NewRateLimitAdminWorker(deps.EmailSender))
 	river.AddWorker(workers, jobemail.NewSuspiciousActivityUserWorker(deps.EmailSender))
@@ -87,8 +92,8 @@ func NewClient(pool *pgxpool.Pool, deps *Dependencies, auditAnchorConfig *AuditA
 	river.AddWorker(workers, jobslack.NewDeployApprovalWorker(deps.Database, deps.SlackNotifier))
 
 	// CI/GitHub workers
-	river.AddWorker(workers, jobcircleci.NewApproveJobWorker())
-	river.AddWorker(workers, jobgithub.NewPostPRCommentWorker())
+	river.AddWorker(workers, jobcircleci.NewApproveJobWorker(deps.Database, deps.CircleCIToken))
+	river.AddWorker(workers, jobgithub.NewPostPRCommentWorker(deps.GitHubToken))
 
 	// Setup periodic jobs
 	var periodicJobs []*river.PeriodicJob

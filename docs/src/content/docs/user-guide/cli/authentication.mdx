@@ -46,19 +46,26 @@ sequenceDiagram
     participant Gateway
     participant Google
 
-    CLI->>Gateway: 1. Start login
+    CLI->>Gateway: 1. Start login (loopback redirect URI + PKCE challenge)
     Gateway-->>CLI: 2. OAuth URL
     CLI->>Google: 3. Open browser
-    Google-->>Gateway: 4. Auth callback
-    Gateway-->>CLI: 5. Session token
+    Google-->>Gateway: 4. Auth callback (gateway exchanges the code)
+    Gateway-->>CLI: 5. Browser redirected to 127.0.0.1 with a single-use login code
+    CLI->>Gateway: 6. Redeem login code + PKCE verifier
+    Gateway-->>CLI: 7. Session token
 ```
 
 The CLI:
-1. Requests a login URL from the gateway
-2. Opens your browser to Google's OAuth consent page
-3. The gateway receives the OAuth callback and stores the auth code
-4. The CLI polls the gateway to complete login
+1. Listens on `http://127.0.0.1:<random port>/callback` and starts the login with the gateway
+2. Prints the login URL and opens your browser to Google's sign-in page
+3. After you sign in (and complete MFA, or enroll a first factor), the browser is sent back to the CLI's
+   local listener with a single-use login code
+4. Redeems the code together with its PKCE verifier for a session token
 5. Stores the session token in your config file
+
+The whole login must finish within 10 minutes. The browser must be on the **same machine** as the CLI,
+because the login code is delivered to `127.0.0.1` (see [Logging in from a remote host](#logging-in-from-a-remote-host)).
+**Cancel Login** on the approval page ends the login and the CLI exits.
 
 ## Session Storage
 
@@ -190,17 +197,36 @@ See [MFA Verification](/user-guide/cli/mfa-verification/) for details.
 The CLI tries to open your default browser. If it fails:
 
 ```bash
-# Copy the printed URL and open it manually
+# The CLI always prints the login URL; open it manually in a browser on the same machine
 rack-gateway login production https://gateway.example.com
-# Output: Open this URL in your browser: https://gateway.example.com/api/v1/auth/cli/start?...
+# Output: Open this URL in your browser to log in (on this machine): https://accounts.google.com/...
 ```
 
 ### "OAuth callback failed"
 
-The gateway receives the OAuth callback, then the CLI polls until completion. Issues can include:
+After Google, the gateway sends the browser to the CLI's local listener on `127.0.0.1`. Issues can include:
 - **Gateway not reachable**: DNS/VPN/Tailscale issues
-- **Browser blocked the redirect**: allow the callback URL
-- **Stale login state**: retry `rack-gateway login`
+- **Browser on another machine**: the redirect to `127.0.0.1` can't reach the CLI (see below)
+- **Local firewall or security software** blocking connections to `127.0.0.1`
+- **Login took longer than 10 minutes**: retry `rack-gateway login`
+
+### Logging in from a remote host
+
+When the CLI runs on a remote machine (for example over SSH), forward its listener port to the machine with
+the browser. Run `rack-gateway login --no-open` on the remote host, note the port in the printed
+"Waiting for the browser to return to `http://127.0.0.1:<port>/callback`" line, then from the machine with
+the browser run:
+
+```bash
+ssh -L <port>:127.0.0.1:<port> <remote-host>
+```
+
+and open the printed URL in the browser there.
+
+### "Gateway is older than this CLI" / "CLI is too old"
+
+The gateway and CLI must both support the loopback login. Upgrade whichever side is older; after upgrading
+the gateway, install the matching rack-gateway CLI.
 
 ### "Domain not allowed"
 

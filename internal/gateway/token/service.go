@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	gtwlog "github.com/DocSpring/rack-gateway/internal/gateway/logging"
@@ -25,6 +26,9 @@ var (
 	ErrAPITokenNameRequired = errors.New("api token name is required")
 	// ErrAPITokenNameExists indicates the desired token name is already in use.
 	ErrAPITokenNameExists = errors.New("api token name already exists")
+	// ErrAPITokenNameInvalid indicates the token name contains control characters. The name is sent to the rack
+	// as the X-Convox-Actor header value, where control characters would make every request fail.
+	ErrAPITokenNameInvalid = errors.New("api token name contains control characters")
 )
 
 // APITokenRequest represents a request to create an API token
@@ -49,8 +53,16 @@ func NewService(database *db.Database) *Service {
 	}
 }
 
-func normalizeTokenName(name string) string {
-	return strings.TrimSpace(name)
+// normalizeTokenName trims the name and checks it is non-empty and free of control characters.
+func normalizeTokenName(name string) (string, error) {
+	trimmed := strings.TrimSpace(name)
+	if trimmed == "" {
+		return "", ErrAPITokenNameRequired
+	}
+	if strings.IndexFunc(trimmed, unicode.IsControl) >= 0 {
+		return "", ErrAPITokenNameInvalid
+	}
+	return trimmed, nil
 }
 
 func (s *Service) ensureUniqueTokenName(name string, excludeID int64) error {
@@ -66,9 +78,9 @@ func (s *Service) ensureUniqueTokenName(name string, excludeID int64) error {
 
 // GenerateAPIToken creates a new API token
 func (s *Service) GenerateAPIToken(req *APITokenRequest) (*APITokenResponse, error) {
-	name := normalizeTokenName(req.Name)
-	if name == "" {
-		return nil, ErrAPITokenNameRequired
+	name, err := normalizeTokenName(req.Name)
+	if err != nil {
+		return nil, err
 	}
 	if err := s.ensureUniqueTokenName(name, 0); err != nil {
 		return nil, err
@@ -157,9 +169,9 @@ func (s *Service) DeleteToken(tokenID int64) error {
 
 // UpdateTokenName updates the display name of an API token
 func (s *Service) UpdateTokenName(tokenID int64, name string) error {
-	trimmed := normalizeTokenName(name)
-	if trimmed == "" {
-		return ErrAPITokenNameRequired
+	trimmed, err := normalizeTokenName(name)
+	if err != nil {
+		return err
 	}
 	if err := s.ensureUniqueTokenName(trimmed, tokenID); err != nil {
 		return err

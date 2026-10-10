@@ -1,7 +1,6 @@
 package proxy
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -123,8 +122,8 @@ func TestAPITokenPermission_Check(t *testing.T) {
 	mgr, err := rbac.NewDBManager(database, "example.com")
 	require.NoError(t, err)
 
-	// Create a test user
-	user, err := database.CreateUser("test@example.com", "Test User", []string{"deployer"})
+	// Token owner is an admin so the token's own permissions are the limiting factor
+	user, err := database.CreateUser("test@example.com", "Test User", []string{"admin"})
 	require.NoError(t, err)
 
 	// Create an API token with specific permissions
@@ -140,6 +139,7 @@ func TestAPITokenPermission_Check(t *testing.T) {
 		Permissions: permissions,
 		IsAPIToken:  true,
 		TokenID:     &tokenID,
+		DBUser:      user,
 	}
 
 	// Exact match
@@ -162,9 +162,15 @@ func TestAPITokenPermission_Check(t *testing.T) {
 		Permissions: wildcardPerms,
 		IsAPIToken:  true,
 		TokenID:     &tokenID2,
+		DBUser:      user,
 	}
 	require.True(t, h.hasAPITokenPermission(u2, rbac.ResourceApp, rbac.ActionUpdate))
 	require.True(t, h.hasAPITokenPermission(u2, rbac.ResourceApp, rbac.ActionDelete))
+
+	// A token can never exceed its owner's current role
+	viewer := &db.User{ID: user.ID, Email: user.Email, Roles: []string{"viewer"}}
+	u2.DBUser = viewer
+	require.False(t, h.hasAPITokenPermission(u2, rbac.ResourceApp, rbac.ActionDelete))
 }
 
 func TestCaptureResourceCreatorStoresMappings(t *testing.T) {
@@ -260,8 +266,7 @@ func TestProxyToRackLogsReleaseAuditAndUserResource(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/apps/my-app/builds", strings.NewReader(`{"git_sha":"abc"}`))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-User-Name", "Creator")
-	au := &auth.User{Email: "creator@example.com", Name: "Creator"}
-	req = req.WithContext(context.WithValue(req.Context(), auth.UserContextKey, au))
+	req = req.WithContext(requestAs(t, database, "creator@example.com").Context())
 
 	rr := httptest.NewRecorder()
 	h.ProxyToRack(rr, req)

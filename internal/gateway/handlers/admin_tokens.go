@@ -17,13 +17,16 @@ import (
 
 // CreateAPIToken godoc
 // @Summary Create an API token
-// @Description Generates a new API token for automation or CI/CD use.
+// @Description Generates a new API token for automation or CI/CD use. The token belongs to the caller
+// @Description unless user_email names someone else, which requires gateway:api_token:manage. Its
+// @Description permissions must be within the owner's current role.
 // @Tags API Tokens
 // @Accept json
 // @Produce json
 // @Param request body CreateAPITokenRequest true "Token payload"
 // @Success 200 {object} CreateAPITokenResponse
 // @Failure 400 {object} ErrorResponse
+// @Failure 403 {object} ErrorResponse
 // @Failure 404 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
 // @Security SessionCookie
@@ -67,32 +70,16 @@ func (h *AdminHandler) CreateAPIToken(c *gin.Context) {
 		return
 	}
 
-	currentUser := c.GetString("user_email")
-	targetEmail := req.UserEmail
-	if targetEmail == "" {
-		targetEmail = currentUser
-	}
-
-	// Get user ID
-	user, err := h.database.GetUser(targetEmail)
-	if err != nil {
-		h.respondAuditError(
-			c,
-			http.StatusNotFound,
-			audit.BuildAction(rbac.ResourceAPIToken.String(), rbac.ActionCreate.String()),
-			targetEmail,
-			"user not found",
-			start,
-			nil,
-		)
+	owner, targetEmail, ok := h.resolveNewTokenOwner(c, &req, start)
+	if !ok {
 		return
 	}
 
-	// Create token
 	tokenReq := &token.APITokenRequest{
 		Name:        req.Name,
-		UserID:      user.ID,
+		UserID:      owner.ID,
 		Permissions: req.Permissions,
+		ExpiresAt:   req.ExpiresAt,
 	}
 	if creatorEmail := strings.TrimSpace(c.GetString("user_email")); creatorEmail != "" && h.rbac != nil {
 		if creator, err := h.rbac.GetUserWithID(creatorEmail); err == nil && creator != nil {
@@ -136,7 +123,8 @@ func (h *AdminHandler) CreateAPIToken(c *gin.Context) {
 
 // ListAPITokens godoc
 // @Summary List API tokens
-// @Description Returns all API tokens configured in the system.
+// @Description Returns the caller's own API tokens, or every token when the caller holds
+// @Description gateway:api_token:manage.
 // @Tags API Tokens
 // @Produce json
 // @Success 200 {array} db.APIToken
@@ -144,8 +132,7 @@ func (h *AdminHandler) CreateAPIToken(c *gin.Context) {
 // @Security SessionCookie
 // @Router /api-tokens [get]
 func (h *AdminHandler) ListAPITokens(c *gin.Context) {
-	// List all API tokens
-	tokens, err := h.database.ListAllAPITokens()
+	tokens, err := h.visibleAPITokens(c)
 	if err != nil {
 		slog.Error("failed to list API tokens", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list tokens"})
@@ -175,7 +162,7 @@ func (h *AdminHandler) GetAPIToken(c *gin.Context) {
 	}
 
 	apiToken, err := h.database.GetAPITokenByPublicID(tokenID)
-	if err != nil {
+	if err != nil || !h.callerMayAccessToken(c, apiToken) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "token not found"})
 		return
 	}
@@ -193,6 +180,7 @@ func (h *AdminHandler) GetAPIToken(c *gin.Context) {
 // @Param request body UpdateAPITokenRequest true "Token update"
 // @Success 200 {object} db.APIToken
 // @Failure 400 {object} ErrorResponse
+// @Failure 403 {object} ErrorResponse
 // @Failure 404 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
 // @Security SessionCookie
@@ -213,6 +201,9 @@ func (h *AdminHandler) UpdateAPIToken(c *gin.Context) {
 	}
 
 	if req.Permissions != nil {
+		if !h.ensureTokenWithinOwnerRole(c, existing.UserID, req.Permissions, tokenIDStr, start) {
+			return
+		}
 		if err := h.tokenService.UpdateTokenPermissions(tokenID, req.Permissions); err != nil {
 			h.respondAuditError(
 				c,
@@ -312,7 +303,7 @@ func (h *AdminHandler) DeleteAPIToken(c *gin.Context) {
 		)
 		return
 	}
-	if existing == nil {
+	if !h.callerMayAccessToken(c, existing) {
 		h.respondAuditError(
 			c,
 			http.StatusNotFound,

@@ -141,15 +141,17 @@ const (
 	ResourceMFAVerification // mfa_verification
 	// ResourceTrustedDevice identifies trusted device resources.
 	ResourceTrustedDevice // trusted_device
+	// ResourceAuditLog identifies the gateway audit log.
+	ResourceAuditLog // audit_log
 )
 
 // IsValid reports whether the resource represents a defined value.
-func (r Resource) IsValid() bool { return r <= ResourceTrustedDevice }
+func (r Resource) IsValid() bool { return r <= ResourceAuditLog }
 
 // ParseResource converts a string name into a Resource value.
 func ParseResource(v string) (Resource, error) {
 	// Try each known value
-	for r := ResourceApp; r <= ResourceTrustedDevice; r++ {
+	for r := ResourceApp; r <= ResourceAuditLog; r++ {
 		if r.String() == v {
 			return r, nil
 		}
@@ -243,15 +245,18 @@ const (
 	ActionUpdate // update
 	// ActionUpdateName represents updating only the resource name.
 	ActionUpdateName // update_name
+	// ActionRunPrivileged represents starting a process with options that escape the app's release
+	// image or scheduling constraints (custom image, host volumes, privileged mode, node placement).
+	ActionRunPrivileged // run_privileged
 )
 
 // IsValid reports whether the action represents a defined value.
-func (a Action) IsValid() bool { return a <= ActionUpdateName }
+func (a Action) IsValid() bool { return a <= ActionRunPrivileged }
 
 // ParseAction converts a string name into an Action value.
 func ParseAction(v string) (Action, error) {
 	// Try each known value
-	for a := ActionAdd; a <= ActionUpdateName; a++ {
+	for a := ActionAdd; a <= ActionRunPrivileged; a++ {
 		if a.String() == v {
 			return a, nil
 		}

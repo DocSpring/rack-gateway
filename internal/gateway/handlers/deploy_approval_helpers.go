@@ -43,7 +43,7 @@ func resolveDeployApprovalRequestToken(
 		return nil, errDeployApprovalRequestTargetMissing
 	}
 
-	if err := validateTokenOwnership(rbacSvc, user, token); err != nil {
+	if err := validateTokenOwnership(rbacSvc, authUser, user, token); err != nil {
 		return nil, err
 	}
 
@@ -100,26 +100,29 @@ func lookupByNameOrID(database *db.Database, identifier string) (*db.APIToken, e
 	return database.GetAPITokenByName(identifier)
 }
 
-// validateTokenOwnership validates that the user owns the token or has admin permissions.
-func validateTokenOwnership(rbacSvc rbac.Manager, user *db.User, token *db.APIToken) error {
+// validateTokenOwnership checks the caller may request an approval for the target token.
+// An API token may only target itself; a user may target tokens they own, or any token if they are an approver.
+func validateTokenOwnership(rbacSvc rbac.Manager, authUser *auth.User, user *db.User, token *db.APIToken) error {
+	if authUser != nil && authUser.IsAPIToken {
+		if authUser.TokenID != nil && *authUser.TokenID == token.ID {
+			return nil
+		}
+		return errDeployApprovalRequestForbidden
+	}
 	if token.UserID == user.ID {
 		return nil
 	}
 
-	allowedAdmin, err := rbacSvc.Enforce(
-		user.Email,
-		rbac.ScopeGateway,
-		rbac.ResourceDeployApprovalRequest,
-		rbac.ActionApprove,
+	allowedAdmin, err := rbacSvc.Authorize(
+		rbac.UserPrincipal(user),
+		rbac.Gateway(rbac.ResourceDeployApprovalRequest, rbac.ActionApprove),
 	)
 	if err != nil {
 		return fmt.Errorf("failed to check admin permission: %w", err)
 	}
-
 	if !allowedAdmin {
 		return errDeployApprovalRequestForbidden
 	}
-
 	return nil
 }
 

@@ -412,9 +412,9 @@ run_viewer_tests() {
 
     verify_rgw_command "ps" "p-web-1" "p-worker-1"
     verify_rgw_command_failure "env" \
-        "Error: failed to fetch env: You don't have permission to view environment variables"
+        "Error: failed to fetch env: insufficient permissions: requires convox:env:read"
     verify_rgw_command_failure "env get DATABASE_URL --unmask" \
-        "Error: failed to fetch env: You don't have permission to view environment variables."
+        "Error: failed to fetch env: insufficient permissions: requires convox:env:read"
 
     clear_mfa_replay_protection
     local delete_code

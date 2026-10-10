@@ -8,12 +8,12 @@ import { Aside, Steps } from '@astrojs/starlight/components';
 The Audit Logs section provides a complete record of all gateway activity for security monitoring and compliance.
 
 <Aside type="note">
-Audit logs are read-only. If you don’t have access in your environment, ask an admin to review logs on your behalf.
+Audit logs are read-only. Admins (`gateway:audit_log:read`) see everyone's activity and can export it. Everyone else sees **My Activity** in the sidebar instead: the same view, limited to their own actions, without export.
 </Aside>
 
 ## Viewing Logs
 
-Navigate to **Audit Logs** in the sidebar to see the activity log:
+Navigate to **Audit Logs** (or **My Activity**) in the sidebar to see the activity log:
 
 | Column | Description |
 |--------|-------------|

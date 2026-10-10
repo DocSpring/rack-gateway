@@ -57,14 +57,22 @@ func TestPermissionMatrix_DeployerVsAdmin(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			// Deployer
-			ok, err := mgr.Enforce("deployer@test.com", c.scope, c.resource, c.action)
-			require.NoError(t, err)
+			permission := rbac.Permission(c.scope, c.resource, c.action)
+			ok := userAllowed(t, mgr, database, "deployer@test.com", permission)
 			require.Equal(t, c.deployerAllow, ok, "deployer mismatch for %s:%s:%s", c.scope, c.resource, c.action)
 
 			// Admin
-			ok, err = mgr.Enforce("admin@test.com", c.scope, c.resource, c.action)
-			require.NoError(t, err)
+			ok = userAllowed(t, mgr, database, "admin@test.com", permission)
 			require.Equal(t, c.adminAllow, ok, "admin mismatch for %s:%s:%s", c.scope, c.resource, c.action)
 		})
 	}
+}
+
+func userAllowed(t *testing.T, mgr *rbac.DBManager, database *db.Database, email, permission string) bool {
+	t.Helper()
+	user, err := database.GetUser(email)
+	require.NoError(t, err)
+	ok, err := mgr.Authorize(rbac.UserPrincipal(user), permission)
+	require.NoError(t, err)
+	return ok
 }

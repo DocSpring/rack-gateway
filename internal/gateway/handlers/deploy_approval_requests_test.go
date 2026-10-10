@@ -14,10 +14,18 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
 	"github.com/DocSpring/rack-gateway/internal/gateway/config"
+	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	"github.com/DocSpring/rack-gateway/internal/gateway/testutil/dbtest"
 )
 
-func TestCreateDeployApprovalRequestResolvesTargetTokenByPublicID(t *testing.T) {
+type createApprovalFixture struct {
+	handler *APIHandler
+	user    *db.User
+	token   *db.APIToken
+}
+
+func newCreateApprovalFixture(t *testing.T) *createApprovalFixture {
+	t.Helper()
 	gin.SetMode(gin.TestMode)
 	database := dbtest.NewDatabase(t)
 
@@ -35,53 +43,63 @@ func TestCreateDeployApprovalRequestResolvesTargetTokenByPublicID(t *testing.T) 
 	require.NoError(t, err)
 	require.NotEmpty(t, token.PublicID)
 
-	auditLogger := audit.NewLogger(database)
 	handler := &APIHandler{
 		rbac:        newAllowAllRBAC(user),
 		database:    database,
-		auditLogger: auditLogger,
+		auditLogger: audit.NewLogger(database),
 		config: &config.Config{Racks: map[string]config.RackConfig{
 			"default": {Name: "staging", Enabled: true},
 		}},
 	}
+	return &createApprovalFixture{handler: handler, user: user, token: token}
+}
 
-	body := map[string]string{
+func (f *createApprovalFixture) create(t *testing.T, commit string) *http.Response {
+	t.Helper()
+	payload, err := json.Marshal(map[string]string{
 		"message":             "Deploy release",
 		"app":                 "myapp",
-		"git_commit_hash":     "abc123def456",
-		"git_branch":          "main",
-		"target_api_token_id": token.PublicID,
-	}
-	payload, err := json.Marshal(body)
+		"git_commit_hash":     commit,
+		"git_branch":          "feature/deploy",
+		"target_api_token_id": f.token.PublicID,
+	})
 	require.NoError(t, err)
 
 	req := httptest.NewRequest(http.MethodPost, "/deploy-approval-requests", strings.NewReader(string(payload)))
 	req.Header.Set("Content-Type", "application/json")
 	req = req.WithContext(context.WithValue(req.Context(), auth.UserContextKey, &auth.User{
-		Email:      user.Email,
-		Name:       user.Name,
+		Email:      f.user.Email,
+		Name:       f.user.Name,
 		IsAPIToken: true,
-		TokenID:    &token.ID,
+		TokenID:    &f.token.ID,
 	}))
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 	c.Request = req
-	c.Set("user_email", user.Email)
+	c.Set("user_email", f.user.Email)
 
-	handler.CreateDeployApprovalRequest(c)
+	f.handler.CreateDeployApprovalRequest(c)
 
 	resp := w.Result()
-	defer func() {
-		if err := resp.Body.Close(); err != nil {
-			t.Errorf("failed to close response body: %v", err)
-		}
-	}()
+	t.Cleanup(func() { _ = resp.Body.Close() })
+	return resp
+}
 
+func TestCreateDeployApprovalRequestResolvesTargetTokenByPublicID(t *testing.T) {
+	f := newCreateApprovalFixture(t)
+	resp := f.create(t, "abc123def4567890abc123def4567890abc123de")
 	require.Equal(t, http.StatusCreated, resp.StatusCode)
 
 	var got DeployApprovalRequestResponse
-	err = json.NewDecoder(resp.Body).Decode(&got)
-	require.NoError(t, err)
-	require.Equal(t, token.PublicID, got.TargetAPITokenID)
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&got))
+	require.Equal(t, f.token.PublicID, got.TargetAPITokenID)
+}
+
+func TestCreateDeployApprovalRequestRequiresFullCommitSHA(t *testing.T) {
+	f := newCreateApprovalFixture(t)
+	for _, commit := range []string{"abc123d", "abc123def456", "%", strings.Repeat("z", 40)} {
+		resp := f.create(t, commit)
+		require.Equalf(t, http.StatusBadRequest, resp.StatusCode, "commit %q", commit)
+	}
 }

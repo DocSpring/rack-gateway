@@ -38,7 +38,8 @@ The CLI supports multiple MFA methods:
     Touch your security key...
     ```
 
-    The CLI prompts you to touch your hardware security key.
+    The CLI prompts you to touch your hardware security key. User verification is required, so you also
+    enter the key's PIN (or use the biometric sensor). A key with no PIN set can't be used until you set one.
 
     <Aside type="note">
     WebAuthn requires system libraries on Linux. See [Installation](/user-guide/cli/installation/#webauthn-support-optional).
@@ -116,6 +117,16 @@ Operations requiring step-up MFA are configured by your administrator, but commo
 
 After successful MFA verification, there's typically a window (default: 10 minutes) where additional step-up prompts aren't required. This is configurable by the gateway administrator.
 
+### One Key Touch Per Command
+
+The CLI asks for MFA once per command and sends that proof with every request the command makes. The first
+request that needs MFA verifies it and starts the step-up window, which covers the rest of the command. Each
+proof verifies only once, so a command whose later requests run after the step-up window has expired (for
+example a deploy whose build takes longer than the window) fails at that point and has to be re-run.
+
+Each WebAuthn challenge is single-use and expires 5 minutes after it's issued, so complete the key prompt
+promptly.
+
 ## Pre-emptive MFA Verification
 
 You can preflight your MFA status or supply a code for non-interactive runs.
@@ -156,6 +167,13 @@ $ rack-gateway test-auth mfa
   Last MFA verification: 5 minutes ago
   Step-up window: Active (expires in 5 minutes)
 ```
+
+## Connection Security
+
+The CLI verifies the gateway's TLS certificate against your system's trusted roots for every request,
+including streamed commands (`logs`, `exec`, `run`). It refuses to send your session over plain `http://`
+unless the gateway is on this machine (`localhost`, `127.0.0.1` or `[::1]`), and it ignores `HTTP_PROXY`,
+`HTTPS_PROXY` and `ALL_PROXY` for gateway connections.
 
 ## Scripting and CI/CD
 

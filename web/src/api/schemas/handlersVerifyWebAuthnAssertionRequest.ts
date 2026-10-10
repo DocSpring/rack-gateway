@@ -8,6 +8,7 @@
 
 export interface HandlersVerifyWebAuthnAssertionRequest {
   assertion_response: string;
+  /** SessionData is the challenge ID returned by /auth/mfa/webauthn/assertion/start. */
   session_data: string;
   trust_device?: boolean;
 }

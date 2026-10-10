@@ -10,13 +10,30 @@ import type { UserEditDialogMode, UserEditDialogValues } from '@/components/user
 import { UserEditDialog } from '@/components/user-edit-dialog'
 import { UserLockDialog, useUnlockUser } from '@/components/user-lock-dialog'
 import { useAuth } from '@/contexts/auth-context'
+import { useCan } from '@/hooks/use-can'
 import { useMutation } from '@/hooks/use-mutation'
-import { api, type UpdateUserRequest } from '@/lib/api'
+import { api, type RoleName, type UpdateUserRequest } from '@/lib/api'
 import { DEFAULT_PER_PAGE } from '@/lib/constants'
+import { PERMISSIONS } from '@/lib/permissions'
 import { QUERY_KEYS } from '@/lib/query-keys'
 import { pickPrimaryRole } from '@/lib/user-roles'
 import { canModifyUser, determineUserUpdatePlan, type User } from '@/pages/users/user-utils'
 import { UsersTableRow } from '@/pages/users/users-table-row'
+
+// The values the user dialog starts with: the edited user's, or blank for a new user.
+function userDialogInitialValues(
+  mode: UserEditDialogMode,
+  editingUser: User | null
+): { email: string; name: string; role: RoleName } {
+  if (mode !== 'edit' || !editingUser) {
+    return { email: '', name: '', role: 'viewer' }
+  }
+  return {
+    email: editingUser.email,
+    name: editingUser.name,
+    role: pickPrimaryRole(editingUser.roles),
+  }
+}
 
 export function UsersPage() {
   const queryClient = useQueryClient()
@@ -29,8 +46,12 @@ export function UsersPage() {
   const [isLockDialogOpen, setIsLockDialogOpen] = useState(false)
   const [userToLock, setUserToLock] = useState<User | null>(null)
 
-  // Check if current user is admin
-  const isAdmin = Boolean(currentUser?.roles?.includes('admin'))
+  // Everyone sees the team directory; managing users, and opening other people's profiles, need
+  // user-admin permissions.
+  const can = useCan()
+  const canAddUsers = can(PERMISSIONS.userCreate)
+  const canManageUsers = can(PERMISSIONS.userUpdate)
+  const canReadAnyProfile = can(PERMISSIONS.userRead)
 
   // Fetch users
   const {
@@ -272,11 +293,7 @@ export function UsersPage() {
   }, [totalPages])
 
   // Dialog-related derived state
-  const isEditingExistingUser = dialogMode === 'edit' && editingUser !== null
-  const dialogInitialEmail = isEditingExistingUser && editingUser ? editingUser.email : ''
-  const dialogInitialName = isEditingExistingUser && editingUser ? editingUser.name : ''
-  const dialogInitialRole =
-    isEditingExistingUser && editingUser ? pickPrimaryRole(editingUser.roles) : 'viewer'
+  const dialogInitial = userDialogInitialValues(dialogMode, editingUser)
   const dialogBusy =
     dialogMode === 'create'
       ? createUserMutation.isPending
@@ -287,7 +304,9 @@ export function UsersPage() {
       <div className="mb-8">
         <h1 className="font-bold text-3xl">Users</h1>
         <p className="mt-2 text-muted-foreground">
-          Manage user access and permissions for the gateway
+          {canManageUsers
+            ? 'Manage user access and permissions for the gateway'
+            : 'People with access to this gateway and their roles'}
         </p>
       </div>
 
@@ -297,7 +316,7 @@ export function UsersPage() {
         emptyMessage="No users configured yet"
         error={queryError ? 'Failed to load users' : null}
         headerRight={
-          isAdmin ? (
+          canAddUsers ? (
             <Button onClick={handleAddUser}>
               <Plus className="mr-2 h-4 w-4" />
               Add User
@@ -314,14 +333,15 @@ export function UsersPage() {
               <TableHead>Status</TableHead>
               <TableHead>Added By</TableHead>
               <TableHead>Created</TableHead>
-              {isAdmin && <TableHead className="text-right">Actions</TableHead>}
+              {canManageUsers && <TableHead className="text-right">Actions</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
             {rows.map((user) => (
               <UsersTableRow
+                canManage={canManageUsers}
+                canOpenProfile={canReadAnyProfile || user.email === currentUser?.email}
                 currentUserEmail={currentUser?.email ?? undefined}
-                isAdmin={isAdmin}
                 isUnlocking={unlockUserMutation.isPending}
                 key={user.email}
                 onDelete={handleRequestDeleteUser}
@@ -352,9 +372,9 @@ export function UsersPage() {
 
       <UserEditDialog
         busy={dialogBusy}
-        initialEmail={dialogInitialEmail}
-        initialName={dialogInitialName}
-        initialRole={dialogInitialRole}
+        initialEmail={dialogInitial.email}
+        initialName={dialogInitial.name}
+        initialRole={dialogInitial.role}
         mode={dialogMode}
         onOpenChange={handleDialogOpenChange}
         onSubmit={handleDialogSubmit}

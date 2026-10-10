@@ -20,8 +20,9 @@ func (d *Database) GetDeployApprovalRequestByPublicID(publicID string) (*DeployA
 // DeployApprovalLookup contains criteria for finding a deploy approval request
 type DeployApprovalLookup struct {
 	TokenID       int64
-	GitCommitHash string
+	GitCommitHash string // full commit SHA, matched exactly
 	App           string
+	ObjectURL     string
 	ReleaseID     string
 	BuildID       string
 	ProcessID     string
@@ -34,13 +35,16 @@ func (d *Database) FindDeployApprovalRequest(lookup DeployApprovalLookup) (*Depl
 	args := []interface{}{lookup.TokenID}
 
 	if lookup.GitCommitHash != "" {
-		// Support both short and full commit hashes via prefix match
-		clauses = append(clauses, "dr.git_commit_hash LIKE ?")
-		args = append(args, lookup.GitCommitHash+"%")
+		clauses = append(clauses, "dr.git_commit_hash = ?")
+		args = append(args, strings.ToLower(strings.TrimSpace(lookup.GitCommitHash)))
 	}
 	if lookup.App != "" {
 		clauses = append(clauses, "dr.app = ?")
 		args = append(args, lookup.App)
+	}
+	if lookup.ObjectURL != "" {
+		clauses = append(clauses, "dr.object_url = ?")
+		args = append(args, lookup.ObjectURL)
 	}
 	if lookup.ReleaseID != "" {
 		clauses = append(clauses, "dr.release_id = ?")
@@ -113,9 +117,9 @@ func (d *Database) ListDeployApprovalRequests(opts DeployApprovalRequestListOpti
 		args = append(args, opts.GitBranch)
 	}
 	if opts.GitCommitHash != "" {
-		// Support both short and full commit hashes via prefix match
-		clauses = append(clauses, "dr.git_commit_hash LIKE ?")
-		args = append(args, opts.GitCommitHash+"%")
+		// Listing accepts short hashes (e.g. `deploy-approval approve` on the current commit)
+		clauses = append(clauses, `dr.git_commit_hash LIKE ? ESCAPE '\'`)
+		args = append(args, likePrefixPattern(strings.ToLower(strings.TrimSpace(opts.GitCommitHash))))
 	}
 	if opts.App != "" {
 		clauses = append(clauses, "dr.app = ?")

@@ -5,6 +5,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strings"
 	"time"
@@ -19,6 +20,10 @@ import (
 
 const proxyLogBodyLimit = 16384
 
+// attachedRunCommand is the placeholder command `convox run` starts before exec'ing the real command
+// into the process (default --timeout). The real command is checked on the exec path.
+const attachedRunCommand = "sleep 3600"
+
 func (h *Handler) validateBuildRequest(
 	r *http.Request,
 	original string,
@@ -29,23 +34,17 @@ func (h *Handler) validateBuildRequest(
 		return nil
 	}
 
-	// For API tokens, check for duplicate object_url BEFORE manifest validation
-	// This ensures we catch duplicate uploads even if manifest validation would fail
-	if authUser.IsAPIToken && authUser.TokenID != nil {
-		if err := h.validateBuildRequestForAPIToken(r, bodyBytes, *authUser.TokenID); err != nil {
-			return err
+	vals, err := url.ParseQuery(string(bodyBytes))
+	if err != nil {
+		return fmt.Errorf("invalid build request body")
+	}
+
+	if authUser.IsAPIToken {
+		if tracker := getDeployApprovalTracker(r.Context()); tracker != nil && tracker.request != nil {
+			return h.validateTokenBuildBinding(r, vals, tracker)
 		}
 	}
-
-	if err := h.validateBuildManifestForAllUsers(r, bodyBytes); err != nil {
-		return err
-	}
-
-	if !authUser.IsAPIToken {
-		return nil
-	}
-
-	return nil
+	return h.validateBuildManifestForAllUsers(r, vals)
 }
 
 func (h *Handler) validateProcessCommand(
@@ -64,7 +63,7 @@ func (h *Handler) validateProcessCommand(
 
 	app := extractAppFromPath(original)
 	command := strings.TrimSpace(r.Header.Get("Command"))
-	if command != "sleep 3600" && !h.isCommandApproved(app, command) {
+	if command != attachedRunCommand && !h.isCommandApproved(app, command) {
 		return fmt.Errorf("command not approved: %s", command)
 	}
 
@@ -88,12 +87,12 @@ func (h *Handler) processBufferedResponse(
 
 	if filterRelease {
 		app := extractAppFromPath(pth)
-		body = h.filterReleaseEnvForUser(authUserEmail, body, app)
+		body = h.filterReleaseEnvForUser(r, body, app)
 	}
 
 	if filterEnvironment {
 		app := extractAppFromPath(pth)
-		body = h.filterEnvironmentMapResponse(authUserEmail, body, app)
+		body = h.filterEnvironmentMapResponse(r, body, app)
 	}
 
 	if shouldCapture {
@@ -269,7 +268,14 @@ func (h *Handler) forwardRequest(
 	path string,
 	authUser *auth.User,
 ) (int, error) {
-	targetURL := buildTargetURL(rack, path, r.URL.RawQuery)
+	targetURL, err := buildTargetURL(rack, path, r.URL.RawQuery)
+	if err != nil {
+		return 0, err
+	}
+
+	if status := h.refuseUnforwardableOptions(w, r, authUser); status != 0 {
+		return status, nil
+	}
 
 	if strings.Contains(strings.ToLower(r.Header.Get("Connection")), "upgrade") &&
 		strings.ToLower(r.Header.Get("Upgrade")) == "websocket" {

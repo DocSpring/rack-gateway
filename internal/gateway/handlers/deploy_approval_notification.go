@@ -9,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/riverqueue/river"
 
+	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	"github.com/DocSpring/rack-gateway/internal/gateway/github"
 	"github.com/DocSpring/rack-gateway/internal/gateway/jobs"
@@ -103,11 +104,10 @@ func (h *APIHandler) enqueueGitHubComment(c *gin.Context, owner, repo string, pr
 	}
 
 	_, err := h.jobsClient.Insert(c.Request.Context(), jobgithub.PostPRCommentArgs{
-		GitHubToken: h.config.GitHubToken,
-		Owner:       owner,
-		Repo:        repo,
-		PRNumber:    prNumber,
-		Comment:     comment,
+		Owner:    owner,
+		Repo:     repo,
+		PRNumber: prNumber,
+		Comment:  comment,
 	}, &river.InsertOpts{
 		Queue:       jobs.QueueIntegrations,
 		MaxAttempts: jobs.MaxAttemptsNotification,
@@ -119,28 +119,39 @@ func (h *APIHandler) enqueueGitHubComment(c *gin.Context, owner, repo string, pr
 
 func (h *APIHandler) authorizeViewRequest(
 	c *gin.Context,
-	userEmail string,
 	dbUser *db.User,
 	record *db.DeployApprovalRequest,
 ) bool {
-	allowedAdmin, err := h.rbac.Enforce(
-		userEmail,
-		rbac.ScopeGateway,
-		rbac.ResourceDeployApprovalRequest,
-		rbac.ActionApprove,
-	)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to check permissions"})
-		return false
-	}
-
-	ownsRequest := record.CreatedByUserID != nil && *record.CreatedByUserID == dbUser.ID
-	ownsToken := record.TargetUserID != nil && *record.TargetUserID == dbUser.ID
-
-	if !allowedAdmin && !ownsRequest && !ownsToken {
+	if !canViewDeployApprovalRequest(c, h.rbac, dbUser, record) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "insufficient permissions"})
 		return false
 	}
-
 	return true
+}
+
+// canViewDeployApprovalRequest allows approvers, the user who created or owns the target token, and the
+// API token that created or is targeted by the request. Tokens never inherit their owner's visibility.
+func canViewDeployApprovalRequest(
+	c *gin.Context,
+	rbacSvc rbac.Manager,
+	dbUser *db.User,
+	record *db.DeployApprovalRequest,
+) bool {
+	authUser, ok := auth.GetAuthUser(c.Request.Context())
+	if !ok || authUser == nil {
+		return false
+	}
+	if authUser.IsAPIToken {
+		tokenID := authUser.TokenID
+		return tokenID != nil &&
+			(sameID(record.CreatedByAPITokenID, *tokenID) || record.TargetAPITokenID == *tokenID)
+	}
+	if callerCan(c, rbacSvc, rbac.Gateway(rbac.ResourceDeployApprovalRequest, rbac.ActionApprove)) {
+		return true
+	}
+	return sameID(record.CreatedByUserID, dbUser.ID) || sameID(record.TargetUserID, dbUser.ID)
+}
+
+func sameID(field *int64, id int64) bool {
+	return field != nil && *field == id
 }

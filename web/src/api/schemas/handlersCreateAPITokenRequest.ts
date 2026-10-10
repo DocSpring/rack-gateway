@@ -7,6 +7,8 @@
  */
 
 export interface HandlersCreateAPITokenRequest {
+  /** Optional expiry; the token stops working after this time */
+  expires_at?: string;
   name: string;
   /** Explicit permissions (overrides role) */
   permissions?: string[];

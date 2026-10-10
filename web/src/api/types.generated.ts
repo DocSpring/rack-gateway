@@ -13,7 +13,8 @@ export interface paths {
         };
         /**
          * List API tokens
-         * @description Returns all API tokens configured in the system.
+         * @description Returns the caller's own API tokens, or every token when the caller holds
+         *     gateway:api_token:manage.
          */
         get: {
             parameters: {
@@ -47,7 +48,9 @@ export interface paths {
         put?: never;
         /**
          * Create an API token
-         * @description Generates a new API token for automation or CI/CD use.
+         * @description Generates a new API token for automation or CI/CD use. The token belongs to the caller
+         *     unless user_email names someone else, which requires gateway:api_token:manage. Its
+         *     permissions must be within the owner's current role.
          */
         post: {
             parameters: {
@@ -74,6 +77,15 @@ export interface paths {
                 };
                 /** @description Bad Request */
                 400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+                /** @description Forbidden */
+                403: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -248,6 +260,15 @@ export interface paths {
                 };
                 /** @description Bad Request */
                 400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+                /** @description Forbidden */
+                403: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -1264,16 +1285,18 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Complete CLI OAuth redirect
-         * @description Stores the OAuth authorization code for the CLI to finish login.
+         * Identity provider redirect for CLI login
+         * @description Exchanges the authorization code and, only once that succeeds, binds the login to this browser.
          */
         get: {
             parameters: {
                 query: {
                     /** @description Authorization code */
-                    code: string;
+                    code?: string;
                     /** @description State */
                     state: string;
+                    /** @description Identity provider error */
+                    error?: string;
                 };
                 header?: never;
                 path?: never;
@@ -1283,15 +1306,6 @@ export interface paths {
             responses: {
                 /** @description Temporary Redirect */
                 307: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "*/*": string;
-                    };
-                };
-                /** @description Missing parameters */
-                400: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -1309,6 +1323,59 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/cli/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel a CLI login
+         * @description Ends the CLI login from the browser bound to it and returns the URL that tells the waiting CLI.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            /** @description Login state */
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["handlers.CLILoginCancelRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.CLILoginRedirectResponse"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/cli/complete": {
         parameters: {
             query?: never;
@@ -1319,8 +1386,9 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Finalize CLI OAuth login
-         * @description Exchanges the stored authorization code and PKCE verifier for a session token.
+         * Finalize CLI login
+         * @description Redeems the single-use login code delivered to the CLI's loopback listener, proving
+         *     possession of the PKCE code verifier, and returns a CLI session token.
          */
         post: {
             parameters: {
@@ -1379,8 +1447,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Display MFA challenge form
-         * @description Displays the MFA challenge form for CLI login.
+         * Continue CLI login in the browser
+         * @description Sends the bound browser to MFA (or MFA enrollment), or back to the CLI when MFA is satisfied.
          */
         get: {
             parameters: {
@@ -1403,8 +1471,41 @@ export interface paths {
                         "*/*": string;
                     };
                 };
-                /** @description Missing parameters */
-                400: {
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/cli/return": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Return the browser to the CLI
+         * @description Issues a single-use login code and redirects the bound browser to the CLI's loopback listener.
+         */
+        get: {
+            parameters: {
+                query: {
+                    /** @description Login state */
+                    state: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Found */
+                302: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -1432,8 +1533,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Start CLI OAuth login
-         * @description Initiates the CLI OAuth flow and returns PKCE parameters.
+         * Start CLI login
+         * @description Starts a loopback CLI login and returns the identity provider URL to open in the browser.
          */
         post: {
             parameters: {
@@ -1442,7 +1543,12 @@ export interface paths {
                 path?: never;
                 cookie?: never;
             };
-            requestBody?: never;
+            /** @description CLI login parameters */
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["handlers.CLILoginStartRequest"];
+                };
+            };
             responses: {
                 /** @description OK */
                 200: {
@@ -1450,7 +1556,16 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["auth.LoginStartResponse"];
+                        "application/json": components["schemas"]["handlers.CLILoginStartResponse"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
                     };
                 };
                 /** @description Internal Server Error */
@@ -3817,6 +3932,8 @@ export interface paths {
         /**
          * List all gateway users
          * @description Returns every user configured in the gateway along with role assignments.
+         *     Callers without gateway:user:read get the team directory: lock reasons, who locked
+         *     the account, and MFA preferences are omitted.
          */
         get: {
             parameters: {
@@ -4085,6 +4202,86 @@ export interface paths {
                 };
             };
         };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/users/{email}/audit-logs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List a user's audit logs
+         * @description Returns paginated audit logs for actions performed by one user. Every user may read
+         *     their own activity; reading another user's activity requires gateway:audit_log:read.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description Text search */
+                    search?: string;
+                    /** @description Action type filter */
+                    action_type?: string;
+                    /** @description Resource type filter */
+                    resource_type?: string;
+                    /** @description Status filter */
+                    status?: string;
+                    /** @description Page number */
+                    page?: number;
+                    /** @description Page size */
+                    limit?: number;
+                    /** @description ISO8601 start time */
+                    start?: string;
+                    /** @description ISO8601 end time */
+                    end?: string;
+                    /** @description Relative range (e.g. 24h, 7d, custom) */
+                    range?: string;
+                };
+                header?: never;
+                path: {
+                    /** @description User email */
+                    email: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.AuditLogsResponse"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+                /** @description Internal Server Error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -4520,11 +4717,6 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
-        "auth.LoginStartResponse": {
-            auth_url: string;
-            code_verifier: string;
-            state: string;
-        };
         "db.APIToken": {
             created_at?: string;
             created_by_email?: string;
@@ -4658,13 +4850,19 @@ export interface components {
         "handlers.BackupCodesResponse": {
             backup_codes: string[];
         };
+        "handlers.CLILoginCancelRequest": {
+            state: string;
+        };
         "handlers.CLILoginCompleteRequest": {
             client_version?: string;
             code_verifier: string;
             device_id?: string;
             device_name?: string;
             device_os?: string;
-            state: string;
+            login_code: string;
+        };
+        "handlers.CLILoginRedirectResponse": {
+            redirect: string;
         };
         "handlers.CLILoginResponse": {
             channel?: string;
@@ -4679,6 +4877,16 @@ export interface components {
             session_id?: number;
             token?: string;
         };
+        "handlers.CLILoginStartRequest": {
+            code_challenge: string;
+            code_challenge_method: string;
+            device_name?: string;
+            redirect_uri: string;
+            state: string;
+        };
+        "handlers.CLILoginStartResponse": {
+            auth_url: string;
+        };
         "handlers.ConfirmTOTPEnrollmentRequest": {
             code: string;
             label?: string;
@@ -4691,6 +4899,8 @@ export interface components {
             method_id: number;
         };
         "handlers.CreateAPITokenRequest": {
+            /** @description Optional expiry; the token stops working after this time */
+            expires_at?: string;
             name: string;
             /** @description Explicit permissions (overrides role) */
             permissions?: string[];
@@ -4929,8 +5139,14 @@ export interface components {
             email: string;
             has_trusted_device: boolean;
             mfa_enrolled: boolean;
+            mfa_pending: boolean;
             mfa_required: boolean;
             name: string;
+            /**
+             * @description Permissions are the caller's effective permissions (from their roles, or an API token's own
+             *     list) so clients can hide what the caller can't use. The server still enforces every request.
+             */
+            permissions: string[];
             preferred_mfa_method?: string;
             recent_step_up_expires_at?: string;
             roles: string[];
@@ -4962,6 +5178,7 @@ export interface components {
         };
         "handlers.VerifyWebAuthnAssertionRequest": {
             assertion_response: string;
+            /** @description SessionData is the challenge ID returned by /auth/mfa/webauthn/assertion/start. */
             session_data: string;
             trust_device?: boolean;
         };
@@ -4972,7 +5189,10 @@ export interface components {
         "handlers.WebAuthnAssertionStartResponse": {
             /** @description protocol.CredentialAssertion */
             options: unknown;
-            /** @description SessionData is the serialized session to send back with verification */
+            /**
+             * @description SessionData is an opaque, single-use challenge ID to send back with the assertion.
+             *     The challenge itself is stored server-side and expires after a few minutes.
+             */
             session_data: string;
         };
         "handlers.WebAuthnEnrollmentResponse": {
