@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -48,37 +49,18 @@ func parseJobID(c *gin.Context) (int64, bool) {
 	return id, true
 }
 
-// parseJobStateFilter converts a state string to River job state.
-// Returns nil and false if the state is empty.
-// Returns nil and false with an error response if the state is invalid.
+// parseJobStateFilter converts a state string to a River job state. It takes River's own state names, the ones
+// job responses carry (River spells the canceled state with two Ls). An empty state means no filter. An unknown
+// state writes a 400 and returns false.
 func parseJobStateFilter(c *gin.Context, state string) (rivertype.JobState, bool) {
 	if state == "" {
 		return "", true
 	}
-
-	var riverState rivertype.JobState
-	switch state {
-	case "available":
-		riverState = rivertype.JobStateAvailable
-	case "canceled":
-		riverState = rivertype.JobStateCancelled
-	case "completed":
-		riverState = rivertype.JobStateCompleted
-	case "discarded":
-		riverState = rivertype.JobStateDiscarded
-	case "pending":
-		riverState = rivertype.JobStatePending
-	case "retryable":
-		riverState = rivertype.JobStateRetryable
-	case "running":
-		riverState = rivertype.JobStateRunning
-	case "scheduled":
-		riverState = rivertype.JobStateScheduled
-	default:
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid state filter"})
-		return "", false
+	if slices.Contains(rivertype.JobStates(), rivertype.JobState(state)) {
+		return rivertype.JobState(state), true
 	}
-	return riverState, true
+	c.JSON(http.StatusBadRequest, gin.H{"error": "invalid state filter"})
+	return "", false
 }
 
 // parseJobListLimit parses and validates the limit query parameter.
