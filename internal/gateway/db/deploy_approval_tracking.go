@@ -118,15 +118,18 @@ func (d *Database) AppendExecCommandToDeployApprovalRequest(id int64, processID,
 	return nil
 }
 
-// MarkDeployApprovalAsDeployed marks a deploy approval request as deployed after successful promotion
+// MarkDeployApprovalAsDeployed marks a deploy approval request as deployed after successful promotion. The
+// promote was authorized while the approval was open; the approval may have expired while the promote ran (up to
+// 10 minutes), and still records that it was deployed.
 func (d *Database) MarkDeployApprovalAsDeployed(id int64) error {
 	res, err := d.exec(
 		`UPDATE deploy_approval_requests
          SET status = ?, updated_at = NOW()
-         WHERE id = ? AND status = ?`,
+         WHERE id = ? AND status IN (?, ?) AND release_id IS NOT NULL`,
 		DeployApprovalRequestStatusDeployed,
 		id,
 		DeployApprovalRequestStatusApproved,
+		DeployApprovalRequestStatusExpired,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to mark deploy approval as deployed: %w", err)

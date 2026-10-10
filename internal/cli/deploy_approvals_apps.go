@@ -3,8 +3,10 @@ package cli
 import (
 	"errors"
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
+	"unicode"
 )
 
 // approvalApps is the set of apps whose deploy approval requests a command acts on: a list of app names, or
@@ -96,4 +98,36 @@ func (a approvalApps) newestRequestPerApp(requests []deployApprovalRequest) []de
 		result = append(result, req)
 	}
 	return result
+}
+
+var fullCommitSHA = regexp.MustCompile(`^[0-9a-fA-F]{40}$`)
+
+// errApprovalTargetNotExplicit explains why an approval without a terminal was refused.
+var errApprovalTargetNotExplicit = errors.New("without a terminal, approving needs an explicit --app " +
+	"(one app or a comma-separated list) and a full 40-character --commit, and no --branch or --all-apps: " +
+	"the PIN dialog shows only this command, so it must say exactly what is approved")
+
+// requireExplicitApprovalTarget refuses an approval run without a terminal (e.g. by an AI agent) unless its
+// command line names exactly what it approves: the person typing the PIN sees only the command line, once.
+func requireExplicitApprovalTarget(interactive bool, appFlag string, allApps bool, branch, commit string) error {
+	if interactive {
+		return nil
+	}
+	if strings.TrimSpace(appFlag) == "" || allApps || strings.TrimSpace(branch) != "" ||
+		!fullCommitSHA.MatchString(strings.TrimSpace(commit)) {
+		return errApprovalTargetNotExplicit
+	}
+	return nil
+}
+
+// displayText makes CI-supplied text (request messages, app and branch names) safe to print: control characters
+// (including terminal escape sequences) and bidirectional overrides are replaced, so a request can't rewrite the
+// terminal or hide text from the person or agent reading it.
+func displayText(s string) string {
+	return strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) || unicode.Is(unicode.Bidi_Control, r) {
+			return '?'
+		}
+		return r
+	}, s)
 }

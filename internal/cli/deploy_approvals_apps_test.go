@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -111,23 +112,80 @@ func TestWaitWaitsForEveryListedAppOnEveryRack(t *testing.T) {
 	require.Equal(t, "p-docspring", waiter.handled["staging"]["docspring"])
 }
 
-func TestWaitAllAppsFinishesAfterAQuietPoll(t *testing.T) {
+// Once promote marks requests deployed, an app that already deployed for the commit counts as done.
+func TestDeployedRequestsCountAsDone(t *testing.T) {
 	fakeApprovalGateway(t, []deployApprovalRequest{
-		approvalRequest("a-docspring", "docspring", "approved"),
+		approvalRequest("d-docspring", "docspring", "deployed"),
 		approvalRequest("a-api-proxy", "api-proxy", "approved"),
 	})
+	apps := approvalApps{names: []string{"api-proxy", "docspring"}}
+
+	found, missing, err := collectAllRequests(&cobra.Command{}, []string{"staging"}, apps, "", appsTestCommit)
+	require.NoError(t, err)
+	require.Empty(t, missing)
+	require.Len(t, found, 2)
+	require.Empty(t, filterPendingRequests(found), "deployed and approved requests are never approved again")
+
 	cmd := &cobra.Command{}
 	cmd.SetOut(&bytes.Buffer{})
-
 	waiter := newDeployApprovalWaiter(cmd, deployApprovalWaitConfig{
-		racks: []string{"staging"}, apps: approvalApps{all: true}, commit: appsTestCommit,
-		pollInterval: time.Millisecond, autoApprove: true,
+		racks: []string{"staging"}, apps: apps, commit: appsTestCommit, pollInterval: time.Millisecond,
 	})
 	done, err := waiter.pollNextRack()
 	require.NoError(t, err)
 	require.True(t, done)
-	require.Equal(t,
-		map[string]string{"docspring": "a-docspring", "api-proxy": "a-api-proxy"}, waiter.handled["staging"])
+}
+
+func TestApprovalWithoutTerminalMustNameAppsAndFullCommit(t *testing.T) {
+	require.NoError(t, requireExplicitApprovalTarget(true, "", false, "", ""), "a terminal shows the requests")
+	require.NoError(t, requireExplicitApprovalTarget(false, "docspring,api-proxy", false, "", appsTestCommit))
+	for name, args := range map[string][4]string{
+		"implicit app":  {"", "", "", appsTestCommit},
+		"short commit":  {"docspring", "", "", appsTestCommit[:7]},
+		"implicit HEAD": {"docspring", "", "", ""},
+		"branch":        {"docspring", "", "main", appsTestCommit},
+		"all apps":      {"", "all", "", appsTestCommit},
+		"not a SHA":     {"docspring", "", "", strings.Repeat("g", 40)},
+	} {
+		err := requireExplicitApprovalTarget(false, args[0], args[1] == "all", args[2], args[3])
+		require.ErrorIs(t, err, errApprovalTargetNotExplicit, name)
+	}
+}
+
+func TestDisplayTextNeutralizesControlAndBidiCharacters(t *testing.T) {
+	require.Equal(t, "Deploy 36a302d to staging", displayText("Deploy 36a302d to staging"))
+	require.Equal(t, "?[2J?[31mevil", displayText("\x1b[2J\x1b[31mevil"))
+	require.Equal(t, "line?break", displayText("line\nbreak"))
+	require.Equal(t, "?gnp.exe", displayText("\u202egnp.exe"))
+}
+
+// The gateway answers a duplicate request with the open request; the CLI must read it from the 409 body.
+func TestRequestConflictIsDecodedFromThe409Body(t *testing.T) {
+	existingApp := "api-proxy"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusConflict)
+		_ = json.NewEncoder(w).Encode(deployApprovalRequest{
+			PublicID: "existing-id", App: existingApp, GitCommitHash: appsTestCommit, Status: "pending",
+		})
+	}))
+	t.Cleanup(server.Close)
+	withCLIConfig(t, Config{NotificationSound: "disabled", Gateways: map[string]GatewayConfig{
+		"staging": {URL: server.URL, Token: "session-token", ExpiresAt: time.Now().Add(time.Hour)},
+	}})
+
+	out := &bytes.Buffer{}
+	cmd := &cobra.Command{}
+	cmd.SetOut(out)
+	cfg := deployApprovalRequestConfig{
+		rack: "staging", app: "api-proxy", gitCommitHash: appsTestCommit, message: "Deploy api-proxy",
+	}
+	require.NoError(t, executeDeployApprovalRequest(cmd, cfg))
+	require.Contains(t, out.String(), "existing-id already exists for api-proxy")
+
+	existingApp = "docspring"
+	err := executeDeployApprovalRequest(cmd, cfg)
+	require.ErrorContains(t, err, "nothing was created")
 }
 
 func TestRequestConflictOnlySucceedsForTheSameAppAndCommit(t *testing.T) {

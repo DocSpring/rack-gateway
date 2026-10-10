@@ -37,8 +37,12 @@ func newDeployApprovalApproveCommand() *cobra.Command {
 
 If no ID is provided, finds the requests for the commit (the current git commit by default) of every listed
 app on every listed rack, shows them, and approves the pending ones: one PIN, then one key touch per approval.
-If a listed app has no request on a listed rack, nothing is approved and the command fails. When run from a
-terminal it asks for Enter first; from scripts and agents it doesn't (the PIN and touch are the confirmation).
+Requests that are already approved or deployed count as done. If a listed app has no request on a listed rack,
+nothing is approved and the command fails.
+
+From a terminal it asks for Enter first. Without a terminal (scripts, AI agents) it doesn't, and it needs an
+explicit --app list and a full 40-character --commit (no --branch or --all-apps): the PIN dialog shows only the
+command line, so it must say exactly what is approved.
 
 Examples:
   # Approve by ID
@@ -95,6 +99,10 @@ func executeDeployApprovalApprove(cmd *cobra.Command, args []string, opts deploy
 	}
 
 	// No ID provided - search by branch or commit
+	err = requireExplicitApprovalTarget(IsInteractive(), opts.app, opts.allApps, opts.branch, opts.commit)
+	if err != nil {
+		return err
+	}
 	apps, err := resolveApprovalApps(opts.app, opts.allApps)
 	if err != nil {
 		return err
@@ -148,7 +156,7 @@ func approveBySearch(cmd *cobra.Command, racks []string, apps approvalApps, bran
 
 	pending := filterPendingRequests(allRequests)
 	if len(pending) == 0 {
-		fmt.Println("\nAll requests are already approved.")
+		fmt.Println("\nNothing to approve: every request is already approved or deployed.")
 		return nil
 	}
 
@@ -214,17 +222,18 @@ func promptForApproval(pending []rackApproval) error {
 
 func buildApprovalPrompt(pending []rackApproval) string {
 	if len(pending) == 1 {
-		return fmt.Sprintf("\nPress Enter to approve %s on rack %s", pending[0].req.App, pending[0].rack)
+		return fmt.Sprintf("\nPress Enter to approve %s on rack %s", displayText(pending[0].req.App), pending[0].rack)
 	}
 	targets := make([]string, len(pending))
 	for i, p := range pending {
-		targets[i] = p.rack + "/" + p.req.App
+		targets[i] = p.rack + "/" + displayText(p.req.App)
 	}
 	return fmt.Sprintf("\nPress Enter to approve %d requests: %s", len(pending), strings.Join(targets, ", "))
 }
 
-// collectAllRequests finds, on each rack, the newest open request of each in-scope app (pending first, then
-// approved). missing lists "rack/app" for listed apps with no open request (with --all-apps: racks with none).
+// collectAllRequests finds, on each rack, the newest request of each in-scope app that is pending, approved or
+// already deployed (in that order of preference). missing lists "rack/app" for listed apps with none (with
+// --all-apps: racks with none).
 func collectAllRequests(
 	cmd *cobra.Command, racks []string, apps approvalApps, branch, commit string,
 ) ([]rackApproval, []string, error) {
@@ -246,7 +255,7 @@ func collectRackRequests(
 ) ([]rackApproval, error) {
 	var results []rackApproval
 	found := map[string]bool{}
-	for _, status := range []string{"pending", "approved"} {
+	for _, status := range []string{"pending", "approved", "deployed"} {
 		requests, err := fetchDeployRequestsByStatus(cmd, rack, apps.queryApp(), branch, commit, status)
 		if err != nil {
 			return nil, err
@@ -323,15 +332,15 @@ func printApprovalContext(cmd *cobra.Command, p rackApproval, current, total int
 
 	_, _ = fmt.Fprintf(out, "  %s %s\n", dim("Rack:   "), p.rack)
 	_, _ = fmt.Fprintf(out, "  %s %s\n", dim("ID:     "), p.req.PublicID)
-	_, _ = fmt.Fprintf(out, "  %s %s\n", dim("Message:"), p.req.Message)
+	_, _ = fmt.Fprintf(out, "  %s %s\n", dim("Message:"), displayText(p.req.Message))
 	if p.req.App != "" {
-		_, _ = fmt.Fprintf(out, "  %s %s\n", dim("App:    "), p.req.App)
+		_, _ = fmt.Fprintf(out, "  %s %s\n", dim("App:    "), displayText(p.req.App))
 	}
 	if p.req.GitCommitHash != "" {
 		_, _ = fmt.Fprintf(out, "  %s %s\n", dim("Commit: "), p.req.GitCommitHash)
 	}
 	if p.req.GitBranch != "" {
-		_, _ = fmt.Fprintf(out, "  %s %s\n", dim("Branch: "), p.req.GitBranch)
+		_, _ = fmt.Fprintf(out, "  %s %s\n", dim("Branch: "), displayText(p.req.GitBranch))
 	}
 }
 

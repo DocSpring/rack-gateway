@@ -189,15 +189,16 @@ func printDeployApprovalDetails(req *deployApprovalRequest, rack string, showRac
 	}
 	fmt.Printf("%s %s\n", dim("ID:      "), req.PublicID)
 	fmt.Printf("%s %s\n", dim("Status:  "), statusColor(req.Status))
-	fmt.Printf("%s %s\n", dim("Message: "), req.Message)
+	fmt.Printf("%s %s\n", dim("Message: "), displayText(req.Message))
 	if req.App != "" {
-		fmt.Printf("%s %s\n", dim("App:     "), req.App)
+		fmt.Printf("%s %s\n", dim("App:     "), displayText(req.App))
 	}
 	fmt.Printf("%s %s\n", dim("Created: "), req.CreatedAt.Format(time.RFC3339))
 	fmt.Printf("%s %s\n", dim("Updated: "), req.UpdatedAt.Format(time.RFC3339))
 
 	if req.TargetAPITokenName != "" {
-		fmt.Printf("%s %s %s\n", dim("Token:   "), req.TargetAPITokenName, dim("("+req.TargetAPITokenID+")"))
+		tokenID := dim("(" + req.TargetAPITokenID + ")")
+		fmt.Printf("%s %s %s\n", dim("Token:   "), displayText(req.TargetAPITokenName), tokenID)
 	} else {
 		fmt.Printf("%s %s\n", dim("Token ID:"), req.TargetAPITokenID)
 	}
@@ -206,7 +207,7 @@ func printDeployApprovalDetails(req *deployApprovalRequest, rack string, showRac
 		fmt.Printf("%s %s\n", dim("Commit:  "), req.GitCommitHash)
 	}
 	if req.GitBranch != "" {
-		fmt.Printf("%s %s\n", dim("Branch:  "), req.GitBranch)
+		fmt.Printf("%s %s\n", dim("Branch:  "), displayText(req.GitBranch))
 	}
 
 	if req.ApprovedAt != nil {
@@ -219,7 +220,7 @@ func printDeployApprovalDetails(req *deployApprovalRequest, rack string, showRac
 		fmt.Printf("%s %s\n", dim("Rejected:"), req.RejectedAt.Format(time.RFC3339))
 	}
 	if req.ApprovalNotes != "" {
-		fmt.Printf("%s %s\n", dim("Notes:   "), req.ApprovalNotes)
+		fmt.Printf("%s %s\n", dim("Notes:   "), displayText(req.ApprovalNotes))
 	}
 
 	return nil

@@ -115,6 +115,8 @@ export function ActionButtons({
 }: ActionButtonsProps) {
   const isPending = requestStatus === 'pending'
   const isApproved = requestStatus === 'approved'
+  // A lapsed approval is marked expired; extending it approves it again.
+  const canExtend = isApproved || requestStatus === 'expired'
 
   return (
     <div className="flex flex-wrap gap-2">
@@ -128,7 +130,7 @@ export function ActionButtons({
           Approve Request
         </Button>
       )}
-      {isApproved && (
+      {canExtend && (
         <Button disabled={extendMutationPending} onClick={onExtend} variant="secondary">
           {extendMutationPending ? (
             <Loader2 className="mr-2 size-4 animate-spin" />

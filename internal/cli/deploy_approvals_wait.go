@@ -19,15 +19,13 @@ func newDeployApprovalWaitCommand() *cobra.Command {
 		Short: "Wait for and optionally approve pending deploy approval requests",
 		Long: `Wait for deploy approval requests for a commit and optionally approve them.
 
-Without --loop, waits until every listed app has an approved request on every rack (or, with --all-apps,
-until each rack has at least one and no more are pending), then prints what was approved.
+Without --loop, waits until every listed app has an approved (or deployed) request on every rack, then prints
+what was approved. Without a terminal (e.g. an AI agent), --approve needs an explicit --app list and a full
+--commit SHA.
 
 Examples:
-  # Approve the current commit's requests for two apps on staging (one PIN, one touch per approval)
-  rack-gateway deploy-approval wait --approve --app docspring,api-proxy --rack staging
-
-  # Approve every app's request for a commit on US and EU
-  rack-gateway deploy-approval wait --approve --all-apps --commit <sha> --rack us,eu`,
+  # Approve two apps' requests for a commit on staging (one PIN, one touch per approval)
+  rack-gateway deploy-approval wait --approve --app docspring,api-proxy --commit <sha> --rack staging`,
 		Args: cobra.NoArgs,
 		RunE: SilenceOnError(func(cmd *cobra.Command, _ []string) error {
 			parsed, err := parseDeployApprovalWaitOptions(cmd, opts)
@@ -39,7 +37,6 @@ Examples:
 	}
 
 	cmd.Flags().StringVarP(&opts.app, "app", "a", "", appsFlagHelp)
-	cmd.Flags().BoolVar(&opts.allApps, "all-apps", false, allAppsFlagHelp)
 	cmd.Flags().StringVar(&opts.branch, "branch", "", "Filter by git branch")
 	cmd.Flags().StringVar(&opts.commit, "commit", "", "Filter by git commit hash (uses current commit by default)")
 	cmd.Flags().StringVar(&opts.pollInterval, "poll-interval", "1s", "Polling interval")
@@ -53,7 +50,6 @@ Examples:
 
 type deployApprovalWaitOptions struct {
 	app          string
-	allApps      bool
 	branch       string
 	commit       string
 	pollInterval string
@@ -82,7 +78,14 @@ func parseDeployApprovalWaitOptions(
 		return deployApprovalWaitConfig{}, err
 	}
 
-	apps, err := resolveApprovalApps(opts.app, opts.allApps)
+	if opts.autoApprove {
+		err := requireExplicitApprovalTarget(IsInteractive(), opts.app, false, opts.branch, opts.commit)
+		if err != nil {
+			return deployApprovalWaitConfig{}, err
+		}
+	}
+
+	apps, err := resolveApprovalApps(opts.app, false)
 	if err != nil {
 		return deployApprovalWaitConfig{}, err
 	}
@@ -141,7 +144,6 @@ func newDeployApprovalWaiter(cmd *cobra.Command, cfg deployApprovalWaitConfig) *
 		notes:        cfg.notes,
 		loop:         cfg.loop,
 		handled:      make(map[string]map[string]string),
-		quietRacks:   make(map[string]bool),
 	}
 }
 
@@ -157,7 +159,6 @@ func (w *deployApprovalWaiter) pollNextRack() (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	newRequests := 0
 	for _, request := range pending {
 		if w.isHandled(rack, request.App) {
 			continue
@@ -165,23 +166,23 @@ func (w *deployApprovalWaiter) pollNextRack() (bool, error) {
 		if err := w.handleRequest(rack, request); err != nil {
 			return false, err
 		}
-		newRequests++
 	}
 
-	approved, err := w.fetch(rack, "approved")
-	if err != nil {
-		return false, err
-	}
-	for _, request := range approved {
-		if w.isHandled(rack, request.App) {
-			continue
+	// Approved (or already deployed) requests count as done.
+	for _, status := range []string{"approved", "deployed"} {
+		requests, err := w.fetch(rack, status)
+		if err != nil {
+			return false, err
 		}
-		w.markHandled(rack, request)
-		_ = writef(w.cmd.OutOrStdout(), "✓ Already approved on rack %s: %s (%s)\n", rack, request.PublicID, request.App)
+		for _, request := range requests {
+			if w.isHandled(rack, request.App) {
+				continue
+			}
+			w.markHandled(rack, request)
+			_ = writef(w.cmd.OutOrStdout(), "✓ Already %s on rack %s: %s (%s)\n",
+				status, rack, request.PublicID, displayText(request.App))
+		}
 	}
-
-	// With --all-apps the expected apps aren't known, so a rack is done after a poll that found nothing new.
-	w.quietRacks[rack] = newRequests == 0 && len(w.handled[rack]) > 0
 	return w.shouldExit(), nil
 }
 
@@ -206,12 +207,8 @@ func (w *deployApprovalWaiter) markHandled(rack string, request deployApprovalRe
 	w.handled[rack][request.App] = request.PublicID
 }
 
-// rackDone reports whether every expected app on rack has been handled (with --all-apps: at least one, and the
-// last poll found nothing new).
+// rackDone reports whether every expected app on rack has been handled.
 func (w *deployApprovalWaiter) rackDone(rack string) bool {
-	if w.apps.all {
-		return w.quietRacks[rack]
-	}
 	for _, app := range w.apps.names {
 		if !w.isHandled(rack, app) {
 			return false
@@ -233,9 +230,8 @@ type deployApprovalWaiter struct {
 	rackIndex    int
 	cachedPIN    string
 	// handled maps rack -> app -> request ID for requests approved (or shown) by this run or already approved.
-	handled    map[string]map[string]string
-	quietRacks map[string]bool
-	soundDone  chan struct{}
+	handled   map[string]map[string]string
+	soundDone chan struct{}
 }
 
 func (w *deployApprovalWaiter) nextRack() string {
@@ -366,10 +362,11 @@ func (w *deployApprovalWaiter) handleRequest(rack string, request deployApproval
 		w.cachedPIN = pin
 	}
 
-	statusLine := fmt.Sprintf("\n✅ Deploy approval request %s (%s) approved", approved.PublicID, request.App)
+	app := displayText(request.App)
+	statusLine := fmt.Sprintf("\n✅ Deploy approval request %s (%s) approved", approved.PublicID, app)
 	if len(w.racks) > 1 {
 		statusLine = fmt.Sprintf(
-			"\n✅ Deploy approval request %s (%s) approved on rack %s", approved.PublicID, request.App, rack,
+			"\n✅ Deploy approval request %s (%s) approved on rack %s", approved.PublicID, app, rack,
 		)
 	}
 	if approved.ApprovalExpiresAt != nil {
@@ -420,16 +417,16 @@ func (w *deployApprovalWaiter) writeRequestSummary(rack string, request deployAp
 	if err := writef(out, "  ID: %s\n", request.PublicID); err != nil {
 		return err
 	}
-	if err := writef(out, "  App: %s\n", request.App); err != nil {
+	if err := writef(out, "  App: %s\n", displayText(request.App)); err != nil {
 		return err
 	}
-	if err := writef(out, "  Message: %s\n", request.Message); err != nil {
+	if err := writef(out, "  Message: %s\n", displayText(request.Message)); err != nil {
 		return err
 	}
 	if err := writef(out, "  Status: %s\n", request.Status); err != nil {
 		return err
 	}
-	if err := writef(out, "  Token: %s\n", request.TargetAPITokenName); err != nil {
+	if err := writef(out, "  Token: %s\n", displayText(request.TargetAPITokenName)); err != nil {
 		return err
 	}
 	return writef(out, "  Created: %s\n", request.CreatedAt.Format(time.RFC3339))

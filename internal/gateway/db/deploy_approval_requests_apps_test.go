@@ -102,3 +102,52 @@ func TestExpireDeployApprovalRequestsOnlyExpiresPastWindows(t *testing.T) {
 		require.Equal(t, want, reloaded.Status)
 	}
 }
+
+// Extending a lapsed (expired) approval approves it again, unless another request for the app has opened since.
+func TestExtendRevivesExpiredApprovalUnlessAnotherIsOpen(t *testing.T) {
+	database, userID, tokenID := newApprovalTestFixture(t)
+
+	lapsed, err := createApproval(t, database, userID, tokenID, "api-proxy")
+	require.NoError(t, err)
+	_, err = database.ApproveDeployApprovalRequest(lapsed.ID, userID, time.Now().Add(-time.Minute), "")
+	require.NoError(t, err)
+	_, err = database.ExpireDeployApprovalRequests()
+	require.NoError(t, err)
+	extended, err := database.ExtendDeployApprovalRequestExpiry(lapsed.PublicID, time.Now().Add(time.Hour))
+	require.NoError(t, err)
+	require.Equal(t, gwdb.DeployApprovalRequestStatusApproved, extended.Status)
+
+	// A lapsed approval with a newer open request for the same app can't be revived: that would make two.
+	old, err := createApproval(t, database, userID, tokenID, "docspring")
+	require.NoError(t, err)
+	_, err = database.ApproveDeployApprovalRequest(old.ID, userID, time.Now().Add(-time.Minute), "")
+	require.NoError(t, err)
+	_, err = createApproval(t, database, userID, tokenID, "docspring") // expires the old one first
+	require.NoError(t, err)
+	_, err = database.ExtendDeployApprovalRequestExpiry(old.PublicID, time.Now().Add(time.Hour))
+	require.ErrorIs(t, err, gwdb.ErrDeployApprovalRequestActive)
+}
+
+// A promote authorized while the approval was open can finish after the window lapsed (and the sweep marked it
+// expired); the approval still records that it was deployed.
+func TestApprovalExpiredDuringPromoteIsMarkedDeployed(t *testing.T) {
+	database, userID, tokenID := newApprovalTestFixture(t)
+
+	approval, err := createApproval(t, database, userID, tokenID, "docspring")
+	require.NoError(t, err)
+	_, err = database.ApproveDeployApprovalRequest(approval.ID, userID, time.Now().Add(time.Hour), "")
+	require.NoError(t, err)
+	require.NoError(t, database.UpdateDeployApprovalRequestObjectURL(approval.ID, "object://docspring/a.tgz"))
+	require.NoError(t, database.MarkDeployApprovalRequestBuildStarted(approval.ID, "B1", ""))
+	require.NoError(t, database.MarkDeployApprovalRequestBuildStarted(approval.ID, "B1", "R1"))
+
+	// The window lapses while the promote runs.
+	require.NoError(t, database.SetDeployApprovalExpiryForTest(approval.ID, time.Now().Add(-time.Second)))
+	_, err = database.ExpireDeployApprovalRequests()
+	require.NoError(t, err)
+
+	require.NoError(t, database.MarkDeployApprovalAsDeployed(approval.ID))
+	reloaded, err := database.GetDeployApprovalRequest(approval.ID)
+	require.NoError(t, err)
+	require.Equal(t, gwdb.DeployApprovalRequestStatusDeployed, reloaded.Status)
+}

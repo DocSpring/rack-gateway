@@ -355,21 +355,28 @@ func (d *Database) UpdateDeployApprovalRequestObjectURL(id int64, objectURL stri
 	return nil
 }
 
-// ExtendDeployApprovalRequestExpiry extends the expiry time for an approved deploy approval request
+// ExtendDeployApprovalRequestExpiry extends the window of an approved deploy approval request. An approval whose
+// window already lapsed (and was marked expired) is approved again, unless another request for the same commit,
+// token and app has opened since (ErrDeployApprovalRequestActive).
 func (d *Database) ExtendDeployApprovalRequestExpiry(
 	publicID string,
 	newExpiresAt time.Time,
 ) (*DeployApprovalRequest, error) {
 	res, err := d.exec(
 		`UPDATE deploy_approval_requests
-         SET approval_expires_at = ?, updated_at = NOW()
-         WHERE public_id = ? AND status = ? AND (approval_expires_at IS NULL OR approval_expires_at < ?)`,
+         SET approval_expires_at = ?, status = ?, updated_at = NOW()
+         WHERE public_id = ? AND status IN (?, ?) AND (approval_expires_at IS NULL OR approval_expires_at < ?)`,
 		newExpiresAt,
+		DeployApprovalRequestStatusApproved,
 		publicID,
 		DeployApprovalRequestStatusApproved,
+		DeployApprovalRequestStatusExpired,
 		newExpiresAt,
 	)
 	if err != nil {
+		if isUniqueConstraintViolation(err) {
+			return nil, ErrDeployApprovalRequestActive
+		}
 		return nil, fmt.Errorf("failed to extend deploy approval expiry: %w", err)
 	}
 	rows, err := res.RowsAffected()

@@ -128,7 +128,8 @@ func printDeployApprovalTableWithRack(
 			commit = commit[:7]
 		}
 		columns := []interface{}{
-			req.PublicID, req.Status, req.App, commit, req.CreatedAt.Format(time.RFC3339), tokenName, req.Message,
+			req.PublicID, req.Status, displayText(req.App), commit, req.CreatedAt.Format(time.RFC3339),
+			displayText(tokenName), displayText(req.Message),
 		}
 		if showRack {
 			fmt.Printf("%-12s  "+format, append([]interface{}{rackMap[req.PublicID]}, columns...)...)
