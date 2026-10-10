@@ -13,6 +13,7 @@ import (
 )
 
 func setupGlobalMiddleware(router *gin.Engine, cfg *Config) {
+	router.Use(middleware.ClientIP())
 	router.Use(middleware.StripInternalHeaders())
 
 	if cfg.SentryEnabled {

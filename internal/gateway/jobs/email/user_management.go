@@ -38,7 +38,7 @@ func NewWelcomeWorker(emailSender email.Sender) *WelcomeWorker {
 func (w *WelcomeWorker) Work(_ context.Context, job *river.Job[WelcomeArgs]) error {
 	args := job.Args
 
-	subject := fmt.Sprintf("Welcome to %s Rack Gateway", args.Rack)
+	subject := "Welcome"
 	rolesText := strings.Join(args.Roles, ", ")
 
 	text := fmt.Sprintf(`Hello %s,
@@ -113,7 +113,7 @@ func NewUserAddedAdminWorker(emailSender email.Sender) *UserAddedAdminWorker {
 func (w *UserAddedAdminWorker) Work(_ context.Context, job *river.Job[UserAddedAdminArgs]) error {
 	args := job.Args
 
-	subject := fmt.Sprintf("New User Added to %s Rack Gateway: %s", args.Rack, args.NewUserEmail)
+	subject := "New user added: " + args.NewUserEmail
 	rolesText := strings.Join(args.Roles, ", ")
 
 	text := fmt.Sprintf(`Admin Notification: A new user has been added to the %s Rack Gateway.

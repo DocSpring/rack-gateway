@@ -13,6 +13,7 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/config"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	emailtemplates "github.com/DocSpring/rack-gateway/internal/gateway/email/templates"
+	"github.com/DocSpring/rack-gateway/internal/gateway/netutil"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rackcert"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 )
@@ -110,7 +111,7 @@ func (h *Handler) notifyRackParamsChanged(_ *http.Request, actor string, changes
 		}
 		fmt.Fprintf(&b, "%s: %s -> %s", c.Key, c.Old, c.New)
 	}
-	subject := fmt.Sprintf("Rack Gateway (%s): %s changed rack parameters", h.rackDisplay(), actor)
+	subject := actor + " changed rack parameters"
 	text, html, _ := emailtemplates.RenderRackParamsChanged(h.rackDisplay(), actor, b.String())
 	_ = h.emailer.SendMany(admins, subject, text, html)
 }
@@ -136,7 +137,7 @@ func (h *Handler) auditRackParamsChanged(r *http.Request, actor string, changes 
 		ResourceType: "rack",
 		Resource:     h.rackName,
 		Details:      string(b),
-		IPAddress:    clientIPFromRequest(r),
+		IPAddress:    netutil.ClientIP(r),
 		UserAgent:    r.UserAgent(),
 		Status:       "success",
 		RBACDecision: "allow",

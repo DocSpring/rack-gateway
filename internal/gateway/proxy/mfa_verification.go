@@ -11,6 +11,7 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
 	"github.com/DocSpring/rack-gateway/internal/gateway/config"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
+	"github.com/DocSpring/rack-gateway/internal/gateway/netutil"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 )
 
@@ -132,7 +133,7 @@ func (h *Handler) verifyTOTP(r *http.Request, authUser *auth.User, userRecord *d
 	result, err := h.mfaService.VerifyTOTP(
 		userRecord,
 		authUser.MFAValue,
-		clientIPFromRequest(r),
+		netutil.ClientIP(r),
 		r.UserAgent(),
 		sessionIDPtr,
 	)
@@ -158,7 +159,7 @@ func (h *Handler) verifyWebAuthn(r *http.Request, authUser *auth.User, userRecor
 		userRecord,
 		[]byte(assertionData.SessionData),
 		[]byte(assertionData.AssertionResponse),
-		clientIPFromRequest(r),
+		netutil.ClientIP(r),
 		r.UserAgent(),
 		sessionIDPtr,
 	)

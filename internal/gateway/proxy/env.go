@@ -13,6 +13,7 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/config"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	"github.com/DocSpring/rack-gateway/internal/gateway/envutil"
+	"github.com/DocSpring/rack-gateway/internal/gateway/netutil"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rackcert"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 )
@@ -35,7 +36,7 @@ func (h *Handler) logDeniedRBACAction(
 		ResourceType:   resourceType,
 		Resource:       resourceName,
 		Details:        details,
-		IPAddress:      clientIPFromRequest(r),
+		IPAddress:      netutil.ClientIP(r),
 		UserAgent:      r.UserAgent(),
 		Status:         "denied",
 		RBACDecision:   "deny",
@@ -409,7 +410,7 @@ func (h *Handler) logEnvDiffs(r *http.Request, email, _ string, diffs []envutil.
 			ResourceType:   rtype,
 			Resource:       fmt.Sprintf("%s/%s", app, d.Key),
 			Details:        details,
-			IPAddress:      clientIPFromRequest(r),
+			IPAddress:      netutil.ClientIP(r),
 			UserAgent:      r.UserAgent(),
 			Status:         "success",
 			RBACDecision:   "allow",

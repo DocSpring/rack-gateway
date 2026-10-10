@@ -8,6 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/config"
+	"github.com/DocSpring/rack-gateway/internal/gateway/netutil"
 	"github.com/DocSpring/rack-gateway/internal/gateway/ratelimit"
 	"github.com/DocSpring/rack-gateway/internal/gateway/security"
 )
@@ -30,8 +31,7 @@ func RateLimit(_ *config.Config, securityNotifier *security.Notifier) gin.Handle
 	rateLimiter := ratelimit.NewRateLimiter(rps, burst)
 
 	return func(c *gin.Context) {
-		clientIP := extractClientIP(c)
-		setClientIPHeaders(c, clientIP)
+		clientIP := netutil.ClientIP(c.Request)
 
 		handler := rateLimiter.Middleware(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
 		writer := &responseWriter{ResponseWriter: c.Writer, statusCode: http.StatusOK}

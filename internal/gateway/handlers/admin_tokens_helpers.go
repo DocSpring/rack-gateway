@@ -147,7 +147,7 @@ func (h *AdminHandler) sendTokenCreatedOwnerEmail(
 	rack string,
 	creatorLabel string,
 ) {
-	subject := fmt.Sprintf("Rack Gateway (%s): New API token created", rack)
+	subject := "New API token created"
 	text, html, err := emailtemplates.RenderTokenCreatedOwner(rack, tokenName, creatorLabel)
 	if err != nil || (text == "" && html == "") {
 		text = fmt.Sprintf("A new API token '%s' was created for your account by %s.", tokenName, creatorLabel)
@@ -175,7 +175,7 @@ func (h *AdminHandler) sendTokenCreatedAdminEmails(
 	sort.Strings(filtered)
 	recipients := prioritiseInviterFirst(filtered, creatorEmail)
 
-	subject := fmt.Sprintf("Rack Gateway (%s): API token created for %s", rack, ownerEmail)
+	subject := "API token created for " + ownerEmail
 	text, html, err := emailtemplates.RenderTokenCreatedAdmin(rack, tokenName, ownerEmail, creatorLabel)
 	if err != nil || (text == "" && html == "") {
 		text = fmt.Sprintf("An API token '%s' was created for %s by %s.", tokenName, ownerEmail, creatorLabel)

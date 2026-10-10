@@ -14,6 +14,7 @@ import (
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	gtwlog "github.com/DocSpring/rack-gateway/internal/gateway/logging"
+	"github.com/DocSpring/rack-gateway/internal/gateway/netutil"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 )
 
@@ -238,7 +239,7 @@ func (l *Logger) LogRequest(
 		LatencyMs:    latency.Milliseconds(),
 		RBACDecision: rbacDecision,
 		RequestID:    getRequestID(r),
-		ClientIP:     getClientIP(r),
+		ClientIP:     netutil.ClientIP(r),
 	}
 
 	if err != nil {
@@ -276,22 +277,6 @@ func RequestAlreadyLogged(r *http.Request) bool {
 		}
 	}
 	return false
-}
-
-// GetClientIP extracts the client IP address from the request
-func (_ *Logger) GetClientIP(r *http.Request) string {
-	return getClientIP(r)
-}
-
-func getClientIP(r *http.Request) string {
-	if ip := r.Header.Get("X-Forwarded-For"); ip != "" {
-		parts := strings.Split(ip, ",")
-		return strings.TrimSpace(parts[0])
-	}
-	if ip := r.Header.Get("X-Real-IP"); ip != "" {
-		return ip
-	}
-	return strings.Split(r.RemoteAddr, ":")[0]
 }
 
 // ParseConvoxAction extracts meaningful action and resource from the request.

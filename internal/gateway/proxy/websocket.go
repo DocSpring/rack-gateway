@@ -18,6 +18,7 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	"github.com/DocSpring/rack-gateway/internal/gateway/httpclient"
 	"github.com/DocSpring/rack-gateway/internal/gateway/httputil"
+	"github.com/DocSpring/rack-gateway/internal/gateway/netutil"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rackcert"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 )
@@ -418,7 +419,7 @@ func (h *Handler) logExecStart(r *http.Request, authUser *auth.User, path string
 		Resource:       resource,
 		ResourceType:   resourceType,
 		Details:        h.auditLogger.BuildDetailsJSON(r),
-		IPAddress:      h.auditLogger.GetClientIP(r),
+		IPAddress:      netutil.ClientIP(r),
 		UserAgent:      r.UserAgent(),
 		Status:         "success",
 		RBACDecision:   "allow",
