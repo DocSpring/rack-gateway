@@ -21,6 +21,7 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/email"
 	jobaudit "github.com/DocSpring/rack-gateway/internal/gateway/jobs/audit"
 	jobcircleci "github.com/DocSpring/rack-gateway/internal/gateway/jobs/circleci"
+	jobdeployapprovals "github.com/DocSpring/rack-gateway/internal/gateway/jobs/deployapprovals"
 	jobemail "github.com/DocSpring/rack-gateway/internal/gateway/jobs/email"
 	jobgithub "github.com/DocSpring/rack-gateway/internal/gateway/jobs/github"
 	jobslack "github.com/DocSpring/rack-gateway/internal/gateway/jobs/slack"
@@ -81,8 +82,44 @@ func NewClient(pool *pgxpool.Pool, deps *Dependencies, auditAnchorConfig *AuditA
 	river.AddWorker(workers, jobcircleci.NewApproveJobWorker(deps.Database, deps.CircleCIToken))
 	river.AddWorker(workers, jobgithub.NewPostPRCommentWorker(deps.GitHubToken))
 
-	// Setup periodic jobs
-	var periodicJobs []*river.PeriodicJob
+	periodicJobs, err := setupPeriodicJobs(workers, deps, auditAnchorConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	riverClient, err := river.NewClient(riverpgxv5.New(pool), &river.Config{
+		Queues: map[string]river.QueueConfig{
+			river.QueueDefault: {MaxWorkers: 10},
+			QueueSecurity:      {MaxWorkers: 5},  // High priority security notifications
+			QueueNotifications: {MaxWorkers: 10}, // Medium priority notifications
+			QueueIntegrations:  {MaxWorkers: 3},  // Low priority CI/GitHub integrations
+		},
+		Workers:      workers,
+		PeriodicJobs: periodicJobs,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create river client: %w", err)
+	}
+
+	return &Client{
+		river: riverClient,
+		pool:  pool,
+	}, nil
+}
+
+// setupPeriodicJobs registers the workers of periodic jobs and returns their schedules.
+func setupPeriodicJobs(
+	workers *river.Workers,
+	deps *Dependencies,
+	auditAnchorConfig *AuditAnchorConfig,
+) ([]*river.PeriodicJob, error) {
+	// Approvals past their window are marked expired, so they stop counting as open requests.
+	river.AddWorker(workers, jobdeployapprovals.NewExpireWorker(deps.Database))
+	periodicJobs := []*river.PeriodicJob{river.NewPeriodicJob(
+		river.PeriodicInterval(jobdeployapprovals.ExpireInterval),
+		func() (river.JobArgs, *river.InsertOpts) { return jobdeployapprovals.ExpireArgs{}, nil },
+		&river.PeriodicJobOpts{RunOnStart: true},
+	)}
 
 	// WORM anchor writer periodic job (hourly in prod, configurable for dev)
 	if auditAnchorConfig != nil && auditAnchorConfig.S3Client != nil {
@@ -116,24 +153,7 @@ func NewClient(pool *pgxpool.Pool, deps *Dependencies, auditAnchorConfig *AuditA
 		))
 	}
 
-	riverClient, err := river.NewClient(riverpgxv5.New(pool), &river.Config{
-		Queues: map[string]river.QueueConfig{
-			river.QueueDefault: {MaxWorkers: 10},
-			QueueSecurity:      {MaxWorkers: 5},  // High priority security notifications
-			QueueNotifications: {MaxWorkers: 10}, // Medium priority notifications
-			QueueIntegrations:  {MaxWorkers: 3},  // Low priority CI/GitHub integrations
-		},
-		Workers:      workers,
-		PeriodicJobs: periodicJobs,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to create river client: %w", err)
-	}
-
-	return &Client{
-		river: riverClient,
-		pool:  pool,
-	}, nil
+	return periodicJobs, nil
 }
 
 // NewAuditAnchorConfigFromEnv creates audit anchor config from environment variables if set

@@ -5769,12 +5769,6 @@
                     "release_id": {
                         "type": "string"
                     },
-                    "release_promoted_at": {
-                        "type": "string"
-                    },
-                    "release_promoted_by_api_token_id": {
-                        "type": "integer"
-                    },
                     "status": {
                         "type": "string"
                     },

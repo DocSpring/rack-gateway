@@ -157,7 +157,14 @@ func executeDeployApprovalRequest(cmd *cobra.Command, cfg deployApprovalRequestC
 		cfg.targetAPITokenID,
 	)
 	if err != nil {
-		return handleDeployApprovalCreationError(cmd, err)
+		var conflict *deployApprovalRequestConflictError
+		if errors.As(err, &conflict) && cfg.wait {
+			if err := handleDeployApprovalCreationError(cmd, cfg, err); err != nil {
+				return err
+			}
+			return waitForExistingDeployApproval(cmd, cfg, conflict.request)
+		}
+		return handleDeployApprovalCreationError(cmd, cfg, err)
 	}
 	if created == nil {
 		return fmt.Errorf("failed to create deploy approval request")
@@ -185,12 +192,38 @@ func executeDeployApprovalRequest(cmd *cobra.Command, cfg deployApprovalRequestC
 	return reportFinalApprovalStatus(cmd, final)
 }
 
-func handleDeployApprovalCreationError(cmd *cobra.Command, err error) error {
+// handleDeployApprovalCreationError treats a 409 as success only when the open request it returns is this
+// app's, for this commit. Any other conflict means nothing was created (e.g. a gateway too old to keep one open
+// request per app), so CI must fail rather than wait on a hold job nobody will approve.
+func handleDeployApprovalCreationError(cmd *cobra.Command, cfg deployApprovalRequestConfig, err error) error {
 	var conflict *deployApprovalRequestConflictError
-	if errors.As(err, &conflict) {
-		return writeLine(cmd.OutOrStdout(), "Deploy approval request already exists for this commit")
+	if !errors.As(err, &conflict) {
+		return err
 	}
-	return err
+	existing := conflict.request
+	if existing == nil || existing.PublicID == "" {
+		return errors.New("the gateway reported an existing deploy approval request but didn't return it; " +
+			"nothing was created")
+	}
+	if existing.App != cfg.app || !strings.EqualFold(existing.GitCommitHash, cfg.gitCommitHash) {
+		return fmt.Errorf(
+			"the gateway returned open request %s for app %q commit %s instead of creating one for app %q "+
+				"commit %s; nothing was created (upgrade the gateway to one that keeps an open request per app)",
+			existing.PublicID, existing.App, existing.GitCommitHash, cfg.app, cfg.gitCommitHash,
+		)
+	}
+	return writef(cmd.OutOrStdout(), "Deploy approval request %s already exists for %s (status: %s)\n",
+		existing.PublicID, existing.App, existing.Status)
+}
+
+func waitForExistingDeployApproval(
+	cmd *cobra.Command, cfg deployApprovalRequestConfig, existing *deployApprovalRequest,
+) error {
+	final, err := waitForDeployApproval(cmd, cfg.rack, existing.PublicID, cfg.pollInterval, cfg.timeout)
+	if err != nil {
+		return err
+	}
+	return reportFinalApprovalStatus(cmd, final)
 }
 
 func reportFinalApprovalStatus(cmd *cobra.Command, final *deployApprovalRequest) error {

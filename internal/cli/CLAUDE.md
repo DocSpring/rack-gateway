@@ -93,6 +93,10 @@ cx deploy-approval approve --rack all --commit abc123
 
 # List deploy approval requests from all racks
 cx deploy-approval list --rack all
+
+# Approve several apps' requests for a commit (one PIN, one touch per approval). Fails without approving
+# anything if a listed app has no request on a listed rack; no Enter prompt without a terminal (agents).
+cx deploy-approval approve --app docspring,api-proxy --commit abc123 --rack us,eu
 ```
 
 The `all` value expands to all configured racks in `gateways`, excluding any racks listed in `all_racks_exclude`. This is useful for avoiding local development racks when operating on production infrastructure.

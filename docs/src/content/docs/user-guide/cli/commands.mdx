@@ -332,6 +332,7 @@ rack-gateway deploy-approval [command]
 ```bash
 rack-gateway deploy-approval list
 rack-gateway deploy-approval approve <request-id>
+rack-gateway deploy-approval approve --app web,proxy --commit <sha> --rack us,eu
 rack-gateway deploy-approval show <request-id>
 rack-gateway deploy-approval request --app myapp --git-commit <sha> --message "Deploy"
 rack-gateway deploy-approval wait <request-id>

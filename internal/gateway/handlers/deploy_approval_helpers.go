@@ -182,12 +182,6 @@ func toDeployApprovalRequestResponse(dr *db.DeployApprovalRequest) DeployApprova
 	if dr.ReleaseCreatedAt != nil {
 		resp.ReleaseCreatedAt = dr.ReleaseCreatedAt
 	}
-	if dr.ReleasePromotedAt != nil {
-		resp.ReleasePromotedAt = dr.ReleasePromotedAt
-	}
-	if dr.ReleasePromotedByAPITokenID != nil {
-		resp.ReleasePromotedByTokenID = dr.ReleasePromotedByAPITokenID
-	}
 	return resp
 }
 

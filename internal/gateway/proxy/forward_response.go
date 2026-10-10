@@ -59,6 +59,8 @@ func (h *Handler) processProxyResponse(
 		respReader = resp.Body
 	}
 
+	h.markDeployApprovalDeployedAfterPromote(r, path, resp.StatusCode)
+
 	httputil.CopyHeaders(w.Header(), resp.Header, "content-length")
 	w.WriteHeader(resp.StatusCode)
 

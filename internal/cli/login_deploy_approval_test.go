@@ -88,7 +88,8 @@ func TestApproveBySearchReturnsExpiredToken(t *testing.T) {
 		},
 	})
 
-	err := approveBySearch(&cobra.Command{}, []string{"us"}, "docspring", "", "13b02be", "")
+	apps := approvalApps{names: []string{"docspring"}}
+	err := approveBySearch(&cobra.Command{}, []string{"us"}, apps, "", "13b02be", "")
 
 	require.ErrorIs(t, err, ErrTokenExpired)
 	assert.Equal(t, "token expired", err.Error())

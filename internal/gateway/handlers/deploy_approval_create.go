@@ -275,7 +275,7 @@ func (_ *APIHandler) handleCreateError(c *gin.Context, err error, tokenID int64,
 		}
 		c.JSON(
 			http.StatusConflict,
-			gin.H{"error": "an approval request is already pending or approved for this token and git commit"},
+			gin.H{"error": "an approval request is already pending or approved for this app, token and git commit"},
 		)
 	default:
 		gtwlog.Errorf(
