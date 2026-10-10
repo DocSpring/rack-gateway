@@ -11,7 +11,6 @@ import (
 
 func TestSlackIntegrationCRUD(t *testing.T) {
 	database := dbtest.NewDatabase(t)
-	t.Cleanup(func() { dbtest.Reset(t, database) })
 
 	// Create user
 	user, err := database.CreateUser("admin@example.com", "Admin User", []string{"admin"})
@@ -89,7 +88,6 @@ func TestSlackIntegrationCRUD(t *testing.T) {
 
 func TestSlackIntegration_NoDuplicates(t *testing.T) {
 	database := dbtest.NewDatabase(t)
-	t.Cleanup(func() { dbtest.Reset(t, database) })
 
 	user, err := database.CreateUser("admin@example.com", "Admin User", []string{"admin"})
 	require.NoError(t, err)
@@ -124,7 +122,6 @@ func TestSlackIntegration_NoDuplicates(t *testing.T) {
 
 func TestUpdateSlackChannels_NoIntegration(t *testing.T) {
 	database := dbtest.NewDatabase(t)
-	t.Cleanup(func() { dbtest.Reset(t, database) })
 
 	updatedActions := map[string]interface{}{}
 	err := database.UpdateSlackIntegrationChannels(updatedActions)
@@ -133,7 +130,6 @@ func TestUpdateSlackChannels_NoIntegration(t *testing.T) {
 
 func TestDeleteSlackIntegration_NoIntegration(t *testing.T) {
 	database := dbtest.NewDatabase(t)
-	t.Cleanup(func() { dbtest.Reset(t, database) })
 
 	// Should not error when there's nothing to delete
 	err := database.DeleteSlackIntegration()

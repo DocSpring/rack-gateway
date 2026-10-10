@@ -14,36 +14,6 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 )
 
-// Reset truncates all application tables to provide a clean slate for tests.
-// Uses TRUNCATE ... CASCADE so FK references are handled.
-// Silently ignores tables that don't exist (for tests that run before migrations).
-func Reset(t *testing.T, database *db.Database) {
-	t.Helper()
-
-	// Truncate each table individually, ignoring "does not exist" errors
-	tables := []string{
-		"api_tokens",
-		"audit.audit_event",
-		"audit.audit_event_aggregated",
-		"cli_login_states",
-		"mfa_attempts",
-		"users",
-	}
-
-	for _, table := range tables {
-		_, err := database.DB().Exec(fmt.Sprintf("TRUNCATE TABLE %s RESTART IDENTITY CASCADE", table))
-		if err != nil && !strings.Contains(err.Error(), "does not exist") {
-			t.Fatalf("failed to truncate %s: %v", table, err)
-		}
-	}
-
-	// Reset audit sequence (ignore if doesn't exist)
-	_, err := database.DB().Exec("ALTER SEQUENCE audit.audit_event_chain_index_seq RESTART WITH 0")
-	if err != nil && !strings.Contains(err.Error(), "does not exist") {
-		t.Fatalf("failed to reset audit sequence: %v", err)
-	}
-}
-
 // NewDatabase creates a unique temporary Postgres database for a test, copied from a fully migrated
 // template (see template.go), and returns a connected *db.Database. The database is dropped on test cleanup.
 // Sets TEST_DATABASE_URL env var to the created database DSN for subprocesses.

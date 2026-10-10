@@ -67,6 +67,5 @@ func TestAuthenticatedSetsRequestContext(t *testing.T) {
 func setupTestDatabase(t *testing.T) *db.Database {
 	t.Helper()
 	database := dbtest.NewDatabase(t)
-	t.Cleanup(func() { dbtest.Reset(t, database) })
 	return database
 }

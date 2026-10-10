@@ -16,7 +16,6 @@ import (
 
 func TestNotifyAuditEvent_NoIntegration(t *testing.T) {
 	database := dbtest.NewDatabase(t)
-	t.Cleanup(func() { dbtest.Reset(t, database) })
 
 	notifier := NewNotifier(database)
 
@@ -34,7 +33,6 @@ func TestNotifyAuditEvent_NoIntegration(t *testing.T) {
 
 func TestNotifyAuditEvent_NoMatchingChannels(t *testing.T) {
 	database := dbtest.NewDatabase(t)
-	t.Cleanup(func() { dbtest.Reset(t, database) })
 
 	// Create user
 	user, err := database.CreateUser("admin@example.com", "Admin User", []string{"admin"})
@@ -103,7 +101,6 @@ func TestMatchGlob(t *testing.T) {
 
 func TestMatchActionToChannels(t *testing.T) {
 	database := dbtest.NewDatabase(t)
-	t.Cleanup(func() { dbtest.Reset(t, database) })
 
 	notifier := NewNotifier(database)
 
@@ -151,7 +148,6 @@ func TestMatchActionToChannels(t *testing.T) {
 
 func TestFormatAuditLogMessage(t *testing.T) {
 	database := dbtest.NewDatabase(t)
-	t.Cleanup(func() { dbtest.Reset(t, database) })
 
 	notifier := NewNotifier(database)
 
@@ -250,7 +246,6 @@ func TestFormatAuditLogMessage(t *testing.T) {
 
 func TestNotifyDeployApprovalCreated(t *testing.T) {
 	database := dbtest.NewDatabase(t)
-	t.Cleanup(func() { dbtest.Reset(t, database) })
 
 	t.Run("skips when no integration configured", func(t *testing.T) {
 		notifier := NewNotifier(database)
@@ -334,7 +329,6 @@ func TestNotifyDeployApprovalCreated(t *testing.T) {
 
 func TestFormatDeployApprovalAlert_BasicMessage(t *testing.T) {
 	database := dbtest.NewDatabase(t)
-	t.Cleanup(func() { dbtest.Reset(t, database) })
 	notifier := NewNotifier(database)
 
 	now := time.Now()
@@ -368,7 +362,6 @@ func TestFormatDeployApprovalAlert_BasicMessage(t *testing.T) {
 
 func TestFormatDeployApprovalAlert_WithPRAndCI(t *testing.T) {
 	database := dbtest.NewDatabase(t)
-	t.Cleanup(func() { dbtest.Reset(t, database) })
 	notifier := NewNotifier(database)
 
 	now := time.Now()
@@ -410,7 +403,6 @@ func TestFormatDeployApprovalAlert_WithPRAndCI(t *testing.T) {
 
 func TestFormatDeployApprovalAlert_WithAPIToken(t *testing.T) {
 	database := dbtest.NewDatabase(t)
-	t.Cleanup(func() { dbtest.Reset(t, database) })
 	notifier := NewNotifier(database)
 
 	now := time.Now()
@@ -439,7 +431,6 @@ func TestFormatDeployApprovalAlert_WithAPIToken(t *testing.T) {
 
 func TestFormatDeployApprovalAlert_WithoutBranch(t *testing.T) {
 	database := dbtest.NewDatabase(t)
-	t.Cleanup(func() { dbtest.Reset(t, database) })
 	notifier := NewNotifier(database)
 
 	now := time.Now()

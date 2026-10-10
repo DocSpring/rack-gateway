@@ -1,6 +1,7 @@
 package db_test
 
 import (
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -15,13 +16,10 @@ import (
 )
 
 func TestDatabaseInitializeAdmin(t *testing.T) {
-	db, err := gwdb.NewFromEnv()
-	require.NoError(t, err)
-	defer db.Close() //nolint:errcheck,gosec // G104: test cleanup
-	dbtest.Reset(t, db)
+	db := dbtest.NewDatabase(t)
 
 	// First initialization should succeed
-	err = db.InitializeAdmin("admin@example.com", "Admin User")
+	err := db.InitializeAdmin("admin@example.com", "Admin User")
 	assert.NoError(t, err)
 
 	// Second initialization should be a no-op (users exist)
@@ -42,10 +40,7 @@ func TestDatabaseInitializeAdmin(t *testing.T) {
 }
 
 func TestDatabaseUserCRUD(t *testing.T) {
-	db, err := gwdb.NewFromEnv()
-	require.NoError(t, err)
-	defer db.Close() //nolint:errcheck,gosec // G104: test cleanup
-	dbtest.Reset(t, db)
+	db := dbtest.NewDatabase(t)
 
 	// Create user
 	user, err := db.CreateUser("test@example.com", "Test User", []string{"viewer", "ops"})
@@ -84,10 +79,7 @@ func TestDatabaseUserCRUD(t *testing.T) {
 }
 
 func TestDatabaseAuditLogs(t *testing.T) {
-	db, err := gwdb.NewFromEnv()
-	require.NoError(t, err)
-	defer db.Close() //nolint:errcheck,gosec // G104: test cleanup
-	dbtest.Reset(t, db)
+	db := dbtest.NewDatabase(t)
 
 	// Create audit logs
 	log1 := &gwdb.AuditLog{
@@ -121,7 +113,7 @@ func TestDatabaseAuditLogs(t *testing.T) {
 		ResponseTimeMs: 5,
 	}
 
-	err = db.CreateAuditLog(log1)
+	err := db.CreateAuditLog(log1)
 	require.NoError(t, err, "Failed to create log1: %v", err)
 
 	// Verify the first log was created by counting
@@ -177,10 +169,7 @@ func TestDatabaseAuditLogs(t *testing.T) {
 }
 
 func TestDatabaseAuditAggregation(t *testing.T) {
-	db, err := gwdb.NewFromEnv()
-	require.NoError(t, err)
-	defer db.Close() //nolint:errcheck,gosec // G104: test cleanup
-	dbtest.Reset(t, db)
+	db := dbtest.NewDatabase(t)
 
 	base := &gwdb.AuditLog{
 		UserEmail:      "poller@example.com",
@@ -261,10 +250,7 @@ func TestDatabaseAuditAggregation(t *testing.T) {
 }
 
 func TestDatabaseAuditAggregationNoTimeWindow(t *testing.T) {
-	db, err := gwdb.NewFromEnv()
-	require.NoError(t, err)
-	defer db.Close() //nolint:errcheck,gosec // G104: test cleanup
-	dbtest.Reset(t, db)
+	db := dbtest.NewDatabase(t)
 
 	base := time.Now().UTC()
 
@@ -315,7 +301,6 @@ func TestDatabaseAuditAggregationNoTimeWindow(t *testing.T) {
 func TestGetAuditLogsPaged(t *testing.T) {
 	db := dbtest.NewDatabase(t)
 	defer db.Close() //nolint:errcheck,gosec // G104: test cleanup
-	dbtest.Reset(t, db)
 
 	base := time.Now().UTC()
 
@@ -403,7 +388,6 @@ func TestGetAuditLogsPaged(t *testing.T) {
 func TestGetAuditLogByIDHandlesNulls(t *testing.T) {
 	db := dbtest.NewDatabase(t)
 	defer db.Close() //nolint:errcheck,gosec // G104: test cleanup
-	dbtest.Reset(t, db)
 
 	// Create a minimal audit log with several nullable fields omitted
 	log := &gwdb.AuditLog{
@@ -440,7 +424,6 @@ func TestGetAuditLogByIDHandlesNulls(t *testing.T) {
 func TestCreateAuditLogHandlesNullThenInet(t *testing.T) {
 	db := dbtest.NewDatabase(t)
 	defer db.Close() //nolint:errcheck,gosec // G104: test cleanup
-	dbtest.Reset(t, db)
 
 	initial := &gwdb.AuditLog{
 		UserEmail:      "sequence@example.com",
@@ -474,7 +457,6 @@ func TestCreateAuditLogHandlesNullThenInet(t *testing.T) {
 func TestListUsersIncludesCreatorMetadata(t *testing.T) {
 	db := dbtest.NewDatabase(t)
 	defer db.Close() //nolint:errcheck,gosec // G104: test cleanup
-	dbtest.Reset(t, db)
 
 	creator, err := db.CreateUser("admin@example.com", "Admin", []string{"admin"})
 	require.NoError(t, err)
@@ -502,7 +484,6 @@ func TestListUsersIncludesCreatorMetadata(t *testing.T) {
 func TestAuditLogIndexes(t *testing.T) {
 	db := dbtest.NewDatabase(t)
 	defer db.Close() //nolint:errcheck,gosec // G104: test cleanup
-	dbtest.Reset(t, db)
 
 	indexes := []string{
 		"audit.idx_audit_event_status",
@@ -520,11 +501,11 @@ func TestAuditLogIndexes(t *testing.T) {
 }
 
 func TestDatabaseInitialization(t *testing.T) {
-	db1, err := gwdb.NewFromEnv()
-	require.NoError(t, err)
-	dbtest.Reset(t, db1)
+	db1 := dbtest.NewDatabase(t)
+	// NewFromEnv must see the same data, so point it at this test's database.
+	t.Setenv("DATABASE_URL", os.Getenv("TEST_DATABASE_URL"))
 
-	err = db1.InitializeAdmin("admin@example.com", "Admin")
+	err := db1.InitializeAdmin("admin@example.com", "Admin")
 	require.NoError(t, err)
 	_, err = db1.CreateUser("user@example.com", "User", []string{"viewer"})
 	require.NoError(t, err)
@@ -543,7 +524,6 @@ func TestDatabaseInitialization(t *testing.T) {
 func TestDeployApprovalShortCommitHashMatching(t *testing.T) {
 	db := dbtest.NewDatabase(t)
 	defer db.Close() //nolint:errcheck,gosec // G104: test cleanup
-	dbtest.Reset(t, db)
 
 	// Create a user and API token for the deploy approval request
 	user, err := db.CreateUser("deployer@example.com", "Deployer", []string{"deployer"})

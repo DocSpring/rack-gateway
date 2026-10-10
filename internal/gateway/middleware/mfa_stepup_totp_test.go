@@ -25,7 +25,6 @@ func TestEnforceMFARequirements_AllowsInlineTOTP(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	database := dbtest.NewDatabase(t)
-	t.Cleanup(func() { dbtest.Reset(t, database) })
 
 	user, err := database.CreateUser("admin-inline-totp@example.com", "Inline Admin", []string{"admin"})
 	require.NoError(t, err)
