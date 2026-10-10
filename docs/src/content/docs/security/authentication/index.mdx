@@ -85,6 +85,7 @@ The gateway supports two authentication channels:
 5. After MFA, the browser is redirected to the CLI's loopback listener with a single-use login code
 6. The CLI redeems the login code with its code verifier and receives a session token
 7. Session token stored in `~/.config/rack-gateway/config.json`
+8. The CLI sends the browser on to the gateway's result page (success, or the reason the login failed)
 
 See [OAuth Flow](/security/authentication/oauth-flow/) for details.
 

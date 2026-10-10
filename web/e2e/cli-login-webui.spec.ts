@@ -5,7 +5,7 @@
  * 1. The CLI (played by the test) listens on 127.0.0.1 and starts a login with a PKCE challenge
  * 2. User completes OAuth and MFA enrollment in the browser
  * 3. The browser is handed back to the CLI's loopback listener with a single-use login code
- * 4. The CLI redeems the code with its PKCE verifier
+ * 4. The CLI redeems the code with its PKCE verifier and sends the browser to the success page
  * 5. User can perform authenticated actions in the WebUI
  *
  * NOTE: Deploy approval "approve" action requires MFAAlways (inline MFA with each request).
@@ -30,7 +30,16 @@ import { expect, test } from './fixtures'
 import { ensureMfaEnrollment, isOnMfaChallengeUrl, resetMfaFor, typeOtpCode } from './helpers'
 
 const ADMIN_EMAIL = 'admin@example.com'
-const LOOPBACK_URL = /^http:\/\/127\.0\.0\.1:\d+\/callback/
+const CLI_SUCCESS_URL = /\/app\/cli\/auth\/success$/
+
+/** Waits for the CLI to redeem the login and for the browser to land on the CLI login success page. */
+async function expectCliLoginApproved(page: Page, cli: CliLoopbackLogin) {
+  const completion = await cli.completion
+  expect(completion.status).toBe(200)
+  expect(completion.token).toBeTruthy()
+  await expect(page).toHaveURL(CLI_SUCCESS_URL, { timeout: 15_000 })
+  await expect(page.getByRole('heading', { name: 'Authentication Complete' })).toBeVisible()
+}
 
 /** Runs the browser half of a CLI login for an unenrolled admin and returns the new TOTP secret. */
 async function approveCliLoginWithEnrollment(page: Page, cli: CliLoopbackLogin): Promise<string> {
@@ -46,8 +55,7 @@ async function approveCliLoginWithEnrollment(page: Page, cli: CliLoopbackLogin):
 
   // After enrolling, the browser is handed back to the CLI's loopback listener
   const secret = await ensureMfaEnrollment(page, { email: ADMIN_EMAIL, useUi: true })
-  await expect(page).toHaveURL(LOOPBACK_URL, { timeout: 15_000 })
-  await expect(page.getByText(/Login approved/i)).toBeVisible()
+  await expectCliLoginApproved(page, cli)
   return secret
 }
 
@@ -97,11 +105,6 @@ test.describe('CLI login to WebUI flow', () => {
     await withCliLogin(request, async (cli) => {
       const secret = await approveCliLoginWithEnrollment(page, cli)
 
-      // The CLI redeems the login code with its PKCE verifier
-      const completion = await cli.complete(request)
-      expect(completion.status).toBe(200)
-      expect(completion.token).toBeTruthy()
-
       // The browser that approved the CLI login also holds a web session
       await page.goto(WebRoute('rack'))
       await page.waitForURL(/\/app\/rack/, { timeout: 10_000 })
@@ -126,8 +129,7 @@ test.describe('CLI login to WebUI flow', () => {
       await approveCliLoginWithEnrollment(page, cli)
 
       // The login code is single use
-      expect((await cli.complete(request)).status).toBe(200)
-      expect((await cli.complete(request)).status).toBe(400)
+      expect((await cli.redeemAgain(request)).status).toBe(400)
 
       const cookies = await page.context().cookies()
       expect(cookies.find((c) => c.name === 'session_token')).toBeTruthy()
@@ -165,7 +167,7 @@ test.describe('CLI login to WebUI flow', () => {
       await page.waitForURL((url) => isOnMfaChallengeUrl(url), { timeout: 10_000 })
       await clearMfaAttempts()
       await typeOtpCode(page, page, authenticator.generate(secret as string))
-      await expect(page).toHaveURL(LOOPBACK_URL, { timeout: 15_000 })
+      await expectCliLoginApproved(page, cli)
 
       await page.goto(WebRoute('rack'))
       await page.waitForURL(/\/app\/rack/, { timeout: 10_000 })

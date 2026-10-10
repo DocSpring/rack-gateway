@@ -116,6 +116,7 @@ sequenceDiagram
 
     CLI->>Gateway: POST /api/v1/auth/cli/complete (login_code + CLI code_verifier)
     Gateway-->>CLI: Session token
+    CLI-->>Browser: Redirect to /app/cli/auth/success (or /app/cli/auth/error?error=<code>)
 ```
 
 ### What protects the login
@@ -130,6 +131,10 @@ sequenceDiagram
 - **Single-use login code.** The login code is 256 bits of randomness, stored only as a SHA-256 hash, valid
   for 2 minutes, issued once per login, and deleted when redeemed (a failed redemption also burns it).
 - **CLI PKCE.** Redeeming the login code also requires the CLI's code verifier, which never leaves the CLI.
+- **Honest result page.** The CLI holds the browser on its callback until it has redeemed the login code and
+  saved the session, then redirects it (with `Referrer-Policy: no-referrer`, so the code isn't leaked as a
+  referrer) to the gateway's success or error page. The error page only shows fixed messages for known error
+  codes, so a crafted link can't put its own text on it.
 - **Time limit.** The whole login must finish within 10 minutes.
 - **First-factor enrollment.** A user with no MFA factor can enroll one during the login, but only in the
   browser bound to the login.

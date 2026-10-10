@@ -47,12 +47,8 @@ func loginCommandWithFlags(args []string, noOpen bool, authFile string) error {
 
 	fmt.Printf("Starting login for rack: %s via gateway: %s\n", rack, gatewayURL)
 
-	loginResp, err := runLoopbackLogin(gatewayURL, noOpen, authFile)
+	loginResp, err := runLoopbackLogin(rack, gatewayURL, noOpen, authFile)
 	if err != nil {
-		return err
-	}
-
-	if err := finalizeLogin(rack, loginResp); err != nil {
 		return err
 	}
 
@@ -62,7 +58,8 @@ func loginCommandWithFlags(args []string, noOpen bool, authFile string) error {
 
 // runLoopbackLogin performs an RFC 8252 loopback login: the browser hands a single-use login code
 // back to this process on 127.0.0.1, and only this process holds the PKCE verifier to redeem it.
-func runLoopbackLogin(gatewayURL string, noOpen bool, authFile string) (*LoginResponse, error) {
+// The session is saved for rack before the browser is shown that the login succeeded.
+func runLoopbackLogin(rack, gatewayURL string, noOpen bool, authFile string) (*LoginResponse, error) {
 	challenge, err := newPKCE()
 	if err != nil {
 		return nil, err
@@ -109,6 +106,10 @@ func runLoopbackLogin(gatewayURL string, noOpen bool, authFile string) (*LoginRe
 	if err != nil {
 		return nil, fmt.Errorf("login failed: %w", err)
 	}
+	if err := finalizeLogin(rack, loginResp); err != nil {
+		return nil, err
+	}
+	loopback.finish("")
 	return loginResp, nil
 }
 

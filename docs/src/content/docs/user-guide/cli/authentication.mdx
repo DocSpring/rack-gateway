@@ -28,7 +28,8 @@ The `rack-gateway` CLI uses OAuth to authenticate you with the gateway. This pag
 
 4. **Return to terminal**
 
-   After successful authentication, you can close the browser. The CLI receives a session token and stores it locally.
+   After successful authentication, the browser shows **Authentication Complete** and you can close it. The CLI
+   receives a session token and stores it locally.
 
 5. **Verify connection**
    ```bash
@@ -53,6 +54,7 @@ sequenceDiagram
     Gateway-->>CLI: 5. Browser redirected to 127.0.0.1 with a single-use login code
     CLI->>Gateway: 6. Redeem login code + PKCE verifier
     Gateway-->>CLI: 7. Session token
+    CLI-->>Gateway: 8. Browser sent to the login result page
 ```
 
 The CLI:
@@ -62,6 +64,7 @@ The CLI:
    local listener with a single-use login code
 4. Redeems the code together with its PKCE verifier for a session token
 5. Stores the session token in your config file
+6. Sends the browser on to the gateway's result page: **Authentication Complete**, or what went wrong
 
 The whole login must finish within 10 minutes. The browser must be on the **same machine** as the CLI,
 because the login code is delivered to `127.0.0.1` (see [Logging in from a remote host](#logging-in-from-a-remote-host)).
