@@ -97,6 +97,20 @@ DeepSource runs additional static analysis in CI. Key points:
 - Example: `"react/jsx-no-bind": "off"` disables the arrow-functions-in-JSX-props rule
 - The `react/jsx-no-bind` rule is intentionally disabled - it's outdated advice for modern React
 
+## 🌐 PUBLIC REPOSITORY
+
+This repository is public on purpose:
+
+- **It's open-source software.** Anyone running Convox racks can use it. It just hasn't been promoted much yet.
+- **CI depends on it.** GitHub-hosted runners are free for public repos and twice the size: 4 vCPU / 16 GB, vs
+  2 vCPU / 7 GB with billed minutes for private repos. When the repo was briefly private, CI took about twice as
+  long and the runner killed `govulncheck`.
+
+Treat everything here as public. Issues, PRs, commit messages and code describe the product only. Nothing about a
+particular company's racks, infrastructure, customers, people or internal processes belongs here; that goes in the
+deploying team's own tracker. `reference/` (local deployment config and secrets) is gitignored and must stay out of
+git.
+
 ## 🚨 PROJECT PHILOSOPHY - READ THIS FIRST
 
 **This is a greenfield project with ZERO active deployments.**
@@ -804,7 +818,7 @@ docker exec -i rack-gateway-postgres-1 psql -U postgres -d gateway_dev -c "\d+ d
 
 **Location**: `reference/convox_racks_terraform/`
 
-This directory contains the actual Terraform configuration used to deploy the rack-gateway to production infrastructure. It's checked into this repository as a reference for understanding the deployment environment.
+This directory contains the actual Terraform configuration used to deploy the rack-gateway to production infrastructure. It's a local, gitignored checkout (never commit it) for understanding the deployment environment.
 
 **Key files for debugging production issues:**
 
