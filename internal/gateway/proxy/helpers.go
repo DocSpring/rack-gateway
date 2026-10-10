@@ -3,7 +3,6 @@ package proxy
 import (
 	"bytes"
 	"fmt"
-	"net"
 	"net/http"
 	"strings"
 
@@ -11,15 +10,6 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 )
-
-// clientIPFromRequest extracts the client IP address from the request
-func clientIPFromRequest(r *http.Request) string {
-	ip := strings.TrimSpace(r.RemoteAddr)
-	if host, _, err := net.SplitHostPort(ip); err == nil {
-		return host
-	}
-	return ip
-}
 
 // logAccumulator accumulates log output with an optional size limit
 type logAccumulator struct {

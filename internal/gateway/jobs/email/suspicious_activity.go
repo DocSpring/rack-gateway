@@ -3,6 +3,7 @@ package email
 import (
 	"context"
 	"fmt"
+	"html"
 	"strings"
 
 	"github.com/riverqueue/river"
@@ -64,7 +65,7 @@ This is an automated security notification from Rack Gateway.`,
 	)
 
 	detailsHTML := formatDetailsAsHTML(args.Details)
-	html := fmt.Sprintf(`<p>Hello %s,</p>
+	htmlBody := fmt.Sprintf(`<p>Hello %s,</p>
 <p>We detected suspicious activity on your account.</p>
 <p><strong>Reason:</strong> %s</p>
 <p><strong>Details:</strong></p>
@@ -76,15 +77,15 @@ This is an automated security notification from Rack Gateway.`,
 </ul>
 <p>If this wasn't you, please contact your administrator immediately and consider changing your password.</p>
 <p><em>This is an automated security notification from Rack Gateway.</em></p>`,
-		args.UserName,
-		args.Reason,
-		job.CreatedAt.Format("2006-01-02 15:04:05 MST"),
-		args.IPAddress,
-		args.UserAgent,
+		html.EscapeString(args.UserName),
+		html.EscapeString(args.Reason),
+		html.EscapeString(job.CreatedAt.Format("2006-01-02 15:04:05 MST")),
+		html.EscapeString(args.IPAddress),
+		html.EscapeString(args.UserAgent),
 		detailsHTML,
 	)
 
-	if err := w.emailSender.Send(args.UserEmail, subject, text, html); err != nil {
+	if err := w.emailSender.Send(args.UserEmail, subject, text, htmlBody); err != nil {
 		return fmt.Errorf("failed to send suspicious activity user email: %w", err)
 	}
 
@@ -144,7 +145,7 @@ This is an automated security notification from Rack Gateway.`,
 	)
 
 	detailsHTML := formatDetailsAsHTML(args.Details)
-	html := fmt.Sprintf(`<p><strong>Admin Alert: Suspicious activity detected.</strong></p>
+	htmlBody := fmt.Sprintf(`<p><strong>Admin Alert: Suspicious activity detected.</strong></p>
 <p><strong>User:</strong> %s (%s)</p>
 <p><strong>Reason:</strong> %s</p>
 <p><strong>Details:</strong></p>
@@ -155,16 +156,16 @@ This is an automated security notification from Rack Gateway.`,
 %s
 </ul>
 <p><em>This is an automated security notification from Rack Gateway.</em></p>`,
-		args.UserEmail,
-		args.UserName,
-		args.Reason,
-		job.CreatedAt.Format("2006-01-02 15:04:05 MST"),
-		args.IPAddress,
-		args.UserAgent,
+		html.EscapeString(args.UserEmail),
+		html.EscapeString(args.UserName),
+		html.EscapeString(args.Reason),
+		html.EscapeString(job.CreatedAt.Format("2006-01-02 15:04:05 MST")),
+		html.EscapeString(args.IPAddress),
+		html.EscapeString(args.UserAgent),
 		detailsHTML,
 	)
 
-	if err := w.emailSender.SendMany(args.AdminEmails, subject, text, html); err != nil {
+	if err := w.emailSender.SendMany(args.AdminEmails, subject, text, htmlBody); err != nil {
 		return fmt.Errorf("failed to send suspicious activity admin emails: %w", err)
 	}
 
@@ -190,7 +191,7 @@ func formatDetailsAsHTML(details map[string]string) string {
 	}
 	parts := make([]string, 0, len(details))
 	for k, v := range details {
-		parts = append(parts, fmt.Sprintf("<li>%s: %s</li>", k, v))
+		parts = append(parts, fmt.Sprintf("<li>%s: %s</li>", html.EscapeString(k), html.EscapeString(v)))
 	}
 	return strings.Join(parts, "\n")
 }

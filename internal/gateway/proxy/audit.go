@@ -15,6 +15,7 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	"github.com/DocSpring/rack-gateway/internal/gateway/envutil"
 	"github.com/DocSpring/rack-gateway/internal/gateway/logutil"
+	"github.com/DocSpring/rack-gateway/internal/gateway/netutil"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 )
 
@@ -86,7 +87,7 @@ func (h *Handler) auditReleaseCreations(
 			RBACDecision:   "allow",
 			HTTPStatus:     status,
 			ResponseTimeMs: int(time.Since(start).Milliseconds()),
-			IPAddress:      clientIPFromRequest(r),
+			IPAddress:      netutil.ClientIP(r),
 			UserAgent:      r.UserAgent(),
 		})
 	}
@@ -187,7 +188,7 @@ func (h *Handler) createAuditLogIfNeeded(
 		Resource:       resource,
 		ResourceType:   resourceType,
 		Details:        h.auditLogger.BuildDetailsJSON(r),
-		IPAddress:      h.auditLogger.GetClientIP(r),
+		IPAddress:      netutil.ClientIP(r),
 		UserAgent:      r.UserAgent(),
 		Status:         h.auditLogger.MapHttpStatusToStatus(status),
 		RBACDecision:   "allow",

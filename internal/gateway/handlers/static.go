@@ -20,6 +20,7 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
 	"github.com/DocSpring/rack-gateway/internal/gateway/config"
 	"github.com/DocSpring/rack-gateway/internal/gateway/middleware"
+	"github.com/DocSpring/rack-gateway/internal/gateway/netutil"
 )
 
 // RootRedirect handles the root path redirect
@@ -329,7 +330,7 @@ func (h *StaticHandler) extractCSRFToken(r *http.Request) string {
 		return ""
 	}
 
-	clientIP := middleware.ClientIPFromRequest(r)
+	clientIP := netutil.ClientIP(r)
 	_, err = h.sessions.ValidateSession(sessionToken, clientIP, r.UserAgent())
 	if err != nil {
 		return ""

@@ -40,6 +40,12 @@ type authzEnv struct {
 
 func newAuthzEnv(t *testing.T) *authzEnv {
 	t.Helper()
+	return newAuthzEnvWithRouter(t, gin.New())
+}
+
+// newAuthzEnvWithRouter sets up the gateway's routes on router (e.g. one with trusted proxies configured).
+func newAuthzEnvWithRouter(t *testing.T, router *gin.Engine) *authzEnv {
+	t.Helper()
 	gin.SetMode(gin.TestMode)
 	database := dbtest.NewDatabase(t)
 	for userEmail, role := range map[string]string{
@@ -63,7 +69,6 @@ func newAuthzEnv(t *testing.T) *authzEnv {
 	require.NoError(t, err)
 
 	authService := auth.NewAuthService(tokenSvc, database, sessions)
-	router := gin.New()
 	Setup(router, &Config{Gateway: &deps.Gateway{
 		Config: &config.Config{
 			Domain:              "gateway.example.com",

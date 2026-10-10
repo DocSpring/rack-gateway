@@ -31,7 +31,7 @@ The error names every offending variable. Remove them from the production enviro
 | `DEV_MODE` | `false` | Enables development-friendly behavior |
 | `APP_SECRET_KEY` | (required) | Secret for sessions and CSRF |
 | `COOKIE_SECURE` | `true` | Set the `Secure` cookie attribute |
-| `TRUSTED_PROXY_CIDRS` | | Comma-separated proxy CIDRs |
+| `TRUSTED_PROXY_CIDRS` | | Comma-separated CIDRs of the reverse proxies in front of the gateway (e.g. an ingress). `X-Forwarded-For` is only believed from these, and the client IP is the right-most address that isn't one of them. Leave empty when clients connect directly; set it whenever there is a proxy, or audit logs, rate limits and security emails all see the proxy's address |
 | `LOG_LEVEL` | `info` | Log level (`debug`, `info`, `warn`, `error`) |
 | `DEBUG_TOPICS` | | Comma-separated debug topics |
 
@@ -62,7 +62,7 @@ The error names every offending variable. Remove them from the production enviro
 | `RACK_USERNAME` | `convox` | Basic auth username |
 | `RACK` | `default` | Rack name (internal identifier) |
 | `RACK_ALIAS` | `RACK` | Short alias (user-facing) |
-| `RACK_DISPLAY_NAME` | `RACK_ALIAS` | Human-friendly display name |
+| `RACK_DISPLAY_NAME` | `RACK_ALIAS` | Human-friendly display name; every email subject starts with `Rack Gateway (<name>):` |
 | `ENABLE_RACK_TLS_PINNING` | `false` | Enable rack TLS pinning |
 
 ## Database

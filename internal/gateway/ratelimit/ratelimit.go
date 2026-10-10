@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"golang.org/x/time/rate"
+
+	"github.com/DocSpring/rack-gateway/internal/gateway/netutil"
 )
 
 // RateLimiter manages per-IP rate limiting for authentication endpoints
@@ -94,35 +96,10 @@ func (rl *RateLimiter) Stop() {
 	close(rl.stop)
 }
 
-// getClientIP extracts the client IP from the request
-func getClientIP(r *http.Request) string {
-	// Check X-Forwarded-For header first (common behind proxies/load balancers)
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		// Take the first IP if there are multiple
-		if idx := strings.Index(xff, ","); idx != -1 {
-			return strings.TrimSpace(xff[:idx])
-		}
-		return strings.TrimSpace(xff)
-	}
-
-	// Check X-Real-IP header
-	if xri := r.Header.Get("X-Real-IP"); xri != "" {
-		return strings.TrimSpace(xri)
-	}
-
-	// Fall back to RemoteAddr
-	// RemoteAddr might be in format "IP:port" so extract just the IP
-	if idx := strings.LastIndex(r.RemoteAddr, ":"); idx != -1 {
-		return r.RemoteAddr[:idx]
-	}
-
-	return r.RemoteAddr
-}
-
 // Middleware returns an HTTP middleware that enforces rate limiting
 func (rl *RateLimiter) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ip := getClientIP(r)
+		ip := netutil.ClientIP(r)
 
 		limiter := rl.getVisitor(ip)
 		if !limiter.Allow() {
@@ -157,7 +134,7 @@ func (rl *RateLimiter) AuthEndpointsOnly(next http.Handler) http.Handler {
 			strings.Contains(path, "/callback") ||
 			strings.Contains(path, "/tokens") && r.Method == "POST" {
 			// Apply rate limiting
-			ip := getClientIP(r)
+			ip := netutil.ClientIP(r)
 			limiter := rl.getVisitor(ip)
 			if !limiter.Allow() {
 				w.Header().Set("Content-Type", "application/json")

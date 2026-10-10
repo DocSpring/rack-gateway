@@ -8,7 +8,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
 	"golang.org/x/time/rate"
+
+	"github.com/DocSpring/rack-gateway/internal/gateway/netutil"
 )
 
 func TestRateLimiter(t *testing.T) {
@@ -73,65 +76,33 @@ func TestRateLimiter(t *testing.T) {
 	}
 }
 
-func TestGetClientIP(t *testing.T) {
-	tests := []struct {
-		name       string
-		headers    map[string]string
-		remoteAddr string
-		expected   string
-	}{
-		{
-			name:       "X-Forwarded-For single IP",
-			headers:    map[string]string{"X-Forwarded-For": "203.0.113.1"},
-			remoteAddr: "192.168.1.1:1234",
-			expected:   "203.0.113.1",
-		},
-		{
-			name:       "X-Forwarded-For multiple IPs",
-			headers:    map[string]string{"X-Forwarded-For": "203.0.113.1, 198.51.100.1"},
-			remoteAddr: "192.168.1.1:1234",
-			expected:   "203.0.113.1",
-		},
-		{
-			name:       "X-Real-IP",
-			headers:    map[string]string{"X-Real-IP": "203.0.113.2"},
-			remoteAddr: "192.168.1.1:1234",
-			expected:   "203.0.113.2",
-		},
-		{
-			name:       "RemoteAddr with port",
-			headers:    map[string]string{},
-			remoteAddr: "192.168.1.1:1234",
-			expected:   "192.168.1.1",
-		},
-		{
-			name:       "RemoteAddr without port",
-			headers:    map[string]string{},
-			remoteAddr: "192.168.1.1",
-			expected:   "192.168.1.1",
-		},
-		{
-			name:       "IPv6 with port",
-			headers:    map[string]string{},
-			remoteAddr: "[2001:db8::1]:1234",
-			expected:   "[2001:db8::1]",
-		},
+func TestRateLimiterKeysOnResolvedClientIPNotForwardingHeaders(t *testing.T) {
+	rl := NewRateLimiter(100, 1)
+	handler := rl.Middleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	serve := func(clientIP, forwardedFor string) int {
+		req := httptest.NewRequest("GET", "/test", nil)
+		req.RemoteAddr = "10.2.87.202:4321"
+		if forwardedFor != "" {
+			req.Header.Set("X-Forwarded-For", forwardedFor)
+		}
+		if clientIP != "" {
+			req = req.WithContext(netutil.WithClientIP(req.Context(), clientIP))
+		}
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		return rec.Code
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest("GET", "/test", nil)
-			req.RemoteAddr = tt.remoteAddr
-			for k, v := range tt.headers {
-				req.Header.Set(k, v)
-			}
+	// A forged X-Forwarded-For doesn't buy a fresh bucket: without a resolved client IP the peer is used.
+	require.Equal(t, http.StatusOK, serve("", "1.1.1.1"))
+	require.Equal(t, http.StatusTooManyRequests, serve("", "2.2.2.2"))
 
-			ip := getClientIP(req)
-			if ip != tt.expected {
-				t.Errorf("expected IP %s, got %s", tt.expected, ip)
-			}
-		})
-	}
+	// Clients the router resolved behind a trusted proxy each get their own bucket.
+	require.Equal(t, http.StatusOK, serve("100.85.250.16", ""))
+	require.Equal(t, http.StatusOK, serve("100.107.53.108", ""))
+	require.Equal(t, http.StatusTooManyRequests, serve("100.85.250.16", ""))
 }
 
 func TestAuthEndpointsOnly(t *testing.T) {

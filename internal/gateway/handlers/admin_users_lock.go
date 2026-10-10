@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"fmt"
+	"html"
 	"net/http"
 	"strings"
 	"time"
@@ -220,7 +221,7 @@ func (h *AdminHandler) sendLockEmail(userEmail, reason string) {
 		"<p>Your account has been locked by an administrator.</p>"+
 			"<p><strong>Reason:</strong> %s</p>"+
 			"<p>Please contact your administrator for assistance.</p>",
-		reason,
+		html.EscapeString(reason),
 	)
 	_ = h.emailSender.Send(userEmail, subject, textBody, htmlBody)
 }

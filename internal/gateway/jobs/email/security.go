@@ -3,6 +3,7 @@ package email
 import (
 	"context"
 	"fmt"
+	"html"
 
 	"github.com/riverqueue/river"
 
@@ -54,7 +55,7 @@ This is an automated security notification from Rack Gateway.`,
 		args.UserAgent,
 	)
 
-	html := fmt.Sprintf(`<p>Hello %s,</p>
+	htmlBody := fmt.Sprintf(`<p>Hello %s,</p>
 <p>We detected a failed multi-factor authentication attempt on your account.</p>
 <p><strong>Details:</strong></p>
 <ul>
@@ -64,13 +65,13 @@ This is an automated security notification from Rack Gateway.`,
 </ul>
 <p>If this wasn't you, please contact your administrator immediately.</p>
 <p><em>This is an automated security notification from Rack Gateway.</em></p>`,
-		args.UserName,
-		job.CreatedAt.Format("2006-01-02 15:04:05 MST"),
-		args.IPAddress,
-		args.UserAgent,
+		html.EscapeString(args.UserName),
+		html.EscapeString(job.CreatedAt.Format("2006-01-02 15:04:05 MST")),
+		html.EscapeString(args.IPAddress),
+		html.EscapeString(args.UserAgent),
 	)
 
-	if err := w.emailSender.Send(args.UserEmail, subject, text, html); err != nil {
+	if err := w.emailSender.Send(args.UserEmail, subject, text, htmlBody); err != nil {
 		return fmt.Errorf("failed to send failed MFA email: %w", err)
 	}
 
@@ -128,7 +129,7 @@ This is an automated security notification from Rack Gateway.`,
 		args.UserAgent,
 	)
 
-	html := fmt.Sprintf(`<p>Hello %s,</p>
+	htmlBody := fmt.Sprintf(`<p>Hello %s,</p>
 <p>We detected a failed login attempt on your account.</p>
 <p><strong>Details:</strong></p>
 <ul>
@@ -140,15 +141,15 @@ This is an automated security notification from Rack Gateway.`,
 </ul>
 <p>If this wasn't you, please contact your administrator immediately.</p>
 <p><em>This is an automated security notification from Rack Gateway.</em></p>`,
-		args.UserName,
-		job.CreatedAt.Format("2006-01-02 15:04:05 MST"),
-		args.Channel,
-		args.Status,
-		args.IPAddress,
-		args.UserAgent,
+		html.EscapeString(args.UserName),
+		html.EscapeString(job.CreatedAt.Format("2006-01-02 15:04:05 MST")),
+		html.EscapeString(args.Channel),
+		html.EscapeString(args.Status),
+		html.EscapeString(args.IPAddress),
+		html.EscapeString(args.UserAgent),
 	)
 
-	if err := w.emailSender.Send(args.UserEmail, subject, text, html); err != nil {
+	if err := w.emailSender.Send(args.UserEmail, subject, text, htmlBody); err != nil {
 		return fmt.Errorf("failed to send failed login email: %w", err)
 	}
 
@@ -203,7 +204,7 @@ This is an automated security notification from Rack Gateway.`,
 		args.UserAgent,
 	)
 
-	html := fmt.Sprintf(`<p>Hello %s,</p>
+	htmlBody := fmt.Sprintf(`<p>Hello %s,</p>
 <p>Your account has exceeded the rate limit.</p>
 <p><strong>Details:</strong></p>
 <ul>
@@ -214,14 +215,14 @@ This is an automated security notification from Rack Gateway.`,
 </ul>
 <p>Please slow down your requests. If you believe this is an error, contact your administrator.</p>
 <p><em>This is an automated security notification from Rack Gateway.</em></p>`,
-		args.UserName,
-		job.CreatedAt.Format("2006-01-02 15:04:05 MST"),
-		args.Path,
-		args.IPAddress,
-		args.UserAgent,
+		html.EscapeString(args.UserName),
+		html.EscapeString(job.CreatedAt.Format("2006-01-02 15:04:05 MST")),
+		html.EscapeString(args.Path),
+		html.EscapeString(args.IPAddress),
+		html.EscapeString(args.UserAgent),
 	)
 
-	if err := w.emailSender.Send(args.UserEmail, subject, text, html); err != nil {
+	if err := w.emailSender.Send(args.UserEmail, subject, text, htmlBody); err != nil {
 		return fmt.Errorf("failed to send rate limit user email: %w", err)
 	}
 
@@ -274,7 +275,7 @@ This is an automated security notification from Rack Gateway.`,
 		args.UserAgent,
 	)
 
-	html := fmt.Sprintf(`<p><strong>Admin Alert: Rate limit exceeded by user.</strong></p>
+	htmlBody := fmt.Sprintf(`<p><strong>Admin Alert: Rate limit exceeded by user.</strong></p>
 <p><strong>User:</strong> %s (%s)</p>
 <p><strong>Details:</strong></p>
 <ul>
@@ -284,15 +285,15 @@ This is an automated security notification from Rack Gateway.`,
 <li>User Agent: %s</li>
 </ul>
 <p><em>This is an automated security notification from Rack Gateway.</em></p>`,
-		args.UserEmail,
-		args.UserName,
-		job.CreatedAt.Format("2006-01-02 15:04:05 MST"),
-		args.Path,
-		args.IPAddress,
-		args.UserAgent,
+		html.EscapeString(args.UserEmail),
+		html.EscapeString(args.UserName),
+		html.EscapeString(job.CreatedAt.Format("2006-01-02 15:04:05 MST")),
+		html.EscapeString(args.Path),
+		html.EscapeString(args.IPAddress),
+		html.EscapeString(args.UserAgent),
 	)
 
-	if err := w.emailSender.SendMany(args.AdminEmails, subject, text, html); err != nil {
+	if err := w.emailSender.SendMany(args.AdminEmails, subject, text, htmlBody); err != nil {
 		return fmt.Errorf("failed to send rate limit admin emails: %w", err)
 	}
 

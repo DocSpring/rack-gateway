@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
+	"github.com/DocSpring/rack-gateway/internal/gateway/netutil"
 )
 
 // CSRF validates CSRF tokens for state-changing requests.
@@ -41,7 +42,7 @@ func CSRF(sessionManager *auth.SessionManager) gin.HandlerFunc {
 		}
 
 		trimmedSession := strings.TrimSpace(sessionToken)
-		clientIP := ClientIPFromRequest(c.Request)
+		clientIP := netutil.ClientIP(c.Request)
 		userAgent := c.GetHeader("User-Agent")
 		if _, err := sessionManager.ValidateSession(trimmedSession, clientIP, userAgent); err != nil {
 			c.JSON(http.StatusForbidden, gin.H{"error": "invalid CSRF token"})

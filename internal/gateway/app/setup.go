@@ -74,7 +74,10 @@ func (a *App) initializeServices() error {
 
 	a.initRackCertManager()
 
-	deliverySender := a.newEmailSender()
+	deliverySender := email.NewIdentifiedSender(a.newEmailSender(), email.Identity{
+		Name: a.Config.Racks["default"].DisplayName,
+		URL:  a.gatewayOrigin(),
+	})
 	if err := a.initJobsClient(deliverySender, slackNotifier); err != nil {
 		return err
 	}
@@ -162,19 +165,22 @@ func (a *App) resolveWebAuthnConfig() (string, string) {
 	if origin != "" {
 		return rpid, origin
 	}
+	return rpid, a.gatewayOrigin()
+}
 
-	if a.Config.DevMode && (a.Config.Domain == "localhost" || strings.HasPrefix(a.Config.Domain, "localhost:")) {
-		return rpid, fmt.Sprintf("http://localhost:%s", a.Config.Port)
+// gatewayOrigin returns the gateway's public origin (scheme://domain), or "" when DOMAIN is not set.
+func (a *App) gatewayOrigin() string {
+	localhost := a.Config.Domain == "localhost" || strings.HasPrefix(a.Config.Domain, "localhost:")
+	if a.Config.DevMode && localhost {
+		return fmt.Sprintf("http://localhost:%s", a.Config.Port)
 	}
 	if a.Config.Domain == "" {
-		return rpid, origin
+		return ""
 	}
-
-	scheme := "https"
-	if a.Config.Domain == "localhost" || strings.HasPrefix(a.Config.Domain, "localhost:") {
-		scheme = "http"
+	if localhost {
+		return "http://" + a.Config.Domain
 	}
-	return rpid, fmt.Sprintf("%s://%s", scheme, a.Config.Domain)
+	return "https://" + a.Config.Domain
 }
 
 func logWebAuthnStatus(cfg *mfaRuntimeConfig) {
@@ -412,6 +418,12 @@ func (a *App) setupRouter() {
 	if err := router.SetTrustedProxies(a.Config.TrustedProxies); err != nil {
 		log.Printf("failed to configure trusted proxies: %v", err)
 		panic(fmt.Sprintf("failed to configure trusted proxies: %v", err))
+	}
+	// Only X-Forwarded-For, and only from TRUSTED_PROXY_CIDRS (see middleware.ClientIP).
+	router.RemoteIPHeaders = []string{"X-Forwarded-For"}
+	if len(a.Config.TrustedProxies) == 0 && !a.Config.DevMode {
+		log.Printf("TRUSTED_PROXY_CIDRS is not set: client IPs are the TCP peer. " +
+			"Set it if the gateway runs behind a proxy, or audit logs and rate limits will only see the proxy.")
 	}
 
 	// Set up routes with all dependencies

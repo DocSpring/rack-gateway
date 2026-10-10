@@ -1,8 +1,12 @@
 package email
 
 import (
+	"context"
 	"testing"
+	"time"
 
+	"github.com/riverqueue/river"
+	"github.com/riverqueue/river/rivertype"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -78,4 +82,42 @@ func TestRateLimitAdminArgs_Kind(t *testing.T) {
 func TestNewRateLimitAdminWorker(t *testing.T) {
 	worker := NewRateLimitAdminWorker(nil)
 	require.NotNil(t, worker)
+}
+
+type capturedEmail struct{ subject, text, html string }
+
+type capturingSender struct{ sent []capturedEmail }
+
+func (c *capturingSender) Send(_, subject, text, html string) error {
+	c.sent = append(c.sent, capturedEmail{subject, text, html})
+	return nil
+}
+
+func (c *capturingSender) SendMany(_ []string, subject, text, html string) error {
+	c.sent = append(c.sent, capturedEmail{subject, text, html})
+	return nil
+}
+
+func TestRateLimitAdminEmailEscapesRequestValues(t *testing.T) {
+	sender := &capturingSender{}
+	job := &river.Job[RateLimitAdminArgs]{
+		JobRow: &rivertype.JobRow{CreatedAt: time.Date(2026, 10, 10, 2, 0, 0, 0, time.UTC)},
+		Args: RateLimitAdminArgs{
+			AdminEmails: []string{"admin@example.com"},
+			UserName:    `<b>Mallory</b>`,
+			Path:        `/api/v1/auth/cli/start?<script>`,
+			IPAddress:   "100.85.250.16",
+			UserAgent:   `evil</body><a href="https://phish.example">click</a>`,
+		},
+	}
+	require.NoError(t, NewRateLimitAdminWorker(sender).Work(context.Background(), job))
+
+	require.Len(t, sender.sent, 1)
+	html := sender.sent[0].html
+	assert.NotContains(t, html, "<b>Mallory</b>")
+	assert.NotContains(t, html, "<script>")
+	assert.NotContains(t, html, "</body>")
+	assert.NotContains(t, html, `<a href="https://phish.example">`)
+	assert.Contains(t, html, "&lt;b&gt;Mallory&lt;/b&gt;")
+	assert.Contains(t, html, "evil&lt;/body&gt;")
 }

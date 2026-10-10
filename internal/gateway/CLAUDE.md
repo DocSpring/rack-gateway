@@ -74,6 +74,8 @@ Request forwarding with WebSocket support:
   manifest from the query string too, which would bypass the gateway's checks
 - Sets `X-Convox-Actor` (user email or `token:<name>`); internal identity headers sent by clients are
   stripped by `middleware/internal_headers.go`
+- Client IPs: use `c.ClientIP()` in gin handlers and `netutil.ClientIP(r)` elsewhere. Both trust
+  `X-Forwarded-For` only from `TRUSTED_PROXY_CIDRS`. Never parse forwarding headers yourself
 - Forwards all methods: GET, POST, PUT, PATCH, DELETE
 - Full WebSocket proxy support for `convox exec` and logs
 
@@ -234,4 +236,6 @@ Configuration in `.air.toml`.
 - **Go handlers must never render HTML**: All web views are rendered via the SPA
 - **Never expose rack tokens**: Always inject from environment, never from client
 - **Audit everything**: All requests should be logged with RBAC decisions
+- **Emails name their gateway**: the delivery sender (`email.IdentifiedSender`) prefixes every subject with
+  `Rack Gateway (<RACK_DISPLAY_NAME>):` and adds a footer with the gateway URL, so write subjects without it
 - **Secret redaction**: Always use audit logger for sensitive data

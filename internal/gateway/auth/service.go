@@ -202,7 +202,7 @@ func (a *Service) authenticateFromCookie(r *http.Request) (*User, string, error)
 		return nil, "", nil
 	}
 
-	result, err := a.sessions.ValidateSession(cookie.Value, netutil.ClientIPFromRequest(r), r.UserAgent())
+	result, err := a.sessions.ValidateSession(cookie.Value, netutil.ClientIP(r), r.UserAgent())
 	if err != nil {
 		return nil, "cookie", fmt.Errorf("authentication failed: %v", err)
 	}
@@ -405,7 +405,7 @@ func (a *Service) validateSessionToken(sessionToken string, r *http.Request) (*U
 	if trimmed == "" {
 		return nil, fmt.Errorf("empty session token")
 	}
-	result, err := a.sessions.ValidateSession(trimmed, netutil.ClientIPFromRequest(r), r.UserAgent())
+	result, err := a.sessions.ValidateSession(trimmed, netutil.ClientIP(r), r.UserAgent())
 	if err != nil {
 		return nil, err
 	}

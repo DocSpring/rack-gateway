@@ -79,7 +79,22 @@ INFO: Email sender configured (Noop - emails disabled)
 
 ## Email Types
 
+Every email names the gateway that sent it, so you can tell racks apart when one person gets email from several
+gateways. The subject starts with `Rack Gateway (<RACK_DISPLAY_NAME>): `, for example
+`Rack Gateway (Staging): New CLI Login`, and the email ends with a footer giving the gateway's name and URL. The
+subjects below are shown without that prefix.
+
 ### Security Notifications
+
+#### New CLI Login
+
+Sent to the user whenever a CLI session is created for their account.
+
+| Field | Content |
+|-------|---------|
+| Subject | New CLI Login |
+| To | User email |
+| Content | Time, device, IP address, user agent |
 
 #### Failed MFA Verification
 
@@ -140,7 +155,7 @@ Sent when a new user is added.
 
 | Field | Content |
 |-------|---------|
-| Subject | Welcome to \{Rack\} Rack Gateway |
+| Subject | Welcome |
 | To | New user email |
 | Content | Roles, inviter, gateway URL |
 
@@ -165,7 +180,7 @@ Sent to all admins when a user is added.
 
 | Field | Content |
 |-------|---------|
-| Subject | New User Added to \{Rack\} Rack Gateway: \{email\} |
+| Subject | New user added: \{email\} |
 | To | All admin users (BCC) |
 | Content | User info, roles, creator, time |
 
@@ -187,9 +202,9 @@ Sent when an account is auto-locked due to MFA failures.
 
 | Field | Content |
 |-------|---------|
-| Subject | Account Auto-Locked - Too Many MFA Failures |
-| To | User and admins |
-| Content | Failure count, IP addresses, time |
+| Subject | Account Locked - Multiple Failed Login Attempts |
+| To | Locked user email |
+| Content | Contact instructions |
 
 ## Job Queue
 
@@ -199,14 +214,16 @@ Email notifications use River for async processing:
 
 | Job Kind | Description |
 |----------|-------------|
+| `email:send:single` / `email:send:many` | Emails built by request handlers (API tokens, account locks, rack parameter changes) |
+| `email:security:new_cli_session` | New CLI login notification |
 | `email:security:failed_mfa` | Failed MFA notification |
 | `email:security:failed_login` | Failed login notification |
 | `email:security:rate_limit_user` | Rate limit user alert |
 | `email:security:rate_limit_admin` | Rate limit admin alert |
+| `email:security:suspicious_activity_user` | Suspicious activity (user) |
+| `email:security:suspicious_activity_admin` | Suspicious activity (admins) |
 | `email:user:welcome` | Welcome email |
 | `email:user:added_admin` | Admin notification |
-| `email:user:locked` | Account locked |
-| `email:security:mfa_autolock` | MFA auto-lock alert |
 
 ### Retry Behavior
 
@@ -236,7 +253,7 @@ DEV_EMAIL_LOG=true
 Emails are logged to stdout:
 
 ```
-DEBUG [email:summary] to=alice@example.com subject="Welcome to Production Rack Gateway"
+DEBUG [email:summary] to=alice@example.com subject="Rack Gateway (Production): Welcome"
 DEBUG [email:body] text=... html=...
 ```
 
