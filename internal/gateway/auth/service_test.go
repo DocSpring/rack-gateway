@@ -144,3 +144,33 @@ func TestAPITokenRejectedWhenOwnerLocked(t *testing.T) {
 		t.Fatalf("token must be rejected once its owner is locked")
 	}
 }
+
+// A failed API token attempt is audited with the client's IP and user agent.
+func TestInvalidAPITokenAuditRecordsClient(t *testing.T) {
+	database := dbtest.NewDatabase(t)
+	svc := NewAuthService(token.NewService(database), database, nil)
+
+	next := http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
+		t.Fatalf("an invalid token must not authenticate")
+	})
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/info", nil)
+	req.RemoteAddr = "203.0.113.7:51234"
+	req.Header.Set("User-Agent", "attacker-cli/1.0")
+	req.Header.Set("Authorization", "Bearer rgw_not_a_real_token")
+	svc.Middleware(next).ServeHTTP(httptest.NewRecorder(), req)
+
+	logs, err := database.GetAuditLogs("", time.Time{}, 10)
+	if err != nil {
+		t.Fatalf("get audit logs: %v", err)
+	}
+	for _, entry := range logs {
+		if entry.Action != "token.validate" {
+			continue
+		}
+		if entry.IPAddress != "203.0.113.7" || entry.UserAgent != "attacker-cli/1.0" {
+			t.Fatalf("audit row has ip %q, user agent %q", entry.IPAddress, entry.UserAgent)
+		}
+		return
+	}
+	t.Fatalf("no token.validate audit row in %d rows", len(logs))
+}
