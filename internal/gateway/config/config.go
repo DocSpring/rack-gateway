@@ -85,6 +85,10 @@ func Load() (*Config, error) {
 		// Without it any Google account could sign in (and be matched to users by email).
 		return nil, fmt.Errorf("GOOGLE_ALLOWED_DOMAIN is required in production")
 	}
+	if !cfg.DevMode && strings.TrimSpace(cfg.Domain) == "" {
+		// Without it the Host and Origin checks are off, and links in emails would have to come from the request.
+		return nil, fmt.Errorf("DOMAIN is required in production")
+	}
 
 	cfg.loadUserRoles()
 	cfg.loadTrustedProxies()
@@ -285,4 +289,21 @@ func getEnvDuration(key string, defaultVal time.Duration) time.Duration {
 		}
 	}
 	return defaultVal
+}
+
+// PublicURL is the gateway's own origin (scheme://domain) from DOMAIN, or "" when DOMAIN is not set (dev mode
+// only). In dev mode a bare localhost DOMAIN gets the gateway's port. Links the gateway sends out (emails, the
+// WebAuthn origin) use it; never build them from request headers, which the client controls.
+func (c *Config) PublicURL() string {
+	localhost := c.Domain == "localhost" || strings.HasPrefix(c.Domain, "localhost:")
+	if c.DevMode && localhost {
+		return fmt.Sprintf("http://localhost:%s", c.Port)
+	}
+	if c.Domain == "" {
+		return ""
+	}
+	if localhost {
+		return "http://" + c.Domain
+	}
+	return "https://" + c.Domain
 }

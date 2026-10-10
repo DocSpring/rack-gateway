@@ -76,7 +76,7 @@ func (a *App) initializeServices() error {
 
 	deliverySender := email.NewIdentifiedSender(a.newEmailSender(), email.Identity{
 		Name: a.Config.Racks["default"].DisplayName,
-		URL:  a.gatewayOrigin(),
+		URL:  a.Config.PublicURL(),
 	})
 	if err := a.initJobsClient(deliverySender, slackNotifier); err != nil {
 		return err
@@ -165,22 +165,7 @@ func (a *App) resolveWebAuthnConfig() (string, string) {
 	if origin != "" {
 		return rpid, origin
 	}
-	return rpid, a.gatewayOrigin()
-}
-
-// gatewayOrigin returns the gateway's public origin (scheme://domain), or "" when DOMAIN is not set.
-func (a *App) gatewayOrigin() string {
-	localhost := a.Config.Domain == "localhost" || strings.HasPrefix(a.Config.Domain, "localhost:")
-	if a.Config.DevMode && localhost {
-		return fmt.Sprintf("http://localhost:%s", a.Config.Port)
-	}
-	if a.Config.Domain == "" {
-		return ""
-	}
-	if localhost {
-		return "http://" + a.Config.Domain
-	}
-	return "https://" + a.Config.Domain
+	return rpid, a.Config.PublicURL()
 }
 
 func logWebAuthnStatus(cfg *mfaRuntimeConfig) {
