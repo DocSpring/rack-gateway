@@ -121,30 +121,20 @@ ensure_local_database() {
         return
     fi
 
-    local IFS=$'\n'
-    read -r db_name admin_uri host port <<'EOF'
-$(python3 <<'PY'
-import os
-from urllib.parse import urlsplit, urlunsplit
+    local parsed db_name admin_uri host port
+    # The URL is an argument: a mise python3 shim would replace DATABASE_URL in the environment.
+    parsed="$(python3 - "$DATABASE_URL" <<'PY'
+import sys
+from urllib.parse import urlsplit
 
-uri = os.environ.get("DATABASE_URL")
-if not uri:
-    raise SystemExit
-
-parts = urlsplit(uri)
-dbname = parts.path.lstrip('/')
-if not dbname:
-    raise SystemExit
-
-admin_parts = parts._replace(path='/postgres')
-admin_uri = urlunsplit(admin_parts)
-print(dbname)
-print(admin_uri)
+parts = urlsplit(sys.argv[1])
+print(parts.path.lstrip('/'))
+print(parts._replace(path='/postgres').geturl())
 print(parts.hostname or '')
 print(parts.port or '')
 PY
-)
-EOF
+)"
+    { read -r db_name; read -r admin_uri; read -r host; read -r port; } <<<"$parsed"
 
     if [ -z "$db_name" ] || [ -z "$admin_uri" ]; then
         return

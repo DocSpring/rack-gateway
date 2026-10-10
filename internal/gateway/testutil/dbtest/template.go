@@ -50,10 +50,7 @@ func ensureTemplate(t *testing.T, admin *sql.DB, baseDSN string) string {
 	name := templateName(t)
 	ctx := context.Background()
 
-	conn, err := admin.Conn(ctx)
-	if err != nil {
-		t.Fatalf("template connection: %v", err)
-	}
+	conn := adminConn(ctx, t, admin)
 	// Advisory locks belong to the session, so lock and unlock on this connection. Closing it also releases
 	// the lock if the test fails part way.
 	if _, err := conn.ExecContext(ctx, "SELECT pg_advisory_lock(hashtext($1))", name); err != nil {
@@ -69,7 +66,7 @@ func ensureTemplate(t *testing.T, admin *sql.DB, baseDSN string) string {
 	}()
 
 	var isTemplate bool
-	err = conn.QueryRowContext(ctx, "SELECT datistemplate FROM pg_database WHERE datname = $1", name).Scan(&isTemplate)
+	err := conn.QueryRowContext(ctx, "SELECT datistemplate FROM pg_database WHERE datname = $1", name).Scan(&isTemplate)
 	switch {
 	case err == nil && isTemplate:
 		return name
@@ -90,6 +87,22 @@ func ensureTemplate(t *testing.T, admin *sql.DB, baseDSN string) string {
 		t.Fatalf("mark template %s: %v", name, err)
 	}
 	return name
+}
+
+// adminConn returns one connection from the admin pool. It retries for a few seconds, because a freshly started
+// Postgres container restarts once after initializing (e.g. the first test run in CI).
+func adminConn(ctx context.Context, t *testing.T, admin *sql.DB) *sql.Conn {
+	t.Helper()
+	var err error
+	for attempt := 0; attempt < 100; attempt++ {
+		var conn *sql.Conn
+		if conn, err = admin.Conn(ctx); err == nil {
+			return conn
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	t.Fatalf("template connection: %v", err)
+	return nil
 }
 
 // migrateTemplate runs every migration in the template and closes all its connections, so it can be copied.
