@@ -103,13 +103,6 @@ func (h *Handler) processBufferedResponse(
 		h.handleProcessCreation(r, body)
 	}
 
-	if r.Method == http.MethodPost &&
-		rbac.KeyMatch3(pth, "/apps/{app}/releases/{id}/promote") &&
-		resp.StatusCode >= 200 &&
-		resp.StatusCode < 300 {
-		h.markDeployApprovalDeployed(r)
-	}
-
 	return body, nil
 }
 
@@ -120,7 +113,13 @@ func (h *Handler) handleProcessCreation(r *http.Request, body []byte) {
 	}
 }
 
-func (h *Handler) markDeployApprovalDeployed(r *http.Request) {
+// markDeployApprovalDeployedAfterPromote marks the approval behind a successful release promote as deployed,
+// so the approval can't promote again. It runs for every proxied response: promote responses aren't buffered.
+func (h *Handler) markDeployApprovalDeployedAfterPromote(r *http.Request, pth string, statusCode int) {
+	if r.Method != http.MethodPost || statusCode < 200 || statusCode >= 300 ||
+		!rbac.KeyMatch3(pth, "/apps/{app}/releases/{id}/promote") {
+		return
+	}
 	tracker := getDeployApprovalTracker(r.Context())
 	if tracker == nil || h.database == nil {
 		return

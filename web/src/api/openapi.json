@@ -3286,6 +3286,16 @@
                             }
                         }
                     },
+                    "409": {
+                        "description": "Conflict",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
+                                }
+                            }
+                        }
+                    },
                     "500": {
                         "description": "Internal Server Error",
                         "content": {
@@ -5768,12 +5778,6 @@
                     },
                     "release_id": {
                         "type": "string"
-                    },
-                    "release_promoted_at": {
-                        "type": "string"
-                    },
-                    "release_promoted_by_api_token_id": {
-                        "type": "integer"
                     },
                     "status": {
                         "type": "string"

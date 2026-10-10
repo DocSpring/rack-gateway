@@ -23,7 +23,11 @@ func (d *Database) CreateDeployApprovalRequest(
 		return nil, err
 	}
 
-	if err := d.checkDeployApprovalConflict(targetAPITokenID, normalizedGitCommitHash); err != nil {
+	// An approval past its window no longer counts as open, so it mustn't block a new request.
+	if _, err := d.ExpireDeployApprovalRequests(); err != nil {
+		return nil, err
+	}
+	if err := d.checkDeployApprovalConflict(targetAPITokenID, normalizedGitCommitHash, normalizedApp); err != nil {
 		return nil, err
 	}
 
@@ -34,7 +38,7 @@ func (d *Database) CreateDeployApprovalRequest(
 		createdByUserID, nullValues, targetAPITokenID,
 	)
 	if err != nil {
-		return d.handleDeployApprovalInsertError(err, targetAPITokenID, normalizedGitCommitHash)
+		return d.handleDeployApprovalInsertError(err, targetAPITokenID, normalizedGitCommitHash, normalizedApp)
 	}
 	return d.GetDeployApprovalRequest(id)
 }
@@ -61,11 +65,14 @@ func validateAndNormalizeDeployApprovalInput(
 	return message, app, gitCommitHash, nil
 }
 
-func (d *Database) checkDeployApprovalConflict(tokenID int64, gitCommitHash string) error {
+// checkDeployApprovalConflict returns a conflict error carrying the open (pending or unexpired approved)
+// request for this commit, target token and app, if there is one.
+func (d *Database) checkDeployApprovalConflict(tokenID int64, gitCommitHash, app string) error {
 	// Check for unexpired approved requests
 	existing, err := d.FindDeployApprovalRequest(DeployApprovalLookup{
 		TokenID:       tokenID,
 		GitCommitHash: gitCommitHash,
+		App:           app,
 		StatusFilter:  DeployApprovalRequestStatusApproved, // FindDeployApprovalRequest enforces expiry for "approved"
 	})
 	if err != nil && !errors.Is(err, ErrDeployApprovalRequestNotFound) {
@@ -77,6 +84,7 @@ func (d *Database) checkDeployApprovalConflict(tokenID int64, gitCommitHash stri
 		existing, err = d.FindDeployApprovalRequest(DeployApprovalLookup{
 			TokenID:       tokenID,
 			GitCommitHash: gitCommitHash,
+			App:           app,
 			StatusFilter:  DeployApprovalRequestStatusPending,
 		})
 		if err != nil && !errors.Is(err, ErrDeployApprovalRequestNotFound) {
@@ -145,7 +153,7 @@ func (d *Database) insertDeployApprovalRequest(
 func (d *Database) handleDeployApprovalInsertError(
 	err error,
 	tokenID int64,
-	normalizedGitCommitHash string,
+	normalizedGitCommitHash, app string,
 ) (*DeployApprovalRequest, error) {
 	if !isUniqueConstraintViolation(err) {
 		return nil, fmt.Errorf("failed to create deploy approval request: %w", err)
@@ -154,6 +162,7 @@ func (d *Database) handleDeployApprovalInsertError(
 	existing, fetchErr := d.FindDeployApprovalRequest(DeployApprovalLookup{
 		TokenID:       tokenID,
 		GitCommitHash: normalizedGitCommitHash,
+		App:           app,
 		StatusFilter:  "any",
 	})
 	if fetchErr == nil && existing != nil {
@@ -346,21 +355,28 @@ func (d *Database) UpdateDeployApprovalRequestObjectURL(id int64, objectURL stri
 	return nil
 }
 
-// ExtendDeployApprovalRequestExpiry extends the expiry time for an approved deploy approval request
+// ExtendDeployApprovalRequestExpiry extends the window of an approved deploy approval request. An approval whose
+// window already lapsed (and was marked expired) is approved again, unless another request for the same commit,
+// token and app has opened since (ErrDeployApprovalRequestActive).
 func (d *Database) ExtendDeployApprovalRequestExpiry(
 	publicID string,
 	newExpiresAt time.Time,
 ) (*DeployApprovalRequest, error) {
 	res, err := d.exec(
 		`UPDATE deploy_approval_requests
-         SET approval_expires_at = ?, updated_at = NOW()
-         WHERE public_id = ? AND status = ? AND (approval_expires_at IS NULL OR approval_expires_at < ?)`,
+         SET approval_expires_at = ?, status = ?, updated_at = NOW()
+         WHERE public_id = ? AND status IN (?, ?) AND (approval_expires_at IS NULL OR approval_expires_at < ?)`,
 		newExpiresAt,
+		DeployApprovalRequestStatusApproved,
 		publicID,
 		DeployApprovalRequestStatusApproved,
+		DeployApprovalRequestStatusExpired,
 		newExpiresAt,
 	)
 	if err != nil {
+		if isUniqueConstraintViolation(err) {
+			return nil, ErrDeployApprovalRequestActive
+		}
 		return nil, fmt.Errorf("failed to extend deploy approval expiry: %w", err)
 	}
 	rows, err := res.RowsAffected()
@@ -371,4 +387,17 @@ func (d *Database) ExtendDeployApprovalRequestExpiry(
 		return nil, ErrDeployApprovalRequestNotFound
 	}
 	return d.GetDeployApprovalRequestByPublicID(publicID)
+}
+
+// ExpireDeployApprovalRequests marks approved requests whose approval window has passed as expired, and returns
+// how many it changed. Lookups already treat them as inactive; this makes their status say so too, so they stop
+// counting as open requests.
+func (d *Database) ExpireDeployApprovalRequests() (int64, error) {
+	result, err := d.exec(`UPDATE deploy_approval_requests SET status = ?, updated_at = NOW()
+		WHERE status = ? AND approval_expires_at IS NOT NULL AND approval_expires_at <= NOW()`,
+		DeployApprovalRequestStatusExpired, DeployApprovalRequestStatusApproved)
+	if err != nil {
+		return 0, fmt.Errorf("failed to expire deploy approval requests: %w", err)
+	}
+	return result.RowsAffected()
 }

@@ -2,6 +2,7 @@ package cli
 
 import (
 	_ "embed"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -103,8 +104,14 @@ func postDeployApprovalRequest(
 ) (*deployApprovalRequest, error) {
 	var result deployApprovalRequest
 	if err := gatewayRequest(cmd, rack, http.MethodPost, endpoint, payload, &result); err != nil {
-		if isGatewayStatus(err, http.StatusConflict) {
-			return &result, &deployApprovalRequestConflictError{request: &result}
+		var httpErr *gatewayHTTPError
+		if errors.As(err, &httpErr) && httpErr.statusCode == http.StatusConflict {
+			// The gateway answers a duplicate with the open request it already has.
+			var existing deployApprovalRequest
+			if json.Unmarshal(httpErr.body, &existing) != nil {
+				existing = deployApprovalRequest{}
+			}
+			return &existing, &deployApprovalRequestConflictError{request: &existing}
 		}
 		return nil, err
 	}

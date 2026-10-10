@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
-	"time"
 )
 
 // MarkDeployApprovalRequestBuildStarted records that a build has started for an approved deploy approval request.
@@ -52,43 +51,6 @@ func (d *Database) MarkDeployApprovalRequestBuildStarted(id int64, buildID, rele
 	}
 	if rows == 0 {
 		return fmt.Errorf("deployment approval not found or not approved")
-	}
-	return nil
-}
-
-// MarkDeployApprovalRequestPromoted records that a release was promoted for an approved deploy approval request
-func (d *Database) MarkDeployApprovalRequestPromoted(
-	id int64,
-	app, releaseID string,
-	tokenID int64,
-	when time.Time,
-) error {
-	if strings.TrimSpace(app) == "" {
-		return fmt.Errorf("app is required")
-	}
-	if strings.TrimSpace(releaseID) == "" {
-		return fmt.Errorf("release id required")
-	}
-	res, err := d.exec(
-		`UPDATE deploy_approval_requests
-         SET app = ?, release_id = ?, release_promoted_at = ?, release_promoted_by_api_token_id = ?, updated_at = NOW()
-         WHERE id = ? AND status = ? AND release_promoted_at IS NULL`,
-		app,
-		releaseID,
-		when,
-		tokenID,
-		id,
-		DeployApprovalRequestStatusApproved,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to mark release promotion: %w", err)
-	}
-	rows, err := res.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("failed to mark release promotion: %w", err)
-	}
-	if rows == 0 {
-		return fmt.Errorf("deployment approval not found or already promoted")
 	}
 	return nil
 }
@@ -156,15 +118,18 @@ func (d *Database) AppendExecCommandToDeployApprovalRequest(id int64, processID,
 	return nil
 }
 
-// MarkDeployApprovalAsDeployed marks a deploy approval request as deployed after successful promotion
+// MarkDeployApprovalAsDeployed marks a deploy approval request as deployed after successful promotion. The
+// promote was authorized while the approval was open; the approval may have expired while the promote ran (up to
+// 10 minutes), and still records that it was deployed.
 func (d *Database) MarkDeployApprovalAsDeployed(id int64) error {
 	res, err := d.exec(
 		`UPDATE deploy_approval_requests
          SET status = ?, updated_at = NOW()
-         WHERE id = ? AND status = ?`,
+         WHERE id = ? AND status IN (?, ?) AND release_id IS NOT NULL`,
 		DeployApprovalRequestStatusDeployed,
 		id,
 		DeployApprovalRequestStatusApproved,
+		DeployApprovalRequestStatusExpired,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to mark deploy approval as deployed: %w", err)

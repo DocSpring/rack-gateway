@@ -210,6 +210,7 @@ func (h *AdminHandler) RejectDeployApprovalRequest(c *gin.Context) {
 // @Param body body UpdateDeployApprovalRequestStatusRequest false "Extension notes"
 // @Success 200 {object} DeployApprovalRequestResponse
 // @Failure 404 {object} ErrorResponse
+// @Failure 409 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
 // @Security SessionCookie
 // @Router /deploy-approval-requests/{id}/extend [post]
@@ -224,6 +225,12 @@ func (h *AdminHandler) ExtendDeployApprovalRequest(c *gin.Context) {
 	if err != nil {
 		if errors.Is(err, db.ErrDeployApprovalRequestNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "deploy approval request not found or not approved"})
+			return
+		}
+		if errors.Is(err, db.ErrDeployApprovalRequestActive) {
+			c.JSON(http.StatusConflict, gin.H{
+				"error": "another request for this app and commit is open; reject it before extending this one",
+			})
 			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to extend deploy approval request"})

@@ -220,11 +220,36 @@ rack-gateway deploy-approval approve <request-id> \
 
 Requires MFA step-up authentication.
 
+### Approve a Commit (Several Apps, Several Racks)
+
+```bash
+# Every listed app's request for the commit, on every listed rack
+rack-gateway deploy-approval approve --app docspring,api-proxy --commit <sha> --rack us,eu
+
+# Every app's request for the commit
+rack-gateway deploy-approval approve --all-apps --commit <sha> --rack staging
+```
+
+One PIN for the run, then one key touch per approval. The command first finds the request of each listed app on
+each listed rack. If any is missing, it approves nothing and exits non-zero, naming the missing `rack/app` pairs,
+so a retry approves them all together. Requests that are already approved or deployed count as done.
+
+From a terminal it asks you to press Enter before approving. Scripts and AI agents (no terminal) skip that prompt,
+because the PIN dialog shows the command being run and each approval needs a key touch. So without a terminal the
+command line must say exactly what is approved: an explicit `--app` list and a full 40-character `--commit`,
+with no `--branch` or `--all-apps`.
+
+`wait --approve --app a,b --commit <sha>` waits until every listed app has an approved (or deployed) request on
+every rack, approving pending ones as they appear, then prints what it approved.
+
 ### List Pending
 
 ```bash
 rack-gateway deploy-approval list --status pending
+rack-gateway deploy-approval list --open --app api-proxy --commit <sha>
 ```
+
+The table shows each request's app and short commit, and the full message.
 
 ### Wait for Approval
 
@@ -235,6 +260,22 @@ rack-gateway deploy-approval request \
   --wait \
   --timeout 20m
 ```
+
+## Several Apps per Commit
+
+CI can deploy several apps from one pipeline, for the same commit and with the same API token (for example a
+main app and a proxy). Each app gets its own request: an open (pending or approved) request is unique per commit,
+target token and app. Creating a request again for the same app returns the open one (409 with that request);
+`rack-gateway deploy-approval request` treats that as success only when the returned request is for the same
+app and commit, and otherwise fails, because nothing was created.
+
+An approval whose window has passed is marked `expired` (every few minutes, and before a new request is
+created), so it no longer counts as open. An admin can still extend it, which approves it again, unless another
+request for the same app and commit has opened since.
+
+A successful promote marks the approval `deployed`, and the approval can't promote again: a second promote gets
+409 "this deploy approval request has already been deployed". A failed promote leaves it approved, so it can be
+retried.
 
 ## RBAC Permissions
 

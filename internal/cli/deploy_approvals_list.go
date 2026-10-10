@@ -15,6 +15,8 @@ type deployApprovalListOptions struct {
 	onlyOpen bool
 	limit    int
 	output   string
+	app      string
+	commit   string
 }
 
 func newDeployApprovalListCommand() *cobra.Command {
@@ -23,7 +25,7 @@ func newDeployApprovalListCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List deploy approval requests",
-		Long:  "List deploy approval requests with optional filtering by status.",
+		Long:  "List deploy approval requests with optional filtering by status, app and commit.",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return executeDeployApprovalList(cmd, opts)
 		},
@@ -33,6 +35,8 @@ func newDeployApprovalListCommand() *cobra.Command {
 	cmd.Flags().BoolVar(&opts.onlyOpen, "open", false, "Only show open (pending) requests")
 	cmd.Flags().IntVarP(&opts.limit, "limit", "l", 50, "Maximum number of results per rack")
 	cmd.Flags().StringVarP(&opts.output, "output", "o", "", "Output format (json)")
+	cmd.Flags().StringVarP(&opts.app, "app", "a", "", "Only show requests for this app")
+	cmd.Flags().StringVar(&opts.commit, "commit", "", "Only show requests for this commit (full SHA or prefix)")
 
 	return cmd
 }
@@ -85,6 +89,12 @@ func buildDeployApprovalListEndpoint(opts deployApprovalListOptions) string {
 	if opts.limit > 0 {
 		params.Set("limit", fmt.Sprintf("%d", opts.limit))
 	}
+	if app := strings.TrimSpace(opts.app); app != "" {
+		params.Set("app", app)
+	}
+	if commit := strings.TrimSpace(opts.commit); commit != "" {
+		params.Set("git_commit", commit)
+	}
 
 	if len(params) > 0 {
 		endpoint += "?" + params.Encode()
@@ -93,51 +103,38 @@ func buildDeployApprovalListEndpoint(opts deployApprovalListOptions) string {
 	return endpoint
 }
 
+// printDeployApprovalTableWithRack prints one request per line. The message comes last and is never cut, so
+// "Deploy <app> <sha7> to <env>" stays readable for people and agents.
 func printDeployApprovalTableWithRack(
 	requests []deployApprovalRequest, rackMap map[string]string, showRack bool,
 ) error {
+	const format = "%-36s  %-9s  %-12s  %-7s  %-20s  %-18s  %s\n"
 	if showRack {
-		fmt.Printf("%-12s  %-36s  %-10s  %-20s  %-30s  %s\n",
-			"RACK", "ID", "STATUS", "CREATED", "MESSAGE", "TOKEN")
-		fmt.Println(strings.Repeat("-", 145))
+		fmt.Printf("%-12s  "+format, "RACK", "ID", "STATUS", "APP", "COMMIT", "CREATED", "TOKEN", "MESSAGE")
 	} else {
-		fmt.Printf("%-36s  %-10s  %-20s  %-30s  %s\n",
-			"ID", "STATUS", "CREATED", "MESSAGE", "TOKEN")
-		fmt.Println(strings.Repeat("-", 120))
+		fmt.Printf(format, "ID", "STATUS", "APP", "COMMIT", "CREATED", "TOKEN", "MESSAGE")
 	}
 
 	for _, req := range requests {
-		message := req.Message
-		if len(message) > 30 {
-			message = message[:27] + "..."
-		}
-
 		tokenName := req.TargetAPITokenName
 		if tokenName == "" {
 			tokenName = req.TargetAPITokenID
 		}
-		if len(tokenName) > 15 {
-			tokenName = tokenName[:12] + "..."
+		if len(tokenName) > 18 {
+			tokenName = tokenName[:15] + "..."
 		}
-
+		commit := req.GitCommitHash
+		if len(commit) > 7 {
+			commit = commit[:7]
+		}
+		columns := []interface{}{
+			req.PublicID, req.Status, displayText(req.App), commit, req.CreatedAt.Format(time.RFC3339),
+			displayText(tokenName), displayText(req.Message),
+		}
 		if showRack {
-			rack := rackMap[req.PublicID]
-			fmt.Printf("%-12s  %-36s  %-10s  %-20s  %-30s  %s\n",
-				rack,
-				req.PublicID,
-				req.Status,
-				req.CreatedAt.Format(time.RFC3339),
-				message,
-				tokenName,
-			)
+			fmt.Printf("%-12s  "+format, append([]interface{}{rackMap[req.PublicID]}, columns...)...)
 		} else {
-			fmt.Printf("%-36s  %-10s  %-20s  %-30s  %s\n",
-				req.PublicID,
-				req.Status,
-				req.CreatedAt.Format(time.RFC3339),
-				message,
-				tokenName,
-			)
+			fmt.Printf(format, columns...)
 		}
 	}
 

@@ -2686,6 +2686,12 @@
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
@@ -4825,12 +4831,6 @@
                 },
                 "release_id": {
                     "type": "string"
-                },
-                "release_promoted_at": {
-                    "type": "string"
-                },
-                "release_promoted_by_api_token_id": {
-                    "type": "integer"
                 },
                 "status": {
                     "type": "string"

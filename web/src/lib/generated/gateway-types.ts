@@ -54,6 +54,4 @@ export interface DeployApprovalRequestResponse {
     process_ids?: string[];
     exec_commands?: {[key: string]: any};
     release_created_at?: string;
-    release_promoted_at?: string;
-    release_promoted_by_api_token_id?: number;
 }

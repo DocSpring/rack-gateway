@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"sort"
 	"strings"
 	"time"
 
@@ -16,7 +17,16 @@ func newDeployApprovalWaitCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "wait",
 		Short: "Wait for and optionally approve pending deploy approval requests",
-		Args:  cobra.NoArgs,
+		Long: `Wait for deploy approval requests for a commit and optionally approve them.
+
+Without --loop, waits until every listed app has an approved (or deployed) request on every rack, then prints
+what was approved. Without a terminal (e.g. an AI agent), --approve needs an explicit --app list and a full
+--commit SHA.
+
+Examples:
+  # Approve two apps' requests for a commit on staging (one PIN, one touch per approval)
+  rack-gateway deploy-approval wait --approve --app docspring,api-proxy --commit <sha> --rack staging`,
+		Args: cobra.NoArgs,
 		RunE: SilenceOnError(func(cmd *cobra.Command, _ []string) error {
 			parsed, err := parseDeployApprovalWaitOptions(cmd, opts)
 			if err != nil {
@@ -26,11 +36,11 @@ func newDeployApprovalWaitCommand() *cobra.Command {
 		}),
 	}
 
-	cmd.Flags().StringVarP(&opts.app, "app", "a", "", appFlagHelp)
+	cmd.Flags().StringVarP(&opts.app, "app", "a", "", appsFlagHelp)
 	cmd.Flags().StringVar(&opts.branch, "branch", "", "Filter by git branch")
 	cmd.Flags().StringVar(&opts.commit, "commit", "", "Filter by git commit hash (uses current commit by default)")
 	cmd.Flags().StringVar(&opts.pollInterval, "poll-interval", "1s", "Polling interval")
-	cmd.Flags().BoolVar(&opts.autoApprove, "approve", false, "Automatically approve the first pending request found")
+	cmd.Flags().BoolVar(&opts.autoApprove, "approve", false, "Approve each matching pending request as it appears")
 	cmd.Flags().StringVar(&opts.notes, "notes", "", "Optional notes for approval (only used with --approve)")
 	cmd.Flags().
 		BoolVar(&opts.loop, "loop", false, "Continue polling for more requests after displaying or approving one")
@@ -50,7 +60,7 @@ type deployApprovalWaitOptions struct {
 
 type deployApprovalWaitConfig struct {
 	racks        []string
-	app          string
+	apps         approvalApps
 	branch       string
 	commit       string
 	pollInterval time.Duration
@@ -68,7 +78,14 @@ func parseDeployApprovalWaitOptions(
 		return deployApprovalWaitConfig{}, err
 	}
 
-	app, err := ResolveApp(opts.app)
+	if opts.autoApprove {
+		err := requireExplicitApprovalTarget(IsInteractive(), opts.app, false, opts.branch, opts.commit)
+		if err != nil {
+			return deployApprovalWaitConfig{}, err
+		}
+	}
+
+	apps, err := resolveApprovalApps(opts.app, false)
 	if err != nil {
 		return deployApprovalWaitConfig{}, err
 	}
@@ -85,7 +102,7 @@ func parseDeployApprovalWaitOptions(
 
 	return deployApprovalWaitConfig{
 		racks:        racks,
-		app:          app,
+		apps:         apps,
 		branch:       branch,
 		commit:       commit,
 		pollInterval: pollInterval,
@@ -109,7 +126,7 @@ func runDeployApprovalWait(cmd *cobra.Command, cfg deployApprovalWaitConfig) err
 			return err
 		}
 		if done {
-			return nil
+			return waiter.printSummary()
 		}
 		waiter.sleep()
 	}
@@ -117,86 +134,104 @@ func runDeployApprovalWait(cmd *cobra.Command, cfg deployApprovalWaitConfig) err
 
 func newDeployApprovalWaiter(cmd *cobra.Command, cfg deployApprovalWaitConfig) *deployApprovalWaiter {
 	return &deployApprovalWaiter{
-		cmd:           cmd,
-		racks:         cfg.racks,
-		app:           cfg.app,
-		branch:        cfg.branch,
-		commit:        cfg.commit,
-		pollInterval:  cfg.pollInterval,
-		autoApprove:   cfg.autoApprove,
-		notes:         cfg.notes,
-		loop:          cfg.loop,
-		approvedRacks: make(map[string]bool),
+		cmd:          cmd,
+		racks:        cfg.racks,
+		apps:         cfg.apps,
+		branch:       cfg.branch,
+		commit:       cfg.commit,
+		pollInterval: cfg.pollInterval,
+		autoApprove:  cfg.autoApprove,
+		notes:        cfg.notes,
+		loop:         cfg.loop,
+		handled:      make(map[string]map[string]string),
 	}
 }
 
-// pollNextRack checks the next rack in rotation for pending/approved requests.
-// Returns (true, nil) when all racks are done and we should exit.
+// pollNextRack checks the next rack in rotation: it handles every in-scope pending request (approving it with
+// --approve) and records requests that are already approved. Returns (true, nil) when we should exit.
 func (w *deployApprovalWaiter) pollNextRack() (bool, error) {
 	rack := w.nextRack()
-
-	// Skip racks we've already processed
-	if w.approvedRacks[rack] {
+	if w.rackDone(rack) {
 		return w.shouldExit(), nil
 	}
 
-	// Check for pending requests first
-	if done, err := w.checkPendingRequests(rack); err != nil || done {
-		return done, err
-	}
-
-	// If we just handled a request (marked rack as approved), we're done with this rack
-	if w.approvedRacks[rack] {
-		return w.shouldExit(), nil
-	}
-
-	// Check for already-approved requests (from previous sessions or other users)
-	return w.checkApprovedRequests(rack)
-}
-
-func (w *deployApprovalWaiter) checkPendingRequests(rack string) (bool, error) {
-	requests, err := fetchPendingDeployRequests(w.cmd, rack, w.app, w.branch, w.commit)
+	pending, err := w.fetch(rack, "pending")
 	if err != nil {
 		return false, err
 	}
-
-	if len(requests) == 0 {
-		return false, nil
+	for _, request := range pending {
+		if w.isHandled(rack, request.App) {
+			continue
+		}
+		if err := w.handleRequest(rack, request); err != nil {
+			return false, err
+		}
 	}
 
-	if err := w.handleRequest(rack, requests[0]); err != nil {
-		return false, err
+	// Approved (or already deployed) requests count as done.
+	for _, status := range []string{"approved", "deployed"} {
+		requests, err := w.fetch(rack, status)
+		if err != nil {
+			return false, err
+		}
+		for _, request := range requests {
+			if w.isHandled(rack, request.App) {
+				continue
+			}
+			w.markHandled(rack, request)
+			_ = writef(w.cmd.OutOrStdout(), "✓ Already %s on rack %s: %s (%s)\n",
+				status, rack, request.PublicID, displayText(request.App))
+		}
 	}
 	return w.shouldExit(), nil
 }
 
-func (w *deployApprovalWaiter) checkApprovedRequests(rack string) (bool, error) {
-	approved, err := fetchApprovedDeployRequests(w.cmd, rack, w.app, w.branch, w.commit)
+// fetch returns the newest in-scope request of each app on rack with the given status.
+func (w *deployApprovalWaiter) fetch(rack, status string) ([]deployApprovalRequest, error) {
+	requests, err := fetchDeployRequestsByStatus(w.cmd, rack, w.apps.queryApp(), w.branch, w.commit, status)
 	if err != nil {
-		return false, err
+		return nil, rackScopedError(rack, err, len(w.racks))
 	}
+	return w.apps.newestRequestPerApp(requests), nil
+}
 
-	if len(approved) > 0 {
-		w.approvedRacks[rack] = true
-		_ = writef(w.cmd.OutOrStdout(), "✓ Already approved on rack %s: %s\n", rack, approved[0].PublicID)
+func (w *deployApprovalWaiter) isHandled(rack, app string) bool {
+	_, ok := w.handled[rack][app]
+	return ok
+}
+
+func (w *deployApprovalWaiter) markHandled(rack string, request deployApprovalRequest) {
+	if w.handled[rack] == nil {
+		w.handled[rack] = make(map[string]string)
 	}
-	return w.shouldExit(), nil
+	w.handled[rack][request.App] = request.PublicID
+}
+
+// rackDone reports whether every expected app on rack has been handled.
+func (w *deployApprovalWaiter) rackDone(rack string) bool {
+	for _, app := range w.apps.names {
+		if !w.isHandled(rack, app) {
+			return false
+		}
+	}
+	return true
 }
 
 type deployApprovalWaiter struct {
-	cmd           *cobra.Command
-	racks         []string
-	app           string
-	branch        string
-	commit        string
-	pollInterval  time.Duration
-	autoApprove   bool
-	notes         string
-	loop          bool
-	rackIndex     int
-	cachedPIN     string
-	approvedRacks map[string]bool
-	soundDone     chan struct{}
+	cmd          *cobra.Command
+	racks        []string
+	apps         approvalApps
+	branch       string
+	commit       string
+	pollInterval time.Duration
+	autoApprove  bool
+	notes        string
+	loop         bool
+	rackIndex    int
+	cachedPIN    string
+	// handled maps rack -> app -> request ID for requests approved (or shown) by this run or already approved.
+	handled   map[string]map[string]string
+	soundDone chan struct{}
 }
 
 func (w *deployApprovalWaiter) nextRack() string {
@@ -214,12 +249,36 @@ func (w *deployApprovalWaiter) shouldExit() bool {
 		return false
 	}
 
-	// Exit when all racks have approved requests
-	if len(w.approvedRacks) >= len(w.racks) {
-		return true
+	for _, rack := range w.racks {
+		if !w.rackDone(rack) {
+			return false
+		}
 	}
+	return true
+}
 
-	return false
+// printSummary lists the requests this run approved or found approved, per rack and app.
+func (w *deployApprovalWaiter) printSummary() error {
+	if !w.autoApprove {
+		return nil
+	}
+	out := w.cmd.OutOrStdout()
+	if err := writeLine(out, "\nApproved:"); err != nil {
+		return err
+	}
+	for _, rack := range w.racks {
+		apps := make([]string, 0, len(w.handled[rack]))
+		for app := range w.handled[rack] {
+			apps = append(apps, app)
+		}
+		sort.Strings(apps)
+		for _, app := range apps {
+			if err := writef(out, "  %s  %s  %s\n", rack, app, w.handled[rack][app]); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 func (w *deployApprovalWaiter) printWaitingMessage() error {
@@ -228,7 +287,7 @@ func (w *deployApprovalWaiter) printWaitingMessage() error {
 	}
 
 	// Build filter description
-	filter := fmt.Sprintf("app=%s", w.app)
+	filter := fmt.Sprintf("apps=%s", w.apps)
 	if w.branch != "" {
 		filter += fmt.Sprintf(" branch=%s", w.branch)
 	}
@@ -258,7 +317,9 @@ func fetchDeployRequestsByStatus(
 	}
 	params := url.Values{}
 	params.Set("status", status)
-	params.Set("app", app)
+	if app != "" {
+		params.Set("app", app)
+	}
 	if branch != "" {
 		params.Set("git_branch", branch)
 	}
@@ -275,21 +336,9 @@ func fetchDeployRequestsByStatus(
 	return response.Requests, nil
 }
 
-func fetchPendingDeployRequests(
-	cmd *cobra.Command, rack, app, branch, commit string,
-) ([]deployApprovalRequest, error) {
-	return fetchDeployRequestsByStatus(cmd, rack, app, branch, commit, "pending")
-}
-
-func fetchApprovedDeployRequests(
-	cmd *cobra.Command, rack, app, branch, commit string,
-) ([]deployApprovalRequest, error) {
-	return fetchDeployRequestsByStatus(cmd, rack, app, branch, commit, "approved")
-}
-
 func (w *deployApprovalWaiter) handleRequest(rack string, request deployApprovalRequest) error {
-	// Mark this rack as having an approved request (pending counts too, we'll approve it)
-	w.approvedRacks[rack] = true
+	// Pending counts as handled too: we approve it now, or show how to approve it.
+	w.markHandled(rack, request)
 
 	w.playNotificationOnce(rack)
 
@@ -313,9 +362,12 @@ func (w *deployApprovalWaiter) handleRequest(rack string, request deployApproval
 		w.cachedPIN = pin
 	}
 
-	statusLine := fmt.Sprintf("\n✅ Deploy approval request %s approved", approved.PublicID)
+	app := displayText(request.App)
+	statusLine := fmt.Sprintf("\n✅ Deploy approval request %s (%s) approved", approved.PublicID, app)
 	if len(w.racks) > 1 {
-		statusLine = fmt.Sprintf("\n✅ Deploy approval request %s approved on rack %s", approved.PublicID, rack)
+		statusLine = fmt.Sprintf(
+			"\n✅ Deploy approval request %s (%s) approved on rack %s", approved.PublicID, app, rack,
+		)
 	}
 	if approved.ApprovalExpiresAt != nil {
 		statusLine = fmt.Sprintf(
@@ -365,13 +417,16 @@ func (w *deployApprovalWaiter) writeRequestSummary(rack string, request deployAp
 	if err := writef(out, "  ID: %s\n", request.PublicID); err != nil {
 		return err
 	}
-	if err := writef(out, "  Message: %s\n", request.Message); err != nil {
+	if err := writef(out, "  App: %s\n", displayText(request.App)); err != nil {
+		return err
+	}
+	if err := writef(out, "  Message: %s\n", displayText(request.Message)); err != nil {
 		return err
 	}
 	if err := writef(out, "  Status: %s\n", request.Status); err != nil {
 		return err
 	}
-	if err := writef(out, "  Token: %s\n", request.TargetAPITokenName); err != nil {
+	if err := writef(out, "  Token: %s\n", displayText(request.TargetAPITokenName)); err != nil {
 		return err
 	}
 	return writef(out, "  Created: %s\n", request.CreatedAt.Format(time.RFC3339))

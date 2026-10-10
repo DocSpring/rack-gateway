@@ -3088,6 +3088,15 @@ export interface paths {
                         "application/json": components["schemas"]["handlers.ErrorResponse"];
                     };
                 };
+                /** @description Conflict */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
                 /** @description Internal Server Error */
                 500: {
                     headers: {
@@ -4954,8 +4963,6 @@ export interface components {
             rejected_by_name?: string;
             release_created_at?: string;
             release_id?: string;
-            release_promoted_at?: string;
-            release_promoted_by_api_token_id?: number;
             status: string;
             target_api_token_id: string;
             target_api_token_name?: string;

@@ -39,6 +39,7 @@ type apiTokenResponse struct {
 type gatewayHTTPError struct {
 	statusCode int
 	message    string
+	body       []byte // raw response body, e.g. the existing deploy approval request on a 409
 }
 
 func (e *gatewayHTTPError) Error() string {
@@ -53,7 +54,7 @@ func gatewayResponseError(statusCode int, responseBody []byte) error {
 	if statusCode == http.StatusUnauthorized && isExpiredAuthMessage(message) {
 		return ErrTokenExpired
 	}
-	return &gatewayHTTPError{statusCode: statusCode, message: message}
+	return &gatewayHTTPError{statusCode: statusCode, message: message, body: responseBody}
 }
 
 func isExpiredAuthMessage(message string) bool {
