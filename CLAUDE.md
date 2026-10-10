@@ -75,11 +75,9 @@ IMPORTANT: Read [docs/legacy/CONVOX_REFERENCE.md](docs/legacy/CONVOX_REFERENCE.m
 - File length check (`task file-length`)
 - Zero biome-ignore comments (`task web:check-ignores`)
 
-**Pre-push hooks enforce:**
-
-- Full CI suite (`task ci`)
-- All tests must pass
-- All builds must succeed
+**There is no pre-push hook, and no hook runs tests.** The full suite (lint, Go unit and integration tests, web
+tests, web and CLI E2E, builds) is too slow to run locally on every push. CI runs it on GitHub for every push, and
+`main` only takes PRs with green CI.
 
 ### 6. Security Scanning
 
@@ -357,15 +355,13 @@ For extracting Go functions:
 
 ## ⚠️ QUALITY CHECKLIST - MUST PASS BEFORE MARKING TASKS COMPLETE
 
-**NEVER mark a task as "completed" unless this passes:**
+**NEVER mark a task as "completed" until CI is green on GitHub for the pushed commit:**
 
-### Run Full CI Suite
+1. Run the focused checks for what you changed locally (see the preferred workflow below).
+2. Push, then `wait-for-github-actions`. On failure, `fetch-github-actions-logs` and fix (see "Debugging CI Failures").
 
-```bash
-task ci
-```
-
-This runs ALL linters, typechecks, unit tests, builds, and E2E tests. **Must pass completely before marking work complete.**
+CI runs ALL linters, typechecks, unit and integration tests, builds, and E2E tests. `task ci` runs the same suite
+locally (about 15 minutes); use it only when you need a full local run.
 
 ### 🔧 Build Requirements
 
@@ -383,10 +379,10 @@ This runs ALL linters, typechecks, unit tests, builds, and E2E tests. **Must pas
 
 **Preferred workflow:**
 
-- Use `task go:test` for Go unit/integration coverage.
+- Use `task go:test:unit` for Go unit tests (`task go:test` adds the integration tests against the built binaries).
 - Use `task web:test` for web unit coverage.
 - When an end-to-end scenario needs verification, run the focused command (for example `task web:e2e -- --grep "manage MFA"`).
-- Leverage `task ci` for the full pre-merge sweep once individual pieces are green.
+- Push and let CI run the full suite.
 
 **Debugging E2E Test Failures:**
 
@@ -615,7 +611,7 @@ When in doubt, choose the straightforward, well‑named, maintainable structure 
 
 | Command         | Description                        | When to Use                                 |
 | --------------- | ---------------------------------- | ------------------------------------------- |
-| `task ci`       | Run ALL linters, tests, and builds | **ALWAYS before marking any task complete** |
+| `task ci`       | Run ALL linters, tests, and builds | Full local run (CI runs it on every push)   |
 | `task dev`      | Start dev stack and follow logs    | Starting development environment            |
 | `task test`     | Run all tests                      | Quick test run during development           |
 | `task lint`     | Run all linters and typecheck      | Before committing code                      |
@@ -639,7 +635,9 @@ When in doubt, choose the straightforward, well‑named, maintainable structure 
 | `task go:build`             | Build all Go binaries                                 |
 | `task go:build:cli:nofido`  | Build CLI without libfido2 support (for CI)           |
 | `task go:lint`              | Run Go linters (vet/fmt/staticcheck)                  |
-| `task go:test`              | Run Go unit/integration tests (uses test DB)          |
+| `task go:test`              | Run Go unit and integration tests (uses test DB)      |
+| `task go:test:unit`         | Run Go unit tests only                                |
+| `task go:test:integration`  | Run Go integration tests against the built binaries   |
 | `task go:e2e`               | Run CLI E2E tests                                     |
 | `task go:imports`           | Fix all Go imports with goimports                     |
 
@@ -705,15 +703,10 @@ task lint:fix      # Fix all linting issues
 task web:lint:fix  # Fix web linting issues
 ```
 
-## Pre-Push Checks
+## Before Pushing
 
-**Before ANY push or marking tasks complete:**
-
-```bash
-task ci
-```
-
-This runs:
+Run the focused checks for what you changed (`task lint:fix`, `task go:test:unit`, `task web:test`, a focused E2E
+run). CI on GitHub then runs everything `task ci` runs:
 
 - Web Biome lint via `bun run lint`
 - Go vet/fmt/staticcheck
@@ -722,7 +715,7 @@ This runs:
 - Web and CLI E2E tests (Playwright + scripts)
 - Full builds of all components
 
-**If `task ci` doesn't pass completely, the task is NOT done.**
+**If CI doesn't pass completely, the task is NOT done.**
 
 ## Database Maintenance
 
@@ -805,7 +798,7 @@ docker exec -i rack-gateway-postgres-1 psql -U postgres -d gateway_dev -c "\d+ d
 
 - Don't leave old code lying around. When you see it, tidy it.
 - We never maintain backwards-compatibility shims or legacy fallbacks.
-- ALWAYS run `task ci` before claiming that any work is complete!
+- Work is complete only when CI is green on GitHub for the pushed commit.
 
 ## Terraform Infrastructure Reference
 
