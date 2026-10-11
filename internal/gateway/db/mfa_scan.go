@@ -7,8 +7,8 @@ import (
 )
 
 // scanMFAMethod scans a single MFA method row into an MFAMethod struct.
-// It handles nullable fields and JSON unmarshalling consistently.
-func scanMFAMethod(scanner interface {
+// It handles nullable fields, JSON unmarshalling and secret decryption consistently.
+func (d *Database) scanMFAMethod(scanner interface {
 	Scan(dest ...interface{}) error
 },
 ) (*MFAMethod, error) {
@@ -32,9 +32,7 @@ func scanMFAMethod(scanner interface {
 	if label.Valid {
 		method.Label = label.String
 	}
-	if secret.Valid {
-		method.Secret = secret.String
-	}
+	d.decryptMFASecret(&method, secret)
 	if transports.Valid {
 		var arr []string
 		if err := json.Unmarshal([]byte(transports.String), &arr); err != nil {

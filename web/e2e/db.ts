@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto'
 import { Client } from 'pg'
+import { decryptMfaSecret, encryptMfaSecret } from './column-crypto'
 
 function getFallbackDatabaseUrl(): string {
   const e2eUrl = process.env.E2E_DATABASE_URL
@@ -353,10 +354,20 @@ export async function clearMfaAttempts() {
   })
 }
 
+type StoredMfaSecret = { user_id: string; secret: string | null }
+
+// TOTP seeds are stored encrypted and bound to the user (see column-crypto.ts).
+function decryptStoredSecret(row?: StoredMfaSecret): string | null {
+  if (!row?.secret) {
+    return null
+  }
+  return decryptMfaSecret(row.user_id, row.secret)
+}
+
 export async function getUserMfaSecret(email: string): Promise<string | null> {
   return await withDbClient(async (client) => {
-    const result = await client.query(
-      `SELECT secret FROM mfa_methods
+    const result = await client.query<StoredMfaSecret>(
+      `SELECT user_id, secret FROM mfa_methods
        WHERE user_id = (SELECT id FROM users WHERE email = $1)
        AND type = 'totp'
        AND confirmed_at IS NOT NULL
@@ -364,14 +375,14 @@ export async function getUserMfaSecret(email: string): Promise<string | null> {
        LIMIT 1;`,
       [email]
     )
-    return result.rows[0]?.secret || null
+    return decryptStoredSecret(result.rows[0])
   })
 }
 
 export async function getPendingTotpSecret(email: string): Promise<string | null> {
   return await withDbClient(async (client) => {
-    const result = await client.query(
-      `SELECT secret FROM mfa_methods
+    const result = await client.query<StoredMfaSecret>(
+      `SELECT user_id, secret FROM mfa_methods
        WHERE user_id = (SELECT id FROM users WHERE email = $1)
          AND type = 'totp'
          AND confirmed_at IS NULL
@@ -379,7 +390,7 @@ export async function getPendingTotpSecret(email: string): Promise<string | null
        LIMIT 1;`,
       [email]
     )
-    return result.rows[0]?.secret || null
+    return decryptStoredSecret(result.rows[0])
   })
 }
 
@@ -401,7 +412,16 @@ export async function getUserMfaEnrolled(email: string): Promise<boolean> {
   })
 }
 
+// The TOTP seed E2E helpers enroll (scripts/lib/cli-e2e/mfa.sh uses the same one for admin).
+const E2E_TOTP_SECRET = 'K745D33R6A3NCWP5C3NYDQMBQF5ZFFHU'
+
 async function resetMfaAndSetupTotp(client: Client, email: string) {
+  const userResult = await client.query('SELECT id FROM users WHERE email = $1;', [email])
+  const userId: string | undefined = userResult.rows[0]?.id
+  if (!userId) {
+    throw new Error(`User ${email} not found`)
+  }
+
   // First reset any existing MFA state
   await client.query(
     'DELETE FROM mfa_methods WHERE user_id = (SELECT id FROM users WHERE email = $1);',
@@ -412,19 +432,11 @@ async function resetMfaAndSetupTotp(client: Client, email: string) {
     [email]
   )
 
-  // Insert TOTP method (using real secret from dev database)
+  // Insert a confirmed TOTP method, encrypted as the gateway stores it
   await client.query(
     `INSERT INTO mfa_methods (user_id, type, secret, label, created_at, confirmed_at, last_used_at)
-       VALUES (
-         (SELECT id FROM users WHERE email = $1),
-         'totp',
-         'K745D33R6A3NCWP5C3NYDQMBQF5ZFFHU',
-         'Authenticator App',
-         NOW(),
-         NOW(),
-         NULL
-       );`,
-    [email]
+       VALUES ($1, 'totp', $2, 'Authenticator App', NOW(), NOW(), NULL);`,
+    [userId, encryptMfaSecret(userId, E2E_TOTP_SECRET)]
   )
 
   // Generate backup codes

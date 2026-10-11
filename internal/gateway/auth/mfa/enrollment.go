@@ -60,8 +60,8 @@ func (s *Service) checkDuplicateYubikey(userID int64, publicID string) error {
 	if err != nil {
 		return err
 	}
-	for _, method := range methods {
-		if method.Type == "yubiotp" && method.Secret == publicID {
+	for _, method := range methodsWithSecret(methods, "yubiotp") {
+		if method.Secret == publicID {
 			return fmt.Errorf("this Yubikey is already registered")
 		}
 	}

@@ -263,6 +263,18 @@ flowchart LR
 | **YubiKey OTP** | Something you have | Web UI |
 | **Backup Codes** | Something you have | Web UI |
 
+### Secret Storage
+
+- **TOTP seeds and YubiKey public IDs** are encrypted with AES-256-GCM under `COLUMN_ENCRYPTION_KEY` and
+  bound to their user, so a copy of the database alone doesn't reveal them, and a value copied to another
+  user's row, or a plaintext seed written into the database, is rejected. See
+  [Column Encryption](/configuration/environment-variables/#column-encryption).
+- **Backup codes** are stored only as keyed hashes.
+- **WebAuthn** stores only each credential's public key.
+
+A TOTP or YubiKey OTP method whose secret can't be decrypted is skipped and reported; the user's other
+methods and backup codes keep working.
+
 ### Configuration
 
 ```bash

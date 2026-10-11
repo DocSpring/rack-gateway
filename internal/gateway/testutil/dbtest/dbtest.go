@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/DocSpring/rack-gateway/internal/gateway/colcrypt"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 )
 
@@ -19,6 +20,7 @@ import (
 // Sets TEST_DATABASE_URL env var to the created database DSN for subprocesses.
 func NewDatabase(t *testing.T) *db.Database {
 	t.Helper()
+	ensureColumnEncryptionKey(t)
 	baseDSN := getBaseDSN()
 	admin, adminCleanup := setupAdminConnection(t, baseDSN)
 
@@ -32,6 +34,18 @@ func NewDatabase(t *testing.T) *db.Database {
 	registerCleanup(t, app, admin, adminCleanup, dbName)
 
 	return app
+}
+
+// ensureColumnEncryptionKey gives tests (and the gateways they start) the published development key unless
+// the environment already sets one: every Database needs a key.
+func ensureColumnEncryptionKey(t *testing.T) {
+	t.Helper()
+	if os.Getenv(colcrypt.EnvVar) != "" {
+		return
+	}
+	if err := os.Setenv(colcrypt.EnvVar, colcrypt.DevKey); err != nil {
+		t.Fatalf("set %s: %v", colcrypt.EnvVar, err)
+	}
 }
 
 func getBaseDSN() string {

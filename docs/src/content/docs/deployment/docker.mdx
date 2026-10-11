@@ -78,6 +78,7 @@ The image never migrates on startup. Run the migrations with the same configurat
 docker run --rm \
   --network rack-gateway-net \
   -e DATABASE_URL=postgres://rack_gateway:your-secure-password@postgres:5432/rack_gateway \
+  -e COLUMN_ENCRYPTION_KEY=your-column-encryption-key \
   docker.io/docspringcom/rack-gateway:latest ./rack-gateway-api migrate
 ```
 
@@ -92,6 +93,7 @@ docker run -d \
   -e DOMAIN=gateway.example.com \
   -e APP_SECRET_KEY=$(openssl rand -base64 32) \
   -e AUDIT_HMAC_SECRET=$(openssl rand -base64 32) \
+  -e COLUMN_ENCRYPTION_KEY=your-column-encryption-key \
   -e GOOGLE_CLIENT_ID=your-client-id \
   -e GOOGLE_CLIENT_SECRET=your-client-secret \
   -e GOOGLE_ALLOWED_DOMAIN=example.com \
@@ -101,8 +103,10 @@ docker run -d \
   docker.io/docspringcom/rack-gateway:latest
 ```
 
-Keep `APP_SECRET_KEY` and `AUDIT_HMAC_SECRET` somewhere safe and pass the same values on every start: a new
-`AUDIT_HMAC_SECRET` breaks the audit log's hash chain.
+Keep `APP_SECRET_KEY`, `AUDIT_HMAC_SECRET` and `COLUMN_ENCRYPTION_KEY` somewhere safe and pass the same values
+on every start: a new `AUDIT_HMAC_SECRET` breaks the audit log's hash chain, and a new `COLUMN_ENCRYPTION_KEY`
+makes stored TOTP seeds and the Slack token unreadable. Generate the column key once with
+`openssl rand -base64 32`; see [Column Encryption](/configuration/environment-variables/#column-encryption).
 
 ### 6. Verify
 
@@ -143,6 +147,7 @@ services:
       DOMAIN: localhost:8080
       APP_SECRET_KEY: dev-secret-key-32-bytes-minimum!!
       AUDIT_HMAC_SECRET: dev-audit-secret-32-bytes-minimum
+      COLUMN_ENCRYPTION_KEY: ${COLUMN_ENCRYPTION_KEY}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
       GOOGLE_ALLOWED_DOMAIN: ${GOOGLE_ALLOWED_DOMAIN}
@@ -180,6 +185,7 @@ docker compose up -d
 | `DOMAIN` | Gateway domain | `gateway.example.com` |
 | `APP_SECRET_KEY` | 256-bit secret for sessions | `openssl rand -base64 32` |
 | `AUDIT_HMAC_SECRET` | Key for the audit log's hash chain; never change it | `openssl rand -base64 32` |
+| `COLUMN_ENCRYPTION_KEY` | Encrypts stored TOTP seeds and the Slack token; generate once and keep it | `openssl rand -base64 32` |
 | `GOOGLE_CLIENT_ID` | OAuth client ID | From Google Cloud Console |
 | `GOOGLE_CLIENT_SECRET` | OAuth client secret | From Google Cloud Console |
 | `GOOGLE_ALLOWED_DOMAIN` | Allowed email domain | `example.com` |
@@ -201,7 +207,7 @@ See [Environment Variables](/configuration/environment-variables/) for the compl
 The image never migrates on startup: run `migrate` with the new image before starting it, after every upgrade.
 
 ```bash
-docker run --rm --network rack-gateway-net -e DATABASE_URL=... \
+docker run --rm --network rack-gateway-net -e DATABASE_URL=... -e COLUMN_ENCRYPTION_KEY=... \
   docker.io/docspringcom/rack-gateway:<version> ./rack-gateway-api migrate
 ```
 
@@ -373,6 +379,7 @@ Common issues:
 |-------|-------|----------|
 | `database connection failed` | PostgreSQL not reachable | Check `DATABASE_URL` and network |
 | `APP_SECRET_KEY required` | Missing secret | Generate with `openssl rand -base64 32` |
+| `COLUMN_ENCRYPTION_KEY is required` | Missing key | Generate once with `openssl rand -base64 32` and keep it |
 | `OAuth client not configured` | Missing Google credentials | Set `GOOGLE_CLIENT_*` variables |
 
 ### Database connection issues

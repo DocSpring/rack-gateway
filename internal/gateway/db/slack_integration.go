@@ -5,14 +5,20 @@ import (
 	"encoding/json"
 	"fmt"
 	"time"
+
+	"github.com/DocSpring/rack-gateway/internal/gateway/colcrypt"
 )
 
 // SlackIntegration represents a Slack workspace integration
 type SlackIntegration struct {
-	ID                            int64                  `json:"id"`
-	WorkspaceID                   string                 `json:"workspace_id"`
-	WorkspaceName                 string                 `json:"workspace_name"`
-	BotTokenEncrypted             string                 `json:"-"` // Never expose
+	ID            int64  `json:"id"`
+	WorkspaceID   string `json:"workspace_id"`
+	WorkspaceName string `json:"workspace_name"`
+	// BotToken is the decrypted bot token. It is stored encrypted and never serialized.
+	BotToken string `json:"-"`
+	// BotTokenErr is set when the stored token can't be decrypted (another COLUMN_ENCRYPTION_KEY, or a
+	// tampered value). BotToken is then empty; reconnecting Slack stores a new token.
+	BotTokenErr                   error                  `json:"-"`
 	ChannelActions                map[string]interface{} `json:"channel_actions"`
 	AlertDeployApprovalsEnabled   bool                   `json:"alert_deploy_approvals_enabled"`
 	AlertDeployApprovalsChannelID string                 `json:"alert_deploy_approvals_channel_id"`
@@ -36,13 +42,14 @@ func (d *Database) GetSlackIntegration() (*SlackIntegration, error) {
 	`
 
 	var si SlackIntegration
+	var storedToken string
 	var channelActionsJSON []byte
 
 	err := d.db.QueryRow(query).Scan(
 		&si.ID,
 		&si.WorkspaceID,
 		&si.WorkspaceName,
-		&si.BotTokenEncrypted,
+		&storedToken,
 		&channelActionsJSON,
 		&si.AlertDeployApprovalsEnabled,
 		&si.AlertDeployApprovalsChannelID,
@@ -64,18 +71,32 @@ func (d *Database) GetSlackIntegration() (*SlackIntegration, error) {
 		return nil, fmt.Errorf("failed to parse channel_actions: %w", err)
 	}
 
+	// A token that can't be decrypted doesn't fail the lookup: the integration's settings stay visible and
+	// it can be deleted or reconnected. Callers that need the token check BotTokenErr.
+	token, err := d.cipher.Decrypt(storedToken, colcrypt.SlackBotTokenScope(si.WorkspaceID))
+	if err != nil {
+		si.BotTokenErr = fmt.Errorf("slack bot token: %w", err)
+	} else {
+		si.BotToken = token
+	}
+
 	return &si, nil
 }
 
-// CreateSlackIntegration creates a new Slack integration
+// CreateSlackIntegration creates a new Slack integration. botToken is stored encrypted and bound to the
+// workspace.
 func (d *Database) CreateSlackIntegration(
-	workspaceID, workspaceName, botTokenEncrypted, botUserID, scope string,
+	workspaceID, workspaceName, botToken, botUserID, scope string,
 	channelActions map[string]interface{},
 	createdByUserID *int64,
 ) (*SlackIntegration, error) {
 	channelActionsJSON, err := json.Marshal(channelActions)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal channel_actions: %w", err)
+	}
+	encryptedToken, err := d.cipher.Encrypt(botToken, colcrypt.SlackBotTokenScope(workspaceID))
+	if err != nil {
+		return nil, fmt.Errorf("failed to encrypt bot token: %w", err)
 	}
 
 	query := `
@@ -92,7 +113,7 @@ func (d *Database) CreateSlackIntegration(
 		query,
 		workspaceID,
 		workspaceName,
-		botTokenEncrypted,
+		encryptedToken,
 		channelActionsJSON,
 		false, // alert_deploy_approvals_enabled defaults to false
 		"",    // alert_deploy_approvals_channel_id defaults to empty
@@ -106,7 +127,7 @@ func (d *Database) CreateSlackIntegration(
 
 	si.WorkspaceID = workspaceID
 	si.WorkspaceName = workspaceName
-	si.BotTokenEncrypted = botTokenEncrypted
+	si.BotToken = botToken
 	si.ChannelActions = channelActions
 	si.AlertDeployApprovalsEnabled = false
 	si.AlertDeployApprovalsChannelID = ""

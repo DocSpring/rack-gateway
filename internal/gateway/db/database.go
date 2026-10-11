@@ -14,6 +14,7 @@ import (
 	// Blank import required to register pgx driver with database/sql
 	_ "github.com/jackc/pgx/v5/stdlib"
 
+	"github.com/DocSpring/rack-gateway/internal/gateway/colcrypt"
 	gtwlog "github.com/DocSpring/rack-gateway/internal/gateway/logging"
 	"github.com/DocSpring/rack-gateway/internal/gateway/testbypass"
 )
@@ -21,9 +22,10 @@ import (
 // Database wraps the SQL database connection
 type Database struct {
 	db     *sql.DB
-	pool   *pgxpool.Pool // For River and other pgx-native operations
-	driver string        // always "pgx"
-	dbName string        // database name for lock uniqueness
+	pool   *pgxpool.Pool    // For River and other pgx-native operations
+	driver string           // always "pgx"
+	dbName string           // database name for lock uniqueness
+	cipher *colcrypt.Cipher // encrypts secret columns (see column_encryption.go)
 }
 
 // PoolConfig holds database connection pool configuration
@@ -48,7 +50,22 @@ func NewWithPoolConfig(dsn string, poolConfig *PoolConfig) (*Database, error) {
 
 // NewWithPoolConfigAndMigration creates a new database connection with custom pool configuration
 // and optionally runs migrations automatically. Set autoMigrate to true only in dev/test environments.
+// COLUMN_ENCRYPTION_KEY must be set: every command that opens the database (server, migrate, reset-db,
+// write-anchor) refuses to run without a valid key, so a missing key fails a deploy before it starts.
 func NewWithPoolConfigAndMigration(dsn string, poolConfig *PoolConfig, autoMigrate bool) (*Database, error) {
+	columnCipher, err := colcrypt.New(os.Getenv(colcrypt.EnvVar))
+	if err != nil {
+		return nil, err
+	}
+	return openDatabase(dsn, poolConfig, autoMigrate, columnCipher)
+}
+
+func openDatabase(
+	dsn string,
+	poolConfig *PoolConfig,
+	autoMigrate bool,
+	columnCipher *colcrypt.Cipher,
+) (*Database, error) {
 	// Use provided DSN if it looks like Postgres, else use env var
 	source := strings.TrimSpace(dsn)
 	lower := strings.ToLower(source)
@@ -111,7 +128,7 @@ func NewWithPoolConfigAndMigration(dsn string, poolConfig *PoolConfig, autoMigra
 	// Extract database name from DSN for unique migration locks
 	dbName := extractDatabaseName(source)
 
-	d := &Database{db: db, pool: pool, driver: "pgx", dbName: dbName}
+	d := &Database{db: db, pool: pool, driver: "pgx", dbName: dbName, cipher: columnCipher}
 	if autoMigrate {
 		if err := d.migrateAll(); err != nil {
 			pool.Close()

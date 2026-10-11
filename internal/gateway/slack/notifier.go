@@ -1,7 +1,6 @@
 package slack
 
 import (
-	"encoding/base64"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -31,9 +30,11 @@ func NewNotifier(database *db.Database) *Notifier {
 func (n *Notifier) NotifyAuditEvent(auditLog *db.AuditLog) error {
 	// Get Slack integration
 	integration, err := n.database.GetSlackIntegration()
-	if err != nil || integration == nil {
-		// No integration configured, silently skip
-		return nil
+	if err != nil {
+		return fmt.Errorf("slack notifier: load integration: %w", err)
+	}
+	if integration == nil {
+		return nil // no integration configured
 	}
 
 	// Match action to channels using glob patterns
@@ -43,14 +44,10 @@ func (n *Notifier) NotifyAuditEvent(auditLog *db.AuditLog) error {
 		return nil
 	}
 
-	// Decrypt bot token
-	botToken, err := base64.StdEncoding.DecodeString(integration.BotTokenEncrypted)
-	if err != nil {
-		return fmt.Errorf("failed to decrypt bot token: %w", err)
+	client := botClient(integration)
+	if client == nil {
+		return nil
 	}
-
-	// Create Slack client
-	client := NewClient(string(botToken))
 
 	// Format message
 	text, blocks := n.formatAuditLogMessage(auditLog)
@@ -66,6 +63,18 @@ func (n *Notifier) NotifyAuditEvent(auditLog *db.AuditLog) error {
 	}
 
 	return nil
+}
+
+// botClient returns a client for the integration's bot token, or nil when the stored token can't be
+// decrypted (another COLUMN_ENCRYPTION_KEY, or a tampered value). That is reported and the notification is
+// skipped: retrying can't help, and reconnecting Slack stores a new token.
+func botClient(integration *db.SlackIntegration) *Client {
+	if integration.BotTokenErr != nil {
+		gtwlog.Errorf("slack notifier: skipping notification: %v", integration.BotTokenErr)
+		sentry.CaptureException(integration.BotTokenErr)
+		return nil
+	}
+	return NewClient(integration.BotToken)
 }
 
 // matchActionToChannels returns channel IDs that match the given action

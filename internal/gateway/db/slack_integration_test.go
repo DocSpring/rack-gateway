@@ -1,7 +1,6 @@
 package db_test
 
 import (
-	"encoding/base64"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -24,7 +23,7 @@ func TestSlackIntegrationCRUD(t *testing.T) {
 			"actions": []string{"mfa.*", "auth.*"},
 		},
 	}
-	botToken := base64.StdEncoding.EncodeToString([]byte("xoxb-test-token"))
+	botToken := fakeSlackBot
 
 	integration, err := database.CreateSlackIntegration(
 		"T123456",
@@ -39,7 +38,7 @@ func TestSlackIntegrationCRUD(t *testing.T) {
 	require.NotNil(t, integration)
 	require.Equal(t, "T123456", integration.WorkspaceID)
 	require.Equal(t, "Test Workspace", integration.WorkspaceName)
-	require.Equal(t, botToken, integration.BotTokenEncrypted)
+	require.Equal(t, botToken, integration.BotToken)
 	require.Equal(t, user.ID, *integration.CreatedByUserID)
 	require.NotEmpty(t, integration.ChannelActions)
 
@@ -49,6 +48,8 @@ func TestSlackIntegrationCRUD(t *testing.T) {
 	require.NotNil(t, retrieved)
 	require.Equal(t, integration.ID, retrieved.ID)
 	require.Equal(t, integration.WorkspaceID, retrieved.WorkspaceID)
+	require.NoError(t, retrieved.BotTokenErr)
+	require.Equal(t, botToken, retrieved.BotToken)
 
 	// Test Update Channels
 	updatedActions := map[string]interface{}{
@@ -93,7 +94,7 @@ func TestSlackIntegration_NoDuplicates(t *testing.T) {
 	require.NoError(t, err)
 
 	channelActions := map[string]interface{}{}
-	botToken := base64.StdEncoding.EncodeToString([]byte("xoxb-test-token"))
+	botToken := fakeSlackBot
 
 	// Create first integration
 	_, err = database.CreateSlackIntegration(

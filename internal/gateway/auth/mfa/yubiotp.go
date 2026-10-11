@@ -94,8 +94,8 @@ func (s *Service) VerifyYubiOTP(user *db.User, otp string) (*VerificationResult,
 	if err != nil {
 		return nil, err
 	}
-	for _, method := range methods {
-		if method.Type == "yubiotp" && method.Secret == publicID {
+	for _, method := range methodsWithSecret(methods, "yubiotp") {
+		if method.Secret == publicID {
 			if err := s.touchMFAMethod(method); err != nil {
 				return nil, err
 			}
