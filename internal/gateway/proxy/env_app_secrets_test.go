@@ -29,7 +29,7 @@ func TestAppSecretEnvVarsAreSecretsOnTheProxy(t *testing.T) {
 	require.Equal(t, http.StatusForbidden, rr.Code, rr.Body.String())
 	require.Contains(t, rr.Body.String(), "You don't have permission to modify secrets: BILLING_ID")
 
-	masked := h.maskSecretAndProtectedEnvVars("BILLING_ID=acct_123\nPORT=3000", app)
+	masked := maskSecretAndProtectedEnvVars("BILLING_ID=acct_123\nPORT=3000", h.loadAppEnvKeys(app))
 	require.NotContains(t, masked, "acct_123")
 	require.Contains(t, masked, "PORT=3000")
 }
