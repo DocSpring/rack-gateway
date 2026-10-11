@@ -1,4 +1,4 @@
-import axios, { type AxiosInstance, type AxiosRequestConfig, type AxiosResponse } from 'axios'
+import axios, { type AxiosInstance } from 'axios'
 import { createContext, type PropsWithChildren, useContext, useEffect, useMemo } from 'react'
 
 import { getCsrfToken } from '@/lib/csrf'
@@ -6,8 +6,6 @@ import { APIRoute } from '@/lib/routes'
 
 type HttpClientContextValue = {
   client: AxiosInstance
-  request<T = unknown, R = AxiosResponse<T>>(config: AxiosRequestConfig): Promise<R>
-  requestData<T = unknown>(config: AxiosRequestConfig): Promise<T>
 }
 
 const HttpClientContext = createContext<HttpClientContextValue | null>(null)
@@ -58,21 +56,7 @@ export function HttpClientProvider({ children }: PropsWithChildren): React.React
     }
   }, [client])
 
-  const value = useMemo<HttpClientContextValue>(() => {
-    const request = <T, R = AxiosResponse<T>>(config: AxiosRequestConfig) =>
-      client.request<T, R>(config)
-
-    const requestData = async <T,>(config: AxiosRequestConfig) => {
-      const response = await request<T>(config)
-      return response.data
-    }
-
-    return {
-      client,
-      request,
-      requestData,
-    }
-  }, [client])
+  const value = useMemo<HttpClientContextValue>(() => ({ client }), [client])
 
   return <HttpClientContext.Provider value={value}>{children}</HttpClientContext.Provider>
 }

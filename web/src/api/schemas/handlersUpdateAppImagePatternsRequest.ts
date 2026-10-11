@@ -5,7 +5,7 @@
  * API for the Rack Gateway administration and proxy services.
  * OpenAPI spec version: 1.0
  */
-import type { HandlersUpdateAppImagePatternsRequestAppImagePatterns } from './handlersUpdateAppImagePatternsRequestAppImagePatterns';
+import type { HandlersUpdateAppImagePatternsRequestAppImagePatterns } from "./handlersUpdateAppImagePatternsRequestAppImagePatterns";
 
 export interface HandlersUpdateAppImagePatternsRequest {
   app_image_patterns?: HandlersUpdateAppImagePatternsRequestAppImagePatterns;

@@ -5,6 +5,6 @@
  * API for the Rack Gateway administration and proxy services.
  * OpenAPI spec version: 1.0
  */
-import type { SettingsSetting } from './settingsSetting';
+import type { SettingsSetting } from "./settingsSetting";
 
 export type GetAdminSettings200 = { [key: string]: SettingsSetting };

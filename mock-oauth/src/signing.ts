@@ -7,11 +7,11 @@ import type { MockUser } from "./types.js";
 
 export type PublicJwk = JWK & { kid: string };
 
-export type SigningContext = {
+export interface SigningContext {
   publicJwk: PublicJwk;
   signingKey: CryptoKey;
   kid: string;
-};
+}
 
 let publicJwk: PublicJwk | undefined;
 let currentKid: string | undefined;

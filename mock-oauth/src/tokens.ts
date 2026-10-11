@@ -5,16 +5,16 @@ import { logger } from "./logger.js";
 import { authCodes } from "./state.js";
 import type { AuthorizationCodePayload, TokenRequestBody } from "./types.js";
 
-export type ErrorResponse = {
+export interface ErrorResponse {
   status: number;
   body: { error: string; error_description: string };
-};
+}
 
-export type TokenValidationSuccess = {
+export interface TokenValidationSuccess {
   authData: AuthorizationCodePayload;
   clientId: string;
   code: string;
-};
+}
 
 export type TokenValidationResult = TokenValidationSuccess | { error: ErrorResponse };
 
