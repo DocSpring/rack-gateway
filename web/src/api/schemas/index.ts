@@ -133,7 +133,6 @@ export * from "./putAppsAppSettingsServiceImagePatterns200";
 export * from "./putAppsAppSettingsServiceImagePatternsBody";
 export * from "./putSettings200";
 export * from "./putSettingsBody";
-export * from "./settingsBody";
 export * from "./settingsSetting";
 export * from "./settingsSettingSource";
 export * from "./valueBody";

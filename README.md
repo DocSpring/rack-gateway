@@ -100,9 +100,9 @@ task dev
 
 ### Prerequisites
 
-- Go 1.22+
+- Go 1.26+
 - Docker & Docker Compose
-- Node.js 20+ and Bun 1.3+
+- Node.js 22.18+ and Bun 1.3+ (CI runs Node 24)
 - mise (for environment variables) - [Install mise](https://mise.jdx.dev/getting-started.html)
 - libfido2 (for WebAuthn CLI support)
 
