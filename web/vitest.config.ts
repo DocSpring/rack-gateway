@@ -1,7 +1,7 @@
 import path from 'node:path'
-import { defineConfig, type UserConfigExport } from 'vitest/config'
+import { defineConfig, type ViteUserConfigExport } from 'vitest/config'
 
-const config: UserConfigExport = {
+const config: ViteUserConfigExport = {
   resolve: {
     alias: {
       '@': path.resolve(process.cwd(), 'src'),

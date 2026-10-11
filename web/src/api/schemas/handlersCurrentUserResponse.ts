@@ -5,7 +5,7 @@
  * API for the Rack Gateway administration and proxy services.
  * OpenAPI spec version: 1.0
  */
-import type { HandlersRackSummary } from './handlersRackSummary';
+import type { HandlersRackSummary } from "./handlersRackSummary";
 
 export interface HandlersCurrentUserResponse {
   deploy_approvals_enabled: boolean;
