@@ -94,17 +94,21 @@ Key files:
 
 ### `/audit` - Audit Logging
 
-Structured logging with automatic secret redaction:
+Structured logging:
 
 - Logs all API requests to structured JSON
-- Automatic secret redaction (passwords, tokens, keys)
 - Includes RBAC decisions (allow/deny)
 - CloudWatch integration via stdout
+- The logger doesn't redact: whatever writes an entry's `Details` keeps secrets out of it, and Slack copies
+  `Details` verbatim. Env change entries get their details from `envutil.AuditVisibleKeys.AuditDetails`
+  (every value `[REDACTED]` unless the app's `audit_visible_env_vars` lists the key and it is neither secret
+  nor protected); rack param changes log key names only; sensitive query parameters go through `RedactQuery`
 
 Key files:
 
 - `audit/logger.go` - Audit log creation
-- `audit/redactor.go` - Secret redaction
+- `audit/redaction.go` - Query string redaction
+- `envutil/audit.go` - Env change audit details
 
 ### `/middleware` - HTTP Middleware
 

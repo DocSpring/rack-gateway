@@ -69,11 +69,29 @@ func (h *Handler) maskSecretAndProtectedEnvVars(s string, app string) string {
 }
 
 func (h *Handler) isSecretKey(key string) bool {
-	extra := make([]string, 0, len(h.secretNames))
+	return envutil.IsSecretKey(key, h.secretNameList())
+}
+
+// secretNameList returns the names CONVOX_SECRET_ENV_VARS marks secret.
+func (h *Handler) secretNameList() []string {
+	names := make([]string, 0, len(h.secretNames))
 	for k := range h.secretNames {
-		extra = append(extra, k)
+		names = append(names, k)
 	}
-	return envutil.IsSecretKey(key, extra)
+	return names
+}
+
+// auditVisibleKeys returns the env vars whose values the app's env change audit entries may show. When the
+// app's settings can't be read, none are shown.
+func (h *Handler) auditVisibleKeys(app string) envutil.AuditVisibleKeys {
+	if h.settingsService == nil || app == "" {
+		return envutil.AuditVisibleKeys{}
+	}
+	keys, err := envutil.LoadAuditVisibleKeys(h.settingsService, app, h.secretNameList())
+	if err != nil {
+		gtwlog.Errorf("proxy: can't read the audit env settings for app %q, so every value is redacted: %v", app, err)
+	}
+	return keys
 }
 
 // isProtectedKeyForApp reports whether key is in the app's protected_env_vars. When the setting can't be read,

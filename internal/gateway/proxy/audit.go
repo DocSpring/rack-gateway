@@ -109,10 +109,10 @@ func (h *Handler) auditRackParamsIfChanged(
 		return
 	}
 
-	changes := diffParams(beforeParams, afterParams)
-	if len(changes) > 0 {
-		h.notifyRackParamsChanged(r, userEmail, changes)
-		h.auditRackParamsChanged(r, userEmail, changes)
+	changed := changedParams(beforeParams, afterParams)
+	if len(changed) > 0 {
+		h.notifyRackParamsChanged(userEmail, changed)
+		h.auditRackParamsChanged(r, userEmail, changed)
 	}
 }
 

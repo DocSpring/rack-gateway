@@ -335,12 +335,12 @@ All API calls are logged to stdout in structured JSON format:
 
 ### Automatic Redaction
 
-Sensitive data is automatically redacted:
+Sensitive data is redacted before it is logged:
 
-- Passwords, tokens, API keys
-- Authorization headers
-- Environment variable values
-- Any field matching sensitive patterns
+- Environment variable values, unless an admin lists the key in the app's `audit_visible_env_vars` (secret and
+  protected values are always redacted)
+- Rack parameter values
+- Login codes, OAuth values and tokens in query strings
 
 ## Deployment
 

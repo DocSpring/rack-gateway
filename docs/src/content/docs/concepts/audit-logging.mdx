@@ -114,33 +114,33 @@ This creates risk:
 - Log aggregation services may store data externally
 - Breached logs expose credentials
 
-### The Solution: Automatic Redaction
+### The Solution: Redact by Default
 
-Rack Gateway automatically redacts sensitive data:
+Guessing which values are sensitive from their names misses credentials under ordinary names (`DATABASE_URL`,
+`SMTP_PASSWORD`). Rack Gateway logs one entry per changed env var and redacts every value:
 
 ```json
 {
   "action": "env.set",
-  "parameters": {
-    "DATABASE_URL": "[REDACTED]",
-    "API_KEY": "[REDACTED]"
-  }
+  "resource": "myapp/DATABASE_URL",
+  "details": {"old": "[REDACTED]", "new": "[REDACTED]"}
 }
 ```
 
 <Aside type="note">
-Rack Gateway identifies sensitive fields by name patterns (password, secret, key, token) and value patterns (connection strings, API keys). The original values are never logged.
+An admin can list harmless env vars (`PORT`, `RAILS_ENV`) in the app's `audit_visible_env_vars` setting to see
+their values in the audit log and Slack. Secret and protected env vars are redacted even when listed.
 </Aside>
 
 ### What Gets Redacted
 
-| Pattern | Examples |
-|---------|----------|
-| **Passwords** | `password`, `passwd`, `db_password` |
-| **Secrets** | `secret`, `secret_key`, `client_secret` |
-| **Tokens** | `token`, `api_token`, `access_token` |
-| **Keys** | `api_key`, `private_key`, `encryption_key` |
-| **Connection strings** | `postgres://...`, `mysql://...` |
+| Data | Logged as |
+|------|-----------|
+| **Env var values** | `[REDACTED]`, unless listed in `audit_visible_env_vars` |
+| **Rack parameter values** | `[REDACTED]`; the changed parameter names are logged |
+| **Login codes, OAuth values and tokens in query strings** | `[REDACTED]` |
+
+See [Secret Redaction](/security/compliance/audit-trail/#secret-redaction) for the details.
 
 ## Immutability and Integrity
 

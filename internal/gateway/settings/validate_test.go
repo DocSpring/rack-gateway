@@ -9,6 +9,7 @@ import (
 func TestValidateAppSettingValue(t *testing.T) {
 	valid := map[string]interface{}{
 		KeyApprovedDeployCommands: []interface{}{"bin/pre_release_checks migrate"},
+		KeyAuditVisibleEnvVars:    []interface{}{"PORT"},
 		KeyProtectedEnvVars:       []string{"DATABASE_URL"},
 		KeySecretEnvVars:          []interface{}{},
 		KeyServiceImagePatterns:   map[string]interface{}{"*": `docker\.io/docspringcom/app:{{GIT_COMMIT}}-amd64`},
@@ -21,6 +22,7 @@ func TestValidateAppSettingValue(t *testing.T) {
 	invalid := map[string]interface{}{
 		// The shape the CLI E2E seed used to store: it read back as an empty list.
 		KeyApprovedDeployCommands: map[string]interface{}{"commands": []interface{}{"echo rake db:migrate"}},
+		KeyAuditVisibleEnvVars:    map[string]interface{}{"PORT": true},
 		KeyProtectedEnvVars:       "DATABASE_URL",
 		KeySecretEnvVars:          []interface{}{"A", 1},
 		KeyServiceImagePatterns:   []interface{}{"docker.io/app:{{GIT_COMMIT}}"},

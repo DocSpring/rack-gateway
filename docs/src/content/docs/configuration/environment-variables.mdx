@@ -164,6 +164,7 @@ RGW_APP_<APP>_SETTING_<KEY>=value
 ```
 RGW_APP_MY_APP_SETTING_CI_PROVIDER=circleci
 RGW_APP_MY_APP_SETTING_PROTECTED_ENV_VARS=DATABASE_URL,SECRET_KEY_BASE
+RGW_APP_MY_APP_SETTING_AUDIT_VISIBLE_ENV_VARS=PORT,RAILS_ENV
 RGW_APP_MY_APP_SETTING_SERVICE_IMAGE_PATTERNS={"*":"registry\\.example\\.com/my-app:{{GIT_COMMIT}}"}
 ```
 
@@ -227,7 +228,10 @@ See [Deploy Approvals](/integrations/deploy-approvals/) for common keys.
 
 | Variable | Description |
 |----------|-------------|
-| `CONVOX_SECRET_ENV_VARS` | Comma-separated env vars to redact |
+| `CONVOX_SECRET_ENV_VARS` | Comma-separated env vars treated as secrets in every app: masked, changed only with `convox:secret:set`, and never shown in audit logs |
+| `RGW_APP_<APP>_SETTING_AUDIT_VISIBLE_ENV_VARS` | The app's env vars whose values audit logs and Slack show (`audit_visible_env_vars`). Every other value is `[REDACTED]`, and secret and protected keys always are |
+
+See [Secret Redaction](/security/compliance/audit-trail/#secret-redaction).
 
 ## Development Ports
 

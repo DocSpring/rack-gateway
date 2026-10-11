@@ -61,6 +61,31 @@ func TestEnvironmentValuesHaveDatabaseShapes(t *testing.T) {
 	require.Equal(t, []string{"TOKEN"}, api)
 }
 
+// audit_visible_env_vars is a list of env var names like protected_env_vars: stored or pinned by an environment
+// variable, and read back upper-cased without duplicates. By default it is empty, so no values are shown.
+func TestAuditVisibleEnvVars(t *testing.T) {
+	svc := NewService(dbtest.NewDatabase(t))
+	visible, err := svc.GetAuditVisibleEnvVars("web")
+	require.NoError(t, err)
+	require.Empty(t, visible)
+
+	stored := []string{"port", " PORT ", "Log_Level"}
+	require.NoError(t, svc.SetAppSetting("web", KeyAuditVisibleEnvVars, stored, nil))
+	visible, err = svc.GetAuditVisibleEnvVars("web")
+	require.NoError(t, err)
+	require.Equal(t, []string{"PORT", "LOG_LEVEL"}, visible)
+	require.ErrorIs(t, svc.SetAppSetting("web", KeyAuditVisibleEnvVars, "PORT", nil), ErrInvalidSettingValue)
+
+	t.Setenv("RGW_APP_WEB_SETTING_AUDIT_VISIBLE_ENV_VARS", "rails_env, PORT")
+	visible, err = svc.GetAuditVisibleEnvVars("web")
+	require.NoError(t, err)
+	require.Equal(t, []string{"RAILS_ENV", "PORT"}, visible)
+	require.ErrorIs(t, svc.SetAppSetting("web", KeyAuditVisibleEnvVars, []string{"PORT"}, nil), ErrSetByEnvironment)
+
+	require.NoError(t, ValidateEnvironment([]string{`RGW_APP_API_SETTING_AUDIT_VISIBLE_ENV_VARS=["PORT"]`}))
+	require.Error(t, ValidateEnvironment([]string{`RGW_APP_API_SETTING_AUDIT_VISIBLE_ENV_VARS=[PORT]`}))
+}
+
 // A setting an env var defines can't be changed through the gateway; storing the value it already has is a no-op.
 func TestEnvDefinedSettingsCantBeChanged(t *testing.T) {
 	database := dbtest.NewDatabase(t)

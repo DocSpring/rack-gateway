@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -164,8 +165,10 @@ func (h *Handler) auditProtectedRefusal(
 	reason string,
 	status int,
 ) {
-	details := fmt.Sprintf("{\"error\":\"%s\"}", escapeJSONString(reason))
+	details, _ := json.Marshal(map[string]string{"error": reason})
 	for _, key := range keys {
-		h.logDeniedRBACAction(r, email, rbac.ResourceEnv, action, fmt.Sprintf("%s/%s", app, key), details, status)
+		h.logDeniedRBACAction(
+			r, email, rbac.ResourceEnv, action, fmt.Sprintf("%s/%s", app, key), string(details), status,
+		)
 	}
 }

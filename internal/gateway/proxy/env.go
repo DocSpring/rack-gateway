@@ -340,21 +340,16 @@ func recomposeEnvString(
 	return b.String()
 }
 
+// logEnvDiffs writes one audit entry per env change. Its values are redacted unless the app's
+// audit_visible_env_vars lists the key and it is neither secret nor protected.
 func (h *Handler) logEnvDiffs(r *http.Request, email, _ string, diffs []envutil.EnvDiff) {
 	if len(diffs) == 0 {
 		return
 	}
 	userName := r.Header.Get("X-User-Name")
 	app := extractAppFromPath(r.URL.Path)
+	visible := h.auditVisibleKeys(app)
 	for _, d := range diffs {
-		// Values of secret and protected keys never reach the audit log.
-		oldVal := d.OldVal
-		newVal := d.NewVal
-		if d.Secret || d.Protected {
-			oldVal = "[REDACTED]"
-			newVal = "[REDACTED]"
-		}
-		details := fmt.Sprintf("{\"old\":\"%s\",\"new\":\"%s\"}", escapeJSONString(oldVal), escapeJSONString(newVal))
 		action, rtype := envDiffAuditAction(d)
 		_ = h.logAudit(r, &db.AuditLog{
 			UserEmail:      email,
@@ -363,7 +358,7 @@ func (h *Handler) logEnvDiffs(r *http.Request, email, _ string, diffs []envutil.
 			Action:         action,
 			ResourceType:   rtype,
 			Resource:       fmt.Sprintf("%s/%s", app, d.Key),
-			Details:        details,
+			Details:        visible.AuditDetails(d),
 			IPAddress:      netutil.ClientIP(r),
 			UserAgent:      r.UserAgent(),
 			Status:         "success",
@@ -392,11 +387,4 @@ func envDiffAuditAction(d envutil.EnvDiff) (string, string) {
 	default:
 		return audit.BuildAction(rbac.ResourceEnv.String(), rbac.ActionSet.String()), "env"
 	}
-}
-
-func escapeJSONString(s string) string {
-	s = strings.ReplaceAll(s, "\\", "\\\\")
-	s = strings.ReplaceAll(s, "\"", "\\\"")
-	s = strings.ReplaceAll(s, "\n", "\\n")
-	return s
 }

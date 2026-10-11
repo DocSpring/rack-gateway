@@ -12,6 +12,7 @@ import type {
   DbUser,
   DeleteAppsAppSettings200,
   DeleteAppsAppSettingsApprovedDeployCommands200,
+  DeleteAppsAppSettingsAuditVisibleEnvVars200,
   DeleteAppsAppSettingsParams,
   DeleteAppsAppSettingsProtectedEnvVars200,
   DeleteAppsAppSettingsSecretEnvVars200,
@@ -84,6 +85,7 @@ import type {
   HandlersWebAuthnEnrollmentResponse,
   PutAppsAppSettings200,
   PutAppsAppSettingsApprovedDeployCommands200,
+  PutAppsAppSettingsAuditVisibleEnvVars200,
   PutAppsAppSettingsBody,
   PutAppsAppSettingsProtectedEnvVars200,
   PutAppsAppSettingsSecretEnvVars200,
@@ -330,6 +332,45 @@ export const getRackGatewayAPI = () => {
         url: `/apps/${app}/settings/approved-deploy-commands`,
         method: "DELETE",
       },
+      options,
+    );
+  };
+
+  /**
+   * Replaces the list of environment variables whose values audit log entries may show for the
+   * specified app. Secret and protected keys are always redacted.
+   * @summary Update env vars shown in audit logs
+   */
+  const putAppsAppSettingsAuditVisibleEnvVars = (
+    app: string,
+    putAppsAppSettingsAuditVisibleEnvVarsBody: string[],
+    options?: SecondParameter<
+      typeof createGatewayClient<PutAppsAppSettingsAuditVisibleEnvVars200>
+    >,
+  ) => {
+    return createGatewayClient<PutAppsAppSettingsAuditVisibleEnvVars200>(
+      {
+        url: `/apps/${app}/settings/audit-visible-env-vars`,
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        data: putAppsAppSettingsAuditVisibleEnvVarsBody,
+      },
+      options,
+    );
+  };
+
+  /**
+   * Removes the stored list of environment variables whose values audit log entries may show
+   * @summary Delete env vars shown in audit logs
+   */
+  const deleteAppsAppSettingsAuditVisibleEnvVars = (
+    app: string,
+    options?: SecondParameter<
+      typeof createGatewayClient<DeleteAppsAppSettingsAuditVisibleEnvVars200>
+    >,
+  ) => {
+    return createGatewayClient<DeleteAppsAppSettingsAuditVisibleEnvVars200>(
+      { url: `/apps/${app}/settings/audit-visible-env-vars`, method: "DELETE" },
       options,
     );
   };
@@ -1435,6 +1476,8 @@ export const getRackGatewayAPI = () => {
     deleteAppsAppSettings,
     putAppsAppSettingsApprovedDeployCommands,
     deleteAppsAppSettingsApprovedDeployCommands,
+    putAppsAppSettingsAuditVisibleEnvVars,
+    deleteAppsAppSettingsAuditVisibleEnvVars,
     putAppsAppSettingsProtectedEnvVars,
     deleteAppsAppSettingsProtectedEnvVars,
     putAppsAppSettingsSecretEnvVars,
@@ -1563,6 +1606,24 @@ export type DeleteAppsAppSettingsApprovedDeployCommandsResult = NonNullable<
       ReturnType<
         typeof getRackGatewayAPI
       >["deleteAppsAppSettingsApprovedDeployCommands"]
+    >
+  >
+>;
+export type PutAppsAppSettingsAuditVisibleEnvVarsResult = NonNullable<
+  Awaited<
+    ReturnType<
+      ReturnType<
+        typeof getRackGatewayAPI
+      >["putAppsAppSettingsAuditVisibleEnvVars"]
+    >
+  >
+>;
+export type DeleteAppsAppSettingsAuditVisibleEnvVarsResult = NonNullable<
+  Awaited<
+    ReturnType<
+      ReturnType<
+        typeof getRackGatewayAPI
+      >["deleteAppsAppSettingsAuditVisibleEnvVars"]
     >
   >
 >;

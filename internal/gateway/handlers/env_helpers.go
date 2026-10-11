@@ -26,6 +26,21 @@ func (h *APIHandler) secretAndProtectedKeys(app string) ([]string, map[string]st
 	return extra, protected
 }
 
+// auditVisibleKeys returns the env vars whose values the app's env change audit entries may show. When the
+// app's settings can't be read, none are shown.
+func (h *APIHandler) auditVisibleKeys(app string) envutil.AuditVisibleKeys {
+	if h.settingsService == nil {
+		return envutil.AuditVisibleKeys{}
+	}
+	keys, err := envutil.LoadAuditVisibleKeys(
+		h.settingsService, app, parseEnvList(os.Getenv("CONVOX_SECRET_ENV_VARS")),
+	)
+	if err != nil {
+		log.Printf(`{"level":"error","event":"audit_env_settings_failed","app":%q,"error":%q}`, app, err.Error())
+	}
+	return keys
+}
+
 func (h *APIHandler) secretEnvVarList(app string) []string {
 	if h.settingsService == nil {
 		return nil

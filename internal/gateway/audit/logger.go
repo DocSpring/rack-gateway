@@ -6,7 +6,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"regexp"
 	"strings"
 	"time"
 
@@ -25,10 +24,9 @@ const (
 	auditLogCreatedKey contextKey = "rgw-audit-log-created"
 )
 
-// Logger provides structured audit logging with automatic secret redaction
-// and integration with database persistence and external notification systems.
+// Logger provides structured audit logging with database persistence and external notification systems.
+// Callers redact sensitive values before they reach an entry: see envutil.AuditVisibleKeys for env changes.
 type Logger struct {
-	redactPatterns     []*regexp.Regexp
 	database           *db.Database
 	slackNotifier      SlackNotifier
 	auditEventEnqueuer EventEnqueuer
@@ -46,26 +44,24 @@ type EventEnqueuer interface {
 
 // LogEntry represents a structured audit log entry for CloudWatch ingestion.
 type LogEntry struct {
-	Timestamp     string                 `json:"ts"`
-	UserEmail     string                 `json:"user_email"`
-	Method        string                 `json:"method"`
-	Path          string                 `json:"path"`
-	QueryParams   string                 `json:"query_params,omitempty"`
-	Status        int                    `json:"status"`
-	LatencyMs     int64                  `json:"latency_ms"`
-	RBACDecision  string                 `json:"rbac_decision"`
-	RequestID     string                 `json:"request_id"`
-	ClientIP      string                 `json:"client_ip"`
-	RequestBody   map[string]interface{} `json:"request_body,omitempty"`
-	ResponseError string                 `json:"response_error,omitempty"`
+	Timestamp     string `json:"ts"`
+	UserEmail     string `json:"user_email"`
+	Method        string `json:"method"`
+	Path          string `json:"path"`
+	QueryParams   string `json:"query_params,omitempty"`
+	Status        int    `json:"status"`
+	LatencyMs     int64  `json:"latency_ms"`
+	RBACDecision  string `json:"rbac_decision"`
+	RequestID     string `json:"request_id"`
+	ClientIP      string `json:"client_ip"`
+	ResponseError string `json:"response_error,omitempty"`
 }
 
-// NewLogger creates a new audit logger with automatic secret redaction patterns.
+// NewLogger creates a new audit logger.
 func NewLogger(database *db.Database) *Logger {
 	return &Logger{
-		redactPatterns: buildRedactPatterns(),
-		database:       database,
-		slackNotifier:  nil, // Set externally via SetSlackNotifier if needed
+		database:      database,
+		slackNotifier: nil, // Set externally via SetSlackNotifier if needed
 	}
 }
 
@@ -100,11 +96,7 @@ func (l *Logger) LogDBEntryWithContext(ctx context.Context, al *db.AuditLog) (co
 }
 
 // Log writes a structured audit log entry to stdout for CloudWatch ingestion.
-func (l *Logger) Log(entry *LogEntry) {
-	if entry.RequestBody != nil {
-		entry.RequestBody = l.redactMap(entry.RequestBody)
-	}
-
+func (_ *Logger) Log(entry *LogEntry) {
 	data, err := json.Marshal(entry)
 	if err != nil {
 		gtwlog.Errorf("audit: failed to marshal audit log entry: %v", err)
