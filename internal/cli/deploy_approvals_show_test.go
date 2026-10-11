@@ -35,7 +35,9 @@ func TestShowJSONIncludesThePRURL(t *testing.T) {
 
 func TestListJSONIncludesThePRURL(t *testing.T) {
 	gateway := startFakeDeployGateway(t, requestWithPR())
+	previousRack := RackFlag
 	RackFlag = "staging"
+	t.Cleanup(func() { RackFlag = previousRack })
 
 	opts := deployApprovalListOptions{status: "pending", output: "json"}
 	require.NoError(t, executeDeployApprovalList(gateway.command(""), opts))

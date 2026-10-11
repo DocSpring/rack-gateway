@@ -61,10 +61,12 @@ describe('RequestDetailsCard', () => {
     expect(screen.queryByRole('link')).not.toBeInTheDocument()
   })
 
-  it('does not link a URL that is not https', () => {
-    const insecure = 'http://github.com/acme/web/pull/7'
-    render(<RequestDetailsCard request={requestWith({ pr_url: insecure })} />)
-    expect(screen.getByText(insecure)).toBeInTheDocument()
-    expect(screen.queryByRole('link')).not.toBeInTheDocument()
-  })
+  it.each(['http://github.com/acme/web/pull/7', 'javascript:alert(1)'])(
+    'does not link a URL that is not https: %s',
+    (url) => {
+      render(<RequestDetailsCard request={requestWith({ pr_url: url })} />)
+      expect(screen.getByText(url)).toBeInTheDocument()
+      expect(screen.queryByRole('link')).not.toBeInTheDocument()
+    }
+  )
 })

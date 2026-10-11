@@ -73,20 +73,26 @@ rack-gateway deploy-approval request \
 | `message` | `--message` | Human-readable description |
 | `target_api_token_id` | Auto-detected | Token that will use approval |
 | `app` | `--app` | Application name |
+| `pr_url` | GitHub verification | The branch's open pull request, if it has one |
 
 ### GitHub Verification
 
-If GitHub integration is configured, the gateway verifies the commit:
+GitHub verification is on by default (the app's `github_verification` setting). The gateway checks the commit
+against the app's `vcs_repo` and refuses the request if the check fails, or if `GITHUB_TOKEN` or `vcs_repo` is
+missing. Turning `github_verification` off for the app is the only way to skip it.
 
 ```mermaid
 graph LR
     Request[Approval Request] --> Verify[Verify Commit]
     Verify --> Branch{Commit on branch?}
-    Branch -->|Yes| PR{Find PR?}
+    Branch -->|Yes| PR{Open PR for branch?}
     Branch -->|No| Reject[Reject Request]
     PR -->|Found| Store[Store PR URL]
-    PR -->|Not Found| Continue[Continue without PR]
+    PR -->|Not found, PR required| Reject
+    PR -->|Not found, PR not required| Continue[Continue without PR]
 ```
+
+An open PR is required unless the app's `require_pr_for_branch` is off.
 
 Verification modes:
 - **latest**: Commit must be the latest on the branch
@@ -100,7 +106,7 @@ Admins see pending requests in the web UI.
 
 The review UI shows:
 
-- **Git commit hash** - Links to VCS provider
+- **Git commit hash** - The full SHA
 - **Branch name** - Source branch
 - **PR link** - If GitHub verification found one
 - **CI pipeline** - Links to CircleCI pipeline
