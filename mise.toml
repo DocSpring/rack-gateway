@@ -12,6 +12,7 @@ MOCK_CONVOX_PORT = "5443"
 TEST_GATEWAY_PORT = "9447"
 TEST_MOCK_OAUTH_PORT = "9345"
 TEST_MOCK_CONVOX_PORT = "6443"
+RELEASE_GATEWAY_PORT = "9460" # release image smoke test (task docker:release:smoke)
 
 # Application configuration
 DEV_MODE = "true"

@@ -26,6 +26,7 @@ import (
 	jobgithub "github.com/DocSpring/rack-gateway/internal/gateway/jobs/github"
 	jobslack "github.com/DocSpring/rack-gateway/internal/gateway/jobs/slack"
 	"github.com/DocSpring/rack-gateway/internal/gateway/slack"
+	"github.com/DocSpring/rack-gateway/internal/gateway/testbypass"
 )
 
 // Client wraps the River client for background job processing
@@ -187,7 +188,7 @@ func NewAuditAnchorConfigFromEnv() (*AuditAnchorConfig, error) {
 
 	s3Client := s3.NewFromConfig(cfg, func(o *s3.Options) {
 		// MinIO requires path-style addressing
-		if os.Getenv("AWS_ENDPOINT_URL_S3") != "" {
+		if testbypass.S3EndpointOverride() {
 			o.UsePathStyle = true
 		}
 	})

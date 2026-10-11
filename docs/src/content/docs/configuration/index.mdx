@@ -99,19 +99,25 @@ RACK_ALIAS = "production"
 
 ### Development Defaults
 
-In development mode (`DEV_MODE=true`), Rack Gateway:
+Development mode (`DEV_MODE=true`) only exists in builds compiled with the `testbypass` Go build tag, which
+`task dev` and the Docker development and E2E stacks use. In development mode, Rack Gateway:
 
 - Uses non-secure cookies (no HTTPS required)
 - Auto-generates `APP_SECRET_KEY` if missing
+- Runs database migrations on startup
 - Logs emails to stdout instead of sending
 - Connects to mock services on localhost
 
+The published Docker image is built without the tag, and refuses to start with `DEV_MODE` or any other
+[test bypass](/configuration/environment-variables/#test-bypasses) set.
+
 ### Production Requirements
 
-For production, you must explicitly set:
+For production, run the published image or a release binary, serve it over HTTPS (cookies are always `Secure`),
+and set:
 
 - `APP_SECRET_KEY` (secure random value)
-- `COOKIE_SECURE=true` (or use HTTPS)
+- `AUDIT_HMAC_SECRET` (secure random value)
 - OAuth credentials (real Google Workspace)
 - Database URL (real PostgreSQL)
 - Rack credentials (real Convox rack)

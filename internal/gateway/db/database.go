@@ -15,6 +15,7 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 
 	gtwlog "github.com/DocSpring/rack-gateway/internal/gateway/logging"
+	"github.com/DocSpring/rack-gateway/internal/gateway/testbypass"
 )
 
 // Database wraps the SQL database connection
@@ -164,10 +165,10 @@ func envDuration(key string, def time.Duration) time.Duration {
 }
 
 // NewFromEnv builds a Postgres DSN from env if DATABASE_URL is unset.
-// Automatically runs migrations only if DEV_MODE=true (for dev/test environments).
+// Automatically runs migrations only in dev mode (a testbypass build with DEV_MODE=true).
 // In production, run migrations manually using the "migrate" command.
 func NewFromEnv() (*Database, error) {
-	autoMigrate := os.Getenv("DEV_MODE") == "true"
+	autoMigrate := testbypass.DevMode()
 
 	// A few variations supported to support different Convox resource names
 	if dsn := os.Getenv("RGW_DATABASE_URL"); dsn != "" {
@@ -208,7 +209,7 @@ func NewFromEnv() (*Database, error) {
 	return NewWithPoolConfigAndMigration(dsn, nil, autoMigrate)
 }
 
-// ensureSSLMode appends an sslmode if missing. In non-dev (DEV_MODE != true) default to require.
+// ensureSSLMode sets the DSN's sslmode to PGSSLMODE when that's set, and otherwise leaves the DSN alone.
 func ensureSSLMode(dsn string) string {
 	s := strings.TrimSpace(dsn)
 	if s == "" {
@@ -324,7 +325,7 @@ func (d *Database) ResetDatabase() error {
 		return err
 	}
 
-	devMode := os.Getenv("DEV_MODE") == "true"
+	devMode := testbypass.DevMode()
 	disableEnvCheck := strings.TrimSpace(os.Getenv("DISABLE_DATABASE_ENVIRONMENT_CHECK")) != ""
 
 	if err := d.validateEnvironmentForReset(devMode, disableEnvCheck); err != nil {
@@ -365,7 +366,7 @@ func (d *Database) validateEnvironmentForReset(devMode, disableEnvCheck bool) er
 		if !devMode && !disableEnvCheck {
 			return fmt.Errorf(
 				"refusing to reset database with unknown environment " +
-					"(set DEV_MODE=true for development or DISABLE_DATABASE_ENVIRONMENT_CHECK=1 to override)",
+					"(use DEV_MODE=true in a testbypass build or DISABLE_DATABASE_ENVIRONMENT_CHECK=1 to override)",
 			)
 		}
 	case "development":

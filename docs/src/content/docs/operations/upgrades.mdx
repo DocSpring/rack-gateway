@@ -232,8 +232,8 @@ services:
 
 ## Database Migrations
 
-Migrations run automatically on startup only in development (`DEV_MODE=true`). In production, run them
-against the new release before promoting it:
+Migrations run automatically on startup only in development builds with `DEV_MODE=true`; the release image never
+runs them on startup. In production, run them against the new release before promoting it:
 
 ```bash
 convox run admin -a rack-gateway --release RELEASE_ID ./rack-gateway-api migrate

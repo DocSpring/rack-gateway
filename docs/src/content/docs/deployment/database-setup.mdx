@@ -149,11 +149,8 @@ volumes:
 
 ### Automatic Migrations
 
-Migrations run automatically when the gateway starts. The gateway:
-
-1. Checks current schema version in `schema_migrations`
-2. Applies any pending migrations
-3. Continues to API server startup
+Only development builds (compiled with the `testbypass` tag) with `DEV_MODE=true` run migrations when the gateway
+starts. The published image never does: run `rack-gateway-api migrate` before starting a new release.
 
 ### Manual Migrations
 
@@ -180,6 +177,8 @@ The reset command **deletes all data**. Use only for development or emergency re
 </Aside>
 
 ### Development Reset
+
+In a development (`testbypass`) build:
 
 ```bash
 export RESET_RACK_GATEWAY_DATABASE=DELETE_ALL_DATA

@@ -35,11 +35,14 @@ COPY cmd/gateway ./cmd/gateway
 # Build the gateway binary with version info (COMMIT_SHA is the same build arg the web stage requires)
 ARG COMMIT_SHA
 RUN test -n "$COMMIT_SHA" || (echo "COMMIT_SHA build arg is required" && exit 1)
+# Release images are built without build tags. The E2E and local stacks pass GO_BUILD_TAGS=testbypass to compile in
+# the test-only bypasses (DEV_MODE, E2E_TEST_MODE, endpoint overrides); a release binary refuses to start with them.
+ARG GO_BUILD_TAGS=""
 RUN VERSION=$(node -p "require('./web/package.json').version") && \
-    CGO_ENABLED=0 go build \
+    CGO_ENABLED=0 go build -tags "${GO_BUILD_TAGS}" \
     -ldflags "-X github.com/DocSpring/rack-gateway/internal/gateway/version.Version=${VERSION} -X github.com/DocSpring/rack-gateway/internal/gateway/version.CommitHash=${COMMIT_SHA}" \
     -o /out/rack-gateway-api ./cmd/gateway \
-    && /out/rack-gateway-api help
+    && /out/rack-gateway-api build-info
 
 FROM alpine:3.24.2@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6
 

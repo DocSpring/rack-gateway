@@ -25,7 +25,8 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
 
-      - name: Build gateway image (with web UI) and export
+      # The E2E stacks run with DEV_MODE and E2E_TEST_MODE, which only a testbypass build honours.
+      - name: Build gateway image (with web UI and test bypasses) and export
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
         with:
           context: .
@@ -33,6 +34,7 @@ jobs:
           tags: ${{ env.GATEWAY_IMAGE }}
           build-args: |
             COMMIT_SHA=${{ github.sha }}
+            GO_BUILD_TAGS=testbypass
           cache-from: type=gha
           cache-to: ${{ github.ref == 'refs/heads/main' && 'type=gha,mode=max' || '' }}
           outputs: type=docker,dest=${{ runner.temp }}/images/gateway-api.tar
@@ -43,6 +45,46 @@ jobs:
           name: e2e-image-gateway
           path: ${{ runner.temp }}/images/gateway-api.tar
           retention-days: 1
+
+  # The E2E jobs run a testbypass build in dev and E2E test mode, so they never exercise the release binary. This
+  # builds the release image (no build tags, like the Release workflow) and smoke-tests it with a production
+  # configuration: test bypasses compiled out and refused at startup, then a production boot with HSTS, a strict CSP,
+  # no localhost origins, Secure cookies and OAuth against Google (see scripts/release-smoke.sh). It runs alongside
+  # the E2E jobs, so it doesn't add to the workflow's run time.
+  release-smoke:
+    runs-on: ubuntu-latest
+    env:
+      GATEWAY_RELEASE_IMAGE: rack-gateway-api:release-${{ github.sha }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+
+      # Its own cache scope, so main's two gateway builds don't overwrite each other's cache. The web and Go module
+      # layers match the E2E image's, so it reads that cache (the default scope) too.
+      - name: Build release gateway image
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          context: .
+          file: Dockerfile
+          tags: ${{ env.GATEWAY_RELEASE_IMAGE }}
+          build-args: |
+            COMMIT_SHA=${{ github.sha }}
+          cache-from: |
+            type=gha,scope=gateway-release
+            type=gha
+          cache-to: ${{ github.ref == 'refs/heads/main' && 'type=gha,mode=max,scope=gateway-release' || '' }}
+          load: true
+
+      # Prints the gateway's logs if a check fails.
+      - name: Smoke-test the release image
+        run: bash scripts/release-smoke.sh
+
+      - name: Teardown
+        if: always()
+        run: docker compose --profile release down -v --remove-orphans
 
   build-mocks:
     runs-on: ubuntu-latest

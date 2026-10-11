@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/DocSpring/rack-gateway/internal/gateway/testbypass"
 )
 
 // Config holds all application configuration settings loaded from environment variables.
@@ -31,7 +33,7 @@ type Config struct {
 	ViewerUsers           []string
 	DeployerUsers         []string
 	OperationsUsers       []string
-	DevMode               bool
+	DevMode               bool // DEV_MODE, read through testbypass: always false in a release build
 	Racks                 map[string]RackConfig
 	RackTLSPinningEnabled bool
 	TrustedProxies        []string
@@ -122,7 +124,7 @@ func loadBaseConfig() *Config {
 		GoogleOAuthBaseURL:  getEnv("GOOGLE_OAUTH_BASE_URL", ""),
 		SlackClientID:       getEnv("SLACK_CLIENT_ID", ""),
 		SlackClientSecret:   getEnv("SLACK_CLIENT_SECRET", ""),
-		DevMode:             getEnv("DEV_MODE", "false") == "true",
+		DevMode:             testbypass.DevMode(),
 		Racks:               make(map[string]RackConfig),
 
 		// Disabled by default because the Convox rack API currently generates a fresh self-signed

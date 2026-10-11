@@ -21,6 +21,7 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/netutil"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rackcert"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
+	"github.com/DocSpring/rack-gateway/internal/gateway/testbypass"
 )
 
 func (h *Handler) proxyWebSocket(
@@ -85,7 +86,7 @@ func (h *Handler) checkWebSocketOrigin(r *http.Request) bool {
 
 // isDevModeOriginAllowed checks if origin is allowed in development mode
 func (h *Handler) isDevModeOriginAllowed(originURL *url.URL) bool {
-	if os.Getenv("DEV_MODE") != "true" {
+	if !testbypass.DevMode() {
 		return false
 	}
 

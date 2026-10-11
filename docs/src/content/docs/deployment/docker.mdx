@@ -3,7 +3,7 @@ title: "Docker Deployment"
 description: "Deploy Rack Gateway with Docker."
 ---
 
-import { Aside, Steps, Tabs, TabItem } from '@astrojs/starlight/components';
+import { Steps, Tabs, TabItem } from '@astrojs/starlight/components';
 
 This guide covers deploying Rack Gateway using Docker, suitable for development, testing, and simple production deployments.
 
@@ -80,7 +80,7 @@ curl http://localhost:8080/api/v1/health
 
 ## Docker Compose
 
-For a complete development environment, use Docker Compose:
+To try the published image locally with Docker Compose:
 
 ```yaml
 # docker-compose.yml
@@ -109,8 +109,8 @@ services:
     environment:
       DATABASE_URL: postgres://rack_gateway:development@postgres:5432/rack_gateway
       DOMAIN: localhost:8080
-      DEV_MODE: "true"
       APP_SECRET_KEY: dev-secret-key-32-bytes-minimum!!
+      AUDIT_HMAC_SECRET: dev-audit-secret-32-bytes-minimum
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
       GOOGLE_ALLOWED_DOMAIN: ${GOOGLE_ALLOWED_DOMAIN}
@@ -127,9 +127,11 @@ volumes:
   pgdata:
 ```
 
-Start with:
+The image never runs migrations on startup, so apply them first, then start:
 
 ```bash
+docker compose up -d postgres
+docker compose run --rm gateway ./rack-gateway-api migrate
 docker compose up -d
 ```
 
@@ -153,7 +155,6 @@ docker compose up -d
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `PORT` | `8080` | HTTP listen port |
-| `DEV_MODE` | `false` | Enable development mode |
 | `ADMIN_USERS` | - | Comma-separated admin emails |
 | `RACK_ALIAS` | - | Short rack name (e.g., `staging`) |
 
@@ -311,25 +312,13 @@ services:
 
 ## Development Mode
 
-For local development, use `DEV_MODE=true`:
+The published image is a release build: it refuses to start with `DEV_MODE`, `E2E_TEST_MODE` or any other
+[test bypass](/configuration/environment-variables/#test-bypasses) set, and `./rack-gateway-api build-info` reports
+`test bypasses: compiled out`.
 
-```bash
-docker run -d \
-  -e DEV_MODE=true \
-  -e COOKIE_SECURE=false \
-  # ... other variables
-  docspringcom/rack-gateway:latest
-```
-
-Development mode enables:
-
-- Non-secure cookies (for HTTP)
-- Email logging instead of sending
-- Relaxed security checks
-
-<Aside type="caution">
-Never use `DEV_MODE=true` in production.
-</Aside>
+Development mode (non-secure cookies for HTTP, relaxed security checks, migrations on startup, email logging) needs
+a build from source with the `testbypass` Go build tag. `task dev` and `task docker:up` build one, or pass
+`--build-arg GO_BUILD_TAGS=testbypass` to `docker build`. Never deploy such a build.
 
 ## Troubleshooting
 

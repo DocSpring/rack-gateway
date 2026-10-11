@@ -50,6 +50,8 @@ x-gateway-test-service: &gateway_test_service
     dockerfile: Dockerfile
     args:
       COMMIT_SHA: ${COMMIT_SHA:-dev}
+      # DEV_MODE and E2E_TEST_MODE only work in a testbypass build (see internal/gateway/testbypass).
+      GO_BUILD_TAGS: testbypass
   image: ${GATEWAY_TEST_IMAGE:-rack-gateway-api:test}
   volumes: []
   depends_on:
@@ -142,6 +144,7 @@ services:
       dockerfile: Dockerfile
       args:
         COMMIT_SHA: ${COMMIT_SHA:-dev}
+        GO_BUILD_TAGS: testbypass
     image: ${GATEWAY_IMAGE:-rack-gateway-api:local}
     environment:
       <<: *gateway_common_env
@@ -230,6 +233,33 @@ services:
       DATABASE_URL: postgres://postgres:postgres@postgres:5432/gateway_test_7?sslmode=disable
     ports:
       - "${TEST_GATEWAY_PORT_7:-9453}:${TEST_GATEWAY_PORT_7:-9453}"
+
+  # The release image: built without the testbypass tag, with a production configuration (no DEV_MODE, no mocks, and
+  # Google's real OIDC discovery), so it marks its database production. scripts/release-smoke.sh runs it to check what
+  # the E2E stacks can't: they run a testbypass build with DEV_MODE and E2E_TEST_MODE on.
+  gateway-api-release:
+    profiles: [release]
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        COMMIT_SHA: ${COMMIT_SHA:-dev}
+    image: ${GATEWAY_RELEASE_IMAGE:-rack-gateway-api:release}
+    environment:
+      <<: *gateway_common_env
+      DOMAIN: gateway.example.test
+      PORT: ${RELEASE_GATEWAY_PORT:-9460}
+      AUDIT_HMAC_SECRET: release-smoke-audit-secret
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/gateway_release?sslmode=disable
+    ports:
+      - "${RELEASE_GATEWAY_PORT:-9460}:${RELEASE_GATEWAY_PORT:-9460}"
+    volumes: []
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck: *gateway_healthcheck
+    networks:
+      - gateway-net
 
   postgres:
     image: postgres:16-alpine

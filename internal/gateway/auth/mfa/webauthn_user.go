@@ -3,13 +3,13 @@ package mfa
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/go-webauthn/webauthn/protocol"
 	"github.com/go-webauthn/webauthn/webauthn"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
+	"github.com/DocSpring/rack-gateway/internal/gateway/testbypass"
 )
 
 // webAuthnUser wraps db.User to implement webauthn.User interface
@@ -96,7 +96,7 @@ func (s *Service) maybeHandleE2EWebAuthn(
 	methods []*db.MFAMethod,
 	onSuccess func(*db.MFAMethod) error,
 ) (*VerificationResult, bool, error) {
-	if os.Getenv("E2E_TEST_MODE") != "true" {
+	if !testbypass.E2ETestMode() {
 		return nil, false, nil
 	}
 	for _, method := range methods {
