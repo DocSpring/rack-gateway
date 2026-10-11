@@ -110,17 +110,49 @@ func (h *Handler) approvalResolverFor(resource rbac.Resource, action rbac.Action
 	return table[key]
 }
 
+// findApprovalForObjectCreate selects the approval an archive upload belongs to. The upload doesn't say which
+// commit it's for, so it binds only when exactly one approval for the token and app is waiting for an upload.
 func (h *Handler) findApprovalForObjectCreate(
 	tokenID int64,
 	app string,
 ) (*db.DeployApprovalRequest, error) {
+	waiting, err := h.database.ListDeployApprovalRequests(db.DeployApprovalRequestListOptions{
+		TokenID:        tokenID,
+		App:            app,
+		AwaitingUpload: true,
+	})
+	if err != nil {
+		return nil, err
+	}
+	switch len(waiting) {
+	case 1:
+		return waiting[0], nil
+	case 0:
+		return h.approvalWithUploadedArchive(tokenID, app)
+	default:
+		commits := make([]string, 0, len(waiting))
+		for _, req := range waiting {
+			commits = append(commits, shortCommit(req.GitCommitHash))
+		}
+		return nil, &deployApprovalError{
+			status: http.StatusConflict,
+			message: fmt.Sprintf(
+				"%d approved deploy requests for %s are waiting for an upload (commits %s), so this upload is "+
+					"ambiguous; reject the ones that aren't being deployed",
+				len(waiting), app, strings.Join(commits, ", "),
+			),
+		}
+	}
+}
+
+// approvalWithUploadedArchive reports an open approval whose archive was already uploaded: uploads happen once
+// per approval (unlike builds, which can fail and retry). With no open approval at all it returns nil.
+func (h *Handler) approvalWithUploadedArchive(tokenID int64, app string) (*db.DeployApprovalRequest, error) {
 	req, err := h.database.FindDeployApprovalRequest(db.DeployApprovalLookup{
 		TokenID:      tokenID,
 		App:          app,
 		StatusFilter: "approved",
 	})
-	// Fail if object_url is already set - this means an object was already uploaded for this approval.
-	// Object uploads should only happen once per approval (unlike builds, which can fail and retry).
 	if err == nil && req != nil && req.ObjectURL != "" {
 		return nil, &deployApprovalError{
 			status:  http.StatusConflict,
@@ -128,6 +160,13 @@ func (h *Handler) findApprovalForObjectCreate(
 		}
 	}
 	return req, err
+}
+
+func shortCommit(hash string) string {
+	if len(hash) > 7 {
+		return hash[:7]
+	}
+	return hash
 }
 
 // findApprovalForBuildCreate selects the approval whose uploaded archive this build uses.
@@ -304,6 +343,25 @@ func (h *Handler) findApprovalForRelease(
 			_, _, denyErr := deny()
 			return nil, denyErr
 		}
+		if checkDeployed {
+			return h.claimPromote(req)
+		}
 	}
 	return req, err
+}
+
+// claimPromote claims the approval for this promote. Another promote with the same approval may already be on
+// its way to the rack; only one is forwarded.
+func (h *Handler) claimPromote(req *db.DeployApprovalRequest) (*db.DeployApprovalRequest, error) {
+	claimed, err := h.database.ClaimDeployApprovalPromote(req.ID)
+	if err != nil {
+		return nil, err
+	}
+	if !claimed {
+		return nil, &deployApprovalError{
+			status:  http.StatusConflict,
+			message: "a promote with this deploy approval request is already in progress",
+		}
+	}
+	return req, nil
 }

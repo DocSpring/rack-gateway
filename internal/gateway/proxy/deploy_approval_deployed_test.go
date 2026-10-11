@@ -63,3 +63,38 @@ func TestSuccessfulPromoteMarksApprovalDeployed(t *testing.T) {
 		})
 	}
 }
+
+// Concurrent promotes with one approval: only the first is forwarded. A promote that fails releases its claim, so
+// it can be retried.
+func TestPromoteClaimIsExclusiveAndReleasedOnFailure(t *testing.T) {
+	h, database := newProxyForDeployApprovalTest(t)
+	user, err := database.CreateUser("deployer@example.com", "Deployer", []string{"deployer"})
+	require.NoError(t, err)
+	token, err := database.CreateAPIToken(strings.Repeat("e", 64), "ci", user.ID, nil, nil, nil)
+	require.NoError(t, err)
+	approval, err := database.CreateDeployApprovalRequest("Deploy", "test-app",
+		"abc123def4567890abc123def4567890abc123de", "main", "", nil, user.ID, nil, token.ID)
+	require.NoError(t, err)
+	approval, err = database.ApproveDeployApprovalRequest(approval.ID, user.ID, time.Now().Add(time.Hour), "")
+	require.NoError(t, err)
+
+	_, err = h.claimPromote(approval)
+	require.NoError(t, err)
+	_, err = h.claimPromote(approval)
+	var approvalErr *deployApprovalError
+	require.ErrorAs(t, err, &approvalErr)
+	require.Equal(t, http.StatusConflict, approvalErr.status)
+
+	const promotePath = "/apps/test-app/releases/RELEASE1/promote"
+	tracker := &deployApprovalTracker{request: approval, tokenID: token.ID, app: "test-app"}
+	promote := httptest.NewRequest(http.MethodPost, promotePath, nil)
+	promote = promote.WithContext(context.WithValue(promote.Context(), deployApprovalContextKey, tracker))
+
+	h.releasePromoteClaimAfterFailure(promote, promotePath, http.StatusOK, nil)
+	_, err = h.claimPromote(approval)
+	require.Error(t, err, "a successful promote keeps its claim")
+
+	h.releasePromoteClaimAfterFailure(promote, promotePath, http.StatusInternalServerError, nil)
+	_, err = h.claimPromote(approval)
+	require.NoError(t, err, "a failed promote releases its claim")
+}

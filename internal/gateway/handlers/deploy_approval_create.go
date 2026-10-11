@@ -4,8 +4,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -247,6 +249,12 @@ func (h *APIHandler) createApprovalRecord(
 	createdByAPITokenID *int64,
 	tokenID int64,
 ) (*db.DeployApprovalRequest, bool) {
+	// An approval past its window (or a stale pending request) no longer counts as open, so expire them first:
+	// otherwise one could block this request.
+	if err := h.expireDeployApprovals(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create deploy approval request"})
+		return nil, false
+	}
 	record, err := h.database.CreateDeployApprovalRequest(
 		message,
 		app,
@@ -311,4 +319,24 @@ func (h *APIHandler) logApprovalCreation(
 		RBACDecision: "allow",
 		HTTPStatus:   http.StatusCreated,
 	})
+}
+
+// expireDeployApprovals runs the expiry sweep and audits each request it expires.
+func (h *APIHandler) expireDeployApprovals() error {
+	var pendingMaxAge time.Duration
+	if h.config != nil {
+		pendingMaxAge = h.config.DeployApprovalPendingMaxAge
+	}
+	expired, err := h.database.ExpireDeployApprovalRequests(pendingMaxAge)
+	if err != nil {
+		return err
+	}
+	for _, e := range expired {
+		if h.auditLogger != nil {
+			if err := h.auditLogger.LogDBEntry(audit.DeployApprovalExpiredEntry(e)); err != nil {
+				log.Printf("failed to audit expired deploy approval %d: %v", e.ID, err)
+			}
+		}
+	}
+	return nil
 }

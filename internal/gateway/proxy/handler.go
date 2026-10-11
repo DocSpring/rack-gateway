@@ -180,6 +180,7 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 	beforeParams := h.captureRackParamsIfNeeded(r, rackPath, rackConfig)
 
 	status, err := h.forwardRequest(w, r, rackConfig, rackPath, authUser)
+	h.releasePromoteClaimAfterFailure(r, rackPath, status, err)
 	if err != nil {
 		h.handleForwardError(w, r, err, rackConfig.Name, start)
 		return

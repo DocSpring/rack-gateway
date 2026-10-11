@@ -1,0 +1,40 @@
+package db_test
+
+import (
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/require"
+)
+
+// Only one promote can hold an approval's claim. A failed promote releases it, and a stale claim (a gateway that
+// stopped mid-promote) can be taken over.
+func TestDeployApprovalPromoteClaim(t *testing.T) {
+	database, userID, tokenID := newApprovalTestFixture(t)
+	approval, err := createApproval(t, database, userID, tokenID, "docspring")
+	require.NoError(t, err)
+
+	claimed, err := database.ClaimDeployApprovalPromote(approval.ID)
+	require.NoError(t, err)
+	require.False(t, claimed, "a pending request can't be promoted")
+
+	_, err = database.ApproveDeployApprovalRequest(approval.ID, userID, time.Now().Add(time.Hour), "")
+	require.NoError(t, err)
+
+	claimed, err = database.ClaimDeployApprovalPromote(approval.ID)
+	require.NoError(t, err)
+	require.True(t, claimed)
+	claimed, err = database.ClaimDeployApprovalPromote(approval.ID)
+	require.NoError(t, err)
+	require.False(t, claimed, "a second concurrent promote must not get the claim")
+
+	require.NoError(t, database.ReleaseDeployApprovalPromote(approval.ID))
+	claimed, err = database.ClaimDeployApprovalPromote(approval.ID)
+	require.NoError(t, err)
+	require.True(t, claimed, "a failed promote's claim is released for a retry")
+
+	require.NoError(t, database.SetDeployApprovalPromoteStartedForTest(approval.ID, time.Now().Add(-time.Hour)))
+	claimed, err = database.ClaimDeployApprovalPromote(approval.ID)
+	require.NoError(t, err)
+	require.True(t, claimed, "a stale claim can be taken over")
+}
