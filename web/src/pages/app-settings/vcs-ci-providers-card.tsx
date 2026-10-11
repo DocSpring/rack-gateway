@@ -289,8 +289,9 @@ export function VCSCIProvidersCard({
       }
       await api.put(`/api/v1/apps/${app}/settings/vcs-ci-deploy`, payload)
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['appSettings', app] })
+    onSuccess: async () => {
+      // Refetch before dropping local edits, so the card never shows the old cached value
+      await qc.invalidateQueries({ queryKey: ['appSettings', app] })
       reset()
       toast.success('Deploy settings updated')
     },
@@ -304,8 +305,9 @@ export function VCSCIProvidersCard({
     mutationFn: async () => {
       await api.delete(`/api/v1/apps/${app}/settings/vcs-ci-deploy`)
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['appSettings', app] })
+    onSuccess: async () => {
+      // Refetch before dropping local edits, so the card never shows the old cached value
+      await qc.invalidateQueries({ queryKey: ['appSettings', app] })
       reset()
       toast.success('Deploy settings cleared')
     },

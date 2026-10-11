@@ -50,8 +50,9 @@ export function ServiceImagePatternsCard({
         throw new Error('Invalid JSON format')
       }
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['appSettings', app] })
+    onSuccess: async () => {
+      // Refetch before dropping local edits, so the card never shows the old cached value
+      await qc.invalidateQueries({ queryKey: ['appSettings', app] })
       setValue(null)
       toast.success('Setting updated')
     },
@@ -65,8 +66,9 @@ export function ServiceImagePatternsCard({
     mutationFn: async () => {
       await api.delete(`/api/v1/apps/${app}/settings/service-image-patterns`)
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['appSettings', app] })
+    onSuccess: async () => {
+      // Refetch before dropping local edits, so the card never shows the old cached value
+      await qc.invalidateQueries({ queryKey: ['appSettings', app] })
       setValue(null)
       toast.success('Setting cleared')
     },

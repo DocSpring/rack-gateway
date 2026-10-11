@@ -47,8 +47,8 @@ export function StringArrayCard({
       const filtered = items.map((value) => value.trim()).filter((value) => value.length > 0)
       await api.put(`/api/v1/apps/${app}/settings/${pathSegment}`, filtered)
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['appSettings', app] })
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ['appSettings', app] })
       toast.success('Setting updated')
     },
     onError: (error: unknown) => {

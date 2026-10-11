@@ -170,9 +170,13 @@ func (h *SettingsHandler) updateSettings(c *gin.Context, ops settingsOperations,
 	c.JSON(http.StatusOK, result)
 }
 
-// deleteSettings handles deleting multiple settings (global or app).
+// deleteSettings handles deleting multiple settings (global or app). On a group route (allowedKeys set), no
+// keys means every key in the group.
 func (_ *SettingsHandler) deleteSettings(c *gin.Context, ops settingsOperations, appName string, allowedKeys []string) {
 	keys := c.QueryArray("key")
+	if len(keys) == 0 {
+		keys = allowedKeys
+	}
 	if len(keys) == 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "at least one key is required"})
 		return
