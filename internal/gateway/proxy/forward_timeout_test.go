@@ -56,6 +56,12 @@ func TestForwardTimeout(t *testing.T) {
 			want:   uploadForwardTimeout,
 		},
 		{
+			name:   "build import gets the long timeout",
+			method: http.MethodPost,
+			path:   "/apps/myapp/builds/import",
+			want:   uploadForwardTimeout,
+		},
+		{
 			name:   "object GET keeps the default",
 			method: http.MethodGet,
 			path:   "/apps/myapp/objects/tmp/source.tgz",
