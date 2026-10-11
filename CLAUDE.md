@@ -437,6 +437,10 @@ When E2E tests fail and you're stuck, use these strategies:
    - Mock Convox: `http://localhost:5444`
    - Database: Docker container (rack-gateway-postgres-1) on port 55432
 
+Both modes, the preview stack and the E2E test stack run the gateway with `DEV_MODE` (and E2E with
+`E2E_TEST_MODE`), so they build it with the `testbypass` Go build tag. Release images are built without it and
+refuse to start while any test bypass is set. See "Test Bypasses" in `internal/gateway/CLAUDE.md`.
+
 **Health checks (Overmind mode):**
 
 - `curl http://localhost:8447/api/v1/health` - Gateway health check passes
@@ -446,6 +450,8 @@ When E2E tests fail and you're stuck, use these strategies:
 ### 🚀 Production Readiness
 
 - `task docker` - Docker build command passes
+- `task docker:release:smoke` - the release image (no test bypasses) boots with a production configuration (CI runs
+  this as the `release-smoke` job)
 
 **If ANY of these fail, the task is NOT complete. Fix all issues before marking done.**
 
@@ -630,7 +636,7 @@ When in doubt, choose the straightforward, well‑named, maintainable structure 
 | `task test`     | Run all tests                      | Quick test run during development           |
 | `task lint`     | Run all linters and typecheck      | Before committing code                      |
 | `task lint:fix` | Auto-fix linting issues            | When linters report fixable issues          |
-| `task build`    | Build all binaries                 | Creating release artifacts                  |
+| `task build`    | Build all binaries                 | Local binaries (the gateway is a testbypass build) |
 
 ### 🐳 Docker Development
 

@@ -17,8 +17,6 @@ environment:
   # - GOOGLE_OAUTH_BASE_URL # optional; default Google; set to your OIDC issuer if needed
   # - POSTMARK_STREAM=outbound # optional stream
   # - POSTMARK_FROM # optional sender address
-  # - COOKIE_SECURE=true # in prod
-  # - DEV_MODE=false
   # - RACK_USERNAME=convox # optional; defaults to convox
   # WORM S3 anchor storage (set via Terraform)
   - AUDIT_HMAC_SECRET # Secret key used for HMAC-SHA256 cryptographic chain of audit logs

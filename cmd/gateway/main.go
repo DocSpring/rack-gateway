@@ -20,6 +20,8 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/jobs"
 	jobaudit "github.com/DocSpring/rack-gateway/internal/gateway/jobs/audit"
 	"github.com/DocSpring/rack-gateway/internal/gateway/logutil"
+	"github.com/DocSpring/rack-gateway/internal/gateway/testbypass"
+	"github.com/DocSpring/rack-gateway/internal/gateway/version"
 )
 
 // @title Rack Gateway API
@@ -36,6 +38,11 @@ import (
 // @name X-CSRF-Token
 // @description HMAC-derived CSRF token tied to the active session.
 func main() {
+	// A release build (without the testbypass tag) refuses to run at all while a test bypass is set.
+	if err := testbypass.Check(os.Getenv); err != nil {
+		log.Fatal(err)
+	}
+
 	handled, err := handleMaintenanceCommand(os.Args)
 	if err != nil {
 		log.Fatalf("Maintenance command failed: %v", err)
@@ -73,7 +80,7 @@ func handleMaintenanceCommand(args []string) (bool, error) {
 	// Check if this is a valid command first
 	var isValidCommand bool
 	switch cmd {
-	case "migrate", "reset-db", "write-anchor", "help", "--help", "-h":
+	case "migrate", "reset-db", "write-anchor", "build-info", "help", "--help", "-h":
 		isValidCommand = true
 	}
 
@@ -95,18 +102,32 @@ func handleMaintenanceCommand(args []string) (bool, error) {
 		return true, resetDatabase()
 	case "write-anchor":
 		return true, writeAuditAnchor()
+	case "build-info":
+		fmt.Println(buildInfo())
+		return true, nil
 	case "help", "--help", "-h":
 		helpText := "rack-gateway commands:\n" +
 			"  (no args)            Start the API server\n" +
 			"  migrate             Apply database migrations\n" +
 			"  reset-db            Drop and recreate the database (requires env guards)\n" +
-			"  write-anchor        Manually trigger an audit anchor write to S3"
+			"  write-anchor        Manually trigger an audit anchor write to S3\n" +
+			"  build-info          Show the version, commit and whether test bypasses are compiled in"
 		fmt.Println(helpText)
 		return true, nil
 	default:
 		// Should never reach here due to isValidCommand check above
 		return true, fmt.Errorf("unknown command: %s\n\nUse 'help' to see available commands", cmd)
 	}
+}
+
+// buildInfo describes this binary. The release workflow checks that the published image reports the test bypasses
+// compiled out.
+func buildInfo() string {
+	compiled := "compiled out"
+	if testbypass.Compiled {
+		compiled = "compiled in (a testbypass build for development and E2E: never deploy it)"
+	}
+	return fmt.Sprintf("version: %s\ncommit: %s\ntest bypasses: %s", version.Version, version.CommitHash, compiled)
 }
 
 // getAdminDatabaseURL returns the database URL for admin operations (migrations, resets).
@@ -219,6 +240,9 @@ func writeAuditAnchor() error {
 }
 
 func runGatewayServer() error {
+	if testbypass.Compiled {
+		log.Println("WARNING: test bypasses are compiled into this build (testbypass tag). Never deploy it.")
+	}
 	application, err := app.New()
 	if err != nil {
 		return fmt.Errorf("initialize app: %w", err)

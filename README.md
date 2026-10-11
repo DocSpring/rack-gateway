@@ -141,9 +141,9 @@ curl -sL https://taskfile.dev/install.sh | sh -s -- -b /usr/local/bin && task de
 task build
 
 # Individual targets
-task go:build:gateway # Build gateway API server -> bin/rack-gateway-api
+task go:build:gateway # Build gateway API server -> bin/rack-gateway-api (a testbypass build: never deploy it)
 task go:build:cli     # Build gateway CLI -> bin/rack-gateway
-task docker     # Build Docker image
+task docker     # Build the release Docker image (test bypasses compiled out)
 task test       # Run all tests
 ```
 

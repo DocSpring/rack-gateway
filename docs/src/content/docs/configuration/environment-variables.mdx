@@ -6,21 +6,32 @@ description: Complete reference of all environment variables for Rack Gateway.
 This page provides a complete reference of Rack Gateway environment variables.
 For a shorter overview, see [Configuration](/configuration/).
 
-## Production Safety Check
+## Test Bypasses
 
-The first time a gateway starts against a database, it marks the database as `production` (or `development` when `DEV_MODE=true`). A gateway refuses to start against a production database while any development or test-only setting is present, because each one weakens a security control:
+A few settings switch off or redirect a security control so the gateway can run against local mocks in development
+and in the end-to-end tests:
 
-| Variable | Why it's refused in production |
-|----------|--------------------------------|
-| `DEV_MODE=true` | Relaxes cookies, CSP and secret requirements |
+| Variable | What it does |
+|----------|--------------|
+| `DEV_MODE=true` | Relaxes cookies, CSP, origin checks and secret requirements, and runs migrations on startup |
 | `E2E_TEST_MODE=true` | Skips WebAuthn assertion checks |
+| `COOKIE_SECURE=false` | Leaves the `Secure` attribute off cookies |
 | `AWS_ENDPOINT_URL` | Sends every AWS call (S3 audit anchors, STS, KMS) to another endpoint |
 | `AWS_ENDPOINT_URL_S3` | Sends audit anchors to another S3 endpoint |
 | `AWS_ENDPOINT_URL_STS`, `AWS_ENDPOINT_URL_KMS` | Sends AWS credential exchange or key operations to another endpoint |
-| `POSTMARK_API_BASE` | Sends the Postmark token to another server |
+| `POSTMARK_API_BASE` | Sends email and the Postmark token to another server |
 | `GOOGLE_OAUTH_BASE_URL` without `https://` | Accepts identity tokens over plain HTTP |
 
-The error names every offending variable. Remove them from the production environment and restart. `GOOGLE_ALLOWED_DOMAIN` is required whenever `DEV_MODE` is off.
+They only work in a build compiled with the `testbypass` Go build tag, which the development and E2E stacks use. The
+published Docker image and the published image is built without it, so they can't honour these settings: a release
+build refuses to start while any of them is set, and the error names each one. Remove them from the environment and
+restart. `rack-gateway-api build-info` shows whether a binary has the bypasses compiled in.
+
+A `testbypass` build refuses them too when its database is marked `production`. The first time a gateway starts
+against a database, it marks the database as `production`, or `development` in a `testbypass` build with
+`DEV_MODE=true`.
+
+`DOMAIN`, `APP_SECRET_KEY`, `GOOGLE_ALLOWED_DOMAIN` and `AUDIT_HMAC_SECRET` are required whenever `DEV_MODE` is off.
 
 ## Core Server
 
@@ -28,9 +39,9 @@ The error names every offending variable. Remove them from the production enviro
 |----------|---------|-------------|
 | `PORT` | `8080` | TCP port the API listens on |
 | `DOMAIN` | (required) | Gateway domain for OAuth redirect URLs |
-| `DEV_MODE` | `false` | Enables development-friendly behavior |
+| `DEV_MODE` | `false` | Development mode (`testbypass` builds only, see [Test Bypasses](#test-bypasses)) |
 | `APP_SECRET_KEY` | (required) | Secret for sessions and CSRF |
-| `COOKIE_SECURE` | `true` | Set the `Secure` cookie attribute |
+| `COOKIE_SECURE` | `true` | `false` leaves the `Secure` attribute off cookies, for plain-HTTP stacks (`testbypass` builds only). Release builds always set it |
 | `TRUSTED_PROXY_CIDRS` | | Comma-separated CIDRs of the reverse proxies in front of the gateway (e.g. an ingress). `X-Forwarded-For` is only believed from these, and the client IP is the right-most address that isn't one of them. Leave empty when clients connect directly; set it whenever there is a proxy, or audit logs, rate limits and security emails all see the proxy's address |
 | `LOG_LEVEL` | `info` | Log level (`debug`, `info`, `warn`, `error`) |
 | `DEBUG_TOPICS` | | Comma-separated debug topics |
@@ -42,7 +53,7 @@ The error names every offending variable. Remove them from the production enviro
 | `GOOGLE_CLIENT_ID` | (required) | OAuth client ID |
 | `GOOGLE_CLIENT_SECRET` | (required) | OAuth client secret |
 | `GOOGLE_ALLOWED_DOMAIN` | (required) | Allowed email domain |
-| `GOOGLE_OAUTH_BASE_URL` | `https://accounts.google.com` | OAuth issuer URL |
+| `GOOGLE_OAUTH_BASE_URL` | `https://accounts.google.com` | OIDC issuer URL. Must be `https://` outside `testbypass` builds |
 
 ### Seed Users
 
@@ -167,7 +178,7 @@ See [Deploy Approvals](/integrations/deploy-approvals/) for common keys.
 | `AUDIT_ANCHOR_CHAIN_ID` | | Chain identifier |
 | `AUDIT_ANCHOR_RETENTION_DAYS` | `400` | Object Lock retention |
 | `AUDIT_ANCHOR_INTERVAL_MINUTES` | `60` | Anchor interval |
-| `AWS_ENDPOINT_URL_S3` | | Custom S3 endpoint |
+| `AWS_ENDPOINT_URL_S3` | | S3 endpoint override, e.g. MinIO (`testbypass` builds only) |
 | `AWS_ACCESS_KEY_ID` | | AWS access key |
 | `AWS_SECRET_ACCESS_KEY` | | AWS secret key |
 | `AWS_REGION` | `us-east-1` | AWS region |
@@ -179,8 +190,8 @@ See [Deploy Approvals](/integrations/deploy-approvals/) for common keys.
 | `POSTMARK_API_TOKEN` | | Postmark API token |
 | `POSTMARK_FROM` | `no-reply@{domain}` | Sender |
 | `POSTMARK_STREAM` | `outbound` | Message stream |
-| `POSTMARK_API_BASE` | `https://api.postmarkapp.com` | API base |
-| `DEV_EMAIL_LOG` | `false` | Log emails in dev |
+| `POSTMARK_API_BASE` | `https://api.postmarkapp.com` | API base override (`testbypass` builds only) |
+| `DEV_EMAIL_LOG` | `false` | Log emails instead of dropping them when no Postmark token is set |
 
 ## Integrations
 

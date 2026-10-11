@@ -80,7 +80,9 @@ tasks:
     deps: [build:gateway, build:cli, build:mock]
 
   build:gateway:
-    desc: Build gateway API server -> bin/rack-gateway-api
+    # With the test bypasses: the dev stack, the integration tests and the db tasks run this binary with DEV_MODE.
+    # Release images are built by the Dockerfile, without the tag.
+    desc: Build gateway API server with test bypasses (testbypass tag) -> bin/rack-gateway-api
     deps: [deps]
     env:
       CGO_ENABLED: "0"
@@ -100,7 +102,7 @@ tasks:
       COMMIT_HASH:
         sh: git rev-parse --short HEAD 2>/dev/null || echo "unknown"
     cmds:
-      - go build -buildvcs=false -ldflags "-X github.com/DocSpring/rack-gateway/internal/gateway/version.Version={{.VERSION}} -X github.com/DocSpring/rack-gateway/internal/gateway/version.CommitHash={{.COMMIT_HASH}}" -o bin/rack-gateway-api ./cmd/gateway/
+      - go build -tags testbypass -buildvcs=false -ldflags "-X github.com/DocSpring/rack-gateway/internal/gateway/version.Version={{.VERSION}} -X github.com/DocSpring/rack-gateway/internal/gateway/version.CommitHash={{.COMMIT_HASH}}" -o bin/rack-gateway-api ./cmd/gateway/
 
   build:cli:
     desc: Build gateway CLI -> bin/rack-gateway
@@ -193,8 +195,11 @@ tasks:
       - internal/gateway/db/migrations/**/*.sql
       - scripts/**/*.sh
     cmds:
-      # -timeout is a per-package hang guard for slow or busy machines.
-      - ./scripts/safe-test.sh -v -race -short -timeout 5m ./cmd/... ./internal/cli/... ./internal/gateway/...
+      # -timeout is a per-package hang guard for slow or busy machines. The suite needs the test bypasses (DEV_MODE
+      # and friends); the second run checks the release variant of the testbypass package (bypasses off, and the
+      # refusal to start with one set).
+      - ./scripts/safe-test.sh -v -race -short -tags testbypass -timeout 5m ./cmd/... ./internal/cli/... ./internal/gateway/...
+      - ./scripts/safe-test.sh -v -race -short -timeout 5m ./internal/gateway/testbypass/...
 
   test:integration:
     desc: Run Go integration tests against the built binaries (bin/)
@@ -230,7 +235,10 @@ tasks:
       - internal/**/*.go
       - tools/**/*.go
     cmds:
+      # The release variant (no build tags) is what ships. Only the testbypass package differs with the tag, so the
+      # second run lints just that package's testbypass files.
       - golangci-lint run ./cmd/... ./internal/... ./tools/...
+      - golangci-lint run --build-tags testbypass ./internal/gateway/testbypass/...
 
   lint:fix:
     desc: Auto-fix Go formatting and lint issues
@@ -243,6 +251,7 @@ tasks:
       - tools/**/*.go
     cmds:
       - golangci-lint run --fix ./cmd/... ./internal/... ./tools/...
+      - golangci-lint run --fix --build-tags testbypass ./internal/gateway/testbypass/...
 
   lint:config:
     desc: Verify golangci-lint configuration

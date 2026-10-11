@@ -21,6 +21,7 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/config"
 	"github.com/DocSpring/rack-gateway/internal/gateway/middleware"
 	"github.com/DocSpring/rack-gateway/internal/gateway/netutil"
+	"github.com/DocSpring/rack-gateway/internal/gateway/testbypass"
 )
 
 // RootRedirect handles the root path redirect
@@ -284,7 +285,7 @@ func (_ *StaticHandler) injectScriptBlock(content []byte, r *http.Request) []byt
 }
 
 func getE2EScript() string {
-	if os.Getenv("E2E_TEST_MODE") == "true" {
+	if testbypass.E2ETestMode() {
 		return "window.__e2e_test_mode__=true;"
 	}
 	return ""

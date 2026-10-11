@@ -146,7 +146,7 @@ Migrations are in `internal/gateway/migrations/`:
 # Apply migrations
 rack-gateway migrate
 
-# Reset database (requires DEV_MODE=true or DISABLE_DATABASE_ENVIRONMENT_CHECK=1)
+# Reset database (requires DEV_MODE=true in a testbypass build, or DISABLE_DATABASE_ENVIRONMENT_CHECK=1)
 RESET_RACK_GATEWAY_DATABASE=DELETE_ALL_DATA rack-gateway reset-db
 ```
 
@@ -203,6 +203,28 @@ See `middleware/security.go` for CSP configuration.
   - Valid CSRF token (for browser requests)
   - Authorization header (for CLI requests)
 
+### Test Bypasses (`testbypass` build tag)
+
+`DEV_MODE`, `E2E_TEST_MODE`, `COOKIE_SECURE=false`, the AWS and Postmark endpoint overrides and a non-https
+`GOOGLE_OAUTH_BASE_URL` switch off or redirect security controls so the dev and E2E stacks can run against mocks.
+They are compiled in only with the `testbypass` build tag (`testbypass/enabled.go`). Release builds, including the
+published Docker image, are built without it (`testbypass/disabled.go`): every bypass reads as off, and
+`rack-gateway-api` refuses to start or run any command while one is set. A `testbypass` build still refuses them
+against a database marked production (`app/production_guard.go`).
+
+- **Read bypass state only through `testbypass`** (`DevMode()`, `E2ETestMode()`, `InsecureCookies()`,
+  `S3EndpointOverride()`, `PostmarkAPIBase()`), or `config.Config.DevMode`, which `config.Load` sets from it.
+  Never read `DEV_MODE`, `E2E_TEST_MODE`, `COOKIE_SECURE`, `AWS_ENDPOINT_URL*` or `POSTMARK_API_BASE` anywhere
+  else. (`GOOGLE_OAUTH_BASE_URL` is ordinary config: an https OIDC issuer is fine in production.)
+- A new test-only switch that weakens auth, TLS, cookies, origin checks, MFA or an external endpoint belongs in
+  `testbypass`: add it to both `enabled.go` and `disabled.go`, and to `Active` so release builds refuse it.
+- Everything that runs with `DEV_MODE` builds with the tag: `task go:build` (`bin/rack-gateway-api`), `task go:test`,
+  air (`.air-gateway.toml`), `Dockerfile.gateway-dev`, and the test and preview compose services
+  (`GO_BUILD_TAGS=testbypass`). `task docker:build` and the Release workflow build without it.
+- `rack-gateway-api build-info` prints `test bypasses: compiled out` for a release build; the Release workflow
+  checks it, and `task docker:release:smoke` (`scripts/release-smoke.sh`) boots the release image with a
+  production configuration.
+
 ### TLS Configuration
 
 **Internal Rack TLS**: Rack-to-gateway traffic uses TLS on 5443 with certificate verification disabled because racks expose self-signed/internal endpoints only. This is an intentional private-network trade-off - do not re-flag `InsecureSkipVerify` in `internal/gateway/httpclient`.
@@ -213,7 +235,7 @@ See `middleware/security.go` for CSP configuration.
 
 ```bash
 task go:build
-# Creates: bin/rack-gateway-api
+# Creates: bin/rack-gateway-api (a testbypass build: never deploy it)
 ```
 
 **⛔ NEVER use `go build` directly** - it creates unwanted binaries in root.

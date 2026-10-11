@@ -22,6 +22,7 @@ module.exports = async function waitForChecks({
     // E2E workflow jobs
     "build-image",
     "build-mocks",
+    "release-smoke",
     "web-e2e",
     "cli-e2e",
   ];

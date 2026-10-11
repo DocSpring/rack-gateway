@@ -9,7 +9,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
@@ -20,6 +19,7 @@ import (
 	"github.com/riverqueue/river"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
+	"github.com/DocSpring/rack-gateway/internal/gateway/testbypass"
 )
 
 // AnchorWriterArgs contains parameters for anchor writer job
@@ -165,7 +165,7 @@ func (w *AnchorWriterWorker) putObjectWithRetention(
 	// Note: We do NOT set ObjectLockMode or ObjectLockRetainUntilDate here because the bucket
 	// has default Object Lock retention configured via Terraform. AWS S3 returns a 400 error
 	// if you try to set per-object retention on a bucket with default retention.
-	useAWS := os.Getenv("AWS_ENDPOINT_URL_S3") == ""
+	useAWS := !testbypass.S3EndpointOverride()
 	if useAWS {
 		putInput.ServerSideEncryption = types.ServerSideEncryptionAwsKms
 		if checksumSHA256 != nil {

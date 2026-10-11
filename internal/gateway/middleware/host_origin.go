@@ -111,13 +111,10 @@ func isLocalHost(host string) bool {
 	return host == "localhost" || host == "127.0.0.1"
 }
 
+// validatorContext returns the configured host, and whether dev mode also allows localhost origins.
 func validatorContext(cfg *config.Config) (allowedHost string, isDev bool) {
-	isDev = gin.Mode() == gin.DebugMode
-	if cfg != nil && cfg.DevMode {
-		isDev = true
+	if cfg == nil {
+		return "", false
 	}
-	if cfg != nil {
-		allowedHost = canonicalHost(cfg.Domain)
-	}
-	return allowedHost, isDev
+	return canonicalHost(cfg.Domain), cfg.DevMode
 }

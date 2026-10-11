@@ -5,13 +5,12 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
+	"github.com/DocSpring/rack-gateway/internal/gateway/testbypass"
 
 	"github.com/gin-gonic/gin"
 
@@ -88,15 +87,10 @@ func (h *AuthHandler) clearWebOAuthStateCookie(c *gin.Context) {
 	c.SetSameSite(http.SameSiteDefaultMode)
 }
 
+// cookieSecure is true except in testbypass builds serving plain HTTP (dev mode, or COOKIE_SECURE=false).
 func (h *AuthHandler) cookieSecure() bool {
-	defaultSecure := h == nil || h.config == nil || !h.config.DevMode
-	if v := strings.TrimSpace(os.Getenv("COOKIE_SECURE")); v != "" {
-		b, err := strconv.ParseBool(v)
-		if err == nil {
-			return b
-		}
-	}
-	return defaultSecure
+	devMode := h != nil && h.config != nil && h.config.DevMode
+	return !testbypass.InsecureCookies(devMode)
 }
 
 // Helper to audit login attempts

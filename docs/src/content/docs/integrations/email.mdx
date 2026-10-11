@@ -242,12 +242,12 @@ ERROR: Email job failed: postmark send failed: 401 Unauthorized
 
 ## Development Mode
 
-In development, emails can be logged instead of sent:
+Without a Postmark token, emails can be logged instead of dropped:
 
 ```bash
-DEV_MODE=true
-# or
 DEV_EMAIL_LOG=true
+# or, in a development (testbypass) build
+DEV_MODE=true
 ```
 
 Emails are logged to stdout:

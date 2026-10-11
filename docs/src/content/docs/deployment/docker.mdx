@@ -3,7 +3,7 @@ title: "Docker Deployment"
 description: "Deploy Rack Gateway with Docker."
 ---
 
-import { Aside, Steps, Tabs, TabItem } from '@astrojs/starlight/components';
+import { Steps, Tabs, TabItem } from '@astrojs/starlight/components';
 
 This guide covers deploying Rack Gateway using Docker, suitable for development, testing, and simple production deployments.
 
@@ -53,7 +53,35 @@ docker run -d \
   postgres:16
 ```
 
-### 3. Start Rack Gateway
+### 3. Create the audit roles
+
+The audit log lives in its own schema, owned by roles the migrations expect to exist. Create them once per
+PostgreSQL cluster:
+
+```bash
+docker exec -i postgres psql -U rack_gateway -d rack_gateway <<'SQL'
+CREATE ROLE audit_owner NOLOGIN;
+CREATE ROLE audit_writer NOLOGIN;
+CREATE ROLE audit_reader NOLOGIN;
+SQL
+```
+
+Here `rack_gateway` is a superuser (the `postgres` image makes `POSTGRES_USER` one), so it can use these roles
+directly. With separate, non-superuser roles, grant `audit_owner` to the role that runs migrations, and
+`audit_writer` and `audit_reader` to the role the gateway connects as.
+
+### 4. Apply migrations
+
+The image never migrates on startup. Run the migrations with the same configuration as the gateway:
+
+```bash
+docker run --rm \
+  --network rack-gateway-net \
+  -e DATABASE_URL=postgres://rack_gateway:your-secure-password@postgres:5432/rack_gateway \
+  docker.io/docspringcom/rack-gateway:latest ./rack-gateway-api migrate
+```
+
+### 5. Start Rack Gateway
 
 ```bash
 docker run -d \
@@ -63,6 +91,7 @@ docker run -d \
   -e DATABASE_URL=postgres://rack_gateway:your-secure-password@postgres:5432/rack_gateway \
   -e DOMAIN=gateway.example.com \
   -e APP_SECRET_KEY=$(openssl rand -base64 32) \
+  -e AUDIT_HMAC_SECRET=$(openssl rand -base64 32) \
   -e GOOGLE_CLIENT_ID=your-client-id \
   -e GOOGLE_CLIENT_SECRET=your-client-secret \
   -e GOOGLE_ALLOWED_DOMAIN=example.com \
@@ -72,7 +101,10 @@ docker run -d \
   docker.io/docspringcom/rack-gateway:latest
 ```
 
-### 4. Verify
+Keep `APP_SECRET_KEY` and `AUDIT_HMAC_SECRET` somewhere safe and pass the same values on every start: a new
+`AUDIT_HMAC_SECRET` breaks the audit log's hash chain.
+
+### 6. Verify
 
 ```bash
 curl http://localhost:8080/api/v1/health
@@ -80,7 +112,7 @@ curl http://localhost:8080/api/v1/health
 
 ## Docker Compose
 
-For a complete development environment, use Docker Compose:
+To try the published image locally with Docker Compose:
 
 ```yaml
 # docker-compose.yml
@@ -109,8 +141,8 @@ services:
     environment:
       DATABASE_URL: postgres://rack_gateway:development@postgres:5432/rack_gateway
       DOMAIN: localhost:8080
-      DEV_MODE: "true"
       APP_SECRET_KEY: dev-secret-key-32-bytes-minimum!!
+      AUDIT_HMAC_SECRET: dev-audit-secret-32-bytes-minimum
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
       GOOGLE_ALLOWED_DOMAIN: ${GOOGLE_ALLOWED_DOMAIN}
@@ -127,9 +159,14 @@ volumes:
   pgdata:
 ```
 
-Start with:
+The image never runs migrations on startup. Create the [audit roles](#3-create-the-audit-roles), apply the
+migrations, then start:
 
 ```bash
+docker compose up -d postgres
+docker compose exec -T postgres psql -U rack_gateway -d rack_gateway \
+  -c 'CREATE ROLE audit_owner NOLOGIN' -c 'CREATE ROLE audit_writer NOLOGIN' -c 'CREATE ROLE audit_reader NOLOGIN'
+docker compose run --rm gateway ./rack-gateway-api migrate
 docker compose up -d
 ```
 
@@ -142,6 +179,7 @@ docker compose up -d
 | `DATABASE_URL` | PostgreSQL connection string | `postgres://user:pass@host:5432/db` |
 | `DOMAIN` | Gateway domain | `gateway.example.com` |
 | `APP_SECRET_KEY` | 256-bit secret for sessions | `openssl rand -base64 32` |
+| `AUDIT_HMAC_SECRET` | Key for the audit log's hash chain; never change it | `openssl rand -base64 32` |
 | `GOOGLE_CLIENT_ID` | OAuth client ID | From Google Cloud Console |
 | `GOOGLE_CLIENT_SECRET` | OAuth client secret | From Google Cloud Console |
 | `GOOGLE_ALLOWED_DOMAIN` | Allowed email domain | `example.com` |
@@ -153,7 +191,6 @@ docker compose up -d
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `PORT` | `8080` | HTTP listen port |
-| `DEV_MODE` | `false` | Enable development mode |
 | `ADMIN_USERS` | - | Comma-separated admin emails |
 | `RACK_ALIAS` | - | Short rack name (e.g., `staging`) |
 
@@ -161,10 +198,11 @@ See [Environment Variables](/configuration/environment-variables/) for the compl
 
 ## Database Migrations
 
-Migrations run automatically on startup. To run them manually:
+The image never migrates on startup: run `migrate` with the new image before starting it, after every upgrade.
 
 ```bash
-docker exec rack-gateway rack-gateway-api migrate
+docker run --rm --network rack-gateway-net -e DATABASE_URL=... \
+  docker.io/docspringcom/rack-gateway:<version> ./rack-gateway-api migrate
 ```
 
 ## Health Checks
@@ -311,25 +349,13 @@ services:
 
 ## Development Mode
 
-For local development, use `DEV_MODE=true`:
+The published image is a release build: it refuses to start with `DEV_MODE`, `E2E_TEST_MODE` or any other
+[test bypass](/configuration/environment-variables/#test-bypasses) set, and `./rack-gateway-api build-info` reports
+`test bypasses: compiled out`.
 
-```bash
-docker run -d \
-  -e DEV_MODE=true \
-  -e COOKIE_SECURE=false \
-  # ... other variables
-  docspringcom/rack-gateway:latest
-```
-
-Development mode enables:
-
-- Non-secure cookies (for HTTP)
-- Email logging instead of sending
-- Relaxed security checks
-
-<Aside type="caution">
-Never use `DEV_MODE=true` in production.
-</Aside>
+Development mode (non-secure cookies for HTTP, relaxed security checks, migrations on startup, email logging) needs
+a build from source with the `testbypass` Go build tag. `task dev` and `task docker:up` build one, or pass
+`--build-arg GO_BUILD_TAGS=testbypass` to `docker build`. Never deploy such a build.
 
 ## Troubleshooting
 
