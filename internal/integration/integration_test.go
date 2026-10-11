@@ -21,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/DocSpring/rack-gateway/internal/gateway/colcrypt"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	"github.com/DocSpring/rack-gateway/internal/gateway/testutil/dbtest"
 	"github.com/DocSpring/rack-gateway/internal/gateway/testutil/webauthntest"
@@ -165,6 +166,7 @@ func (s *TestServers) startGateway(t *testing.T) {
 		"DEV_MODE=true",
 		"DOMAIN=localhost",
 		"APP_SECRET_KEY=test-secret-key-for-integration-testing",
+		"COLUMN_ENCRYPTION_KEY="+colcrypt.DevKey,
 		"GOOGLE_CLIENT_ID=test-client-id",
 		"GOOGLE_CLIENT_SECRET=test-client-secret",
 		"GOOGLE_ALLOWED_DOMAIN=example.com",

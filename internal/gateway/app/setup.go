@@ -39,10 +39,25 @@ type mfaRuntimeConfig struct {
 }
 
 // initializeServices sets up all application services (matching original main.go exactly)
+
+// columnUpgradeRepeatDelay is when the column encryption upgrade runs again after startup: after a rolling
+// deploy has replaced the previous release, which may have written plaintext secrets meanwhile.
+const columnUpgradeRepeatDelay = 10 * time.Minute
+
 func (a *App) initializeServices() error {
 	if err := a.ensureAuditSecret(); err != nil {
 		return err
 	}
+	// Encrypt secrets stored before column encryption existed, before anything reads them. During a rolling
+	// deploy the previous release can still write plaintext after this, so the sweep runs once more later.
+	if _, err := a.Database.UpgradePlaintextColumns(context.Background()); err != nil {
+		return err
+	}
+	time.AfterFunc(columnUpgradeRepeatDelay, func() {
+		if _, err := a.Database.UpgradePlaintextColumns(context.Background()); err != nil {
+			log.Printf("Column encryption: repeat upgrade failed: %v", err)
+		}
+	})
 	if err := a.seedInitialUsers(); err != nil {
 		return err
 	}

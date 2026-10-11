@@ -38,6 +38,9 @@ GOOGLE_OAUTH_BASE_URL = "http://localhost:3345"
 
 # Secret configuration
 APP_SECRET_KEY = "dev-secret-key-change-in-production"
+# Published development/test key for encrypted columns (TOTP seeds, Slack token). It decodes to
+# "rack-gateway-dev-only-column-key"; the gateway refuses it against a production database.
+COLUMN_ENCRYPTION_KEY = "cmFjay1nYXRld2F5LWRldi1vbmx5LWNvbHVtbi1rZXk="
 
 # Mock Convox rack (for development)
 RACK = "Dev"

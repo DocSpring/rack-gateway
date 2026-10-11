@@ -2,8 +2,8 @@ package handlers
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -133,7 +133,7 @@ func TestGetSlackIntegration_Found(t *testing.T) {
 			"actions": []string{"mfa.*", "auth.*"},
 		},
 	}
-	botToken := base64.StdEncoding.EncodeToString([]byte("xoxb-test-token"))
+	botToken := fakeSlackBot
 	integration, err := database.CreateSlackIntegration(
 		"T123456",
 		"Test Workspace",
@@ -169,8 +169,13 @@ func TestGetSlackIntegration_Found(t *testing.T) {
 
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	require.NotContains(t, string(body), botToken)
+	require.NotContains(t, string(body), "rgwenc:")
+
 	var result db.SlackIntegration
-	err = json.NewDecoder(resp.Body).Decode(&result)
+	err = json.Unmarshal(body, &result)
 	require.NoError(t, err)
 	require.Equal(t, integration.WorkspaceID, result.WorkspaceID)
 	require.Equal(t, integration.WorkspaceName, result.WorkspaceName)
@@ -192,7 +197,7 @@ func TestUpdateSlackChannels(t *testing.T) {
 			"actions": []string{"mfa.*"},
 		},
 	}
-	botToken := base64.StdEncoding.EncodeToString([]byte("xoxb-test-token"))
+	botToken := fakeSlackBot
 	_, err = database.CreateSlackIntegration(
 		"T123456",
 		"Test Workspace",
@@ -281,7 +286,7 @@ func TestDeleteSlackIntegration(t *testing.T) {
 			"actions": []string{"mfa.*"},
 		},
 	}
-	botToken := base64.StdEncoding.EncodeToString([]byte("xoxb-test-token"))
+	botToken := fakeSlackBot
 	_, err = database.CreateSlackIntegration(
 		"T123456",
 		"Test Workspace",
@@ -473,17 +478,18 @@ func TestCreateSlackClient_InvalidToken(t *testing.T) {
 		config:   &config.Config{},
 	}
 
-	// Create integration with invalid base64 token
-	integration := &db.SlackIntegration{
-		ID:                1,
-		WorkspaceID:       "T123456",
-		WorkspaceName:     "Test Workspace",
-		BotTokenEncrypted: "!invalid-base64!",
-		BotUserID:         "U123456",
-		Scope:             "channels:read,chat:write",
-		ChannelActions:    map[string]interface{}{},
-		CreatedByUserID:   &user.ID,
-	}
+	// A stored token that can't be decrypted (here: plaintext written directly to the database)
+	_, err = database.CreateSlackIntegration(
+		"T123456", "Test Workspace", fakeSlackBot, "U123456", "channels:read,chat:write",
+		map[string]interface{}{}, &user.ID,
+	)
+	require.NoError(t, err)
+	_, err = database.DB().Exec(`UPDATE slack_integration SET bot_token_encrypted = 'xoxb-planted-token'`)
+	require.NoError(t, err)
+	integration, err := database.GetSlackIntegration()
+	require.NoError(t, err)
+	require.Error(t, integration.BotTokenErr)
+	require.Empty(t, integration.BotToken)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/integrations/slack/test", nil)
 	w := httptest.NewRecorder()

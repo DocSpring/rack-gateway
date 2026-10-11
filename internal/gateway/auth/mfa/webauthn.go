@@ -56,9 +56,8 @@ func (s *Service) StartWebAuthnEnrollment(user *db.User, sessionID int64) (*Star
 		return nil, err
 	}
 
-	// Store a minimal placeholder method to get an ID
-	placeholder := fmt.Sprintf("webauthn_enroll_%d_%d", user.ID, s.now().UnixNano())
-	method, err := s.db.CreateMFAMethod(user.ID, "webauthn_pending", "Security Key", placeholder, nil, nil, nil, nil)
+	// A pending method gives the enrollment an ID; it has no secret.
+	method, err := s.db.CreateMFAMethod(user.ID, "webauthn_pending", "Security Key", "", nil, nil, nil, nil)
 	if err != nil {
 		return nil, err
 	}

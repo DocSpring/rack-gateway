@@ -2,7 +2,8 @@
 # Smoke-tests the release gateway image, built without the testbypass tag, with a production configuration. The E2E
 # suite can't cover this: it runs a testbypass build with DEV_MODE and E2E_TEST_MODE on. Checks that:
 #   - the binary reports its test bypasses compiled out
-#   - it refuses to start (or run a command) while a test bypass is set, naming each one
+#   - it refuses to start (or run a command) while a test bypass is set, naming each one, or with the published
+#     development column encryption key
 #   - it migrates, starts, marks its database production and serves the health check
 #   - production behaviour is on: HSTS and a strict CSP, no dev-mode localhost origins, Secure cookies, OAuth against
 #     Google over https, and no E2E flag in the web UI
@@ -16,6 +17,10 @@ SERVICE="gateway-api-release"
 DATABASE="gateway_release"
 BASE_URL="http://127.0.0.1:${RELEASE_GATEWAY_PORT:-9460}"
 MAX_WAIT_SECONDS="${MAX_WAIT_SECONDS:-60}"
+# A fresh column encryption key: release builds refuse the development key published in this repository.
+RELEASE_COLUMN_ENCRYPTION_KEY="$(openssl rand -base64 32)"
+export RELEASE_COLUMN_ENCRYPTION_KEY
+DEV_COLUMN_KEY="cmFjay1nYXRld2F5LWRldi1vbmx5LWNvbHVtbi1rZXk="
 
 compose() {
   docker compose --profile release "$@"
@@ -75,6 +80,13 @@ for command in "" "./rack-gateway-api migrate"; do
     "DEV_MODE, E2E_TEST_MODE, COOKIE_SECURE=false, AWS_ENDPOINT_URL_S3, POSTMARK_API_BASE, GOOGLE_OAUTH_BASE_URL"
 done
 echo "Refused, naming every bypass"
+
+echo "== Refuses the development column encryption key"
+if output="$(run_gateway -e COLUMN_ENCRYPTION_KEY="$DEV_COLUMN_KEY" "$SERVICE" ./rack-gateway-api migrate)"; then
+  fail "the release image ran migrate with the development column key:"$'\n'"${output}"
+fi
+expect "development key refusal" "$output" "is the development key published in this repository"
+echo "Refused"
 
 echo "== Database"
 compose up -d --wait postgres

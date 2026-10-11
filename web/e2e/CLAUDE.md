@@ -161,6 +161,11 @@ Programmatically enrolls user in TOTP MFA:
 await ensureMfaEnrollment(page);
 ```
 
+TOTP seeds in `mfa_methods.secret` are stored encrypted. Read and write them only through the `db.ts`
+helpers (`getUserMfaSecret`, `getPendingTotpSecret`, `setupTotpMfaForUser`), which use `column-crypto.ts`
+and need `COLUMN_ENCRYPTION_KEY` to match the test gateway (`mise.toml` locally, the job env in
+`.github/workflows/e2e.yml` on CI). A plaintext seed inserted directly is rejected by the gateway.
+
 #### `resetMfaFor(email)`
 
 Removes all MFA methods for a user (useful for testing enrollment flows):

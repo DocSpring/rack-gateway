@@ -64,6 +64,10 @@ SLACK_CLIENT_ID="your-client-id"
 SLACK_CLIENT_SECRET="your-client-secret"
 ```
 
+The bot token Slack returns is stored encrypted with `COLUMN_ENCRYPTION_KEY` (see
+[Column Encryption](/configuration/environment-variables/#column-encryption)). If that key changes,
+notifications stop and are reported in the logs until you reconnect Slack.
+
 ### 3. Connect via Web UI
 
 <Steps>
