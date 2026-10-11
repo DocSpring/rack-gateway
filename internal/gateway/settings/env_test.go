@@ -25,6 +25,11 @@ func TestEnvironmentOverridesTheDatabase(t *testing.T) {
 
 	require.True(t, setting.StoredValueIgnored, "the stored value is reported, so it can be cleared")
 
+	t.Setenv("RGW_APP_WEB_SETTING_VCS_REPO", `"acme/web"`)
+	repo, err := svc.GetAppSetting("web", KeyVCSRepo, nil)
+	require.NoError(t, err)
+	require.Equal(t, "acme/web", repo.Value, "a JSON-encoded string is decoded")
+
 	all, err := svc.GetAllAppSettings("web")
 	require.NoError(t, err)
 	require.Equal(t, SourceEnv, all[KeyGitHubVerification].Source)
@@ -92,6 +97,15 @@ func TestValidateEnvironment(t *testing.T) {
 		"RGW_APP_MY_SERVICE_SETTING_PROTECTED_ENV_VARS=A,B",
 		`RGW_APP_WEB_SETTING_SERVICE_IMAGE_PATTERNS={"web":"repo:{{GIT_COMMIT}}"}`,
 		"RGW_APP_WEB_SETTING_VCS_REPO=acme/web",
+		// What a deployment that writes jsonencode(value) for every setting produces (Terraform, for one).
+		`RGW_APP_API_SETTING_VCS_REPO="acme/api"`,
+		`RGW_APP_API_SETTING_VERIFY_GIT_COMMIT_MODE="latest"`,
+		`RGW_APP_API_SETTING_CIRCLECI_APPROVAL_JOB_NAME="approve_deploy"`,
+		"RGW_APP_API_SETTING_CIRCLECI_AUTO_APPROVE_ON_APPROVAL=true",
+		"RGW_APP_API_SETTING_GITHUB_POST_PR_COMMENT=false",
+		"RGW_APP_API_SETTING_APPROVED_DEPLOY_COMMANDS=[]",
+		`RGW_APP_API_SETTING_PROTECTED_ENV_VARS=["REDIS_URL","API_HOST"]`,
+		`RGW_APP_API_SETTING_SERVICE_IMAGE_PATTERNS={"*":"docker\\.io/acme/api:{{GIT_COMMIT}}-amd64"}`,
 		"RGW_SETTING_ALLOW_DESTRUCTIVE_ACTIONS=", // blank: not set
 	}))
 
@@ -103,7 +117,8 @@ func TestValidateEnvironment(t *testing.T) {
 		"RGW_SETTING_NO_SUCH_SETTING=1",
 		"RGW_APP_WEB_SETTING_SERVICE_IMAGE_PATTERNS=not json",
 		"RGW_APP_WEB_SETTING_GITHUB_VERIFICATION=1.5",
-		`RGW_APP_WEB_SETTING_DEFAULT_BRANCH="main"`,
+		"RGW_APP_WEB_SETTING_DEFAULT_BRANCH='main'",
+		`RGW_APP_API_SETTING_DEFAULT_BRANCH="main`,
 		"RGW_APP_WEB_SETTING_VCS_REPO=null",
 		"RGW_APP_WEB_SETTING_VERIFY_GIT_COMMIT_MODE=Latest",
 		// Names the gateway never reads: they'd be silently ignored.

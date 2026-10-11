@@ -129,10 +129,15 @@ func parseEnvBool(raw string) (bool, error) {
 	}
 }
 
-// parseEnvString takes a string value as it is. Quotes would become part of the value, so they're refused.
+// parseEnvString reads a string value: plain, or JSON-encoded (as Terraform's jsonencode writes every value). Any
+// other quoting would become part of the value, so it's refused, and so is null (unset the variable instead).
 func parseEnvString(key, raw string) (string, error) {
-	if strings.HasPrefix(raw, `"`) || strings.HasPrefix(raw, "'") || raw == "null" {
-		return "", fmt.Errorf("must be a plain value without quotes, got %s", raw)
+	if strings.HasPrefix(raw, `"`) {
+		if err := json.Unmarshal([]byte(raw), &raw); err != nil {
+			return "", fmt.Errorf("must be a plain value or a JSON string, got %s", raw)
+		}
+	} else if strings.HasPrefix(raw, "'") || raw == "null" {
+		return "", fmt.Errorf("must be a plain value or a JSON string, got %s", raw)
 	}
 	allowed, restricted := allowedSettingValues[key]
 	if restricted && !slices.Contains(allowed, raw) {

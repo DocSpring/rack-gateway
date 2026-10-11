@@ -112,7 +112,10 @@ An environment variable pins its setting: the web UI shows it read-only, and the
 - Lists: a JSON array of strings, or a comma-separated list (use the JSON form when a value contains a comma,
   e.g. an approved deploy command)
 - Maps (`service_image_patterns`): a JSON object of strings
-- Strings: the plain value, without quotes. `verify_git_commit_mode` must be `latest` or `branch`.
+- Strings: the plain value, or a JSON string (`"main"`, as Terraform's `jsonencode` writes it). Other quoting is
+  refused. `verify_git_commit_mode` must be `latest` or `branch`.
+
+Every value can be JSON-encoded, so a deployment tool can write `jsonencode(value)` for all of them.
 
 The gateway refuses to start when a `RGW_SETTING_*` or `RGW_APP_*_SETTING_*` variable names an unknown setting,
 isn't spelled the way the gateway reads it (upper case, with dashes in app names written as underscores), or has a
