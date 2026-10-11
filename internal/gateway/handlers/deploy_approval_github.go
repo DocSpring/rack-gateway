@@ -7,6 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/DocSpring/rack-gateway/internal/gateway/config"
 	"github.com/DocSpring/rack-gateway/internal/gateway/github"
 	gtwlog "github.com/DocSpring/rack-gateway/internal/gateway/logging"
 	"github.com/DocSpring/rack-gateway/internal/gateway/settings"
@@ -32,7 +33,7 @@ func (h *APIHandler) performGitHubVerification(
 		return "", false
 	}
 
-	if !enabled || h.config == nil || h.config.GitHubToken == "" {
+	if !enabled {
 		return "", true
 	}
 
@@ -43,8 +44,14 @@ func (h *APIHandler) performGitHubVerification(
 		return "", false
 	}
 
-	if githubRepo == "" {
-		return "", true
+	// Verification (and the PR and default-branch rules that run inside it) must not be skipped silently.
+	if missing := missingGitHubVerificationConfig(h.config, githubRepo); missing != "" {
+		gtwlog.Warnf("deploy approvals: github_verification is on for app=%s but %s", app, missing)
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf(
+			"GitHub verification is on for app %s, but %s. Set it, or turn off github_verification for the app.",
+			app, missing,
+		)})
+		return "", false
 	}
 
 	return h.verifyGitHubCommit(c, app, githubRepo, req, gitCommitHash)
@@ -83,7 +90,7 @@ func (h *APIHandler) verifyGitHubCommit(
 		return "", false
 	}
 
-	client := github.NewClient(h.config.GitHubToken)
+	client := github.NewClient(h.config.GitHubToken, h.config.GitHubAPIURL)
 	opts := github.VerifyCommitOptions{
 		RequirePR: requirePR,
 		Mode:      verifyMode,
@@ -166,4 +173,16 @@ func (h *APIHandler) getVerificationSettings(c *gin.Context, app string) (bool, 
 	}
 
 	return requirePR, verifyMode, true
+}
+
+// missingGitHubVerificationConfig describes what GitHub verification needs but doesn't have, or returns "".
+func missingGitHubVerificationConfig(cfg *config.Config, githubRepo string) string {
+	var missing []string
+	if cfg == nil || strings.TrimSpace(cfg.GitHubToken) == "" {
+		missing = append(missing, "the gateway has no GITHUB_TOKEN")
+	}
+	if strings.TrimSpace(githubRepo) == "" {
+		missing = append(missing, "the app has no vcs_repo setting")
+	}
+	return strings.Join(missing, " and ")
 }

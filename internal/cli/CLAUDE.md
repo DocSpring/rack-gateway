@@ -51,6 +51,7 @@ Structure:
   "mfa_preference": "webauthn",
   "notification_sound": "default",
   "sound_volume": 0.6,
+  "touch_notifications": true,
   "all_racks_exclude": ["dev", "Dev"]
 }
 ```
@@ -64,6 +65,8 @@ Structure:
 - `mfa_preference` - Default MFA method: `"default"`, `"webauthn"`, or `"totp"`
 - `notification_sound` - Default notification sound: `"default"`, `"disabled"`, or path to MP3 file
 - `sound_volume` - Default sound volume: 0.0 to 1.0 (default: 0.6 = 60%)
+- `touch_notifications` - Show a desktop notification each time a security key touch is needed (default: `true`;
+  macOS via `osascript`, Linux via `notify-send` when installed)
 - `all_racks_exclude` - Array of rack names to exclude when using `--rack all`
 
 **Per-Rack Settings (GatewayConfig):**

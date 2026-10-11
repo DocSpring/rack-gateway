@@ -104,11 +104,12 @@ var fullCommitSHA = regexp.MustCompile(`^[0-9a-fA-F]{40}$`)
 
 // errApprovalTargetNotExplicit explains why an approval without a terminal was refused.
 var errApprovalTargetNotExplicit = errors.New("without a terminal, approving needs an explicit --app " +
-	"(one app or a comma-separated list) and a full 40-character --commit, and no --branch or --all-apps: " +
-	"the PIN dialog shows only this command, so it must say exactly what is approved")
+	"(one app or a comma-separated list) and a full 40-character --commit, and no --branch or --all-apps, " +
+	"so the command says exactly what it approves")
 
 // requireExplicitApprovalTarget refuses an approval run without a terminal (e.g. by an AI agent) unless its
-// command line names exactly what it approves: the person typing the PIN sees only the command line, once.
+// command line names exactly what it approves: no one at a terminal confirms the requests it finds, and the
+// person typing the PIN in the dialog sees the command line next to the approvals it makes.
 func requireExplicitApprovalTarget(interactive bool, appFlag string, allApps bool, branch, commit string) error {
 	if interactive {
 		return nil

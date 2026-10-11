@@ -558,6 +558,12 @@
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
@@ -575,7 +581,7 @@
                         "CSRFToken": []
                     }
                 ],
-                "description": "Deletes multiple app settings from the database, reverting to env or default values",
+                "description": "Deletes app settings' database values; their environment variables or defaults apply",
                 "produces": [
                     "application/json"
                 ],
@@ -688,6 +694,12 @@
                     },
                     "400": {
                         "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
                         "schema": {
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
@@ -809,6 +821,12 @@
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
@@ -926,6 +944,12 @@
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
@@ -1039,6 +1063,12 @@
                     },
                     "400": {
                         "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
                         "schema": {
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
@@ -3195,6 +3225,12 @@
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
@@ -3212,7 +3248,7 @@
                         "CSRFToken": []
                     }
                 ],
-                "description": "Deletes multiple global settings from the database, reverting to env or default values",
+                "description": "Deletes global settings' database values; their environment variables or defaults apply",
                 "produces": [
                     "application/json"
                 ],
@@ -5716,11 +5752,15 @@
             "type": "object",
             "properties": {
                 "env_var": {
-                    "description": "e.g., \"RGW_SETTING_REQUIRE_MFA_ALL_USERS\"",
+                    "description": "e.g., \"RGW_SETTING_MFA_REQUIRE_ALL_USERS\"",
                     "type": "string"
                 },
                 "source": {
                     "$ref": "#/definitions/settings.SettingSource"
+                },
+                "stored_value_ignored": {
+                    "description": "StoredValueIgnored reports a database value that the environment variable overrides. It has no effect, and\ncan be cleared.",
+                    "type": "boolean"
                 },
                 "value": {}
             }

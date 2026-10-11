@@ -23,10 +23,6 @@ func (d *Database) CreateDeployApprovalRequest(
 		return nil, err
 	}
 
-	// An approval past its window no longer counts as open, so it mustn't block a new request.
-	if _, err := d.ExpireDeployApprovalRequests(); err != nil {
-		return nil, err
-	}
 	if err := d.checkDeployApprovalConflict(targetAPITokenID, normalizedGitCommitHash, normalizedApp); err != nil {
 		return nil, err
 	}
@@ -196,6 +192,9 @@ func (d *Database) updateApprovalStatus(
 	case "id = ?":
 		whereColumn = "id"
 	case "public_id = ?":
+		if publicID, ok := whereArg.(string); !ok || !isPublicID(publicID) {
+			return ErrDeployApprovalRequestNotFound
+		}
 		whereColumn = "public_id"
 	default:
 		return fmt.Errorf("invalid where clause: %s", whereClause)
@@ -362,10 +361,14 @@ func (d *Database) ExtendDeployApprovalRequestExpiry(
 	publicID string,
 	newExpiresAt time.Time,
 ) (*DeployApprovalRequest, error) {
+	if !isPublicID(publicID) {
+		return nil, ErrDeployApprovalRequestNotFound
+	}
 	res, err := d.exec(
 		`UPDATE deploy_approval_requests
          SET approval_expires_at = ?, status = ?, updated_at = NOW()
-         WHERE public_id = ? AND status IN (?, ?) AND (approval_expires_at IS NULL OR approval_expires_at < ?)`,
+         WHERE public_id = ? AND status IN (?, ?) AND approved_at IS NOT NULL
+           AND (approval_expires_at IS NULL OR approval_expires_at < ?)`,
 		newExpiresAt,
 		DeployApprovalRequestStatusApproved,
 		publicID,
@@ -387,17 +390,4 @@ func (d *Database) ExtendDeployApprovalRequestExpiry(
 		return nil, ErrDeployApprovalRequestNotFound
 	}
 	return d.GetDeployApprovalRequestByPublicID(publicID)
-}
-
-// ExpireDeployApprovalRequests marks approved requests whose approval window has passed as expired, and returns
-// how many it changed. Lookups already treat them as inactive; this makes their status say so too, so they stop
-// counting as open requests.
-func (d *Database) ExpireDeployApprovalRequests() (int64, error) {
-	result, err := d.exec(`UPDATE deploy_approval_requests SET status = ?, updated_at = NOW()
-		WHERE status = ? AND approval_expires_at IS NOT NULL AND approval_expires_at <= NOW()`,
-		DeployApprovalRequestStatusExpired, DeployApprovalRequestStatusApproved)
-	if err != nil {
-		return 0, fmt.Errorf("failed to expire deploy approval requests: %w", err)
-	}
-	return result.RowsAffected()
 }

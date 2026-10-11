@@ -31,7 +31,8 @@ test.describe('Global Settings', () => {
 
     // Check for environment variable source indicator
     // The E2E test has RGW_SETTING_MFA_TRUSTED_DEVICE_TTL_DAYS=45 set
-    await expect(page.getByText(/\(from env var\)/i)).toBeVisible()
+    await expect(page.getByText(/\(from env var, read-only\)/i)).toBeVisible()
+    await expect(page.getByLabel(/trusted device ttl/i)).toBeDisabled()
 
     // Verify the value from env is displayed
     const ttlInput = page.getByLabel(/trusted device ttl/i)

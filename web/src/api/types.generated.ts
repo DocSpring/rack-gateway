@@ -597,6 +597,15 @@ export interface paths {
                         "application/json": components["schemas"]["handlers.ErrorResponse"];
                     };
                 };
+                /** @description Conflict */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
                 /** @description Internal Server Error */
                 500: {
                     headers: {
@@ -611,7 +620,7 @@ export interface paths {
         post?: never;
         /**
          * Delete multiple app settings
-         * @description Deletes multiple app settings from the database, reverting to env or default values
+         * @description Deletes app settings' database values; their environment variables or defaults apply
          */
         delete: {
             parameters: {
@@ -715,6 +724,15 @@ export interface paths {
                 };
                 /** @description Bad Request */
                 400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+                /** @description Conflict */
+                409: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -835,6 +853,15 @@ export interface paths {
                         "application/json": components["schemas"]["handlers.ErrorResponse"];
                     };
                 };
+                /** @description Conflict */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
                 /** @description Internal Server Error */
                 500: {
                     headers: {
@@ -941,6 +968,15 @@ export interface paths {
                 };
                 /** @description Bad Request */
                 400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+                /** @description Conflict */
+                409: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -1056,6 +1092,15 @@ export interface paths {
                 };
                 /** @description Bad Request */
                 400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+                /** @description Conflict */
+                409: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -3741,6 +3786,15 @@ export interface paths {
                         "application/json": components["schemas"]["handlers.ErrorResponse"];
                     };
                 };
+                /** @description Conflict */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
                 /** @description Internal Server Error */
                 500: {
                     headers: {
@@ -3755,7 +3809,7 @@ export interface paths {
         post?: never;
         /**
          * Delete multiple global settings
-         * @description Deletes multiple global settings from the database, reverting to env or default values
+         * @description Deletes global settings' database values; their environment variables or defaults apply
          */
         delete: {
             parameters: {
@@ -5215,9 +5269,14 @@ export interface components {
             total_count?: number;
         };
         "settings.Setting": {
-            /** @description e.g., "RGW_SETTING_REQUIRE_MFA_ALL_USERS" */
+            /** @description e.g., "RGW_SETTING_MFA_REQUIRE_ALL_USERS" */
             env_var?: string;
             source?: components["schemas"]["settings.SettingSource"];
+            /**
+             * @description StoredValueIgnored reports a database value that the environment variable overrides. It has no effect, and
+             *     can be cleared.
+             */
+            stored_value_ignored?: boolean;
             value?: unknown;
         };
         /** @enum {string} */

@@ -310,7 +310,7 @@ func (h *Handler) forwardRequest(
 		if fpErr, ok := rackcert.AsFingerprintMismatch(err); ok {
 			return 0, fpErr
 		}
-		return 0, fmt.Errorf("failed to forward request: %w", err)
+		return 0, fmt.Errorf("%w: %w", errRackRequestFailed, err)
 	}
 	defer resp.Body.Close() //nolint:errcheck,gosec // G104: cleanup
 

@@ -1,7 +1,12 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 
-import { getSettingValue, SourceIndicator } from '@/components/settings/source-indicator'
+import {
+  getSettingValue,
+  hasStoredValue,
+  isSetByEnv,
+  SourceIndicator,
+} from '@/components/settings/source-indicator'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
@@ -50,8 +55,9 @@ export function ServiceImagePatternsCard({
         throw new Error('Invalid JSON format')
       }
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['appSettings', app] })
+    onSuccess: async () => {
+      // Refetch before dropping local edits, so the card never shows the old cached value
+      await qc.invalidateQueries({ queryKey: ['appSettings', app] })
       setValue(null)
       toast.success('Setting updated')
     },
@@ -65,8 +71,9 @@ export function ServiceImagePatternsCard({
     mutationFn: async () => {
       await api.delete(`/api/v1/apps/${app}/settings/service-image-patterns`)
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['appSettings', app] })
+    onSuccess: async () => {
+      // Refetch before dropping local edits, so the card never shows the old cached value
+      await qc.invalidateQueries({ queryKey: ['appSettings', app] })
       setValue(null)
       toast.success('Setting cleared')
     },
@@ -88,7 +95,7 @@ export function ServiceImagePatternsCard({
     clearMutation.mutate()
   }
 
-  const hasDbSetting = setting?.source === 'db'
+  const hasDbSetting = hasStoredValue(setting)
 
   return (
     <Card>
@@ -107,7 +114,7 @@ export function ServiceImagePatternsCard({
           <div className="flex flex-col gap-2">
             <textarea
               className="min-h-32 w-full rounded-md border border-input bg-background px-3 py-2 font-mono text-sm"
-              disabled={disabled}
+              disabled={disabled || isSetByEnv(setting)}
               id="service-image-patterns"
               onChange={(event) => setValue(event.target.value)}
               placeholder='{"*": "docker\\.io/myorg/app:{{GIT_COMMIT}}-amd64"}'

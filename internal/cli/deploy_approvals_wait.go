@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bufio"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -20,12 +21,15 @@ func newDeployApprovalWaitCommand() *cobra.Command {
 		Long: `Wait for deploy approval requests for a commit and optionally approve them.
 
 Without --loop, waits until every listed app has an approved (or deployed) request on every rack, then prints
-what was approved. Without a terminal (e.g. an AI agent), --approve needs an explicit --app list and a full
---commit SHA.
+what was approved. Each request is shown (rack, app, commit, message, branch, token) before it is approved.
+
+Without a terminal (e.g. an AI agent), --approve needs an explicit --app list and a full --commit SHA; the macOS
+PIN dialog lists every approval the run can make. In a terminal, --approve with --branch and no --commit approves
+the newest request for the branch whatever its commit, so it asks you to confirm each one (y/N).
 
 Examples:
   # Approve two apps' requests for a commit on staging (one PIN, one touch per approval)
-  rack-gateway deploy-approval wait --approve --app docspring,api-proxy --commit <sha> --rack staging`,
+  rack-gateway deploy-approval wait --approve --app web,worker --commit <sha> --rack staging`,
 		Args: cobra.NoArgs,
 		RunE: SilenceOnError(func(cmd *cobra.Command, _ []string) error {
 			parsed, err := parseDeployApprovalWaitOptions(cmd, opts)
@@ -143,7 +147,7 @@ func newDeployApprovalWaiter(cmd *cobra.Command, cfg deployApprovalWaitConfig) *
 		autoApprove:  cfg.autoApprove,
 		notes:        cfg.notes,
 		loop:         cfg.loop,
-		handled:      make(map[string]map[string]string),
+		handled:      make(map[string]map[string]deployApprovalRequest),
 	}
 }
 
@@ -180,7 +184,7 @@ func (w *deployApprovalWaiter) pollNextRack() (bool, error) {
 			}
 			w.markHandled(rack, request)
 			_ = writef(w.cmd.OutOrStdout(), "✓ Already %s on rack %s: %s (%s)\n",
-				status, rack, request.PublicID, displayText(request.App))
+				status, rack, request.PublicID, approvalTarget(&request))
 		}
 	}
 	return w.shouldExit(), nil
@@ -202,9 +206,9 @@ func (w *deployApprovalWaiter) isHandled(rack, app string) bool {
 
 func (w *deployApprovalWaiter) markHandled(rack string, request deployApprovalRequest) {
 	if w.handled[rack] == nil {
-		w.handled[rack] = make(map[string]string)
+		w.handled[rack] = make(map[string]deployApprovalRequest)
 	}
-	w.handled[rack][request.App] = request.PublicID
+	w.handled[rack][request.App] = request
 }
 
 // rackDone reports whether every expected app on rack has been handled.
@@ -229,9 +233,11 @@ type deployApprovalWaiter struct {
 	loop         bool
 	rackIndex    int
 	cachedPIN    string
-	// handled maps rack -> app -> request ID for requests approved (or shown) by this run or already approved.
-	handled   map[string]map[string]string
+	// handled maps rack -> app -> request for requests approved (or shown) by this run or already approved.
+	handled   map[string]map[string]deployApprovalRequest
 	soundDone chan struct{}
+	// stdin reads answers to confirmation prompts; see input.
+	stdin *bufio.Reader
 }
 
 func (w *deployApprovalWaiter) nextRack() string {
@@ -273,7 +279,10 @@ func (w *deployApprovalWaiter) printSummary() error {
 		}
 		sort.Strings(apps)
 		for _, app := range apps {
-			if err := writef(out, "  %s  %s  %s\n", rack, app, w.handled[rack][app]); err != nil {
+			request := w.handled[rack][app]
+			err := writef(out, "  %s  %s  %s  commit %s\n",
+				rack, displayText(app), request.PublicID, shortCommit(request.GitCommitHash))
+			if err != nil {
 				return err
 			}
 		}
@@ -350,33 +359,7 @@ func (w *deployApprovalWaiter) handleRequest(rack string, request deployApproval
 		msg := "\nUse 'rack-gateway deploy-approval approve <id>' to approve this request."
 		return writeLine(w.cmd.OutOrStdout(), msg)
 	}
-
-	// Approve with PIN caching
-	approved, pin, err := approveDeployRequestWithPIN(w.cmd, rack, request.PublicID, w.notes, w.cachedPIN)
-	if err != nil {
-		return err
-	}
-
-	// Cache the PIN for subsequent approvals
-	if w.cachedPIN == "" && pin != "" {
-		w.cachedPIN = pin
-	}
-
-	app := displayText(request.App)
-	statusLine := fmt.Sprintf("\n✅ Deploy approval request %s (%s) approved", approved.PublicID, app)
-	if len(w.racks) > 1 {
-		statusLine = fmt.Sprintf(
-			"\n✅ Deploy approval request %s (%s) approved on rack %s", approved.PublicID, app, rack,
-		)
-	}
-	if approved.ApprovalExpiresAt != nil {
-		statusLine = fmt.Sprintf(
-			"%s (expires at %s)",
-			statusLine,
-			approved.ApprovalExpiresAt.UTC().Format(time.RFC3339),
-		)
-	}
-	return writeLine(w.cmd.OutOrStdout(), statusLine)
+	return w.approve(rack, request)
 }
 
 // playNotificationOnce plays the notification sound a single time per invocation,
@@ -402,34 +385,14 @@ func (w *deployApprovalWaiter) waitForSound() {
 	}
 }
 
+// writeRequestSummary shows a pending request (rack, app, full commit, message, branch, token) before anything
+// is done with it.
 func (w *deployApprovalWaiter) writeRequestSummary(rack string, request deployApprovalRequest) error {
 	out := w.cmd.OutOrStdout()
-	if len(w.racks) > 1 {
-		if err := writef(out, "\n📋 Deploy Approval Request Found on rack '%s':\n", rack); err != nil {
-			return err
-		}
-	} else {
-		if err := writeLine(out, "\n📋 Deploy Approval Request Found:"); err != nil {
-			return err
-		}
-	}
-
-	if err := writef(out, "  ID: %s\n", request.PublicID); err != nil {
+	if err := writeLine(out, "\n📋 Deploy Approval Request Found:"); err != nil {
 		return err
 	}
-	if err := writef(out, "  App: %s\n", displayText(request.App)); err != nil {
-		return err
-	}
-	if err := writef(out, "  Message: %s\n", displayText(request.Message)); err != nil {
-		return err
-	}
-	if err := writef(out, "  Status: %s\n", request.Status); err != nil {
-		return err
-	}
-	if err := writef(out, "  Token: %s\n", displayText(request.TargetAPITokenName)); err != nil {
-		return err
-	}
-	return writef(out, "  Created: %s\n", request.CreatedAt.Format(time.RFC3339))
+	return printDeployApprovalDetails(out, &request, rack, true)
 }
 
 func (w *deployApprovalWaiter) sleep() {

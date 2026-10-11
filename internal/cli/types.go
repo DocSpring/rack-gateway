@@ -16,6 +16,8 @@ type Config struct {
 	NotificationSound string `json:"notification_sound,omitempty"`
 	// Global default: sound volume (0.0 to 1.0, default 0.6 = 60%)
 	SoundVolume *float64 `json:"sound_volume,omitempty"`
+	// Show a desktop notification each time a security key touch is needed (default true)
+	TouchNotifications *bool `json:"touch_notifications,omitempty"`
 	// Racks to exclude when using --rack all (e.g., ["dev", "Dev"])
 	AllRacksExclude []string `json:"all_racks_exclude,omitempty"`
 }

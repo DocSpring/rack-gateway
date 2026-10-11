@@ -8,8 +8,13 @@
 import type { SettingsSettingSource } from "./settingsSettingSource";
 
 export interface SettingsSetting {
-  /** e.g., "RGW_SETTING_REQUIRE_MFA_ALL_USERS" */
+  /** e.g., "RGW_SETTING_MFA_REQUIRE_ALL_USERS" */
   env_var?: string;
   source?: SettingsSettingSource;
+  /**
+   * StoredValueIgnored reports a database value that the environment variable overrides. It has no effect, and
+   * can be cleared.
+   */
+  stored_value_ignored?: boolean;
   value?: unknown;
 }

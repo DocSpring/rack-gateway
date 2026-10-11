@@ -236,3 +236,13 @@ func RemoveRack(rack string) (bool, error) {
 	}
 	return true, nil
 }
+
+// touchNotificationsEnabled reports whether to show a desktop notification each time a security key touch is
+// needed (the touch_notifications setting, on by default).
+func touchNotificationsEnabled() bool {
+	cfg, _, err := LoadConfig()
+	if err != nil || cfg.TouchNotifications == nil {
+		return true
+	}
+	return *cfg.TouchNotifications
+}

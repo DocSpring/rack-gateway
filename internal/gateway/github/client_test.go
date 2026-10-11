@@ -26,7 +26,7 @@ func TestDoRequestSuccess(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("test-token")
+	client := NewClient("test-token", "")
 
 	var branch Branch
 	err := client.doRequest("GET", server.URL, nil, http.StatusOK, "", &branch)
@@ -64,7 +64,7 @@ func TestDoRequestWithBody(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("test-token")
+	client := NewClient("test-token", "")
 
 	body, _ := json.Marshal(PRCommentRequest{Body: "test comment"})
 	err := client.doRequest("POST", server.URL, strings.NewReader(string(body)), http.StatusCreated, "", nil)
@@ -81,7 +81,7 @@ func TestDoRequestNotFoundWithCustomError(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("test-token")
+	client := NewClient("test-token", "")
 
 	customError := "branch test-branch not found in repository owner/repo"
 	err := client.doRequest("GET", server.URL, nil, http.StatusOK, customError, nil)
@@ -102,7 +102,7 @@ func TestDoRequestNotFoundWithoutCustomError(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("test-token")
+	client := NewClient("test-token", "")
 
 	err := client.doRequest("GET", server.URL, nil, http.StatusOK, "", nil)
 	if err == nil {
@@ -124,7 +124,7 @@ func TestDoRequestUnexpectedStatus(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("test-token")
+	client := NewClient("test-token", "")
 
 	err := client.doRequest("GET", server.URL, nil, http.StatusOK, "", nil)
 	if err == nil {
@@ -148,7 +148,7 @@ func TestDoRequestJSONDecodeError(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("test-token")
+	client := NewClient("test-token", "")
 
 	var branch Branch
 	err := client.doRequest("GET", server.URL, nil, http.StatusOK, "", &branch)
@@ -163,7 +163,7 @@ func TestDoRequestJSONDecodeError(t *testing.T) {
 
 // TestDoRequestNetworkError tests handling of network errors
 func TestDoRequestNetworkError(t *testing.T) {
-	client := NewClient("test-token")
+	client := NewClient("test-token", "")
 
 	// Use an invalid URL to trigger network error
 	err := client.doRequest("GET", "http://invalid-host-that-does-not-exist.local", nil, http.StatusOK, "", nil)
@@ -188,7 +188,7 @@ func TestDoRequestNoTargetDecoding(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("test-token")
+	client := NewClient("test-token", "")
 
 	// Call without a target - should not attempt to decode
 	err := client.doRequest("GET", server.URL, nil, http.StatusOK, "", nil)
@@ -203,7 +203,7 @@ func TestDoRequestNoTargetDecoding(t *testing.T) {
 
 // TestDoRequestInvalidURL tests handling of invalid URLs
 func TestDoRequestInvalidURL(t *testing.T) {
-	client := NewClient("test-token")
+	client := NewClient("test-token", "")
 
 	// Invalid URL that causes http.NewRequest to fail
 	err := client.doRequest("GET\n", "http://example.com", nil, http.StatusOK, "", nil)
@@ -224,7 +224,7 @@ func TestDoRequestServerError(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("test-token")
+	client := NewClient("test-token", "")
 
 	err := client.doRequest("GET", server.URL, nil, http.StatusOK, "", nil)
 	if err == nil {
@@ -251,7 +251,7 @@ func TestGetBranchIntegration(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("test-token")
+	client := NewClient("test-token", "")
 
 	var branch Branch
 	err := client.doRequest(

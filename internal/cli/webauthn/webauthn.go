@@ -13,26 +13,8 @@ import (
 	"github.com/keys-pub/go-libfido2"
 
 	"github.com/DocSpring/rack-gateway/internal/cli/pinentry"
+	"github.com/DocSpring/rack-gateway/internal/cli/touchnotify"
 )
-
-// AssertionOptions contains the challenge and credential info from the server
-type AssertionOptions struct {
-	Challenge        string   `json:"challenge"`
-	RPID             string   `json:"rp_id"`
-	AllowCredentials []string `json:"allow_credentials"`
-	Timeout          int      `json:"timeout"`
-	UserVerification string   `json:"user_verification"`
-	Origin           string   `json:"origin"` // Gateway URL origin for clientData
-}
-
-// AssertionResponse contains the signed assertion to send back to the server
-type AssertionResponse struct {
-	CredentialID      string `json:"credential_id"`
-	AuthenticatorData string `json:"authenticator_data"`
-	ClientDataJSON    string `json:"client_data_json"`
-	Signature         string `json:"signature"`
-	UserHandle        string `json:"user_handle"`
-}
 
 // GetAssertion prompts the user to authenticate with their FIDO2 device
 func GetAssertion(options AssertionOptions) (*AssertionResponse, error) {
@@ -63,7 +45,7 @@ func GetAssertionWithCachedPIN(options AssertionOptions, cachedPIN string) (*Ass
 			return nil, "", err
 		}
 	} else {
-		pinRequest := pinentry.Request{Gateway: options.Origin, Args: os.Args}
+		pinRequest := pinentry.Request{Gateway: options.Origin, Args: os.Args, Summary: options.Prompt.Summary}
 		allowList, pin, err = filterCredentialsForDevice(device, options.RPID, allowList, pinRequest)
 		if err != nil {
 			return nil, "", err
@@ -77,7 +59,7 @@ func GetAssertionWithCachedPIN(options AssertionOptions, cachedPIN string) (*Ass
 
 	assertionOpts := buildAssertionOptions(options)
 
-	fmt.Fprintln(os.Stderr, "Touch your security key to authenticate... (press Ctrl+C to abort)")
+	promptTouch(options)
 	assertion, err := device.Assertion(options.RPID, clientDataHash, allowList, pin, assertionOpts)
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to get assertion: %w", err)
@@ -85,6 +67,16 @@ func GetAssertionWithCachedPIN(options AssertionOptions, cachedPIN string) (*Ass
 
 	resp, err := buildAssertionResponse(assertion, clientDataJSON)
 	return resp, pin, err
+}
+
+// promptTouch tells the user a touch is needed, every time one is: on the terminal, and in a desktop notification
+// unless they're turned off.
+func promptTouch(options AssertionOptions) {
+	reason := options.TouchReason()
+	fmt.Fprintf(os.Stderr, "Touch your security key to %s... (press Ctrl+C to abort)\n", reason)
+	if options.Prompt.Notify {
+		touchnotify.Show("To " + reason)
+	}
 }
 
 func openFirstFIDODevice() (*libfido2.Device, error) {
