@@ -466,55 +466,12 @@ echo "SHA256: $SHA256 (stored in S3 metadata)"
 
 ## Verification Flow
 
-### Hourly Verification Job
+### Verification Job
 
-```go
-func VerifyChain(db *Database, s3Client *s3.Client) error {
-    // 1. Fetch latest anchor from S3
-    anchor, err := s3Client.GetLatestAnchor("prod/global")
-    if err != nil {
-        return fmt.Errorf("failed to fetch anchor: %w", err)
-    }
-
-    // 2. Verify anchor JSON matches S3 metadata checksum
-    // S3 automatically validates the checksum on GetObject if ChecksumMode is enabled
-    anchorHash := computeSHA256(anchor.Payload)
-    storedHash := anchor.ChecksumSHA256 // From S3 metadata
-    if anchorHash != storedHash {
-        return fmt.Errorf("ANCHOR TAMPERED: hash mismatch")
-    }
-
-    // 3. Fetch chain head from database
-    latest, err := db.GetEventAtIndex(anchor.LastSeq)
-    if err != nil {
-        return fmt.Errorf("failed to fetch event %d: %w", anchor.LastSeq, err)
-    }
-
-    // 4. Compare hashes
-    expectedHash := hex.EncodeToString(latest.EventHash)
-    if anchor.LastHash != expectedHash {
-        return fmt.Errorf("CHAIN TAMPERED: DB shows %s, anchor shows %s",
-            expectedHash, anchor.LastHash)
-    }
-
-    // 5. Verify chain integrity from last anchor to current head
-    currentHead, _ := db.GetLatestEvent()
-    if err := db.VerifyChainIntegrity(anchor.LastSeq, currentHead.ChainIndex); err != nil {
-        return fmt.Errorf("CHAIN BROKEN: %w", err)
-    }
-
-    // 6. Verify anchor-to-anchor chain
-    if anchor.PrevAnchorHash != "" {
-        prevAnchor, _ := s3Client.GetPreviousAnchor(anchor)
-        expectedPrevHash := computeSHA256(prevAnchor.Payload)
-        if anchor.PrevAnchorHash != hex.EncodeToString(expectedPrevHash) {
-            return fmt.Errorf("ANCHOR CHAIN BROKEN: prev anchor hash mismatch")
-        }
-    }
-
-    return nil // Chain is valid
-}
-```
+`rack-gateway-api verify-audit` (`cmd/gateway/verify_audit.go`, `internal/gateway/auditverify/`) does the
+verification: it walks the whole chain, recomputes the HMAC of every hash v2 event, and checks every version of
+every anchor in the bucket against the one written before it and against the database. Run it on a schedule. See
+`docs/src/content/docs/deployment/terraform/s3-worm-storage.mdx` (Verification) for what it checks.
 
 ### Manual Verification
 
@@ -571,18 +528,8 @@ fi
 
 echo "✅ Chain verified against anchor"
 
-# 6. Verify database chain integrity from anchor to current head
-CURRENT_SEQ=$(psql -t -A -c "SELECT MAX(chain_index) FROM audit.audit_event")
-echo "Verifying chain from $LAST_SEQ to $CURRENT_SEQ..."
-
-BROKEN=$(psql -t -A -c "SELECT broken_at_index FROM audit.verify_chain($LAST_SEQ, $CURRENT_SEQ) LIMIT 1")
-
-if [ -n "$BROKEN" ] && [ "$BROKEN" != "" ]; then
-    echo "❌ CHAIN BROKEN at index $BROKEN"
-    exit 1
-fi
-
-echo "✅ Full chain integrity verified"
+# 6. Verify the whole chain (links and HMACs) and every anchor
+rack-gateway-api verify-audit
 ```
 
 ## Monitoring and Alerting
@@ -612,7 +559,9 @@ echo "✅ Full chain integrity verified"
 
 ### Transition to Lower-Cost Storage
 
-After 30 days, transition anchors to Glacier Deep Archive:
+After 30 days, transition anchors to Glacier Instant Retrieval. Don't use `GLACIER` or `DEEP_ARCHIVE`:
+`verify-audit` reads every anchor, and those classes need a restore first. Don't add an expiration rule either:
+in a versioned bucket it adds delete markers, which `verify-audit` reports as deleted anchors.
 
 ```bash
 aws s3api put-bucket-lifecycle-configuration \
@@ -627,16 +576,12 @@ aws s3api put-bucket-lifecycle-configuration \
           {
             "Days": 30,
             "StorageClass": "GLACIER_IR"
-          },
-          {
-            "Days": 90,
-            "StorageClass": "DEEP_ARCHIVE"
           }
         ],
         "NoncurrentVersionTransitions": [
           {
             "NoncurrentDays": 30,
-            "StorageClass": "DEEP_ARCHIVE"
+            "StorageClass": "GLACIER_IR"
           }
         ]
       }
@@ -644,11 +589,12 @@ aws s3api put-bucket-lifecycle-configuration \
   }'
 ```
 
-**Cost impact**: Storage cost drops from $0.023/GB to $0.00099/GB (~96% reduction).
+**Cost impact**: Storage cost drops from $0.023/GB to $0.004/GB (~83% reduction).
 
 ### Retention Expiration
 
-After 400 days, Object Lock retention expires and objects can be deleted if needed. For regulatory compliance:
+After 400 days, Object Lock retention expires and objects can be deleted if needed. Nothing deletes them
+automatically: anchors stay until someone deletes their versions. For regulatory compliance:
 
 - **SOC 2 Type II**: 400 days exceeds the typical 1-year requirement
 - **Extended retention**: For specific regulations (SOX, FINRA), extend to 3-7 years as needed

@@ -120,7 +120,6 @@ export async function cleanupE2eArtifacts() {
         await client.query("SET session_replication_role = 'origin';")
       }
     }
-    await client.query('ALTER SEQUENCE audit.audit_event_chain_index_seq RESTART WITH 0;')
     await client.query("DELETE FROM api_tokens WHERE name LIKE 'E2E Web%';")
     await client.query("DELETE FROM users WHERE name LIKE 'E2E Web%';")
   })

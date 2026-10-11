@@ -105,6 +105,14 @@ Key files:
 
 - `audit/logger.go` - Audit log creation
 - `audit/redactor.go` - Secret redaction
+- `db/audit_append.go`, `db/audit_hash.go`, `db/audit_normalize.go` - Hash-chained append (hash v2). The row is
+  normalized to its stored form, hashed, then stored, so the stored row always re-hashes to `event_hash`. Never
+  change the v2 encoding (existing rows would stop verifying); a new audit column needs a new hash version
+- `jobs/audit/anchor_writer.go` - Hourly S3 Object Lock anchors. Every write (job or `write-anchor`) goes through
+  `WriteAnchor`, which holds the audit anchor advisory lock (`db.WithAuditAnchorLock`) from the existence check
+  through the Put: anchors are permanent, so an overlapping write would be a permanent verification failure
+- `auditverify/` - `rack-gateway-api verify-audit` (chain + anchor verification). Never trust the database's own
+  hash v2 start: it comes from `hash_version`, which anyone with database write access can change
 
 ### `/middleware` - HTTP Middleware
 
