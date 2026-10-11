@@ -61,7 +61,8 @@ export function UsersTableRow({
         <div>
           <div className="font-medium">
             <ProfileLink enabled={canOpenProfile} user={user}>
-              {user.name}
+              {/* Users seeded from the environment get their name from the identity provider at first sign-in */}
+              {user.name || <span className="text-muted-foreground italic">Not signed in yet</span>}
             </ProfileLink>
             {locked && <Lock className="ml-2 inline h-4 w-4" />}
             {user.email === currentUserEmail && (

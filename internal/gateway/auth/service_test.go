@@ -3,9 +3,11 @@ package auth
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	"github.com/DocSpring/rack-gateway/internal/gateway/testutil/dbtest"
 	"github.com/DocSpring/rack-gateway/internal/gateway/token"
 )
@@ -145,32 +147,45 @@ func TestAPITokenRejectedWhenOwnerLocked(t *testing.T) {
 	}
 }
 
-// A failed API token attempt is audited with the client's IP and user agent.
+// A failed API token attempt is audited with the client's IP and user agent. An oversized user agent is truncated
+// rather than losing the row.
 func TestInvalidAPITokenAuditRecordsClient(t *testing.T) {
-	database := dbtest.NewDatabase(t)
-	svc := NewAuthService(token.NewService(database), database, nil)
+	longAgent := strings.Repeat("a", 600)
+	for _, agent := range []string{"attacker-cli/1.0", longAgent} {
+		database := dbtest.NewDatabase(t)
+		svc := NewAuthService(token.NewService(database), database, nil)
 
-	next := http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
-		t.Fatalf("an invalid token must not authenticate")
-	})
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/info", nil)
-	req.RemoteAddr = "203.0.113.7:51234"
-	req.Header.Set("User-Agent", "attacker-cli/1.0")
-	req.Header.Set("Authorization", "Bearer rgw_not_a_real_token")
-	svc.Middleware(next).ServeHTTP(httptest.NewRecorder(), req)
+		next := http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
+			t.Fatalf("an invalid token must not authenticate")
+		})
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/info", nil)
+		req.RemoteAddr = "203.0.113.7:51234"
+		req.Header.Set("User-Agent", agent)
+		req.Header.Set("Authorization", "Bearer rgw_not_a_real_token")
+		svc.Middleware(next).ServeHTTP(httptest.NewRecorder(), req)
 
+		entry := tokenValidateAuditRow(t, database)
+		wantAgent := agent
+		if agent == longAgent {
+			wantAgent = agent[:512]
+		}
+		if entry.IPAddress != "203.0.113.7" || entry.UserAgent != wantAgent {
+			t.Fatalf("audit row has ip %q, user agent %q", entry.IPAddress, entry.UserAgent)
+		}
+	}
+}
+
+func tokenValidateAuditRow(t *testing.T, database *db.Database) *db.AuditLog {
+	t.Helper()
 	logs, err := database.GetAuditLogs("", time.Time{}, 10)
 	if err != nil {
 		t.Fatalf("get audit logs: %v", err)
 	}
 	for _, entry := range logs {
-		if entry.Action != "token.validate" {
-			continue
+		if entry.Action == "token.validate" {
+			return entry
 		}
-		if entry.IPAddress != "203.0.113.7" || entry.UserAgent != "attacker-cli/1.0" {
-			t.Fatalf("audit row has ip %q, user agent %q", entry.IPAddress, entry.UserAgent)
-		}
-		return
 	}
 	t.Fatalf("no token.validate audit row in %d rows", len(logs))
+	return nil
 }

@@ -201,16 +201,7 @@ func (a *App) resolveOAuthParameters() (string, string, string, error) {
 		issuerURL = "https://accounts.google.com"
 	}
 
-	redirectInput := ""
-	switch {
-	case a.Config.Domain != "" && strings.EqualFold(a.Config.Domain, "localhost"):
-		redirectInput = "http://localhost:" + a.Config.Port
-	case a.Config.Domain != "":
-		redirectInput = "https://" + a.Config.Domain
-	case a.Config.DevMode:
-		redirectInput = "http://localhost:" + a.Config.Port
-	}
-
+	redirectInput := a.Config.PublicURL()
 	if redirectInput == "" {
 		return "", "", "", fmt.Errorf("DOMAIN must be set (or use DEV_MODE with PORT) to derive OAuth redirect URLs")
 	}

@@ -96,8 +96,10 @@ func TestPublicURL(t *testing.T) {
 		{name: "production domain", domain: "gateway.example.com", want: "https://gateway.example.com"},
 		{name: "dev localhost", domain: "localhost", devMode: true, want: "http://localhost:8447"},
 		{name: "dev localhost:port", domain: "localhost:9999", devMode: true, want: "http://localhost:8447"},
-		{name: "localhost outside dev mode", domain: "localhost:9447", want: "http://localhost:9447"},
-		{name: "no domain in dev mode", domain: "", devMode: true, want: ""},
+		{name: "localhost:port outside dev mode", domain: "localhost:9447", want: "http://localhost:9447"},
+		{name: "bare localhost outside dev mode", domain: "localhost", want: "http://localhost:8447"},
+		{name: "no domain in dev mode", domain: "", devMode: true, want: "http://localhost:8447"},
+		{name: "no domain outside dev mode", domain: "", want: ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

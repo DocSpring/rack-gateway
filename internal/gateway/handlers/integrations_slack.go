@@ -62,13 +62,7 @@ func (h *AdminHandler) SlackOAuthAuthorizeHandler(c *gin.Context) {
 	state := base64.URLEncoding.EncodeToString(stateBytes)
 	oauthStates[state] = true
 
-	// Build redirect URI
-	scheme := "https"
-	if h.config.DevMode {
-		scheme = "http"
-	}
-	host := c.Request.Host
-	redirectURI := fmt.Sprintf("%s://%s/api/v1/integrations/slack/oauth/callback", scheme, host)
+	redirectURI := h.slackRedirectURI()
 
 	// Build Slack authorization URL
 	authURL := fmt.Sprintf(
@@ -105,13 +99,7 @@ func (h *AdminHandler) SlackOAuthCallbackHandler(c *gin.Context) {
 	}
 	delete(oauthStates, state)
 
-	// Build redirect URI (must match authorization request)
-	scheme := "https"
-	if h.config.DevMode {
-		scheme = "http"
-	}
-	host := c.Request.Host
-	redirectURI := fmt.Sprintf("%s://%s/api/v1/integrations/slack/oauth/callback", scheme, host)
+	redirectURI := h.slackRedirectURI() // must match the authorization request
 
 	// Exchange code for access token
 	oauthResp, err := slack.ExchangeOAuthCode(h.config.SlackClientID, h.config.SlackClientSecret, code, redirectURI)
@@ -338,4 +326,9 @@ func (h *AdminHandler) UpdateSlackAlertSettingsHandler(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"success": true})
+}
+
+// slackRedirectURI is the OAuth callback registered with Slack. It comes from DOMAIN, never the request's Host.
+func (h *AdminHandler) slackRedirectURI() string {
+	return h.config.PublicURL() + "/api/v1/integrations/slack/oauth/callback"
 }

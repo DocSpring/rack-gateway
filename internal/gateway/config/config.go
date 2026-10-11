@@ -291,19 +291,20 @@ func getEnvDuration(key string, defaultVal time.Duration) time.Duration {
 	return defaultVal
 }
 
-// PublicURL is the gateway's own origin (scheme://domain) from DOMAIN, or "" when DOMAIN is not set (dev mode
-// only). In dev mode a bare localhost DOMAIN gets the gateway's port. Links the gateway sends out (emails, the
-// WebAuthn origin) use it; never build them from request headers, which the client controls.
+// PublicURL is the gateway's own origin (scheme://domain) from DOMAIN. A bare localhost DOMAIN, or any localhost (or
+// no DOMAIN) in dev mode, gets the gateway's port. It's "" only without DOMAIN outside dev mode, which Load refuses.
+// Everything the gateway links to or registers with another service (emails, approval links, OAuth redirects, the
+// WebAuthn origin) uses it; never build these from request headers, which the client controls.
 func (c *Config) PublicURL() string {
 	localhost := c.Domain == "localhost" || strings.HasPrefix(c.Domain, "localhost:")
-	if c.DevMode && localhost {
-		return fmt.Sprintf("http://localhost:%s", c.Port)
-	}
-	if c.Domain == "" {
+	switch {
+	case c.Domain == "localhost" || (c.DevMode && (localhost || c.Domain == "")):
+		return "http://localhost:" + c.Port
+	case c.Domain == "":
 		return ""
-	}
-	if localhost {
+	case localhost:
 		return "http://" + c.Domain
+	default:
+		return "https://" + c.Domain
 	}
-	return "https://" + c.Domain
 }

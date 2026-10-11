@@ -136,12 +136,20 @@ func (d *Database) CreateAuditLog(log *AuditLog) error {
 	return nil
 }
 
+// maxAuditUserAgentLength matches audit.audit_event.user_agent (VARCHAR(512)).
+const maxAuditUserAgentLength = 512
+
 func normalizeAuditLog(log *AuditLog) {
 	if log.EventCount <= 0 {
 		log.EventCount = 1
 	}
 	if log.Timestamp.IsZero() {
 		log.Timestamp = time.Now().UTC()
+	}
+	// The user agent comes from the client. Truncate it rather than let the insert fail and lose the event
+	// (before hashing, so the stored row verifies).
+	if agent := []rune(log.UserAgent); len(agent) > maxAuditUserAgentLength {
+		log.UserAgent = string(agent[:maxAuditUserAgentLength])
 	}
 }
 
