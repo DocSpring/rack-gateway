@@ -136,6 +136,9 @@ jobs:
       GATEWAY_TEST_IMAGE: rack-gateway-api:e2e-${{ github.sha }}
       SKIP_BUILD: "true"
       E2E_DATABASE_URL: postgres://postgres:postgres@localhost:55432/gateway_test?sslmode=disable
+      # The published development key the test gateways use (docker-compose.yml): the DB helpers encrypt and
+      # decrypt TOTP seeds with it.
+      COLUMN_ENCRYPTION_KEY: cmFjay1nYXRld2F5LWRldi1vbmx5LWNvbHVtbi1rZXk=
       # Two gateways (each with its own database), one Playwright worker per gateway.
       WEB_E2E_SHARDS: 2
       PLAYWRIGHT_WORKERS: 2
@@ -224,6 +227,9 @@ jobs:
       WEB_UI_PATH: "/app/"
       CHECK_VITE_PROXY: false
       CGO_ENABLED: 1
+      # The published development key the test gateway uses (docker-compose.yml): totp-gen encrypts the
+      # TOTP seeds the suite inserts with it.
+      COLUMN_ENCRYPTION_KEY: cmFjay1nYXRld2F5LWRldi1vbmx5LWNvbHVtbi1rZXk=
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0

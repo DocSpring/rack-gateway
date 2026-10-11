@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/DocSpring/rack-gateway/internal/gateway/colcrypt"
 )
 
 // ShouldEnforceMFA returns true when the user is subject to MFA enforcement
@@ -110,6 +112,7 @@ func (d *Database) ResetUserMFA(userID int64) error {
 
 // CreateMFAMethod creates a new MFA method for a user.
 // It supports both TOTP (with secret) and WebAuthn (with credentialID/publicKey).
+// The secret is stored encrypted and bound to the user (see column_encryption.go).
 func (d *Database) CreateMFAMethod(
 	userID int64,
 	methodType string,
@@ -129,6 +132,11 @@ func (d *Database) CreateMFAMethod(
 		meta = string(b)
 	}
 
+	encryptedSecret, err := d.cipher.Encrypt(secret, colcrypt.MFASecretScope(userID))
+	if err != nil {
+		return nil, fmt.Errorf("failed to encrypt MFA secret: %w", err)
+	}
+
 	var id int64
 	var createdAt time.Time
 	query := `
@@ -142,7 +150,7 @@ func (d *Database) CreateMFAMethod(
 		userID,
 		methodType,
 		nullableString(label, 150),
-		secret,
+		encryptedSecret,
 		credentialID,
 		publicKey,
 		jsonStringArray(transports),
@@ -231,7 +239,7 @@ func (d *Database) queryMFAMethods(userID int64, includeUnconfirmed bool) ([]*MF
 
 	var methods []*MFAMethod
 	for rows.Next() {
-		method, err := scanMFAMethod(rows)
+		method, err := d.scanMFAMethod(rows)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan MFA method: %w", err)
 		}
@@ -300,7 +308,7 @@ func (d *Database) GetMFAMethodByID(id int64) (*MFAMethod, error) {
                cli_capable, webauthn_sign_count, created_at, confirmed_at, last_used_at
         FROM mfa_methods WHERE id = ?
     `
-	method, err := scanMFAMethod(d.queryRow(query, id))
+	method, err := d.scanMFAMethod(d.queryRow(query, id))
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}

@@ -17,6 +17,14 @@ Use this checklist before deploying Rack Gateway to production. Each item addres
   ```
   Never reuse across environments. Store securely.
 
+- [ ] **COLUMN_ENCRYPTION_KEY generated and backed up**
+  ```bash
+  openssl rand -base64 32
+  ```
+  Encrypts stored TOTP seeds and the Slack token. Never reuse across environments, never use the
+  development key, and back it up: without it users must re-enroll TOTP and Slack must be reconnected.
+  See [Column Encryption](/configuration/environment-variables/#column-encryption).
+
 - [ ] **HTTPS enabled with valid certificates**
   - Let's Encrypt or organization CA
   - TLS 1.2+ only
@@ -268,6 +276,7 @@ Use this checklist before deploying Rack Gateway to production. Each item addres
 ```bash
 # Required
 APP_SECRET_KEY=$(openssl rand -base64 32)
+COLUMN_ENCRYPTION_KEY=$(openssl rand -base64 32)  # Generate once and back it up
 DOMAIN=gateway.example.com
 GOOGLE_CLIENT_ID=xxx
 GOOGLE_CLIENT_SECRET=xxx
@@ -304,6 +313,7 @@ SENTRY_ENVIRONMENT=production
 ```bash
 # Similar to production but with staging-specific values
 APP_SECRET_KEY=$(openssl rand -base64 32)  # Different from prod!
+COLUMN_ENCRYPTION_KEY=$(openssl rand -base64 32)  # Different from prod!
 DOMAIN=gateway-staging.example.com
 RACK_ALIAS=staging
 RACK_DISPLAY_NAME="Staging"
@@ -316,7 +326,7 @@ LOG_RETENTION_DAYS=90  # Shorter for staging
 
 **Security Anti-Patterns:**
 
-- Using the same `APP_SECRET_KEY` across environments
+- Using the same `APP_SECRET_KEY` or `COLUMN_ENCRYPTION_KEY` across environments
 - Storing secrets in git or environment files
 - Deploying anything but a release image or binary (`rack-gateway-api build-info` must report
   `test bypasses: compiled out`; see [Test Bypasses](/configuration/environment-variables/#test-bypasses))

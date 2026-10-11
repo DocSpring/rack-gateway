@@ -119,17 +119,14 @@ func (h *AdminHandler) SlackOAuthCallbackHandler(c *gin.Context) {
 		}
 	}
 
-	// Encrypt bot token (for now, just base64 encode - in production use proper encryption)
-	botTokenEncrypted := base64.StdEncoding.EncodeToString([]byte(oauthResp.AccessToken))
-
 	// Delete existing integration if any
 	_ = h.database.DeleteSlackIntegration()
 
-	// Create new integration with default channel mappings
+	// Create new integration with default channel mappings (the database encrypts the token)
 	_, err = h.database.CreateSlackIntegration(
 		oauthResp.Team.ID,
 		oauthResp.Team.Name,
-		botTokenEncrypted,
+		oauthResp.AccessToken,
 		oauthResp.BotUserID,
 		oauthResp.Scope,
 		defaultChannelActions,
@@ -160,9 +157,6 @@ func (h *AdminHandler) GetSlackIntegrationHandler(c *gin.Context) {
 	if integration == nil {
 		return
 	}
-
-	// Don't expose the encrypted token
-	integration.BotTokenEncrypted = ""
 
 	c.JSON(http.StatusOK, integration)
 }

@@ -1,7 +1,6 @@
 package slack
 
 import (
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"time"
@@ -32,14 +31,10 @@ func (n *Notifier) NotifyDeployApprovalCreated(req *db.DeployApprovalRequest, ga
 		return nil
 	}
 
-	// Decrypt bot token
-	botToken, err := base64.StdEncoding.DecodeString(integration.BotTokenEncrypted)
-	if err != nil {
-		return fmt.Errorf("failed to decrypt bot token: %w", err)
+	client := botClient(integration)
+	if client == nil {
+		return nil
 	}
-
-	// Create Slack client
-	client := NewClient(string(botToken))
 
 	// Format rich message
 	text, blocks := n.formatDeployApprovalAlert(req, gatewayDomain)

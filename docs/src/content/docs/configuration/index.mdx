@@ -74,7 +74,11 @@ PGDATABASE = "rack_gateway"
 ```toml
 [env]
 APP_SECRET_KEY = "your-32-byte-random-key"  # Generate with: openssl rand -hex 32
+COLUMN_ENCRYPTION_KEY = "your-column-key"     # Generate once with: openssl rand -base64 32
 ```
+
+`COLUMN_ENCRYPTION_KEY` encrypts stored TOTP seeds and the Slack token, so keep it and back it up. See
+[Column Encryption](/configuration/environment-variables/#column-encryption).
 
 ### 4. Convox Rack Connection
 
@@ -103,7 +107,8 @@ Development mode (`DEV_MODE=true`) only exists in builds compiled with the `test
 `task dev` and the Docker development and E2E stacks use. In development mode, Rack Gateway:
 
 - Uses non-secure cookies (no HTTPS required)
-- Auto-generates `APP_SECRET_KEY` if missing
+- Auto-generates `APP_SECRET_KEY` if missing (`COLUMN_ENCRYPTION_KEY` is never generated: it is required
+  in every mode)
 - Runs database migrations on startup
 - Logs emails to stdout instead of sending
 - Connects to mock services on localhost
@@ -117,6 +122,7 @@ For production, run the published image (or an image built with `task docker`), 
 and set:
 
 - `APP_SECRET_KEY` (secure random value)
+- `COLUMN_ENCRYPTION_KEY` (generated once and backed up)
 - `AUDIT_HMAC_SECRET` (secure random value)
 - OAuth credentials (real Google Workspace)
 - Database URL (real PostgreSQL)

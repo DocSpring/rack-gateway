@@ -43,6 +43,10 @@ func (a *App) initializeServices() error {
 	if err := a.ensureAuditSecret(); err != nil {
 		return err
 	}
+	// Encrypt secrets stored before column encryption existed, before anything reads them.
+	if _, err := a.Database.UpgradePlaintextColumns(context.Background()); err != nil {
+		return err
+	}
 	if err := a.seedInitialUsers(); err != nil {
 		return err
 	}
