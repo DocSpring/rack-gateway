@@ -163,10 +163,11 @@ func TestMergeEnvRefusesSecretRemovalWithoutSecretSet(t *testing.T) {
 	baseEnv := map[string]string{"SECRET_KEY": "abc", "PORT": "3000"}
 	posted := map[string]string{"PORT": "3000"}
 
-	_, _, err := h.mergeEnvAndComputeDiffs(req, "deployer@test.com", "app", posted, []string{"PORT"}, baseEnv, false)
+	keys := h.loadAppEnvKeys("app")
+	_, _, err := h.mergeEnvAndComputeDiffs(req, "deployer@test.com", keys, posted, []string{"PORT"}, baseEnv, false)
 	require.EqualError(t, err, "You don't have permission to modify secrets: SECRET_KEY")
 
-	_, diffs, err := h.mergeEnvAndComputeDiffs(req, "admin@test.com", "app", posted, []string{"PORT"}, baseEnv, true)
+	_, diffs, err := h.mergeEnvAndComputeDiffs(req, "admin@test.com", keys, posted, []string{"PORT"}, baseEnv, true)
 	require.NoError(t, err)
 	require.Len(t, diffs, 1)
 	require.Equal(t, "SECRET_KEY", diffs[0].Key)
@@ -200,7 +201,7 @@ func TestValidateProtectedKeysAllowsMaskedValues(t *testing.T) {
 	req.Header.Set("X-User-Name", "Admin")
 
 	// This should succeed - ADMIN_PASSWORD is masked, so it's not being changed
-	err := h.validateProtectedKeys(req, "admin@test.com", appName, posted)
+	err := h.validateProtectedKeys(req, "admin@test.com", h.loadAppEnvKeys(appName), posted)
 	require.NoError(t, err, "validateProtectedKeys should allow masked protected keys")
 }
 
@@ -221,7 +222,7 @@ func TestValidateProtectedKeysBlocksActualChanges(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/apps/docspring/releases", nil)
 	req.Header.Set("X-User-Name", "Admin")
 
-	err := h.validateProtectedKeys(req, "admin@test.com", appName, posted)
+	err := h.validateProtectedKeys(req, "admin@test.com", h.loadAppEnvKeys(appName), posted)
 	require.EqualError(
 		t, err,
 		"ADMIN_PASSWORD is a protected env var for docspring. An admin can change it with --allow-protected "+
@@ -262,7 +263,7 @@ func TestMergeEnvPreservesProtectedKeysNotInPosted(t *testing.T) {
 
 	// This should succeed - DATABASE_URL_DIRECT is not being changed
 	merged, diffs, err := h.mergeEnvAndComputeDiffs(
-		req, "admin@test.com", appName, posted, order, baseEnv, true,
+		req, "admin@test.com", h.loadAppEnvKeys(appName), posted, order, baseEnv, true,
 	)
 	require.NoError(t, err, "mergeEnvAndComputeDiffs should allow unchanged protected keys")
 
@@ -379,7 +380,7 @@ func TestEnvUnsetWithProtectedKeysFullFlow(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/apps/docspring/environment", nil)
 	req.Header.Set("X-User-Name", "Admin")
 
-	err = h.validateProtectedKeys(req, "admin@test.com", appName, postedWithMasked)
+	err = h.validateProtectedKeys(req, "admin@test.com", h.loadAppEnvKeys(appName), postedWithMasked)
 	require.NoError(t, err, "validateProtectedKeys should allow masked protected keys")
 
 	// Step 3: Test validateProtectedKeys with real value (should still be blocked for direct attempts)
@@ -388,7 +389,7 @@ func TestEnvUnsetWithProtectedKeysFullFlow(t *testing.T) {
 		"OTHER_VAR":                 "value",
 	}
 
-	err = h.validateProtectedKeys(req, "admin@test.com", appName, postedWithReal)
+	err = h.validateProtectedKeys(req, "admin@test.com", h.loadAppEnvKeys(appName), postedWithReal)
 	require.Error(t, err, "validateProtectedKeys should block real protected key values")
 	require.Contains(t, err.Error(), "ADMIN_DATABASE_URL_DIRECT is a protected env var")
 }

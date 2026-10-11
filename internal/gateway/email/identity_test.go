@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/DocSpring/rack-gateway/internal/gateway/config"
 )
 
 type recordedEmail struct {
@@ -26,7 +28,8 @@ func (r *recordingSender) SendMany(to []string, subject, textBody, htmlBody stri
 
 func TestIdentifiedSenderNamesTheGatewayInEveryEmail(t *testing.T) {
 	inner := &recordingSender{}
-	sender := NewIdentifiedSender(inner, Identity{Name: "Staging", URL: "https://rack-gateway-staging.example.ts.net/"})
+	gateway := config.NewGatewayIdentity("Staging", "https://rack-gateway-staging.example.ts.net/")
+	sender := NewIdentifiedSender(inner, gateway)
 
 	require.NoError(t, sender.Send("a@example.com", "New CLI Login", "Hello,\n\nDetails.\n",
 		"<!DOCTYPE html><html><body><p>Hello</p></body></html>"))
@@ -52,7 +55,7 @@ func TestIdentifiedSenderNamesTheGatewayInEveryEmail(t *testing.T) {
 
 func TestIdentifiedSenderAppendsFooterToHTMLFragments(t *testing.T) {
 	inner := &recordingSender{}
-	sender := NewIdentifiedSender(inner, Identity{Name: "EU", URL: "https://gw.example.com"})
+	sender := NewIdentifiedSender(inner, config.NewGatewayIdentity("EU", "https://gw.example.com"))
 
 	require.NoError(t, sender.Send("a@example.com", "Subject", "Text", "<p>Fragment</p>"))
 	require.Regexp(t, `^<p>Fragment</p><hr .*Sent by the <strong>EU Rack Gateway</strong>.*</p>$`,
@@ -61,7 +64,7 @@ func TestIdentifiedSenderAppendsFooterToHTMLFragments(t *testing.T) {
 
 func TestIdentifiedSenderEscapesIdentityInHTML(t *testing.T) {
 	inner := &recordingSender{}
-	sender := NewIdentifiedSender(inner, Identity{Name: `<b>"x"</b>`, URL: `https://gw.example.com/?a=1&b="2"`})
+	sender := NewIdentifiedSender(inner, config.NewGatewayIdentity(`<b>"x"</b>`, `https://gw.example.com/?a=1&b="2"`))
 
 	require.NoError(t, sender.Send("a@example.com", "Subject", "Text", "<p>Body</p>"))
 	html := inner.sent[0].htmlStr
@@ -72,7 +75,7 @@ func TestIdentifiedSenderEscapesIdentityInHTML(t *testing.T) {
 
 func TestIdentifiedSenderWithoutIdentity(t *testing.T) {
 	inner := &recordingSender{}
-	sender := NewIdentifiedSender(inner, Identity{})
+	sender := NewIdentifiedSender(inner, config.GatewayIdentity{})
 
 	require.NoError(t, sender.Send("a@example.com", "Subject", "Text", ""))
 	require.Equal(t, "Rack Gateway: Subject", inner.sent[0].subject)
@@ -84,7 +87,7 @@ func TestIdentifiedSenderPlacesFooterCorrectlyAfterNonASCIIText(t *testing.T) {
 	// the footer or panic.
 	for _, text := range []string{strings.Repeat("Ⱥ", 50), strings.Repeat("\u212a", 50), strings.Repeat("İ", 50)} {
 		inner := &recordingSender{}
-		sender := NewIdentifiedSender(inner, Identity{Name: "US", URL: "https://gw.example.com"})
+		sender := NewIdentifiedSender(inner, config.NewGatewayIdentity("US", "https://gw.example.com"))
 
 		body := "<html><body><p>" + text + "</p></BODY></html>"
 		require.NotPanics(t, func() { require.NoError(t, sender.Send("a@example.com", "S", "T", body)) })

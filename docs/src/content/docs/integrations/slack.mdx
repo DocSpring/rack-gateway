@@ -10,6 +10,7 @@ Rack Gateway can forward audit log events to Slack. Notifications are routed by 
 ## Features
 
 - OAuth-based connection to a Slack workspace
+- Every message names the gateway that sent it, so several gateways can share one Slack app
 - Channel routing using glob patterns
 - Test notifications per channel
 - Dedicated deploy approval alert channel (optional)
@@ -121,7 +122,8 @@ Action names use underscores (e.g., `deploy_approval_request.*`). Use the Audit 
 
 ### Testing
 
-Each channel card includes a **Test** button that sends a test message to the selected Slack channel.
+Each channel card includes a **Test** button that sends a test message, naming the gateway, to the selected Slack
+channel.
 
 ## Deploy Approval Alerts
 
@@ -133,7 +135,13 @@ The Slack integration also supports a dedicated **Deploy Approval Alerts** chann
 
 ## Message Formatting
 
-Messages include:
+One gateway runs per rack, and several gateways can post to the same Slack workspace through one Slack app, so
+every message names the gateway that sent it. The first line is `Rack Gateway (<RACK_DISPLAY_NAME>)`, linked to the
+gateway, and the notification text starts with `Rack Gateway (<RACK_DISPLAY_NAME>): `. Set
+[`RACK_DISPLAY_NAME`](/configuration/environment-variables/#convox-rack) on each gateway (for example `Staging` or
+`US`); it defaults to `RACK_ALIAS`, then `RACK`. Emails from the gateway use the same name.
+
+Audit event messages then include:
 
 - Action name
 - User or API token
@@ -147,10 +155,18 @@ Messages include:
 Example action:
 
 ```
+Rack Gateway (Staging)
 🚀 deploy_approval_request.approved
 User: admin@example.com
 Status: success
 ```
+
+Deploy approval alerts start with the same line, and their **View Approval Request** link opens the request on
+that gateway.
+
+Values that come from CI or from users (branch, message, names, resources, audit details) are escaped, so they show
+as written and can't mention anyone or add links. The pull request and CI build links appear only for `https://`
+URLs, and the CI build link names its host. Long messages and audit details are shortened to fit in a Slack message.
 
 ## Related
 

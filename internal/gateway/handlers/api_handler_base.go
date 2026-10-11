@@ -25,7 +25,7 @@ type APIHandler struct {
 
 // SlackNotifier defines the interface for sending Slack notifications
 type SlackNotifier interface {
-	NotifyDeployApprovalCreated(req *db.DeployApprovalRequest, gatewayDomain string) error
+	NotifyDeployApprovalCreated(req *db.DeployApprovalRequest) error
 }
 
 // NewAPIHandler creates a new API handler with the provided dependencies

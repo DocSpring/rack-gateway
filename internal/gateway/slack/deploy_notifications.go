@@ -12,7 +12,7 @@ import (
 )
 
 // NotifyDeployApprovalCreated sends a rich notification for a new deploy approval request
-func (n *Notifier) NotifyDeployApprovalCreated(req *db.DeployApprovalRequest, gatewayDomain string) error {
+func (n *Notifier) NotifyDeployApprovalCreated(req *db.DeployApprovalRequest) error {
 	// Get Slack integration
 	integration, err := n.database.GetSlackIntegration()
 	if err != nil {
@@ -39,7 +39,7 @@ func (n *Notifier) NotifyDeployApprovalCreated(req *db.DeployApprovalRequest, ga
 	}
 
 	// Format rich message
-	text, blocks := n.formatDeployApprovalAlert(req, gatewayDomain)
+	text, blocks := n.formatDeployApprovalAlert(req)
 
 	// Send to configured channel
 	if err := client.PostMessage(channelID, text, blocks); err != nil {
@@ -51,16 +51,15 @@ func (n *Notifier) NotifyDeployApprovalCreated(req *db.DeployApprovalRequest, ga
 	return nil
 }
 
-// formatDeployApprovalAlert formats a deploy approval request into a rich Slack message
-func (_ *Notifier) formatDeployApprovalAlert(
-	req *db.DeployApprovalRequest,
-	gatewayDomain string,
-) (string, []map[string]interface{}) {
-	branchText := deployApprovalBranch(req)
-	text := deployApprovalFallbackText(branchText, req.Message)
+// formatDeployApprovalAlert formats a deploy approval request into a rich Slack message that names the gateway.
+// Everything in the request except the gateway's own link comes from CI or a user, so each value is escaped
+// where it's formatted.
+func (n *Notifier) formatDeployApprovalAlert(req *db.DeployApprovalRequest) (string, []map[string]interface{}) {
+	branch := deployApprovalBranch(req)
+	text := deployApprovalFallbackText(branch, req.Message)
 
 	blocks := []map[string]interface{}{
-		deployApprovalHeaderBlock(branchText),
+		deployApprovalHeaderBlock(branch),
 		deployApprovalDetailsBlock(req),
 	}
 
@@ -68,7 +67,7 @@ func (_ *Notifier) formatDeployApprovalAlert(
 		blocks = append(blocks, messageBlock)
 	}
 
-	blocks = append(blocks, deployApprovalLinksBlock(req, gatewayDomain))
+	blocks = append(blocks, deployApprovalLinksBlock(req, n.gateway.URL))
 
 	if contextBlock := deployApprovalContextBlock(req); contextBlock != nil {
 		blocks = append(blocks, contextBlock)
@@ -76,7 +75,7 @@ func (_ *Notifier) formatDeployApprovalAlert(
 
 	blocks = append(blocks, slackDividerBlock())
 
-	return text, blocks
+	return identify(n.gateway, text, blocks)
 }
 
 func deployApprovalBranch(req *db.DeployApprovalRequest) string {
@@ -88,31 +87,19 @@ func deployApprovalBranch(req *db.DeployApprovalRequest) string {
 }
 
 func deployApprovalFallbackText(branch, message string) string {
-	return fmt.Sprintf("🚀 Deploy approval needed for %s - %s", branch, message)
+	return fmt.Sprintf("🚀 Deploy approval needed for %s - %s", escapeMrkdwn(branch), escapeMrkdwn(message))
 }
 
 func deployApprovalHeaderBlock(branch string) map[string]interface{} {
-	return map[string]interface{}{
-		"type": "section",
-		"text": map[string]interface{}{
-			"type": "mrkdwn",
-			"text": fmt.Sprintf("*🚀 Deploy approval needed for `%s`*", branch),
-		},
-	}
+	return mrkdwnSection(fmt.Sprintf("*🚀 Deploy approval needed for %s*", inlineCode(branch)))
 }
 
 func deployApprovalDetailsBlock(req *db.DeployApprovalRequest) map[string]interface{} {
 	return map[string]interface{}{
 		"type": "section",
 		"fields": []map[string]interface{}{
-			{
-				"type": "mrkdwn",
-				"text": fmt.Sprintf("*App:*\n%s", req.App),
-			},
-			{
-				"type": "mrkdwn",
-				"text": fmt.Sprintf("*Commit:*\n`%s`", shortCommitHash(req.GitCommitHash)),
-			},
+			mrkdwnElement("*App:*\n" + escapeMrkdwn(req.App)),
+			mrkdwnElement("*Commit:*\n" + inlineCode(shortCommitHash(req.GitCommitHash))),
 		},
 	}
 }
@@ -122,32 +109,21 @@ func deployApprovalMessageBlock(req *db.DeployApprovalRequest) map[string]interf
 		return nil
 	}
 
-	return map[string]interface{}{
-		"type": "section",
-		"text": map[string]interface{}{
-			"type": "mrkdwn",
-			"text": fmt.Sprintf("*Message:*\n%s", req.Message),
-		},
-	}
+	return mrkdwnSection("*Message:*\n" + truncateMrkdwn(escapeMrkdwn(req.Message), maxSectionValue))
 }
 
-func deployApprovalLinksBlock(req *db.DeployApprovalRequest, gatewayDomain string) map[string]interface{} {
+// deployApprovalLinksBlock links to the request on this gateway, and to the pull request and CI build when their
+// URLs are safe to link (see externalLink).
+func deployApprovalLinksBlock(req *db.DeployApprovalRequest, gatewayURL string) map[string]interface{} {
 	elements := []map[string]interface{}{
-		{
-			"type": "mrkdwn",
-			"text": fmt.Sprintf(
-				"🔗 <https://%s/app/deploy-approval-requests/%s|View Approval Request>",
-				gatewayDomain,
-				req.PublicID,
-			),
-		},
+		mrkdwnElement("🔗 " + mrkdwnLink(
+			gatewayURL+"/app/deploy-approval-requests/"+req.PublicID,
+			"View Approval Request",
+		)),
 	}
 
-	if req.PrURL != "" {
-		elements = append(elements, map[string]interface{}{
-			"type": "mrkdwn",
-			"text": fmt.Sprintf("🔗 <%s|GitHub PR>", req.PrURL),
-		})
+	if prLink := externalLink(req.PrURL, "GitHub PR"); prLink != "" {
+		elements = append(elements, mrkdwnElement("🔗 "+prLink))
 	}
 
 	if ciElement := deployApprovalCIElement(req.CIMetadata); ciElement != nil {
@@ -171,14 +147,16 @@ func deployApprovalCIElement(metadata json.RawMessage) map[string]interface{} {
 	}
 
 	buildURL, ok := ciMeta["build_url"].(string)
-	if !ok || buildURL == "" {
+	if !ok {
 		return nil
 	}
 
-	return map[string]interface{}{
-		"type": "mrkdwn",
-		"text": fmt.Sprintf("🔗 <%s|CI Pipeline>", buildURL),
+	ciLink := hostLabeledLink(buildURL, "CI Pipeline")
+	if ciLink == "" {
+		return nil
 	}
+
+	return mrkdwnElement("🔗 " + ciLink)
 }
 
 func deployApprovalContextBlock(req *db.DeployApprovalRequest) map[string]interface{} {
@@ -190,18 +168,12 @@ func deployApprovalContextBlock(req *db.DeployApprovalRequest) map[string]interf
 	return map[string]interface{}{
 		"type": "context",
 		"elements": []map[string]interface{}{
-			{
-				"type": "mrkdwn",
-				"text": contextText,
-			},
-			{
-				"type": "mrkdwn",
-				"text": fmt.Sprintf(
-					"<!date^%d^{date_short_pretty} at {time}|%s>",
-					req.CreatedAt.Unix(),
-					req.CreatedAt.Format(time.RFC3339),
-				),
-			},
+			mrkdwnElement(contextText),
+			mrkdwnElement(fmt.Sprintf(
+				"<!date^%d^{date_short_pretty} at {time}|%s>",
+				req.CreatedAt.Unix(),
+				req.CreatedAt.Format(time.RFC3339),
+			)),
 		},
 	}
 }
@@ -209,11 +181,11 @@ func deployApprovalContextBlock(req *db.DeployApprovalRequest) map[string]interf
 func deployApprovalCreatorText(req *db.DeployApprovalRequest) string {
 	switch {
 	case req.CreatedByEmail != "" && req.CreatedByName != "":
-		return fmt.Sprintf("Created by %s (%s)", req.CreatedByName, req.CreatedByEmail)
+		return fmt.Sprintf("Created by %s (%s)", escapeMrkdwn(req.CreatedByName), escapeMrkdwn(req.CreatedByEmail))
 	case req.CreatedByEmail != "":
-		return fmt.Sprintf("Created by %s", req.CreatedByEmail)
+		return "Created by " + escapeMrkdwn(req.CreatedByEmail)
 	case req.CreatedByAPITokenName != "":
-		return fmt.Sprintf("Created by API token: %s", req.CreatedByAPITokenName)
+		return "Created by API token: " + escapeMrkdwn(req.CreatedByAPITokenName)
 	default:
 		return ""
 	}

@@ -91,10 +91,7 @@ func (a *App) initializeServices() error {
 
 	a.initRackCertManager()
 
-	deliverySender := email.NewIdentifiedSender(a.newEmailSender(), email.Identity{
-		Name: a.Config.Racks["default"].DisplayName,
-		URL:  a.Config.PublicURL(),
-	})
+	deliverySender := email.NewIdentifiedSender(a.newEmailSender(), a.Config.GatewayIdentity())
 	if err := a.initJobsClient(deliverySender, slackNotifier); err != nil {
 		return err
 	}
@@ -261,7 +258,7 @@ func (a *App) initAuditLogger() *audit.Logger {
 }
 
 func (a *App) initSlackNotifier(logger *audit.Logger) *slackpkg.Notifier {
-	notifier := slackpkg.NewNotifier(a.Database)
+	notifier := slackpkg.NewNotifier(a.Database, a.Config.GatewayIdentity())
 	logger.SetSlackNotifier(notifier)
 	a.SlackNotifier = notifier
 	return notifier

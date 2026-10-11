@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -155,6 +156,83 @@ func TestGitHubVerificationFailsClosedWithoutConfig(t *testing.T) {
 	f.handler.config.GitHubToken = ""
 	resp = f.create(t, ghBranchHead)
 	require.Equal(t, http.StatusCreated, resp.StatusCode, "verification off needs neither")
+}
+
+// createAuditDetails returns the details of the fixture's deploy_approval_request.create audit entry.
+func createAuditDetails(t *testing.T, f *createApprovalFixture) map[string]string {
+	t.Helper()
+	logs, err := f.handler.database.GetAuditLogs(f.user.Email, time.Time{}, 10)
+	require.NoError(t, err)
+	for _, entry := range logs {
+		if entry.Action == "deploy_approval_request.create" {
+			var details map[string]string
+			require.NoError(t, json.Unmarshal([]byte(entry.Details), &details))
+			return details
+		}
+	}
+	require.Fail(t, "no deploy_approval_request.create audit entry")
+	return nil
+}
+
+// The create audit entry records what GitHub verification did: the settings a passed check used and the PR it
+// found, or why the check was skipped.
+func TestGitHubVerificationIsAuditLogged(t *testing.T) {
+	tests := map[string]struct {
+		withPR      bool
+		appSettings map[string]interface{}
+		commit      string
+		want        map[string]string
+	}{
+		"passed with a PR in branch mode": {
+			withPR:      true,
+			appSettings: map[string]interface{}{settings.KeyVerifyGitCommitMode: settings.VerifyGitCommitModeBranch},
+			commit:      ghBehind,
+			want: map[string]string{
+				"github_verification":    "passed",
+				"vcs_repo":               "acme/web",
+				"verify_git_commit_mode": settings.VerifyGitCommitModeBranch,
+				"require_pr_for_branch":  "true",
+				"pr_url":                 ghPRURL,
+			},
+		},
+		"passed without a PR in latest mode": {
+			appSettings: map[string]interface{}{settings.KeyRequirePRForBranch: false},
+			commit:      ghBranchHead,
+			want: map[string]string{
+				"github_verification":    "passed",
+				"vcs_repo":               "acme/web",
+				"verify_git_commit_mode": settings.VerifyGitCommitModeLatest,
+				"require_pr_for_branch":  "false",
+			},
+		},
+		"skipped when verification is off": {
+			withPR:      true,
+			appSettings: map[string]interface{}{settings.KeyGitHubVerification: false},
+			commit:      ghBranchHead,
+			want: map[string]string{
+				"github_verification":             "skipped",
+				"github_verification_skip_reason": "github_verification is off for the app",
+			},
+		},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			f := newVerifyingFixture(t, tc.withPR, tc.appSettings)
+			resp := f.create(t, tc.commit)
+			require.Equal(t, http.StatusCreated, resp.StatusCode, responseError(t, resp))
+
+			want := map[string]string{
+				"token_uuid":      f.token.PublicID,
+				"git_commit_hash": tc.commit,
+				"git_branch":      "feature/deploy",
+				"message":         "Deploy release",
+			}
+			for key, value := range tc.want {
+				want[key] = value
+			}
+			require.Equal(t, want, createAuditDetails(t, f))
+		})
+	}
 }
 
 // A PR comment names the app, rack and short commit, so comments for several apps or racks differ.

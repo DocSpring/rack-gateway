@@ -86,6 +86,7 @@ type deployApprovalRequest struct {
 	ApprovalNotes      string                 `json:"approval_notes,omitempty"`
 	GitCommitHash      string                 `json:"git_commit_hash"`
 	GitBranch          string                 `json:"git_branch,omitempty"`
+	PrURL              string                 `json:"pr_url,omitempty"`
 	CIMetadata         map[string]interface{} `json:"ci_metadata,omitempty"`
 }
 
