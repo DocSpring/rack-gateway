@@ -202,18 +202,27 @@ func TestGetAssertionNarrowsAllowListToKeyCredentials(t *testing.T) {
 }
 
 func TestGetAssertionFailsWhenCredentialsCantBeListed(t *testing.T) {
-	for _, listErr := range []error{libfido2.ErrPinInvalid, libfido2.ErrRX, libfido2.ErrPinAuthBlocked} {
-		t.Run(listErr.Error(), func(t *testing.T) {
+	tests := []struct {
+		listErr error
+		want    string
+	}{
+		{libfido2.ErrPinInvalid, "wrong security key PIN"},
+		{libfido2.ErrPinAuthBlocked, "unplug the security key, plug it back in"},
+		{errPINBlocked, "the security key's PIN is blocked"},
+		{libfido2.ErrOperationDenied, "failed to list the security key's credentials"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.listErr.Error(), func(t *testing.T) {
 			key := &fakeKey{
 				options:        pinOptions,
-				credentialsErr: fmt.Errorf("failed to get resident key info: %w", listErr),
+				credentialsErr: fmt.Errorf("failed to get resident key info: %w", tt.listErr),
 			}
 			prompts := 0
 
 			_, _, err := testFlow(key, "1234", &prompts).getAssertion(testAssertionOptions(), "")
 
-			require.ErrorIs(t, err, listErr)
-			require.ErrorContains(t, err, "failed to list the security key's credentials")
+			require.ErrorIs(t, err, tt.listErr)
+			require.ErrorContains(t, err, tt.want)
 			require.Zero(t, key.assertionCalls)
 		})
 	}
@@ -225,6 +234,9 @@ func TestGetAssertionUsesWholeAllowListWhenKeyCantListCredentials(t *testing.T) 
 		libfido2.ErrUnsupportedOption,
 		errUnauthorizedPermission,
 		libfido2.ErrNoCredentials,
+		libfido2.ErrTX,
+		libfido2.ErrRX,
+		errChannelBusy,
 	}
 	for _, listErr := range unsupported {
 		t.Run(listErr.Error(), func(t *testing.T) {
@@ -275,11 +287,18 @@ func TestGetAssertionExplainsAssertionErrors(t *testing.T) {
 			want:      "couldn't read the security key (failed to get assertion: unsupported option)",
 		},
 		{
-			name:      "other errors",
+			name:      "wrong PIN",
 			options:   pinOptions,
 			cachedPIN: "1234",
 			err:       fmt.Errorf("failed to get assertion: %w", libfido2.ErrPinInvalid),
-			want:      "failed to get assertion: failed to get assertion: pin invalid",
+			want:      "wrong security key PIN (failed to get assertion: pin invalid); try again",
+		},
+		{
+			name:      "other errors",
+			options:   pinOptions,
+			cachedPIN: "1234",
+			err:       fmt.Errorf("failed to get assertion: %w", libfido2.ErrOperationDenied),
+			want:      "failed to get assertion: failed to get assertion: operation denied",
 		},
 	}
 	for _, tt := range tests {

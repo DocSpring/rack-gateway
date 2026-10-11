@@ -15,9 +15,16 @@ import (
 // moment, for example while another app (a browser or password manager) is using the key.
 const infoRetryDelay = 500 * time.Millisecond
 
-// errUnauthorizedPermission is CTAP2_ERR_UNAUTHORIZED_PERMISSION, which go-libfido2 has no name for. A CTAP 2.1
-// key without credential management returns it when asked for permission to list credentials.
-var errUnauthorizedPermission = libfido2.Error{Code: 0x40}
+// CTAP error codes go-libfido2 has no name for.
+var (
+	// errUnauthorizedPermission is CTAP2_ERR_UNAUTHORIZED_PERMISSION. A CTAP 2.1 key without credential management
+	// returns it when asked for permission to list credentials.
+	errUnauthorizedPermission = libfido2.Error{Code: 0x40}
+	// errChannelBusy is CTAP1_ERR_CHANNEL_BUSY: another app is talking to the key.
+	errChannelBusy = libfido2.Error{Code: 0x06}
+	// errPINBlocked is CTAP2_ERR_PIN_BLOCKED: too many wrong PINs, so the key needs a reset.
+	errPINBlocked = libfido2.Error{Code: 0x32}
+)
 
 var errNoPINEntered = errors.New(
 	"no security key PIN entered; the gateway requires user verification, and this key verifies you with its PIN",
@@ -122,6 +129,9 @@ func (f assertionFlow) filterCredentials(rpID string, allowList [][]byte, pin st
 	}
 	deviceCreds, err := f.key.Credentials(rpID, pin)
 	if err != nil {
+		if pinErr := pinError(err); pinErr != nil {
+			return nil, pinErr
+		}
 		if cannotListCredentials(err) {
 			return allowList, nil
 		}
@@ -140,20 +150,50 @@ func (f assertionFlow) filterCredentials(rpID string, allowList [][]byte, pin st
 	return filtered, nil
 }
 
-// cannotListCredentials reports whether a failed listing means the key can't list these credentials, rather than
-// that something went wrong: it has no credential management (an unknown command, option or permission), or no
-// discoverable credential for this site.
+// cannotListCredentials reports whether a failed listing just means the key gets the whole allow list: it has no
+// credential management (an unknown command, option or permission), it has no discoverable credential for this
+// site, or the transfer failed for a moment. Listing only narrows the allow list, and the assertion opens the key
+// again, so it reports a transfer problem that lasts.
 func cannotListCredentials(err error) bool {
-	return errors.Is(err, libfido2.ErrInvalidCommand) ||
-		errors.Is(err, libfido2.ErrUnsupportedOption) ||
-		errors.Is(err, errUnauthorizedPermission) ||
-		errors.Is(err, libfido2.ErrNoCredentials)
+	for _, target := range []error{
+		libfido2.ErrInvalidCommand,
+		libfido2.ErrUnsupportedOption,
+		errUnauthorizedPermission,
+		libfido2.ErrNoCredentials,
+		libfido2.ErrTX,
+		libfido2.ErrRX,
+		errChannelBusy,
+	} {
+		if errors.Is(err, target) {
+			return true
+		}
+	}
+	return false
+}
+
+// pinError explains a failure caused by the PIN, or returns nil for any other error.
+func pinError(err error) error {
+	switch {
+	case errors.Is(err, libfido2.ErrPinInvalid):
+		return fmt.Errorf("wrong security key PIN (%w); try again", err)
+	case errors.Is(err, libfido2.ErrPinAuthBlocked):
+		return fmt.Errorf("too many wrong PINs in a row (%w); unplug the security key, plug it back in and try again",
+			err)
+	case errors.Is(err, errPINBlocked):
+		return fmt.Errorf("the security key's PIN is blocked after too many wrong PINs (%w); "+
+			"the key can only be used again after a reset, which deletes its credentials", err)
+	default:
+		return nil
+	}
 }
 
 // assertionError explains a failed assertion. libfido2 reports "unsupported option" when a key with no PIN set
 // and no built-in user verification is asked to verify the user. It also reports it when the key didn't answer
 // libfido2's info request while being opened: libfido2 then treats it as a U2F key, which can't take a PIN.
 func assertionError(err error, pin string) error {
+	if pinErr := pinError(err); pinErr != nil {
+		return pinErr
+	}
 	if !errors.Is(err, libfido2.ErrUnsupportedOption) {
 		return fmt.Errorf("failed to get assertion: %w", err)
 	}
