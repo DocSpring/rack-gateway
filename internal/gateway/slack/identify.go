@@ -1,14 +1,8 @@
 package slack
 
 import (
-	"fmt"
-	"strings"
-
 	"github.com/DocSpring/rack-gateway/internal/gateway/config"
 )
-
-// mrkdwnEscaper escapes the characters Slack's mrkdwn reserves for links, mentions and formatting.
-var mrkdwnEscaper = strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;")
 
 // testMessageText is the text of the message the Integrations page's Test button sends.
 const testMessageText = "🧪 Test notification"
@@ -21,20 +15,21 @@ func TestMessage(gateway config.GatewayIdentity) (string, []map[string]interface
 
 // identify names the gateway in a message, since one Slack workspace can get messages from several gateways:
 // the fallback text, which Slack shows in notifications, starts with the gateway's label as email subjects do
-// ("Rack Gateway (Staging): ..."), and the first block is that label, linked to the gateway.
+// ("Rack Gateway (Staging): ..."), and the first block is that label, linked to the gateway. text is already
+// mrkdwn; only the label is escaped here.
 func identify(
 	gateway config.GatewayIdentity,
 	text string,
 	blocks []map[string]interface{},
 ) (string, []map[string]interface{}) {
-	label := mrkdwnEscaper.Replace(gateway.Label())
+	label := escapeMrkdwn(gateway.Label())
 	return label + ": " + text, append([]map[string]interface{}{gatewayBlock(gateway, label)}, blocks...)
 }
 
 // gatewayBlock is a section naming the gateway in bold, linked to the gateway when it has a URL.
 func gatewayBlock(gateway config.GatewayIdentity, label string) map[string]interface{} {
 	if gateway.URL != "" {
-		label = fmt.Sprintf("<%s|%s>", mrkdwnEscaper.Replace(gateway.URL), label)
+		label = mrkdwnLink(gateway.URL, label)
 	}
 	return mrkdwnSection("*" + label + "*")
 }
@@ -43,9 +38,14 @@ func gatewayBlock(gateway config.GatewayIdentity, label string) map[string]inter
 func mrkdwnSection(text string) map[string]interface{} {
 	return map[string]interface{}{
 		"type": "section",
-		"text": map[string]interface{}{
-			"type": "mrkdwn",
-			"text": text,
-		},
+		"text": mrkdwnElement(text),
+	}
+}
+
+// mrkdwnElement is a mrkdwn text object, as used in a section's text or fields and in a context block.
+func mrkdwnElement(text string) map[string]interface{} {
+	return map[string]interface{}{
+		"type": "mrkdwn",
+		"text": text,
 	}
 }

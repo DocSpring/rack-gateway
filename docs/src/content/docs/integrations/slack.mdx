@@ -164,6 +164,10 @@ Status: success
 Deploy approval alerts start with the same line, and their **View Approval Request** link opens the request on
 that gateway.
 
+Values that come from CI or from users (branch, message, names, resources, audit details) are escaped, so they show
+as written and can't mention anyone or add links. The pull request and CI build links appear only for `https://`
+URLs.
+
 ## Related
 
 - [Audit Logs](/user-guide/web-ui/audit-logs/) - Action names and filters
