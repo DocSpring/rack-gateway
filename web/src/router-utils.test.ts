@@ -46,6 +46,8 @@ describe('route tree', () => {
   })
 })
 
+const USE_PARAMS_FROM_RE = /useParams\(\{ from: '([^']+)' \}\)/g
+
 describe('route ids', () => {
   // useParams({ from }) throws "Invariant failed" when the id doesn't exist, e.g. after the route tree changes.
   it('every useParams({ from }) in the pages names a real route', () => {
@@ -64,5 +66,3 @@ describe('route ids', () => {
     }
   })
 })
-
-const USE_PARAMS_FROM_RE = /useParams\(\{ from: '([^']+)' \}\)/g
