@@ -145,7 +145,7 @@ func (n *Notifier) formatAuditLogMessage(auditLog *db.AuditLog) (string, []map[s
 	user := formatUserIdentifier(auditLog)
 	text := fmt.Sprintf("%s *%s* - %s", emoji, auditLog.Action, user)
 
-	return n.identify(text, buildSlackBlocks(auditLog, emoji, user))
+	return identify(n.gateway, text, buildSlackBlocks(auditLog, emoji, user))
 }
 
 // determineEmojiForAction selects appropriate emoji based on action type and status

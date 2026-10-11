@@ -73,7 +73,7 @@ func (n *Notifier) formatDeployApprovalAlert(req *db.DeployApprovalRequest) (str
 
 	blocks = append(blocks, slackDividerBlock())
 
-	return n.identify(text, blocks)
+	return identify(n.gateway, text, blocks)
 }
 
 func deployApprovalBranch(req *db.DeployApprovalRequest) string {

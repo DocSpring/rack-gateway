@@ -285,7 +285,7 @@ Configuration in `.air.toml`.
 - **Audit everything**: All requests should be logged with RBAC decisions
 - **Emails name their gateway**: the delivery sender (`email.IdentifiedSender`) prefixes every subject with
   `Rack Gateway (<RACK_DISPLAY_NAME>):` and adds a footer with the gateway URL, so write subjects without it
-- **Slack messages name their gateway**: `slack.Notifier` starts every message's fallback text with
+- **Slack messages name their gateway**: the `slack` package's `identify` starts every message's fallback text with
   `Rack Gateway (<RACK_DISPLAY_NAME>):` and puts that label, linked to the gateway URL, in the first block, so build
   messages without it. Email and Slack share the name from `config.GatewayIdentity`
 - **Secret redaction**: Always use audit logger for sensitive data

@@ -98,6 +98,11 @@ func TestGatewayNameIsEscapedForMrkdwn(t *testing.T) {
 	require.Equal(t, "*<https://gw.example.com|Rack Gateway (R&amp;D &lt;EU&gt;)>*", sectionText(t, blocks[0]))
 }
 
-func TestIdentifyText(t *testing.T) {
-	require.Equal(t, "Rack Gateway (Staging): 🧪 Test notification", IdentifyText(testGateway, "🧪 Test notification"))
+func TestTestMessageNamesTheGateway(t *testing.T) {
+	text, blocks := TestMessage(testGateway)
+
+	require.Equal(t, "Rack Gateway (Staging): 🧪 Test notification", text)
+	require.Len(t, blocks, 2)
+	require.Equal(t, testGatewayBlock, blocks[0])
+	require.Equal(t, "🧪 Test notification", sectionText(t, blocks[1]))
 }
