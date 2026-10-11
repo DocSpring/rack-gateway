@@ -370,6 +370,7 @@ export function VCSCIProvidersCard({
             displayDefaultBranch={displayDefaultBranch}
             displayGithubVerification={displayGithubVerification}
             displayRequirePRForBranch={displayRequirePRForBranch}
+            displayVcsRepo={displayVcsRepo}
             displayVerifyGitCommitMode={displayVerifyGitCommitMode}
             githubAvailable={githubAvailable}
             onChangeDefaultBranch={setDefaultBranch}

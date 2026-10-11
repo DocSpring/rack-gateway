@@ -15,25 +15,6 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/cli/pinentry"
 )
 
-// AssertionOptions contains the challenge and credential info from the server
-type AssertionOptions struct {
-	Challenge        string   `json:"challenge"`
-	RPID             string   `json:"rp_id"`
-	AllowCredentials []string `json:"allow_credentials"`
-	Timeout          int      `json:"timeout"`
-	UserVerification string   `json:"user_verification"`
-	Origin           string   `json:"origin"` // Gateway URL origin for clientData
-}
-
-// AssertionResponse contains the signed assertion to send back to the server
-type AssertionResponse struct {
-	CredentialID      string `json:"credential_id"`
-	AuthenticatorData string `json:"authenticator_data"`
-	ClientDataJSON    string `json:"client_data_json"`
-	Signature         string `json:"signature"`
-	UserHandle        string `json:"user_handle"`
-}
-
 // GetAssertion prompts the user to authenticate with their FIDO2 device
 func GetAssertion(options AssertionOptions) (*AssertionResponse, error) {
 	resp, _, err := GetAssertionWithCachedPIN(options, "")
@@ -63,7 +44,7 @@ func GetAssertionWithCachedPIN(options AssertionOptions, cachedPIN string) (*Ass
 			return nil, "", err
 		}
 	} else {
-		pinRequest := pinentry.Request{Gateway: options.Origin, Args: os.Args}
+		pinRequest := pinentry.Request{Gateway: options.Origin, Args: os.Args, Summary: options.PINSummary}
 		allowList, pin, err = filterCredentialsForDevice(device, options.RPID, allowList, pinRequest)
 		if err != nil {
 			return nil, "", err

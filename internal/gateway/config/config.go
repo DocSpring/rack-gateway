@@ -36,11 +36,15 @@ type Config struct {
 	RackTLSPinningEnabled bool
 	TrustedProxies        []string
 	GitHubToken           string
+	GitHubAPIURL          string
 	CircleCIToken         string
 	DBMaxOpenConns        int
 	DBMaxIdleConns        int
 	DBConnMaxLifetime     time.Duration
 	DBConnMaxIdleTime     time.Duration
+	// DeployApprovalPendingMaxAge is how long a deploy approval request can stay pending before it expires
+	// (0 keeps pending requests forever).
+	DeployApprovalPendingMaxAge time.Duration
 }
 
 // RackConfig holds configuration for a single Convox rack connection.
@@ -95,6 +99,7 @@ func Load() (*Config, error) {
 	cfg.loadRacksFromEnv()
 	cfg.loadIntegrationTokens()
 	cfg.loadDatabasePoolConfig()
+	cfg.DeployApprovalPendingMaxAge = getEnvDuration("DEPLOY_APPROVAL_PENDING_MAX_AGE", 7*24*time.Hour)
 
 	return cfg, nil
 }
@@ -179,6 +184,7 @@ func (c *Config) loadTrustedProxies() {
 
 func (c *Config) loadIntegrationTokens() {
 	c.GitHubToken = strings.TrimSpace(getEnv("GITHUB_TOKEN", ""))
+	c.GitHubAPIURL = strings.TrimSpace(getEnv("GITHUB_API_URL", ""))
 	c.CircleCIToken = strings.TrimSpace(getEnv("CIRCLECI_TOKEN", ""))
 }
 

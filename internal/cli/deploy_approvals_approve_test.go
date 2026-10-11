@@ -9,7 +9,7 @@ import (
 
 func TestApprovingWithAPITokenFailsBeforeCallingTheGateway(t *testing.T) {
 	t.Setenv("RACK_GATEWAY_API_TOKEN", "rgw_token")
-	_, _, err := getDeployApprovalMFAAuth(&cobra.Command{}, "staging", "")
+	_, _, err := getDeployApprovalMFAAuth(&cobra.Command{}, "staging", "", nil)
 	require.ErrorIs(t, err, errAPITokenCannotApprove)
 }
 

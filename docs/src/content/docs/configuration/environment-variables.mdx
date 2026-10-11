@@ -100,6 +100,12 @@ The error names every offending variable. Remove them from the production enviro
 | `WEBAUTHN_RP_ID` | WebAuthn RPID |
 | `WEBAUTHN_ORIGIN` | WebAuthn origin |
 
+## Deploy Approvals
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DEPLOY_APPROVAL_PENDING_MAX_AGE` | `168h` | How long a request can stay pending before it expires (a Go duration; `0` keeps pending requests forever). Each expiry is audit-logged. |
+
 ## Settings (Env Overrides)
 
 Settings resolve in this order: DB value → env var → default.
@@ -162,7 +168,8 @@ See [Deploy Approvals](/integrations/deploy-approvals/) for common keys.
 |----------|-------------|
 | `SLACK_CLIENT_ID` | Slack OAuth client ID |
 | `SLACK_CLIENT_SECRET` | Slack OAuth client secret |
-| `GITHUB_TOKEN` | GitHub token for deploy approvals |
+| `GITHUB_TOKEN` | GitHub token for deploy approvals. With `github_verification` on (the default), requests are refused without it |
+| `GITHUB_API_URL` | GitHub REST API root, e.g. for GitHub Enterprise (default `https://api.github.com`) |
 | `CIRCLECI_TOKEN` | CircleCI token for deploy approvals |
 
 ## Sentry
