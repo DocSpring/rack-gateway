@@ -63,7 +63,7 @@ func (h *APIHandler) CreateDeployApprovalRequest(c *gin.Context) {
 		return
 	}
 
-	prURL, ok := h.performGitHubVerification(c, app, req, gitCommitHash)
+	verification, ok := h.performGitHubVerification(c, app, req, gitCommitHash)
 	if !ok {
 		return
 	}
@@ -74,7 +74,7 @@ func (h *APIHandler) CreateDeployApprovalRequest(c *gin.Context) {
 		app,
 		gitCommitHash,
 		req.GitBranch,
-		prURL,
+		verification.prURL,
 		ciMetadata,
 		dbUser.ID,
 		createdByAPITokenID,
@@ -84,15 +84,15 @@ func (h *APIHandler) CreateDeployApprovalRequest(c *gin.Context) {
 		return
 	}
 
-	h.logApprovalCreation(userEmail, dbUser.Name, token.PublicID, gitCommitHash, req.GitBranch, message, record.ID)
+	h.logApprovalCreation(userEmail, dbUser.Name, token.PublicID, record, verification)
 	h.sendSlackNotification(c, record.ID)
 
-	if !h.shouldPostPRComment(prURL) {
+	if !h.shouldPostPRComment(verification.prURL) {
 		c.JSON(http.StatusCreated, toDeployApprovalRequestResponse(record))
 		return
 	}
 
-	h.postPRCommentAsync(c, app, prURL, record.PublicID, record.GitCommitHash)
+	h.postPRCommentAsync(c, app, verification.prURL, record.PublicID, record.GitCommitHash)
 	c.JSON(http.StatusCreated, toDeployApprovalRequestResponse(record))
 }
 
@@ -297,16 +297,18 @@ func (_ *APIHandler) handleCreateError(c *gin.Context, err error, tokenID int64,
 	}
 }
 
+// logApprovalCreation audit-logs a new request, with what GitHub verification did for it.
 func (h *APIHandler) logApprovalCreation(
-	userEmail, userName, tokenUUID, gitCommitHash, gitBranch, message string,
-	recordID int64,
+	userEmail, userName, tokenUUID string,
+	record *db.DeployApprovalRequest,
+	verification githubVerification,
 ) {
-	details := auditDetails(map[string]string{
-		"token_uuid":      tokenUUID,
-		"git_commit_hash": gitCommitHash,
-		"git_branch":      gitBranch,
-		"message":         message,
-	})
+	fields := verification.auditFields()
+	fields["token_uuid"] = tokenUUID
+	fields["git_commit_hash"] = record.GitCommitHash
+	fields["git_branch"] = record.GitBranch
+	fields["message"] = record.Message
+	details := auditDetails(fields)
 
 	_ = h.auditLogger.LogDBEntry(&db.AuditLog{
 		UserEmail:    userEmail,
@@ -314,7 +316,7 @@ func (h *APIHandler) logApprovalCreation(
 		ActionType:   audit.ActionTypeGateway,
 		Action:       audit.BuildAction(rbac.ResourceDeployApprovalRequest.String(), rbac.ActionCreate.String()),
 		ResourceType: rbac.ResourceDeployApprovalRequest.String(),
-		Resource:     fmt.Sprintf("%d", recordID),
+		Resource:     fmt.Sprintf("%d", record.ID),
 		Details:      details,
 		Status:       audit.StatusSuccess,
 		RBACDecision: "allow",

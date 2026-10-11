@@ -19,7 +19,7 @@ import (
 // (`env set/unset --allow-protected`), the caller is a user holding convox:env:set_protected (admins), and MFA is
 // verified on that request, whatever the session's step-up state.
 
-// protectedKeySet holds env var names upper-cased, matching how isProtectedKeyForApp compares keys.
+// protectedKeySet holds env var names upper-cased, so keys match whatever their case or surrounding spaces.
 type protectedKeySet map[string]struct{}
 
 func (s protectedKeySet) has(key string) bool {
@@ -44,22 +44,23 @@ func optedInProtectedKeys(r *http.Request) protectedKeySet {
 // The CLI posts masked values back for protected keys it isn't changing, so only unmasked values count.
 func (h *Handler) validateProtectedKeys(
 	r *http.Request,
-	email, app string,
+	email string,
+	keys appEnvKeys,
 	posted map[string]string,
 ) error {
 	var changed []string
 	for k, v := range posted {
-		if h.isProtectedKeyForApp(k, app) && v != maskedSecret {
+		if keys.isProtected(k) && v != maskedSecret {
 			changed = append(changed, k)
 		}
 	}
-	return h.authorizeProtectedKeyChanges(r, email, app, changed)
+	return h.authorizeProtectedKeyChanges(r, email, keys.app, changed)
 }
 
 // markProtectedDiffs flags the diffs that change or remove one of the app's protected keys.
-func (h *Handler) markProtectedDiffs(app string, diffs []envutil.EnvDiff) {
+func markProtectedDiffs(keys appEnvKeys, diffs []envutil.EnvDiff) {
 	for i := range diffs {
-		diffs[i].Protected = h.isProtectedKeyForApp(diffs[i].Key, app)
+		diffs[i].Protected = keys.isProtected(diffs[i].Key)
 	}
 }
 

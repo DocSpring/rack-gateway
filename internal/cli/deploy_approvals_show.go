@@ -186,7 +186,7 @@ func outputResultsAsText(out io.Writer, results []rackApproval, showRack bool) e
 }
 
 // printDeployApprovalDetails prints every field of a request, one per line. Text that CI supplies (message, app,
-// branch, commit, token name, notes) goes through displayText.
+// branch, commit, token name, notes) and the PR URL go through displayText.
 func printDeployApprovalDetails(out io.Writer, req *deployApprovalRequest, rack string, showRack bool) error {
 	var details strings.Builder
 	if showRack {
@@ -213,6 +213,9 @@ func printDeployApprovalDetails(out io.Writer, req *deployApprovalRequest, rack 
 	}
 	if req.GitBranch != "" {
 		writeDetail(&details, "Branch:  ", displayText(req.GitBranch))
+	}
+	if req.PrURL != "" {
+		writeDetail(&details, "PR:      ", displayText(req.PrURL))
 	}
 
 	writeTimeDetail(&details, "Approved:", req.ApprovedAt)

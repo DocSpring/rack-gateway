@@ -3,6 +3,7 @@ package handlers
 import (
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -13,35 +14,74 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/settings"
 )
 
+// GitHub verification results recorded in the deploy_approval_request.create audit entry.
+const (
+	githubVerificationPassed  = "passed"
+	githubVerificationSkipped = "skipped"
+)
+
+// githubVerification is what GitHub verification did for a new deploy approval request: the create audit entry
+// records it as change-management evidence.
+type githubVerification struct {
+	result     string // githubVerificationPassed or githubVerificationSkipped
+	skipReason string
+	repo       string // owner/repo
+	mode       string // settings.VerifyGitCommitModeLatest or settings.VerifyGitCommitModeBranch
+	requirePR  bool
+	prURL      string
+}
+
+func skippedGitHubVerification(reason string) githubVerification {
+	return githubVerification{result: githubVerificationSkipped, skipReason: reason}
+}
+
+// auditFields returns the verification's fields for the create audit entry. A passed verification records the
+// settings it checked against, named as the app settings are.
+func (v githubVerification) auditFields() map[string]string {
+	if v.result != githubVerificationPassed {
+		return map[string]string{
+			settings.KeyGitHubVerification:    v.result,
+			"github_verification_skip_reason": v.skipReason,
+		}
+	}
+	return map[string]string{
+		settings.KeyGitHubVerification:  v.result,
+		settings.KeyVCSRepo:             v.repo,
+		settings.KeyVerifyGitCommitMode: v.mode,
+		settings.KeyRequirePRForBranch:  strconv.FormatBool(v.requirePR),
+		"pr_url":                        v.prURL,
+	}
+}
+
 // performGitHubVerification checks GitHub verification settings and performs verification if enabled.
-// Returns the PR URL if found, or empty string if verification is disabled or no PR is required.
-// Returns false if verification fails or settings cannot be loaded.
+// It returns the verification result (with the PR URL, if the branch has an open PR), or false after writing an
+// error response if verification fails or settings cannot be loaded.
 func (h *APIHandler) performGitHubVerification(
 	c *gin.Context,
 	app string,
 	req CreateDeployApprovalRequestRequest,
 	gitCommitHash string,
-) (string, bool) {
+) (githubVerification, bool) {
 	if h.settingsService == nil {
-		return "", true
+		return skippedGitHubVerification("app settings are unavailable"), true
 	}
 
 	enabled, err := getAppSettingBool(h.settingsService, app, settings.KeyGitHubVerification, true)
 	if err != nil {
 		gtwlog.Warnf("deploy approvals: failed to get github_verification setting app=%s: %v", app, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load app settings"})
-		return "", false
+		return githubVerification{}, false
 	}
 
 	if !enabled {
-		return "", true
+		return skippedGitHubVerification("github_verification is off for the app"), true
 	}
 
 	githubRepo, err := getAppSettingString(h.settingsService, app, settings.KeyVCSRepo, "")
 	if err != nil {
 		gtwlog.Warnf("deploy approvals: failed to get vcs_repo setting app=%s: %v", app, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load app settings"})
-		return "", false
+		return githubVerification{}, false
 	}
 
 	// Verification (and the PR and default-branch rules that run inside it) must not be skipped silently.
@@ -51,7 +91,7 @@ func (h *APIHandler) performGitHubVerification(
 			"GitHub verification is on for app %s, but %s. Set it, or turn off github_verification for the app.",
 			app, missing,
 		)})
-		return "", false
+		return githubVerification{}, false
 	}
 
 	return h.verifyGitHubCommit(c, app, githubRepo, req, gitCommitHash)
@@ -59,35 +99,34 @@ func (h *APIHandler) performGitHubVerification(
 
 // verifyGitHubCommit performs the actual GitHub commit verification.
 // It validates the commit exists on the specified branch and finds the associated PR if required.
-// Returns the PR URL if found, or empty string if no PR is required.
-// Returns false if verification fails.
+// It returns the passed verification, or false after writing an error response if verification fails.
 func (h *APIHandler) verifyGitHubCommit(
 	c *gin.Context,
 	app string,
 	githubRepo string,
 	req CreateDeployApprovalRequestRequest,
 	gitCommitHash string,
-) (string, bool) {
+) (githubVerification, bool) {
 	gitBranch := strings.TrimSpace(req.GitBranch)
 	if gitBranch == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "git_branch is required for GitHub verification"})
-		return "", false
+		return githubVerification{}, false
 	}
 
 	owner, repo := github.SplitRepo(githubRepo)
 	if owner == "" || repo == "" {
 		gtwlog.Warnf("deploy approvals: invalid vcs_repo format app=%s value=%s", app, githubRepo)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "GitHub integration misconfigured"})
-		return "", false
+		return githubVerification{}, false
 	}
 
 	if ok := h.checkDefaultBranchRestriction(c, app, gitBranch); !ok {
-		return "", false
+		return githubVerification{}, false
 	}
 
 	requirePR, verifyMode, ok := h.getVerificationSettings(c, app)
 	if !ok {
-		return "", false
+		return githubVerification{}, false
 	}
 
 	client := github.NewClient(h.config.GitHubToken, h.config.GitHubAPIURL)
@@ -108,10 +147,30 @@ func (h *APIHandler) verifyGitHubCommit(
 			err,
 		)
 		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("GitHub verification failed: %s", err.Error())})
-		return "", false
+		return githubVerification{}, false
 	}
 
-	return prURL, true
+	verification := githubVerification{
+		result:    githubVerificationPassed,
+		repo:      owner + "/" + repo,
+		mode:      verifyMode,
+		requirePR: requirePR,
+		prURL:     prURL,
+	}
+	verification.logPassed(app, gitBranch, gitCommitHash)
+	return verification, true
+}
+
+// logPassed writes one info line for a passed verification.
+func (v githubVerification) logPassed(app, gitBranch, gitCommitHash string) {
+	pr := v.prURL
+	if pr == "" {
+		pr = "none"
+	}
+	gtwlog.Infof(
+		"deploy approvals: GitHub verification passed app=%s repo=%s branch=%s commit=%s mode=%s require_pr=%t pr=%s",
+		app, v.repo, gitBranch, gitCommitHash, v.mode, v.requirePR, pr,
+	)
 }
 
 // checkDefaultBranchRestriction checks if deploying from the default branch is allowed.

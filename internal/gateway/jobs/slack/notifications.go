@@ -51,8 +51,7 @@ func (w *AuditEventWorker) Work(_ context.Context, job *river.Job[AuditEventArgs
 
 // DeployApprovalArgs contains parameters for Slack deploy approval notification
 type DeployApprovalArgs struct {
-	DeployApprovalRequestID int64  `json:"deploy_approval_request_id"`
-	GatewayDomain           string `json:"gateway_domain"`
+	DeployApprovalRequestID int64 `json:"deploy_approval_request_id"`
 }
 
 // Kind returns the unique identifier for this job type
@@ -82,7 +81,7 @@ func (w *DeployApprovalWorker) Work(_ context.Context, job *river.Job[DeployAppr
 	}
 
 	// Send Slack notification
-	if err := w.slackNotifier.NotifyDeployApprovalCreated(deployApprovalRequest, job.Args.GatewayDomain); err != nil {
+	if err := w.slackNotifier.NotifyDeployApprovalCreated(deployApprovalRequest); err != nil {
 		return fmt.Errorf("failed to send Slack deploy approval notification: %w", err)
 	}
 
