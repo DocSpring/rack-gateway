@@ -95,11 +95,32 @@ func (w *AnchorWriterWorker) anchorExists(ctx context.Context, key string) (bool
 	return false, fmt.Errorf("failed to check for anchor %s: %w", key, err)
 }
 
-// Work writes an audit anchor to S3
+// anchorBusySnooze is how long the job waits before trying again when another anchor write holds the lock.
+const anchorBusySnooze = time.Minute
+
+// Work writes the anchor for the hour the job was created in. When another anchor write is running, the job is
+// snoozed and tries again later.
 func (w *AnchorWriterWorker) Work(ctx context.Context, job *river.Job[AnchorWriterArgs]) error {
-	// Use job creation time as anchor timestamp - this ensures deterministic filenames on retries
-	// All retries of the same job will use the same timestamp and try to write the same file
-	timestamp := job.CreatedAt.UTC()
+	// The job's creation time names the anchor, so retries of a job write the same key.
+	err := w.WriteAnchor(ctx, job.CreatedAt)
+	if errors.Is(err, db.ErrAuditAnchorLockBusy) {
+		return river.JobSnooze(anchorBusySnooze)
+	}
+	return err
+}
+
+// WriteAnchor writes the anchor for the hour of ts unless it's already written. It holds the audit anchor lock
+// from the existence check through the write, so concurrent writes can't add a second version of a key or link
+// two anchors to the same predecessor, which verification would report as failures that Object Lock keeps
+// forever. It returns db.ErrAuditAnchorLockBusy when another anchor write holds the lock.
+func (w *AnchorWriterWorker) WriteAnchor(ctx context.Context, ts time.Time) error {
+	timestamp := ts.UTC()
+	return w.db.WithAuditAnchorLock(ctx, func(ctx context.Context, lock *db.AuditAnchorTx) error {
+		return w.writeAnchorLocked(ctx, lock, timestamp)
+	})
+}
+
+func (w *AnchorWriterWorker) writeAnchorLocked(ctx context.Context, lock *db.AuditAnchorTx, timestamp time.Time) error {
 	key := AnchorKey(w.chainID, timestamp) // Hour precision only - no minutes/seconds
 
 	exists, err := w.anchorExists(ctx, key)
@@ -111,7 +132,7 @@ func (w *AnchorWriterWorker) Work(ctx context.Context, job *river.Job[AnchorWrit
 		return nil
 	}
 
-	head, err := w.db.AuditChainHead(ctx)
+	head, err := lock.AuditChainHead(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get latest event: %w", err)
 	}

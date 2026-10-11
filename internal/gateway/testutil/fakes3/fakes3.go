@@ -53,6 +53,16 @@ func (b *Bucket) PutAt(key string, body []byte, modified time.Time) {
 	b.add(&entry{key: key, body: bytes.Clone(body), lastModified: modified})
 }
 
+// AdvanceTo moves the clock forward to t, so the next write without an explicit time is stamped one second after
+// it. An earlier t is ignored.
+func (b *Bucket) AdvanceTo(t time.Time) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if t.After(b.clock) {
+		b.clock = t
+	}
+}
+
 // AddDeleteMarker hides key behind a delete marker, as an unversioned DELETE does in a versioned bucket.
 func (b *Bucket) AddDeleteMarker(key string) {
 	b.mu.Lock()

@@ -149,7 +149,7 @@ func TestAnchorWriterFailsWhenItCannotTellIfTheAnchorExists(t *testing.T) {
 		},
 	}
 
-	err := newTestWorker(nil, s3Client).Work(context.Background(), anchorJob(firstAnchorHour))
+	err := newTestWorker(dbtest.NewDatabase(t), s3Client).Work(context.Background(), anchorJob(firstAnchorHour))
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "access denied")
 	assert.False(t, putCalled, "writing again could add a second version of an existing anchor")

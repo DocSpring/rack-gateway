@@ -27,13 +27,30 @@ type AuditChainHead struct {
 
 // AuditChainHead returns the latest event's index and hash and where hash v2 starts.
 func (d *Database) AuditChainHead(ctx context.Context) (AuditChainHead, error) {
+	return auditChainHead(ctx, d.db)
+}
+
+// queryRower runs a single-row query: *sql.DB and *sql.Tx both do.
+type queryRower interface {
+	QueryRowContext(ctx context.Context, query string, args ...interface{}) *sql.Row
+}
+
+// auditChainHead reads the head in one statement. Only events in the chain (chain_index >= 0) count: one with a
+// NULL index (which the schema forbids) would otherwise sort first and hide the chain. AuditChainStats counts the
+// events outside it.
+func auditChainHead(ctx context.Context, q queryRower) (AuditChainHead, error) {
 	var head AuditChainHead
 	var lastIndex sql.NullInt64
-	err := d.db.QueryRowContext(ctx, `
+	err := q.QueryRowContext(ctx, `
 		SELECT latest.chain_index, latest.event_hash, cutover.first_v2
-		FROM (SELECT MIN(chain_index) AS first_v2 FROM audit.audit_event WHERE hash_version >= 2) cutover
+		FROM (
+			SELECT MIN(chain_index) AS first_v2 FROM audit.audit_event
+			WHERE hash_version >= 2 AND chain_index >= 0
+		) cutover
 		LEFT JOIN (
-			SELECT chain_index, event_hash FROM audit.audit_event ORDER BY chain_index DESC LIMIT 1
+			SELECT chain_index, event_hash FROM audit.audit_event
+			WHERE chain_index >= 0
+			ORDER BY chain_index DESC LIMIT 1
 		) latest ON TRUE`).Scan(&lastIndex, &head.LastHash, &head.HashV2From)
 	if err != nil {
 		return head, fmt.Errorf("failed to read the audit chain head: %w", err)
@@ -41,6 +58,32 @@ func (d *Database) AuditChainHead(ctx context.Context) (AuditChainHead, error) {
 	head.Empty = !lastIndex.Valid
 	head.LastIndex = lastIndex.Int64
 	return head, nil
+}
+
+// AuditChainStats counts stored events, to find rows a walk by chain index can't see.
+type AuditChainStats struct {
+	// Rows counts events with 0 <= chain_index <= the index asked for, and DistinctIndexes their chain indexes.
+	Rows            int64
+	DistinctIndexes int64
+	// OutsideChain counts events with a NULL or negative chain_index.
+	OutsideChain int64
+}
+
+// AuditChainStats counts the events with chain indexes 0..toIndex (none when toIndex is negative) and the events
+// outside the chain. The schema's constraints (unique, not null, non-negative) should keep the extra counts at
+// zero; verification checks they weren't dropped to hide rows.
+func (d *Database) AuditChainStats(ctx context.Context, toIndex int64) (AuditChainStats, error) {
+	var stats AuditChainStats
+	err := d.db.QueryRowContext(ctx, `
+		SELECT
+			COUNT(*) FILTER (WHERE chain_index BETWEEN 0 AND $1),
+			COUNT(DISTINCT chain_index) FILTER (WHERE chain_index BETWEEN 0 AND $1),
+			COUNT(*) FILTER (WHERE chain_index IS NULL OR chain_index < 0)
+		FROM audit.audit_event`, toIndex).Scan(&stats.Rows, &stats.DistinctIndexes, &stats.OutsideChain)
+	if err != nil {
+		return stats, fmt.Errorf("failed to count audit events: %w", err)
+	}
+	return stats, nil
 }
 
 // AuditChainRows returns up to limit events with afterIndex < chain_index <= toIndex, in chain order.

@@ -3,6 +3,7 @@ package auditverify
 import (
 	"fmt"
 	"io"
+	"time"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 )
@@ -25,11 +26,16 @@ type Report struct {
 	// LegacyIndexGaps are jumps in legacy chain indexes, which the old sequence-based writer left after failed
 	// inserts. Their links are still checked.
 	LegacyIndexGaps int64
+	// HashV2FromPinned is the hash v2 start pinned with --hash-v2-from or AUDIT_HASH_V2_FROM (nil: not pinned).
+	HashV2FromPinned *int64
+	// HashV2StartAnchors counts the format 2 anchors checked, each of which records where hash v2 starts.
+	HashV2StartAnchors int
 
 	// AnchorsChecked counts anchor versions read from the bucket (0 when anchors weren't checked).
 	AnchorsChecked int
-	// LatestAnchor is the key of the most recently written anchor.
-	LatestAnchor string
+	// LatestAnchor is the key of the most recently written anchor, and LatestAnchorWritten when S3 stored it.
+	LatestAnchor        string
+	LatestAnchorWritten time.Time
 	// LegacyAnchorLinkMismatches counts anchors written before anchor format 2 whose prev_anchor_hash doesn't
 	// name the anchor written before them (earlier versions only listed the first 1000 anchors).
 	LegacyAnchorLinkMismatches int
@@ -103,6 +109,9 @@ func (r *Report) writeChain(p *summaryPrinter) {
 	if r.LegacyEvents > 0 {
 		p.line("  legacy (v1) events: %d checked, previous_hash links only (HMAC not recomputable)", r.LegacyEvents)
 	}
+	if hasLegacyEvents(r.Head) {
+		p.line("  hash v2 start: %s", r.describeHashV2StartConfirmation())
+	}
 	if r.LegacyIndexGaps > 0 {
 		p.line("  legacy chain index gaps (left by failed inserts before hash v2): %d", r.LegacyIndexGaps)
 	}
@@ -112,10 +121,26 @@ func (r *Report) writeAnchors(p *summaryPrinter) {
 	if r.AnchorsChecked == 0 {
 		return
 	}
-	p.line("Anchors: %d checked, latest %s", r.AnchorsChecked, r.LatestAnchor)
+	p.line("Anchors: %d checked, latest %s (written %s)",
+		r.AnchorsChecked, r.LatestAnchor, r.LatestAnchorWritten.UTC().Format(time.RFC3339))
 	if r.LegacyAnchorLinkMismatches > 0 {
 		p.line("  anchors from before anchor format 2 with a stale prev_anchor_hash: %d (known old bug, not a failure)",
 			r.LegacyAnchorLinkMismatches)
+	}
+}
+
+// describeHashV2StartConfirmation says what outside the database confirmed where hash v2 starts.
+func (r *Report) describeHashV2StartConfirmation() string {
+	switch {
+	case r.HashV2FromPinned != nil && r.HashV2StartAnchors > 0:
+		return fmt.Sprintf("pinned at event %d, and recorded by %d format 2 anchors",
+			*r.HashV2FromPinned, r.HashV2StartAnchors)
+	case r.HashV2FromPinned != nil:
+		return fmt.Sprintf("pinned at event %d", *r.HashV2FromPinned)
+	case r.HashV2StartAnchors > 0:
+		return fmt.Sprintf("recorded by %d format 2 anchors", r.HashV2StartAnchors)
+	default:
+		return "NOT confirmed outside the database (pin it, see the failure below)"
 	}
 }
 

@@ -43,6 +43,11 @@ The gateway writes at most one anchor per hour. A periodic job runs every `AUDIT
 60) and when the gateway starts; anchors are keyed by hour, so a run that finds this hour's anchor already written
 does nothing. `rack-gateway-api write-anchor` writes one by hand.
 
+Anchor writes hold a database advisory lock from the check for this hour's anchor until the write, so two of them
+(on different gateway instances, or the job and `write-anchor`) never overlap: an overlap could write an hour's
+key twice or link two anchors to the same predecessor, and Object Lock would keep that forever. A job that finds
+the lock taken tries again a minute later; `write-anchor` fails and can be run again.
+
 ### Anchor Content
 
 Each anchor is a JSON blob containing chain state:
@@ -363,13 +368,15 @@ AWS_REGION=us-east-1
 reads.
 
 ```bash
-rack-gateway-api verify-audit [--from N] [--to N] [--no-anchors]
+rack-gateway-api verify-audit [--from N] [--to N] [--hash-v2-from N] [--max-anchor-age 3h] [--no-anchors]
 ```
 
 | Option | Meaning |
 |--------|---------|
 | `--from N` | First chain index to check (default 0). The event before it is still read to check the link. |
 | `--to N` | Last chain index to check (default: the latest event) |
+| `--hash-v2-from N` | Where hash v2 starts, recorded after upgrading (default: `AUDIT_HASH_V2_FROM`). See [Pinning where hash v2 starts](#pinning-where-hash-v2-starts). |
+| `--max-anchor-age D` | Fail when the latest anchor was written longer ago than this (default `3h`) |
 | `--no-anchors` | Skip the S3 checks and only check the database |
 
 It prints a summary and exits non-zero if it finds any integrity failure. Warnings don't change the exit code.
@@ -383,6 +390,8 @@ It prints a summary and exits non-zero if it finds any integrity failure. Warnin
 - Unless `--no-anchors` is given: `AUDIT_ANCHOR_BUCKET`, `AUDIT_ANCHOR_CHAIN_ID` and AWS credentials allowed
   `s3:ListBucket`, `s3:ListBucketVersions`, `s3:GetObject` and `s3:GetObjectVersion` on the bucket, and
   `kms:Decrypt` on its key (the verifier role above).
+- On a gateway that was upgraded from a version before hash v2: `AUDIT_HASH_V2_FROM` (or `--hash-v2-from`), see
+  below.
 
 The anchor checks read every anchor, one request per hour of history, so a full run gets slower as the bucket
 grows. `--from` only limits the database checks.
@@ -395,7 +404,10 @@ Events, in chain order:
 - Each event's `previous_hash` is the hash of the event before it.
 - Hash v2 events have consecutive indexes, and their HMAC is recomputed from the stored row and compared with
   `event_hash`.
-- Legacy (v1) events only come before the first hash v2 event.
+- Legacy (v1) events only come before hash v2 starts, and something outside the database confirms where it starts
+  (a pinned start or a `format` 2 anchor; see below).
+- On a full run (no `--from` or `--to`): the number of events in the table matches the number checked, so no event
+  hides outside the chain (a NULL or negative chain index, or two events at one index).
 
 Anchors, in the order they were written:
 
@@ -405,14 +417,39 @@ Anchors, in the order they were written:
 - `last_seq` never goes down (events removed from the end of the chain).
 - `prev_anchor_hash` is the SHA-256 of the anchor written before it (failure for `format` 2 anchors; older anchors
   are counted, see above).
-- `hash_v2_from_seq` matches where hash v2 starts in the database, so hash v2 events can't be relabeled as legacy
-  events to skip their HMAC check.
+- Every `format` 2 anchor agrees with the database on where hash v2 starts: `hash_v2_from_seq` once there are hash
+  v2 events, or, in an anchor written before the first one, the event after `last_seq`. This catches hash v2
+  events relabeled as legacy events to skip their HMAC check.
+- There is at least one anchor once there are events, and the latest anchor was written within
+  `--max-anchor-age`. Either failing means anchors aren't being written, so nothing outside the database protects
+  new events. If you raised `AUDIT_ANCHOR_INTERVAL_MINUTES`, raise `--max-anchor-age` above it.
 
 It warns about hours without an anchor and about events written after the latest anchor.
+
+### Pinning Where Hash v2 Starts
+
+Events written before hash v2 (by versions before the hash v2 migration) are legacy (v1) events: only their links
+are checked. Which events are legacy is recorded in the database itself, so someone with write access to the
+database (no secret needed) could relabel hash v2 events as legacy and then edit them. To catch that, the start of
+hash v2 has to be confirmed outside the database, by either:
+
+- **A pinned start.** Right after upgrading, run `verify-audit`: it prints `hash v2 from event N` (before the new
+  version has written an event, its failure names the event that will be the first). Record `N` and set
+  `AUDIT_HASH_V2_FROM=N` wherever `verify-audit` runs, or pass `--hash-v2-from N`. A different start in the
+  database is a failure, and so is every legacy event from `N` on.
+- **A `format` 2 anchor.** Every anchor written since the upgrade pins where hash v2 starts. Anchors are
+  written hourly, so this is available about an hour after upgrading, but not with `--no-anchors`.
+
+Pin the start even when anchors are configured: it also covers `--no-anchors` runs and doesn't depend on the
+bucket. While legacy events exist and neither confirms the start, `verify-audit` fails. A gateway that never ran a
+version before hash v2 has no legacy events and needs no pin.
 
 ### What It Can't Detect
 
 - **Events that were never written**, for example when an audit write failed.
+- **Events deleted from the end of the chain before an anchor records them.** This needs only write access to the
+  database, not the secret: the events that are left still form a valid chain. Anchors bound the window to about
+  an hour, and `verify-audit` fails when the latest anchor is older than `--max-anchor-age`.
 - **Changes after the latest anchor by someone who has `AUDIT_HMAC_SECRET`.** With the secret and write access to
   the database, they can rewrite the unanchored tail and recompute every hash. Only history up to the latest
   anchor is protected from them, so keep the secret away from people who administer the database.
@@ -422,6 +459,9 @@ It warns about hours without an anchor and about events written after the latest
   row: it covered values the database doesn't keep exactly (nanosecond timestamps, some fields before they were
   normalized for storage, and a chain index that could differ from the stored one). Only their `previous_hash`
   links are checked. An anchor still pins the hash of the event it recorded, but not the content of legacy events.
+- **Hash v2 events relabeled as legacy, without a pinned start or `format` 2 anchors.** Nothing outside the
+  database then says which events are hash v2. `verify-audit` reports this as a failure rather than passing, but
+  it can't tell whether anything was relabeled.
 
 ### Running It on a Schedule
 
@@ -439,6 +479,8 @@ timers:
     command: ./rack-gateway-api verify-audit
     service: gateway
 ```
+
+Set `AUDIT_HASH_V2_FROM` in that app's environment if the gateway was upgraded from a version before hash v2.
 
 ## Cross-Region Replication
 
@@ -514,6 +556,9 @@ resource "aws_s3_bucket_lifecycle_configuration" "audit_anchors" {
 `verify-audit` reads every anchor. Objects in `GLACIER` or `DEEP_ARCHIVE` can't be read without restoring them
 first, so keep anchors in a class with instant retrieval (`GLACIER_IR` or warmer). At a few kilobytes an hour,
 anchors cost cents a year in any class.
+
+Don't add an expiration rule. In a versioned bucket, expiring the current version adds a delete marker, and
+`verify-audit` reports every delete marker as a deleted anchor.
 </Aside>
 
 ## Monitoring
@@ -558,7 +603,10 @@ resource "aws_s3_bucket_logging" "audit_anchors" {
 
 In COMPLIANCE mode, you **cannot** delete objects before retention expires. Options:
 
-1. **Wait for expiration** - Objects auto-expire after retention period
+1. **Wait for retention to end** - Retention only prevents deletion; nothing is deleted when it ends, and anchors
+   stay in the bucket. Deleting them afterwards is a deliberate step: delete the old versions themselves (not
+   with a delete marker, which `verify-audit` reports as a failure). The oldest anchor left then points at one
+   that's gone, which `verify-audit` only warns about.
 2. **Delete entire bucket** - Requires AWS Support ticket
 3. **Legal Hold** - Mark objects for investigation without deleting
 

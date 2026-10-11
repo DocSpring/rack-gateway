@@ -18,7 +18,7 @@ func verifyRows(ctx context.Context, source ChainSource, opts Options, head db.A
 	if opts.To != nil {
 		to = min(to, *opts.To)
 	}
-	walker := &chainWalker{secret: opts.Secret, cutover: head.HashV2From, report: report}
+	walker := &chainWalker{secret: opts.Secret, cutover: hashV2Start(head, opts.HashV2From), report: report}
 	if opts.From > 0 {
 		prev, err := source.AuditChainRowBefore(ctx, opts.From)
 		if err != nil {
@@ -47,8 +47,8 @@ func verifyRows(ctx context.Context, source ChainSource, opts Options, head db.A
 // chainWalker checks each event against the one before it.
 type chainWalker struct {
 	secret []byte
-	// cutover is the first hash v2 event in the database. Every event before it must be legacy and every event
-	// from it on must be v2.
+	// cutover is where hash v2 starts: the pinned start, or the database's first hash v2 event. Every event from
+	// it on must be v2.
 	cutover sql.NullInt64
 	prev    *db.AuditChainRow
 	report  *Report
@@ -65,13 +65,13 @@ func (w *chainWalker) check(row *db.AuditChainRow) {
 }
 
 // checkVersion catches a v2 event relabeled as legacy to skip its HMAC check: legacy events can only come
-// before the first v2 event.
+// before hash v2 starts.
 func (w *chainWalker) checkVersion(row *db.AuditChainRow) {
 	if row.HashVersion != db.AuditHashVersion && row.HashVersion != db.AuditHashVersionLegacy {
 		w.report.fail("event %d (id %d): unknown hash_version %d", row.ChainIndex, row.ID, row.HashVersion)
 		return
 	}
-	if row.HashVersion == db.AuditHashVersionLegacy && w.cutover.Valid && row.ChainIndex > w.cutover.Int64 {
+	if row.HashVersion == db.AuditHashVersionLegacy && w.cutover.Valid && row.ChainIndex >= w.cutover.Int64 {
 		w.report.fail("event %d (id %d): marked as a legacy (v1) event after hash v2 started at event %d",
 			row.ChainIndex, row.ID, w.cutover.Int64)
 	}
@@ -114,4 +114,30 @@ func (w *chainWalker) checkHMAC(row *db.AuditChainRow) {
 		w.report.fail("event %d (id %d): event_hash doesn't match the stored event (it was changed, or "+
 			"AUDIT_HMAC_SECRET is wrong)", row.ChainIndex, row.ID)
 	}
+}
+
+// checkRowCounts compares the number of stored events with the number the walk checked. The walk reads events by
+// chain index, so it can't see events with a NULL or negative index, or a second event at an index it has passed.
+// The schema forbids all three, unless its constraints were dropped to hide rows. Events written after the run
+// started are left out.
+func checkRowCounts(ctx context.Context, source ChainSource, head db.AuditChainHead, report *Report) error {
+	last := head.LastIndex
+	if head.Empty {
+		last = -1
+	}
+	stats, err := source.AuditChainStats(ctx, last)
+	if err != nil {
+		return err
+	}
+	if stats.OutsideChain > 0 {
+		report.fail("events outside the chain (NULL or negative chain_index): %d", stats.OutsideChain)
+	}
+	if duplicates := stats.Rows - stats.DistinctIndexes; duplicates > 0 {
+		report.fail("events at a chain index another event already has: %d", duplicates)
+	}
+	if stats.Rows != report.EventsChecked {
+		report.fail("the database has %d events with chain indexes 0..%d, but the chain walk checked %d",
+			stats.Rows, last, report.EventsChecked)
+	}
+	return nil
 }

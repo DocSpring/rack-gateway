@@ -37,7 +37,9 @@ func (d *Database) CreateAuditLog(log *AuditLog) error {
 }
 
 func (d *Database) appendAuditChainRow(ctx context.Context, row *AuditChainRow, secret []byte) error {
-	tx, err := d.db.BeginTx(ctx, nil)
+	// Read committed, whatever the server default: the latest event is read after the chain lock is taken, so
+	// each statement needs its own snapshot to see the event the previous lock holder committed.
+	tx, err := d.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
 	if err != nil {
 		return fmt.Errorf("failed to begin audit log tx: %w", err)
 	}

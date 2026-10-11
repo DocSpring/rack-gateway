@@ -114,8 +114,9 @@ func TestVerifyChecksLegacyEventsByLinksAndReportsTheCutover(t *testing.T) {
 	require.NoError(t, err)
 	logs := writeEvents(t, database, 2)
 	require.Equal(t, int64(4), logs[0].ChainIndex)
+	pinned := auditverify.Options{HashV2From: int64Ptr(4)}
 
-	report := verify(t, database, auditverify.Options{})
+	report := verify(t, database, pinned)
 	requireOK(t, report)
 	assert.Equal(t, int64(3), report.LegacyEvents)
 	assert.Equal(t, int64(2), report.V2Events)
@@ -126,11 +127,12 @@ func TestVerifyChecksLegacyEventsByLinksAndReportsTheCutover(t *testing.T) {
 	require.NoError(t, report.Write(&summary))
 	assert.Contains(t, summary.String(), "hash v2 from event 4")
 	assert.Contains(t, summary.String(), "legacy (v1) events: 3 checked")
+	assert.Contains(t, summary.String(), "hash v2 start: pinned at event 4")
 
 	// A broken link between legacy events is still caught.
 	tamper(t, database, `UPDATE audit.audit_event SET previous_hash = decode(repeat('09', 32), 'hex')
 		WHERE chain_index = 1`)
-	requireFailure(t, verify(t, database, auditverify.Options{}), "event 1 ", "previous_hash doesn't match")
+	requireFailure(t, verify(t, database, pinned), "event 1 ", "previous_hash doesn't match")
 }
 
 func TestVerifyChecksOnlyTheRequestedRange(t *testing.T) {

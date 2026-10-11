@@ -2,6 +2,7 @@ package auditverify_test
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"strings"
 	"testing"
@@ -44,6 +45,30 @@ func writeEvents(t *testing.T, database *gwdb.Database, count int) []*gwdb.Audit
 		logs = append(logs, log)
 	}
 	return logs
+}
+
+// legacyEventCount is how many hash v1 events insertLegacyEvents adds.
+const legacyEventCount = 3
+
+// insertLegacyEvents adds legacyEventCount linked hash v1 events at chain indexes 0..legacyEventCount-1, as
+// written before hash v2. Their hashes can't be recomputed, so any 32 bytes will do.
+func insertLegacyEvents(t *testing.T, database *gwdb.Database) {
+	t.Helper()
+	var previous []byte
+	for i := 0; i < legacyEventCount; i++ {
+		sum := sha256.Sum256([]byte(fmt.Sprintf("legacy event %d", i)))
+		var previousHash interface{}
+		if previous != nil {
+			previousHash = previous
+		}
+		_, err := database.DB().Exec(`
+			INSERT INTO audit.audit_event
+				(chain_index, hash_version, previous_hash, event_hash, user_email, action_type, action, status)
+			VALUES ($1, 1, $2, $3, 'legacy@example.com', 'convox', 'app.list', 'success')`,
+			i, previousHash, sum[:])
+		require.NoError(t, err)
+		previous = sum[:]
+	}
 }
 
 // tamper runs statements with the append-only triggers switched off, as someone with superuser access to the

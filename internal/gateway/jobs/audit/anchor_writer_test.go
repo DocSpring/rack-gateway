@@ -122,7 +122,7 @@ func TestAnchorWriterWorker_Work_BothFilesExist(t *testing.T) {
 	}
 
 	worker := &AnchorWriterWorker{
-		db:            nil, // Not needed when files already exist
+		db:            dbtest.NewDatabase(t), // only for the anchor lock
 		s3Client:      s3Client,
 		bucket:        "test-bucket",
 		chainID:       "staging",

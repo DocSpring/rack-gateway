@@ -13,8 +13,6 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/getsentry/sentry-go"
-	"github.com/riverqueue/river"
-	"github.com/riverqueue/river/rivertype"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/app"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
@@ -119,7 +117,8 @@ func handleMaintenanceCommand(args []string) (bool, error) {
 			"  write-anchor        Manually trigger an audit anchor write to S3\n" +
 			"  build-info          Show the version, commit and whether test bypasses are compiled in\n" +
 			"  verify-audit        Verify the audit log hash chain and its S3 anchors\n" +
-			"                      [--from N] [--to N] [--no-anchors] (exits non-zero on any integrity failure)"
+			"                      [--from N] [--to N] [--hash-v2-from N] [--max-anchor-age 3h] [--no-anchors]\n" +
+			"                      (exits non-zero on any integrity failure)"
 		fmt.Println(helpText)
 		return true, nil
 	default:
@@ -229,16 +228,10 @@ func writeAuditAnchor() error {
 		anchorConfig.RetentionDays,
 	)
 
-	// Execute the work directly (synchronously)
-	ctx := context.Background()
-	mockJob := &river.Job[jobaudit.AnchorWriterArgs]{
-		JobRow: &rivertype.JobRow{
-			CreatedAt: time.Now(),
-		},
-	}
-
+	// Write this hour's anchor directly (synchronously). It takes the same lock as the periodic job, and fails
+	// rather than waits while another anchor write holds it.
 	fmt.Println("Writing audit anchor to S3...")
-	if err := worker.Work(ctx, mockJob); err != nil {
+	if err := worker.WriteAnchor(context.Background(), time.Now()); err != nil {
 		return fmt.Errorf("failed to write anchor: %w", err)
 	}
 

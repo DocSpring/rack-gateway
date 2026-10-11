@@ -27,9 +27,10 @@ const (
 
 var firstHour = time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
 
-// writeAnchor runs the real anchor writer for the hour of at.
+// writeAnchor runs the real anchor writer for the hour of at. S3 stores the anchor a second after at.
 func writeAnchor(t *testing.T, database *gwdb.Database, bucket *fakes3.Bucket, at time.Time) {
 	t.Helper()
+	bucket.AdvanceTo(at)
 	worker := jobaudit.NewAnchorWriterWorker(database, bucket, testBucket, testChainID, 7)
 	job := &river.Job[jobaudit.AnchorWriterArgs]{JobRow: &rivertype.JobRow{CreatedAt: at}}
 	require.NoError(t, worker.Work(context.Background(), job))
@@ -84,13 +85,14 @@ func TestVerifyWarnsAboutUnanchoredEventsAndMissingHours(t *testing.T) {
 	bucket := fakes3.New(firstHour)
 	writeEvents(t, database, 2)
 	writeAnchor(t, database, bucket, firstHour)
+	writeAnchor(t, database, bucket, firstHour.Add(3*time.Hour)) // no anchors for two hours
 	writeEvents(t, database, 3)
 
 	report := verifyWithAnchors(t, database, bucket, firstHour.Add(4*time.Hour))
 	requireOK(t, report)
 	assert.Equal(t, 2, report.WarningCount, "warnings: %q", report.Warnings)
 	assert.Contains(t, strings.Join(report.Warnings, "\n"), "events 2..4 (3) were written after the latest anchor")
-	assert.Contains(t, strings.Join(report.Warnings, "\n"), "3 hours since the first anchor have no anchor")
+	assert.Contains(t, strings.Join(report.Warnings, "\n"), "2 hours since the first anchor have no anchor")
 }
 
 func TestVerifyDetectsAnAnchorThatDoesNotMatchTheEvent(t *testing.T) {
