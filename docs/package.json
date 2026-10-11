@@ -15,15 +15,16 @@
     "format": "biome format --write ."
   },
   "dependencies": {
-    "@astrojs/starlight": "^0.37.7",
-    "@pasqal-io/starlight-client-mermaid": "^0.1.0",
-    "astro": "^5.6.1",
-    "sharp": "^0.34.2",
-    "starlight-image-zoom": "^0.13.0",
-    "starlight-links-validator": "^0.18.0"
+    "@astrojs/markdown-remark": "^7.3.0",
+    "@astrojs/starlight": "^0.42.0",
+    "astro": "^7.2.10",
+    "mermaid": "^11.4.1",
+    "sharp": "^0.35.5",
+    "starlight-image-zoom": "^0.16.0",
+    "starlight-links-validator": "^0.26.0"
   },
   "devDependencies": {
-    "@biomejs/biome": "^1.9.4",
+    "@biomejs/biome": "^2.5.15",
     "tsx": "^4.21.0"
   }
 }

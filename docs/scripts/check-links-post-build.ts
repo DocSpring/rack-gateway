@@ -34,20 +34,19 @@ function extractLinks(html: string): string[] {
 
   // Extract href from <a> and <link> tags
   const hrefRegex = /<(?:a|link)[^>]+href=["']([^"']+)["']/gi;
-  let match: RegExpExecArray | null;
-  while ((match = hrefRegex.exec(html)) !== null) {
+  for (const match of html.matchAll(hrefRegex)) {
     allLinks.push(match[1]);
   }
 
   // Extract src from <img>, <script>, <video>, <audio>, <iframe>, <source>
   const srcRegex = /<(?:img|script|video|audio|iframe|source)[^>]+src=["']([^"']+)["']/gi;
-  while ((match = srcRegex.exec(html)) !== null) {
+  for (const match of html.matchAll(srcRegex)) {
     allLinks.push(match[1]);
   }
 
   // Extract srcset from responsive images
   const srcsetRegex = /srcset=["']([^"']+)["']/gi;
-  while ((match = srcsetRegex.exec(html)) !== null) {
+  for (const match of html.matchAll(srcsetRegex)) {
     const srcset = match[1];
     // srcset format: "url1 1x, url2 2x" or "url1 100w, url2 200w"
     for (const part of srcset.split(',')) {
@@ -120,7 +119,7 @@ function urlToFilePath(url: string, htmlDir: string, distDir: string): string | 
       const candidates = [
         join(distDir, path),
         join(distDir, path, 'index.html'),
-        join(distDir, path + '.html'),
+        join(distDir, `${path}.html`),
       ];
 
       for (const candidate of candidates) {
