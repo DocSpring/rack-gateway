@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"strings"
+
+	"github.com/DocSpring/rack-gateway/internal/cli/webauthn"
 )
 
 // errBranchApprovalNotConfirmed is returned when the user doesn't confirm a request found by branch alone.
@@ -21,9 +23,8 @@ func (w *deployApprovalWaiter) approve(rack string, request deployApprovalReques
 		}
 	}
 
-	approved, pin, err := approveDeployRequestWithPIN(
-		w.cmd, rack, request.PublicID, w.notes, w.cachedPIN, w.pinSummary(rack, request),
-	)
+	prompt := webauthn.Prompt{Summary: w.pinSummary(rack, request), Touch: approvalTouch(rack, &request, 0, 0)}
+	approved, pin, err := approveDeployRequestWithPIN(w.cmd, rack, request.PublicID, w.notes, w.cachedPIN, prompt)
 	if err != nil {
 		return err
 	}

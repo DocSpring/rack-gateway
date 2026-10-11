@@ -129,7 +129,7 @@ func runOsascript(ctx context.Context, script, message string) (string, string, 
 }
 
 // dialogMessage renders the dialog text. Everything that comes from outside the dialog (the summary, the
-// gateway, the command line) goes through dialogText, so it can't add lines or reorder what the dialog shows.
+// gateway, the command line) goes through SingleLine, so it can't add lines or reorder what the dialog shows.
 func dialogMessage(req Request) string {
 	gateway := strings.TrimPrefix(strings.TrimPrefix(req.Gateway, "https://"), "http://")
 
@@ -138,7 +138,7 @@ func dialogMessage(req Request) string {
 	if len(req.Summary) > 0 {
 		message.WriteString("Approving:\n" + describeSummary(req.Summary) + "\n\n")
 	}
-	message.WriteString("Gateway: " + dialogText(gateway, maxLineLength) + "\n")
+	message.WriteString("Gateway: " + SingleLine(gateway, maxLineLength) + "\n")
 	message.WriteString("Command: " + describeCommand(req.Args))
 	return message.String()
 }
@@ -153,7 +153,7 @@ func describeSummary(lines []string) string {
 
 	bullets := make([]string, 0, len(shown)+1)
 	for _, line := range shown {
-		bullets = append(bullets, "• "+dialogText(line, maxLineLength))
+		bullets = append(bullets, "• "+SingleLine(line, maxLineLength))
 	}
 	if hidden := len(lines) - len(shown); hidden > 0 {
 		bullets = append(bullets, fmt.Sprintf("• ...and %d more", hidden))
@@ -185,7 +185,7 @@ func describeCommand(args []string) string {
 			shown = append(shown, flag)
 		}
 	}
-	return dialogText(strings.Join(shown, " "), maxCommandLength)
+	return SingleLine(strings.Join(shown, " "), maxCommandLength)
 }
 
 // maskAssignment masks the value of a KEY=value argument.
@@ -221,10 +221,10 @@ func isSecretFlag(name string) bool {
 	return false
 }
 
-// dialogText makes text safe for one line of the dialog: control characters (newlines, escape sequences),
-// Unicode line and paragraph separators and bidirectional overrides become '?', so the text can't add lines
-// or reorder what the dialog shows. Text longer than maxRunes is cut and ends in "...".
-func dialogText(s string, maxRunes int) string {
+// SingleLine makes text safe for one line of a dialog or notification: control characters (newlines, escape
+// sequences), Unicode line and paragraph separators and bidirectional overrides become '?', so the text can't add
+// lines or reorder what is shown. Text longer than maxRunes is cut and ends in "...".
+func SingleLine(s string, maxRunes int) string {
 	runes := []rune(s)
 	truncated := len(runes) > maxRunes
 	if truncated {

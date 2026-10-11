@@ -11,6 +11,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
+
+	"github.com/DocSpring/rack-gateway/internal/cli/webauthn"
 )
 
 // errAPITokenCannotApprove explains why approving with RACK_GATEWAY_API_TOKEN fails: the gateway only
@@ -294,7 +296,7 @@ func missingApps(rack string, apps approvalApps, found []rackApproval) []string 
 }
 
 // approveAllRequests approves the pending requests in turn: one PIN (cached after the first approval), then one
-// key touch per approval. The PIN dialog lists every one of them.
+// key touch per approval. The PIN dialog lists every one of them, and each touch says which approval it's for.
 func approveAllRequests(cmd *cobra.Command, pending []rackApproval, notes string, showRack bool) error {
 	summary := approvalSummary(pending)
 	var cachedPIN string
@@ -302,7 +304,8 @@ func approveAllRequests(cmd *cobra.Command, pending []rackApproval, notes string
 	for i, p := range pending {
 		printApprovalContext(cmd, p, i+1, len(pending))
 
-		approved, pin, err := approveDeployRequestWithPIN(cmd, p.rack, p.req.PublicID, notes, cachedPIN, summary)
+		prompt := webauthn.Prompt{Summary: summary, Touch: approvalTouch(p.rack, p.req, i+1, len(pending))}
+		approved, pin, err := approveDeployRequestWithPIN(cmd, p.rack, p.req.PublicID, notes, cachedPIN, prompt)
 		if err != nil {
 			return fmt.Errorf("failed to approve request on rack %s: %w", p.rack, err)
 		}
@@ -350,10 +353,10 @@ func printApprovalContext(cmd *cobra.Command, p rackApproval, current, total int
 	}
 }
 
-// approveDeployRequestWithPIN approves one request. pinSummary lists every approval the command makes, for the
-// PIN dialog (only shown when no PIN is cached yet).
+// approveDeployRequestWithPIN approves one request. prompt lists every approval the command makes, for the PIN
+// dialog (only shown when no PIN is cached yet), and says what the key touch approves.
 func approveDeployRequestWithPIN(
-	cmd *cobra.Command, rack, requestID, notes, cachedPIN string, pinSummary []string,
+	cmd *cobra.Command, rack, requestID, notes, cachedPIN string, prompt webauthn.Prompt,
 ) (*deployApprovalRequest, string, error) {
 	payload := map[string]interface{}{}
 	if notes != "" {
@@ -363,7 +366,7 @@ func approveDeployRequestWithPIN(
 	endpoint := fmt.Sprintf("/deploy-approval-requests/%s/approve", requestID)
 
 	// Get MFA auth with PIN caching
-	mfaAuth, pinUsed, err := getDeployApprovalMFAAuth(cmd, rack, cachedPIN, pinSummary)
+	mfaAuth, pinUsed, err := getDeployApprovalMFAAuth(cmd, rack, cachedPIN, prompt)
 	if err != nil {
 		return nil, "", err
 	}
@@ -377,7 +380,7 @@ func approveDeployRequestWithPIN(
 }
 
 func getDeployApprovalMFAAuth(
-	cmd *cobra.Command, rack, cachedPIN string, pinSummary []string,
+	cmd *cobra.Command, rack, cachedPIN string, prompt webauthn.Prompt,
 ) (string, string, error) {
 	if os.Getenv("RACK_GATEWAY_API_TOKEN") != "" {
 		return "", "", errAPITokenCannotApprove
@@ -388,7 +391,7 @@ func getDeployApprovalMFAAuth(
 		return "", "", err
 	}
 
-	return GetMFAAuthWithPIN(cmd, gatewayURL, bearer, rack, cachedPIN, pinSummary)
+	return GetMFAAuthWithPIN(cmd, gatewayURL, bearer, rack, cachedPIN, prompt)
 }
 
 func postDeployApprovalRequestWithMFA(

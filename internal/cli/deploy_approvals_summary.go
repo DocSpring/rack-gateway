@@ -26,6 +26,20 @@ func approvalTarget(req *deployApprovalRequest) string {
 	return displayText(req.App) + ", " + commit
 }
 
+// approvalTouch says what the security key touch for an approval is for, e.g. "approve api on staging (2 of 4)".
+// total is how many approvals the command makes, when it knows (0 otherwise).
+func approvalTouch(rack string, req *deployApprovalRequest, current, total int) string {
+	app := displayText(req.App)
+	if app == "" {
+		app = "request " + req.PublicID
+	}
+	touch := fmt.Sprintf("approve %s on %s", app, displayText(rack))
+	if total > 1 {
+		touch += fmt.Sprintf(" (%d of %d)", current, total)
+	}
+	return touch
+}
+
 // approvalSummaryLine describes one approval for the PIN dialog: the app, the rack, the commit and the message.
 func approvalSummaryLine(rack string, req *deployApprovalRequest) string {
 	app := displayText(req.App)
