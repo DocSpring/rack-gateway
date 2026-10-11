@@ -74,6 +74,13 @@ Request forwarding with WebSocket support:
   manifest from the query string too, which would bypass the gateway's checks
 - Sets `X-Convox-Actor` (user email or `token:<name>`); internal identity headers sent by clients are
   stripped by `middleware/internal_headers.go`
+- Protected env vars (the app's `protected_env_vars`) are refused on release
+  create unless the request names them in `X-Allow-Protected-Env` (`env set/unset --allow-protected`), the
+  caller is a user (never an API token) holding `convox:env:set_protected`, and inline MFA is verified on
+  that request even within the step-up window (`proxy/env_protected.go`). An inline proof is verified at
+  most once per request (`markInlineMFAVerified`): TOTP codes are single-use. Audit entries for protected
+  changes (`env.set_protected`, `env.unset_protected`) never contain values. The web env editor
+  (`handlers/api_handler_env.go`) still refuses protected keys
 - Client IPs: use `c.ClientIP()` in gin handlers and `netutil.ClientIP(r)` elsewhere. Both trust
   `X-Forwarded-For` only from `TRUSTED_PROXY_CIDRS`. Never parse forwarding headers yourself
 - Forwards all methods: GET, POST, PUT, PATCH, DELETE

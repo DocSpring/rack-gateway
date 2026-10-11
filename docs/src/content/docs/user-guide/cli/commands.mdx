@@ -186,12 +186,36 @@ rack-gateway env [command] -a <app>
 - `rack-gateway env set VAR=value -a <app>` - Set a variable
 - `rack-gateway env unset VAR -a <app>` - Remove a variable
 
+**Flags (`set` and `unset`):**
+- `--promote` - Promote the new release
+- `--allow-protected` - Change or remove the protected env vars named in the command (admins only, see below)
+
 **Example:**
 ```bash
 rack-gateway env -a myapp
 rack-gateway env set DATABASE_URL=postgres://... -a myapp
 rack-gateway env unset DEBUG -a myapp
 ```
+
+#### Protected env vars
+
+An app's protected env vars (set under **Apps → `{app}` → Settings**) are masked everywhere and can't be
+changed or removed by accident: `env set` and `env unset` refuse them. To rotate or remove one without
+unprotecting it, an admin names it in the command and passes `--allow-protected`:
+
+```bash
+rack-gateway env set DATABASE_URL=postgres://new-host/db --allow-protected -a myapp
+rack-gateway env unset LEGACY_API_URL --allow-protected -a myapp
+```
+
+- Only users holding `convox:env:set_protected` (admins) can do this. API tokens never can, whatever their
+  permissions, because they can't complete MFA.
+- Every such command asks for MFA (one code or key touch), even within the step-up window, and the gateway
+  verifies it on the request that changes the protected key.
+- Only the keys named on the command line are unlocked. Other protected keys stay as they are.
+- The gateway writes one audit log entry per protected key changed (`env.set_protected` or
+  `env.unset_protected`) and never logs the values.
+- The web UI's env editor still refuses protected keys.
 
 ### exec
 

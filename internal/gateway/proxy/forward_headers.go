@@ -37,8 +37,9 @@ func (s headerSet) has(name string) bool {
 //
 // Everything else is dropped: client credentials and cookies, actor and tenant overrides (X-Convox-Actor,
 // X-Convox-TID), X-Forwarded-*, hop-by-hop headers, Accept-Encoding (so the transport decompresses responses
-// before the gateway masks secrets in them), gateway-internal headers, and env headers (env changes must go
-// through the release body, where the gateway checks protected and secret keys).
+// before the gateway masks secrets in them), gateway-internal headers, env headers (env changes must go
+// through the release body, where the gateway checks protected and secret keys), and the
+// X-Allow-Protected-Env opt-in, which only the gateway reads.
 var forwardedClientHeaders = newHeaderSet(
 	// Sent by the SDK on every request
 	"Accept", "Content-Type", "User-Agent", "Version",

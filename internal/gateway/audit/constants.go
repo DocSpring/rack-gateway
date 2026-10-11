@@ -44,6 +44,7 @@ const (
 	ActionVerbRequireAllUsers    = "require_all_users"
 	ActionVerbUnlock             = "unlock"
 	ActionVerbUnset              = "unset"
+	ActionVerbUnsetProtected     = "unset_protected"
 	ActionVerbUpdateRoles        = "update_roles"
 	ActionVerbUserNotAuthorized  = "user_not_authorized"
 	ActionVerbValidate           = "validate"

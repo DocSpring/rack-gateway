@@ -122,6 +122,10 @@ Operations requiring step-up MFA are configured by your administrator, but commo
 
 After successful MFA verification, there's typically a window (default: 10 minutes) where additional step-up prompts aren't required. This is configurable by the gateway administrator.
 
+The window doesn't cover changes to protected env vars: `env set` and `env unset` with `--allow-protected` ask
+for MFA every time, and the gateway verifies it on the request that makes the change. See
+[Protected env vars](/user-guide/cli/commands/#protected-env-vars).
+
 ### One Key Touch Per Command
 
 The CLI asks for MFA once per command and sends that proof with every request the command makes. The first

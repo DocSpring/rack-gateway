@@ -93,6 +93,7 @@ The gateway creates two default channel configs:
 - `mfa_method.*`
 - `user.update_roles`
 - `api_token.*`
+- `env.*_protected`
 
 **#infrastructure**
 - `deploy_approval_request.*`
@@ -109,6 +110,7 @@ Action names use underscores (e.g., `deploy_approval_request.*`). Use the Audit 
 | `login.*_failed` | `login.oauth_failed`, `login.user_not_authorized` |
 | `mfa_method.*` | MFA enrollment events |
 | `api_token.*` | API token create/update/delete |
+| `env.*_protected` | Protected env var changes and removals (`env.set_protected`, `env.unset_protected`), including refused `--allow-protected` attempts while the step-up window is open |
 | `deploy_approval_request.*` | Request create/approve/reject |
 | `release.promote` | Release promotions |
 | `user.*` | User create/update/delete/lock/unlock |
