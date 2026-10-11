@@ -247,17 +247,33 @@ const (
 	// slower (observed: 30s timeouts stacked zombie promotes running 3-9
 	// minutes each while deploys hard-failed).
 	promoteForwardTimeout = 10 * time.Minute
+
+	// uploadForwardTimeout gives a build archive room to reach the rack: the gateway sends the whole archive, which
+	// can be hundreds of megabytes, before the rack answers.
+	uploadForwardTimeout = 10 * time.Minute
 )
 
 var promotePathPattern = regexp.MustCompile(`^/apps/[^/]+/releases/[^/]+/promote$`)
 
+// objectUploadRoute is where `convox build` uploads the app's source archive.
+const objectUploadRoute = "/apps/{app}/objects/tmp/{name}"
+
+// isObjectUpload reports whether r uploads a build archive to path.
+func isObjectUpload(r *http.Request, path string) bool {
+	return r.Method == http.MethodPost && rbac.KeyMatch3("/"+strings.TrimLeft(path, "/"), objectUploadRoute)
+}
+
 // forwardTimeout selects the upstream timeout for a forwarded rack API request.
 func forwardTimeout(r *http.Request, path string) time.Duration {
 	normalized := "/" + strings.TrimLeft(path, "/")
-	if r.Method == http.MethodPost && promotePathPattern.MatchString(normalized) {
+	switch {
+	case r.Method == http.MethodPost && promotePathPattern.MatchString(normalized):
 		return promoteForwardTimeout
+	case isObjectUpload(r, normalized):
+		return uploadForwardTimeout
+	default:
+		return defaultForwardTimeout
 	}
-	return defaultForwardTimeout
 }
 
 func (h *Handler) forwardRequest(

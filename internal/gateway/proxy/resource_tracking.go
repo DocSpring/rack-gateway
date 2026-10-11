@@ -151,7 +151,7 @@ func (h *Handler) captureObjectUpload(
 	obj map[string]interface{},
 	email string,
 ) {
-	if r.Method != http.MethodPost || !rbac.KeyMatch3(path, "/apps/{app}/objects/tmp/{name}") {
+	if !isObjectUpload(r, path) {
 		return
 	}
 

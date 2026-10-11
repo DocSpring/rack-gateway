@@ -10,8 +10,8 @@ import (
 )
 
 // Release promotes run for minutes on the rack API and cannot be canceled
-// server-side, so they get a long forward timeout; everything else keeps the
-// short default.
+// server-side, and a build archive upload sends the whole archive, so both get a
+// long forward timeout; everything else keeps the short default.
 func TestForwardTimeout(t *testing.T) {
 	cases := []struct {
 		name   string
@@ -47,6 +47,18 @@ func TestForwardTimeout(t *testing.T) {
 			name:   "other POSTs keep the default",
 			method: http.MethodPost,
 			path:   "/apps/myapp/builds",
+			want:   defaultForwardTimeout,
+		},
+		{
+			name:   "build archive upload gets the long timeout",
+			method: http.MethodPost,
+			path:   "/apps/myapp/objects/tmp/source.tgz",
+			want:   uploadForwardTimeout,
+		},
+		{
+			name:   "object GET keeps the default",
+			method: http.MethodGet,
+			path:   "/apps/myapp/objects/tmp/source.tgz",
 			want:   defaultForwardTimeout,
 		},
 		{
