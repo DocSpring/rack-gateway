@@ -1,29 +1,29 @@
-export type MockUser = {
+export interface MockUser {
   id: string;
   email: string;
   name: string;
   picture: string;
   verified_email: boolean;
-};
+}
 
-export type AuthorizationCodePayload = {
+export interface AuthorizationCodePayload {
   clientId: string;
   redirectUri: string;
   codeChallenge?: string;
   codeChallengeMethod?: string;
   user: MockUser;
   expires: number;
-};
+}
 
-export type AccessTokenPayload = {
+export interface AccessTokenPayload {
   user: MockUser;
   expires: number;
-};
+}
 
-export type TokenRequestBody = {
+export interface TokenRequestBody {
   grant_type?: string;
   code?: string;
   redirect_uri?: string;
   code_verifier?: string;
   client_id?: string;
-};
+}
