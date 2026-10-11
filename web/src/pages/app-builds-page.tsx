@@ -27,7 +27,7 @@ type Build = {
 }
 
 export function AppBuildsPage() {
-  const { app } = useParams({ from: '/apps/$app/builds' }) as { app: string }
+  const { app } = useParams({ from: '/_app/apps/$app/builds' }) as { app: string }
   const {
     data = [],
     isLoading,

@@ -26,7 +26,7 @@ async function rewriteHtmlFiles(dir) {
       // Rewrite srcset attributes (responsive images)
       content = content.replace(/srcset="\/(?!\/|rack-gateway)(.*?)"/g, `srcset="${BASE_PATH}/$1"`);
       // Also handle srcset with multiple sources separated by commas
-      content = content.replace(/srcset="([^"]*?)"/g, (match, srcset) => {
+      content = content.replace(/srcset="([^"]*?)"/g, (_match, srcset) => {
         const rewritten = srcset.replace(/(\s|^)\/(?!\/|rack-gateway)([^\s,]+)/g, `$1${BASE_PATH}/$2`);
         return `srcset="${rewritten}"`;
       });

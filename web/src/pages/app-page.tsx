@@ -3,7 +3,7 @@ import { useEffect } from 'react'
 import { PageLayout } from '../components/page-layout'
 
 export function AppPage() {
-  const { app } = useParams({ from: '/apps/$app' }) as { app: string }
+  const { app } = useParams({ from: '/_app/apps/$app' }) as { app: string }
   const location = useLocation()
   const navigate = useNavigate()
 

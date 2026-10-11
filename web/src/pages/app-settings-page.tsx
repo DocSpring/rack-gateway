@@ -10,7 +10,7 @@ import type { AppSettingsResponse } from '@/pages/app-settings/types'
 import { VCSCIProvidersCard } from '@/pages/app-settings/vcs-ci-providers-card'
 
 export function AppSettingsPage() {
-  const { app } = useParams({ from: '/apps/$app/settings' }) as { app: string }
+  const { app } = useParams({ from: '/_app/apps/$app/settings' }) as { app: string }
   const { user } = useAuth()
   const isAdmin = Boolean(user?.roles?.includes('admin'))
 

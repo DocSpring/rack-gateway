@@ -8,7 +8,7 @@ export default defineConfig({
       target: 'src/api/generated.ts',
       schemas: 'src/api/schemas',
       client: 'axios',
-      prettier: true,
+      formatter: 'prettier',
       override: {
         mutator: {
           path: 'src/api/http-client.ts',

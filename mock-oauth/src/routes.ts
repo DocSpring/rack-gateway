@@ -22,7 +22,7 @@ const resolveInternalBase = (req: Request): string =>
 const resolveBrowserBase = (req: Request): string =>
   process.env.OAUTH_BROWSER_BASE ?? `${req.protocol}://${req.get("host")}`;
 
-type UserSelectionParams = {
+interface UserSelectionParams {
   client_id?: string;
   redirect_uri?: string;
   response_type?: string;
@@ -30,7 +30,7 @@ type UserSelectionParams = {
   state?: string;
   code_challenge?: string;
   code_challenge_method?: string;
-};
+}
 
 export const registerRoutes = (app: Express): void => {
   app.get("/health", (_req: Request, res: Response) => {
@@ -150,7 +150,7 @@ export const registerRoutes = (app: Express): void => {
       });
     }
 
-    const token = authHeader.substring(7);
+    const token = authHeader.slice(7);
     const tokenData = accessTokens.get(token);
 
     if (!tokenData || tokenData.expires < Date.now()) {

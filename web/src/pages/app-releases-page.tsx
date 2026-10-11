@@ -23,7 +23,7 @@ type Release = {
   created_by?: string
 }
 export function AppReleasesPage() {
-  const { app } = useParams({ from: '/apps/$app/releases' }) as { app: string }
+  const { app } = useParams({ from: '/_app/apps/$app/releases' }) as { app: string }
   const {
     data = [],
     isLoading,

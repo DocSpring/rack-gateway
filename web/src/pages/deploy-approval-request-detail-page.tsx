@@ -17,7 +17,7 @@ import { useDeployApprovalAuditLogs } from '@/hooks/use-deploy-approval-audit-lo
 import { useDeployApprovalRequestData } from '@/hooks/use-deploy-approval-request-data'
 
 export function DeployApprovalRequestDetailPage() {
-  const { id } = useParams({ from: '/deploy-approval-requests/$id' }) as { id: string }
+  const { id } = useParams({ from: '/_app/deploy-approval-requests/$id' }) as { id: string }
   const queryClient = useQueryClient()
   const { handleStepUpError } = useStepUp()
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false)

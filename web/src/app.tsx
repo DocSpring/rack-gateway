@@ -90,14 +90,18 @@ function buildRouteTree() {
     component: CLIAuthErrorPage,
   })
 
-  // App layout route with nested pages
+  // Pathless layout for the signed-in pages. (A path: '/' route is an index route, which can't have children.)
   const layoutRoute = createRoute({
     getParentRoute: () => rootRoute,
-    path: '/',
+    id: '_app',
     component: Layout,
   })
 
-  // No separate index route; default redirect handled by Layout component
+  // The Layout component redirects '/' to the right first page
+  const homeRoute = createRoute({
+    getParentRoute: () => layoutRoute,
+    path: '/',
+  })
 
   const usersRoute = createRoute({
     getParentRoute: () => layoutRoute,
@@ -233,6 +237,7 @@ function buildRouteTree() {
   })
 
   const layoutChildren = [
+    homeRoute,
     rackRoute,
     instancesRoute,
     allBuildsRoute,
@@ -290,7 +295,7 @@ export function detectBasepath() {
   return base.replace(TRAILING_SLASH_RE, '')
 }
 
-function createAppRouter(basepath?: string) {
+export function createAppRouter(basepath?: string) {
   return createRouter({
     routeTree: buildRouteTree(),
     basepath: basepath ?? detectBasepath(),

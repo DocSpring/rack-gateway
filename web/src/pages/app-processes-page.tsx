@@ -22,7 +22,7 @@ import { DEFAULT_PER_PAGE } from '../lib/constants'
 import { QUERY_KEYS } from '../lib/query-keys'
 
 export function AppProcessesPage() {
-  const { app } = useParams({ from: '/apps/$app/processes' }) as {
+  const { app } = useParams({ from: '/_app/apps/$app/processes' }) as {
     app: string
   }
   const { user } = useAuth()

@@ -5,6 +5,6 @@
  * API for the Rack Gateway administration and proxy services.
  * OpenAPI spec version: 1.0
  */
-import type { HandlersRoleDescriptor } from './handlersRoleDescriptor';
+import type { HandlersRoleDescriptor } from "./handlersRoleDescriptor";
 
 export type GetAdminRoles200 = { [key: string]: HandlersRoleDescriptor };
