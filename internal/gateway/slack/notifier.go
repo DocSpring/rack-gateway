@@ -139,11 +139,12 @@ func matchGlob(pattern, text string) bool {
 	return matched
 }
 
-// formatAuditLogMessage formats an audit log into a Slack message that names the gateway
+// formatAuditLogMessage formats an audit log into a Slack message that names the gateway. Names, resources and
+// details come from users and requests, so each value is escaped where it's formatted.
 func (n *Notifier) formatAuditLogMessage(auditLog *db.AuditLog) (string, []map[string]interface{}) {
 	emoji := determineEmojiForAction(auditLog)
 	user := formatUserIdentifier(auditLog)
-	text := fmt.Sprintf("%s *%s* - %s", emoji, auditLog.Action, user)
+	text := fmt.Sprintf("%s *%s* - %s", emoji, escapeMrkdwn(auditLog.Action), user)
 
 	return identify(n.gateway, text, buildSlackBlocks(auditLog, emoji, user))
 }
@@ -212,27 +213,21 @@ func isFailureStatus(status string) bool {
 	return status == audit.StatusDenied || status == audit.StatusError || status == audit.StatusFailed
 }
 
-// formatUserIdentifier formats user identification string
+// formatUserIdentifier names the user or API token as escaped mrkdwn
 func formatUserIdentifier(auditLog *db.AuditLog) string {
 	if auditLog.APITokenName != "" {
-		return fmt.Sprintf("API Token: %s", auditLog.APITokenName)
+		return "API Token: " + escapeMrkdwn(auditLog.APITokenName)
 	}
 	if auditLog.UserName != "" {
-		return fmt.Sprintf("%s (%s)", auditLog.UserName, auditLog.UserEmail)
+		return fmt.Sprintf("%s (%s)", escapeMrkdwn(auditLog.UserName), escapeMrkdwn(auditLog.UserEmail))
 	}
-	return auditLog.UserEmail
+	return escapeMrkdwn(auditLog.UserEmail)
 }
 
 // buildSlackBlocks constructs the full Slack message block structure
 func buildSlackBlocks(auditLog *db.AuditLog, emoji, user string) []map[string]interface{} {
 	blocks := []map[string]interface{}{
-		{
-			"type": "section",
-			"text": map[string]interface{}{
-				"type": "mrkdwn",
-				"text": fmt.Sprintf("*%s %s*", emoji, auditLog.Action),
-			},
-		},
+		mrkdwnSection(fmt.Sprintf("*%s %s*", emoji, escapeMrkdwn(auditLog.Action))),
 		buildFieldsBlock(auditLog, user),
 	}
 
@@ -244,23 +239,14 @@ func buildSlackBlocks(auditLog *db.AuditLog, emoji, user string) []map[string]in
 	return blocks
 }
 
-// buildFieldsBlock creates the fields section with user, status, and time
+// buildFieldsBlock creates the fields section with user (already mrkdwn), status, and time
 func buildFieldsBlock(auditLog *db.AuditLog, user string) map[string]interface{} {
 	return map[string]interface{}{
 		"type": "section",
 		"fields": []map[string]interface{}{
-			{
-				"type": "mrkdwn",
-				"text": fmt.Sprintf("*User:*\n%s", user),
-			},
-			{
-				"type": "mrkdwn",
-				"text": fmt.Sprintf("*Status:*\n%s", auditLog.Status),
-			},
-			{
-				"type": "mrkdwn",
-				"text": fmt.Sprintf("*Time:*\n%s", auditLog.Timestamp.Format(time.RFC3339)),
-			},
+			mrkdwnElement("*User:*\n" + user),
+			mrkdwnElement("*Status:*\n" + escapeMrkdwn(auditLog.Status)),
+			mrkdwnElement("*Time:*\n" + auditLog.Timestamp.Format(time.RFC3339)),
 		},
 	}
 }
@@ -272,15 +258,12 @@ func appendResourceBlock(blocks []map[string]interface{}, auditLog *db.AuditLog)
 	}
 
 	fields := blocks[1]["fields"].([]map[string]interface{})
-	resourceText := auditLog.Resource
+	resourceText := escapeMrkdwn(auditLog.Resource)
 	if auditLog.ResourceType != "" && auditLog.Resource != "" {
-		resourceText = fmt.Sprintf("%s (%s)", auditLog.Resource, auditLog.ResourceType)
+		resourceText = fmt.Sprintf("%s (%s)", resourceText, escapeMrkdwn(auditLog.ResourceType))
 	}
 
-	newField := map[string]interface{}{
-		"type": "mrkdwn",
-		"text": fmt.Sprintf("*Resource:*\n%s", resourceText),
-	}
+	newField := mrkdwnElement("*Resource:*\n" + resourceText)
 
 	// Insert resource field after user, before status
 	blocks[1]["fields"] = append(fields[:1], append([]map[string]interface{}{newField}, fields[1:]...)...)
@@ -288,19 +271,14 @@ func appendResourceBlock(blocks []map[string]interface{}, auditLog *db.AuditLog)
 	return blocks
 }
 
-// appendDetailsBlock adds details section if present
+// appendDetailsBlock adds details section if present. The details are a code block whose value can't close it
+// (see codeBlock).
 func appendDetailsBlock(blocks []map[string]interface{}, auditLog *db.AuditLog) []map[string]interface{} {
 	if auditLog.Details == "" {
 		return blocks
 	}
 
-	return append(blocks, map[string]interface{}{
-		"type": "section",
-		"text": map[string]interface{}{
-			"type": "mrkdwn",
-			"text": fmt.Sprintf("*Details:*\n```%s```", auditLog.Details),
-		},
-	})
+	return append(blocks, mrkdwnSection("*Details:*\n"+codeBlock(auditLog.Details)))
 }
 
 // appendContextBlock adds context section with IP if present
@@ -310,12 +288,7 @@ func appendContextBlock(blocks []map[string]interface{}, auditLog *db.AuditLog) 
 	}
 
 	return append(blocks, map[string]interface{}{
-		"type": "context",
-		"elements": []map[string]interface{}{
-			{
-				"type": "mrkdwn",
-				"text": fmt.Sprintf("IP: %s", auditLog.IPAddress),
-			},
-		},
+		"type":     "context",
+		"elements": []map[string]interface{}{mrkdwnElement("IP: " + escapeMrkdwn(auditLog.IPAddress))},
 	})
 }

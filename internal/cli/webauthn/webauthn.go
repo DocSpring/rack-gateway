@@ -24,49 +24,20 @@ func GetAssertion(options AssertionOptions) (*AssertionResponse, error) {
 
 // GetAssertionWithCachedPIN authenticates with FIDO2 device, optionally using a cached PIN.
 // Returns the assertion response and the PIN used (for caching in subsequent calls).
-// If cachedPIN is empty, prompts the user for PIN. Otherwise uses the cached PIN.
+// If cachedPIN is empty, asks for the PIN when the key has one. Otherwise uses the cached PIN.
 func GetAssertionWithCachedPIN(options AssertionOptions, cachedPIN string) (*AssertionResponse, string, error) {
 	device, err := openFirstFIDODevice()
 	if err != nil {
 		return nil, "", err
 	}
 
-	allowList, err := decodeCredentialIDs(options.AllowCredentials)
-	if err != nil {
-		return nil, "", err
+	pinRequest := pinentry.Request{Gateway: options.Origin, Args: os.Args, Summary: options.Prompt.Summary}
+	flow := assertionFlow{
+		key:            device,
+		readPIN:        func() (string, error) { return pinentry.ReadPIN(pinRequest) },
+		infoRetryDelay: infoRetryDelay,
 	}
-
-	var pin string
-	if cachedPIN != "" {
-		pin = cachedPIN
-		// Still need to filter credentials for device
-		allowList, err = filterCredentialsOnly(device, options.RPID, allowList, pin)
-		if err != nil {
-			return nil, "", err
-		}
-	} else {
-		pinRequest := pinentry.Request{Gateway: options.Origin, Args: os.Args, Summary: options.Prompt.Summary}
-		allowList, pin, err = filterCredentialsForDevice(device, options.RPID, allowList, pinRequest)
-		if err != nil {
-			return nil, "", err
-		}
-	}
-
-	clientDataJSON, clientDataHash, err := buildClientData(options)
-	if err != nil {
-		return nil, "", err
-	}
-
-	assertionOpts := buildAssertionOptions(options)
-
-	promptTouch(options)
-	assertion, err := device.Assertion(options.RPID, clientDataHash, allowList, pin, assertionOpts)
-	if err != nil {
-		return nil, "", fmt.Errorf("failed to get assertion: %w", err)
-	}
-
-	resp, err := buildAssertionResponse(assertion, clientDataJSON)
-	return resp, pin, err
+	return flow.getAssertion(options, cachedPIN)
 }
 
 // promptTouch tells the user a touch is needed, every time one is: on the terminal, and in a desktop notification
@@ -104,54 +75,6 @@ func decodeCredentialIDs(ids []string) ([][]byte, error) {
 		allowList = append(allowList, credBytes)
 	}
 	return allowList, nil
-}
-
-func filterCredentialsForDevice(
-	device *libfido2.Device, rpID string, allowList [][]byte, pinRequest pinentry.Request,
-) ([][]byte, string, error) {
-	info, err := device.Info()
-	if err != nil {
-		return allowList, "", nil
-	}
-
-	pin, err := maybePromptForPIN(info, pinRequest)
-	if err != nil {
-		return nil, "", err
-	}
-
-	filtered, err := filterCredentialsOnly(device, rpID, allowList, pin)
-	if err != nil {
-		return nil, "", err
-	}
-	return filtered, pin, nil
-}
-
-// filterCredentialsOnly filters credentials for device using an already-known PIN.
-func filterCredentialsOnly(device *libfido2.Device, rpID string, allowList [][]byte, pin string) ([][]byte, error) {
-	deviceCreds, err := device.Credentials(rpID, pin)
-	if err != nil {
-		return allowList, nil
-	}
-
-	if len(deviceCreds) == 0 {
-		return nil, fmt.Errorf("this security key has no credentials registered for this service")
-	}
-
-	filtered, err := intersectCredentialLists(allowList, deviceCreds)
-	if err != nil {
-		return nil, err
-	}
-	fmt.Fprintf(os.Stderr, "Found %d matching credential(s) on this device\n", len(filtered))
-	return filtered, nil
-}
-
-func maybePromptForPIN(info *libfido2.DeviceInfo, pinRequest pinentry.Request) (string, error) {
-	for _, opt := range info.Options {
-		if opt.Name == "clientPin" && opt.Value == libfido2.True {
-			return pinentry.ReadPIN(pinRequest)
-		}
-	}
-	return "", nil
 }
 
 func intersectCredentialLists(allowList [][]byte, deviceCreds []*libfido2.Credential) ([][]byte, error) {
@@ -202,10 +125,14 @@ func buildClientData(options AssertionOptions) ([]byte, []byte, error) {
 }
 
 func buildAssertionOptions(options AssertionOptions) *libfido2.AssertionOpts {
-	if options.UserVerification != "required" {
+	if !requiresUserVerification(options) {
 		return nil
 	}
 	return &libfido2.AssertionOpts{UV: libfido2.True}
+}
+
+func requiresUserVerification(options AssertionOptions) bool {
+	return options.UserVerification == "required"
 }
 
 func buildAssertionResponse(assertion *libfido2.Assertion, clientDataJSON []byte) (*AssertionResponse, error) {
