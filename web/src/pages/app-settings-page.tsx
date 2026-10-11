@@ -77,6 +77,18 @@ export function AppSettingsPage() {
         <div className="grid grid-cols-2 gap-12">
           <StringArrayCard
             app={app}
+            description="Audit logs and Slack notifications show the values of these environment variables and redact all others. Secret and protected values are always redacted."
+            disabled={!isAdmin}
+            pathSegment="audit-visible-env-vars"
+            placeholder="e.g. RAILS_ENV"
+            settingKey="audit_visible_env_vars"
+            settings={appSettings}
+            title="Environment Variables Shown in Audit Logs"
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-12">
+          <StringArrayCard
+            app={app}
             description="The exact commands a CI/CD token can run during an approved deploy request. An empty list allows none."
             disabled={!isAdmin}
             pathSegment="approved-deploy-commands"

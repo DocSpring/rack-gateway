@@ -51,16 +51,6 @@ func TestMapHttpStatusToStatus(t *testing.T) {
 	})
 }
 
-func TestRedactEnvVars(t *testing.T) {
-	database := dbtest.NewDatabase(t)
-	logger := NewLogger(database)
-
-	vars := map[string]string{"FOO": "bar", "SECRET_TOKEN": "abc"}
-	red := logger.RedactEnvVars(vars)
-	assert.Equal(t, "[REDACTED]", red["FOO"])
-	assert.Equal(t, "[REDACTED]", red["SECRET_TOKEN"])
-}
-
 func TestLogRequest(t *testing.T) {
 	database := dbtest.NewDatabase(t)
 	logger := NewLogger(database)

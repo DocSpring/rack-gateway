@@ -332,8 +332,13 @@ func TestProtectedEnvUnsetRemovesOnlyOptedInKeys(t *testing.T) {
 	require.Equal(t, `{"old":"[REDACTED]","new":"[REDACTED]"}`, entry.Details)
 }
 
+// Protected values stay redacted even when audit_visible_env_vars lists their keys.
 func TestLogEnvDiffsRedactsProtectedValues(t *testing.T) {
 	h, database, _ := newProxyForEnvTest(t)
+	app := "my-app"
+	require.NoError(t, database.UpsertSetting(
+		&app, settings.KeyAuditVisibleEnvVars, []string{"ADMIN_PASSWORD", "DATABASE_URL", "PORT"}, nil,
+	))
 	req := httptest.NewRequest(http.MethodPost, "/apps/my-app/releases", nil)
 	h.logEnvDiffs(req, "admin@test.com", "default", []envutil.EnvDiff{
 		{Key: "ADMIN_PASSWORD", OldVal: "old-value", NewVal: "new-value", Protected: true},

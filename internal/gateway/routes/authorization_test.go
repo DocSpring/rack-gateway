@@ -166,6 +166,7 @@ var adminOnlyCalls = []routeCall{
 	{http.MethodPut, "/api/v1/settings/deploy-approvals", map[string]interface{}{"deploy_approvals_enabled": false}},
 	{http.MethodPut, "/api/v1/settings/mfa-configuration", map[string]interface{}{"mfa_require_all_users": false}},
 	{http.MethodPut, "/api/v1/apps/web/settings/protected-env-vars", []string{}},
+	{http.MethodPut, "/api/v1/apps/web/settings/audit-visible-env-vars", []string{"PORT"}},
 	{http.MethodGet, "/api/v1/jobs", nil},
 	{http.MethodGet, "/api/v1/deploy-approval-requests", nil},
 	{http.MethodPost, "/api/v1/deploy-approval-requests/00000000-0000-0000-0000-000000000000/approve", nil},

@@ -140,6 +140,9 @@ Messages include:
 - Status
 - Timestamp
 - Context fields (when available)
+- The audit entry's details. For env var changes, values are `[REDACTED]` unless the app lists the key in
+  `audit_visible_env_vars`; rack parameter changes name the parameters only. See
+  [Secret Redaction](/security/compliance/audit-trail/#secret-redaction).
 
 Example action:
 

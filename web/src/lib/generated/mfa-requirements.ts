@@ -26,6 +26,12 @@ export const HTTP_ROUTE_MFA_REQUIREMENTS: HttpRouteMfaRequirement[] = [
   },
   {
     method: "DELETE",
+    pattern: "/api/v1/apps/:app/settings/audit-visible-env-vars",
+    permissions: ["gateway:setting:audit_visible_env_vars"],
+    mfaLevel: "step_up",
+  },
+  {
+    method: "DELETE",
     pattern: "/api/v1/apps/:app/settings/protected-env-vars",
     permissions: ["gateway:setting:protected_env_vars"],
     mfaLevel: "step_up",
@@ -454,6 +460,12 @@ export const HTTP_ROUTE_MFA_REQUIREMENTS: HttpRouteMfaRequirement[] = [
     method: "PUT",
     pattern: "/api/v1/apps/:app/settings/approved-deploy-commands",
     permissions: ["gateway:setting:approved_deploy_commands"],
+    mfaLevel: "step_up",
+  },
+  {
+    method: "PUT",
+    pattern: "/api/v1/apps/:app/settings/audit-visible-env-vars",
+    permissions: ["gateway:setting:audit_visible_env_vars"],
     mfaLevel: "step_up",
   },
   {

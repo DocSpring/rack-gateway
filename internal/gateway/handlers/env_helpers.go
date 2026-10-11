@@ -14,38 +14,59 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/rackcert"
 )
 
-func (h *APIHandler) secretAndProtectedKeys(app string) ([]string, map[string]struct{}) {
+// secretAndProtectedKeys returns the app's secret env vars (its secret_env_vars and CONVOX_SECRET_ENV_VARS) and
+// protected ones. It fails when the app's settings can't be read: guessing would unmask or unprotect keys.
+func (h *APIHandler) secretAndProtectedKeys(app string) ([]string, map[string]struct{}, error) {
 	extra := make([]string, 0)
 	seen := make(map[string]struct{})
 
-	appendUniqueKeys(&extra, seen, h.secretEnvVarList(app))
+	secrets, err := h.secretEnvVarList(app)
+	if err != nil {
+		return nil, nil, err
+	}
+	appendUniqueKeys(&extra, seen, secrets)
 	appendUniqueKeys(&extra, seen, parseEnvList(os.Getenv("CONVOX_SECRET_ENV_VARS")))
 
-	protected := h.protectedEnvVarMap(app, seen, &extra)
-
-	return extra, protected
-}
-
-func (h *APIHandler) secretEnvVarList(app string) []string {
-	if h.settingsService == nil {
-		return nil
-	}
-	values, err := h.settingsService.GetSecretEnvVars(app)
+	protected, err := h.protectedEnvVarMap(app, seen, &extra)
 	if err != nil {
-		return nil
+		return nil, nil, err
 	}
-	return values
+	return extra, protected, nil
 }
 
-func (h *APIHandler) protectedEnvVarMap(app string, seen map[string]struct{}, extra *[]string) map[string]struct{} {
+// auditVisibleKeys returns the env vars whose values the app's env change audit entries may show. When the
+// app's settings can't be read, none are shown.
+func (h *APIHandler) auditVisibleKeys(app string) envutil.AuditVisibleKeys {
+	if h.settingsService == nil {
+		return envutil.AuditVisibleKeys{}
+	}
+	keys, err := envutil.LoadAuditVisibleKeys(
+		h.settingsService, app, parseEnvList(os.Getenv("CONVOX_SECRET_ENV_VARS")),
+	)
+	if err != nil {
+		log.Printf(`{"level":"error","event":"audit_env_settings_failed","app":%q,"error":%q}`, app, err.Error())
+	}
+	return keys
+}
+
+func (h *APIHandler) secretEnvVarList(app string) ([]string, error) {
+	if h.settingsService == nil {
+		return nil, nil
+	}
+	return h.settingsService.GetSecretEnvVars(app)
+}
+
+func (h *APIHandler) protectedEnvVarMap(
+	app string, seen map[string]struct{}, extra *[]string,
+) (map[string]struct{}, error) {
 	protected := make(map[string]struct{})
 	if h.settingsService == nil {
-		return protected
+		return protected, nil
 	}
 
 	values, err := h.settingsService.GetProtectedEnvVars(app)
 	if err != nil {
-		return protected
+		return nil, err
 	}
 
 	for _, value := range values {
@@ -57,7 +78,7 @@ func (h *APIHandler) protectedEnvVarMap(app string, seen map[string]struct{}, ex
 		appendUniqueNormalized(extra, seen, trim, upper)
 	}
 
-	return protected
+	return protected, nil
 }
 
 func appendUniqueKeys(extra *[]string, seen map[string]struct{}, values []string) {

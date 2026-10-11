@@ -56,6 +56,8 @@ App-specific settings are **not** on this page. Go to **Apps → `{app}` → Set
 
 - VCS/CI deploy settings (repo, branch, approval job name)
 - Protected and secret environment variables
+- Environment variables shown in audit logs: every other env value is `[REDACTED]` in the audit log and Slack
+  (see [Secret Redaction](/security/compliance/audit-trail/#secret-redaction))
 - Approved deploy commands
 - Service image patterns
 

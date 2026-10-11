@@ -89,41 +89,41 @@ Every API request generates an audit log entry:
 
 ## Secret Redaction
 
-Sensitive data is automatically redacted before logging:
+The gateway leaves sensitive values out of audit entries when it writes them, so they never reach the database,
+stdout, CloudWatch or Slack:
 
-### Redacted Patterns
-
-| Pattern | Example | Redacted As |
-|---------|---------|-------------|
-| Secrets/tokens/passwords | `PASSWORD=hunter2` | `PASSWORD=[REDACTED]` |
-| Auth headers/cookies | `Authorization: Bearer ...` | `[REDACTED]` |
-| API/client secrets | `CLIENT_SECRET=...` | `[REDACTED]` |
-
-### Redaction Rules
-
-```go
-// Built-in redaction patterns
-var redactPatterns = []string{
-    `(?i)(secret|token|password|key|authorization|cookie|set-cookie|session)`,
-    `(?i)(api[-_]?key|api[-_]?secret|client[-_]?secret)`,
-    `(?i)(bearer|jwt|auth)`,
-}
-```
-
-<Aside type="tip">
-Redaction happens before any logging, including stdout and database storage. Secrets never appear in logs.
-</Aside>
+| Data | What's logged |
+|------|---------------|
+| Env var values | `[REDACTED]`, unless the app's `audit_visible_env_vars` lists the key (see below) |
+| Rack parameter values (`rack params set`) | The names of the changed parameters; values are `[REDACTED]` |
+| Query parameters carrying login codes, OAuth values or tokens | `[REDACTED]` |
+| Request bodies | Not logged |
 
 ### Environment Variable Changes
 
-Every env var a release changes gets its own entry, with the resource `app/KEY` and the old and new values in
-`details`:
+Every env var a release changes gets its own entry, with the resource `app/KEY` and `details` of
+`{"old":"[REDACTED]","new":"[REDACTED]"}`:
 
-| Action | Change | Values logged |
-|--------|--------|---------------|
-| `env.set`, `env.unset` | Ordinary env var | Yes |
-| `secret.set`, `secret.unset` | Secret env var | `[REDACTED]` |
-| `env.set_protected`, `env.unset_protected` | Protected env var, changed with `--allow-protected` | `[REDACTED]` |
+| Action | Change |
+|--------|--------|
+| `env.set`, `env.unset` | Ordinary env var |
+| `secret.set`, `secret.unset` | Secret env var |
+| `env.set_protected`, `env.unset_protected` | Protected env var, changed with `--allow-protected` |
+
+Values are redacted whatever the key's name: a password or a connection string under an ordinary name such as
+`DATABASE_URL` is redacted too. To see the values of harmless settings such as `PORT` or `RAILS_ENV` in the audit
+log and Slack, list them in the app's **Environment Variables Shown in Audit Logs** setting
+(`audit_visible_env_vars`, under **Apps → `{app}` → Settings**). Names match exactly, ignoring case. A listed key
+is still redacted when it is secret (its name contains `SECRET` or `TOKEN` or ends in `_KEY` or `_KEY_ID`, or it is
+in the app's `secret_env_vars` or `CONVOX_SECRET_ENV_VARS`) or protected (`protected_env_vars`).
+
+<Aside type="caution">
+Earlier gateway versions logged the values of env vars that weren't secret or protected, and every rack
+parameter value (also emailed to admins). Those entries keep them: `details` is part of each entry's hash chain
+and the table is append-only, so they can't be rewritten. Slack messages and emails already sent keep them too. If
+a credential was changed under a name that didn't look secret (such as `DATABASE_URL` or `SMTP_PASSWORD`), or set
+as a rack parameter, rotate it.
+</Aside>
 
 Refused protected changes are logged per key with `status: denied`: without `--allow-protected` as `env.set`,
 and `--allow-protected` attempts refused for permissions, or for MFA while the session's step-up window is open,
@@ -264,15 +264,15 @@ ORDER BY day DESC;
 
 | Category | What's Redacted |
 |----------|-----------------|
-| **Environment Variables** | Values |
+| **Environment Variables** | Values, unless listed in `audit_visible_env_vars` |
+| **Rack Parameters** | Values |
 | **API Tokens** | Token strings |
-| **Build Logs** | Secrets in output |
-| **Request Bodies** | Sensitive fields |
 
 ### Not Logged
 
 | Category | Reason |
 |----------|--------|
+| **Request Bodies** | May carry secrets; the relevant changes are logged on their own |
 | **Health Checks** | Too frequent, not useful |
 | **Static Assets** | No security value |
 | **Internal Metrics** | System-level only |
