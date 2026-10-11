@@ -56,11 +56,16 @@ func newCreateApprovalFixture(t *testing.T) *createApprovalFixture {
 
 func (f *createApprovalFixture) create(t *testing.T, commit string) *http.Response {
 	t.Helper()
+	return f.createOnBranch(t, commit, "feature/deploy")
+}
+
+func (f *createApprovalFixture) createOnBranch(t *testing.T, commit, branch string) *http.Response {
+	t.Helper()
 	payload, err := json.Marshal(map[string]string{
 		"message":             "Deploy release",
 		"app":                 "myapp",
 		"git_commit_hash":     commit,
-		"git_branch":          "feature/deploy",
+		"git_branch":          branch,
 		"target_api_token_id": f.token.PublicID,
 	})
 	require.NoError(t, err)

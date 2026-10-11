@@ -92,7 +92,7 @@ func (h *APIHandler) CreateDeployApprovalRequest(c *gin.Context) {
 		return
 	}
 
-	h.postPRCommentAsync(c, app, prURL, record.PublicID)
+	h.postPRCommentAsync(c, app, prURL, record.PublicID, record.GitCommitHash)
 	c.JSON(http.StatusCreated, toDeployApprovalRequestResponse(record))
 }
 

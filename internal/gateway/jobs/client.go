@@ -44,6 +44,8 @@ type Dependencies struct {
 	// arguments, which are persisted in river_job and returned by the jobs API.
 	CircleCIToken string
 	GitHubToken   string
+	// GitHubAPIURL is the GitHub REST API root ("" for api.github.com).
+	GitHubAPIURL string
 	// DeployApprovalPendingMaxAge is how long a deploy approval request can stay pending (0: forever).
 	DeployApprovalPendingMaxAge time.Duration
 }
@@ -83,7 +85,7 @@ func NewClient(pool *pgxpool.Pool, deps *Dependencies, auditAnchorConfig *AuditA
 
 	// CI/GitHub workers
 	river.AddWorker(workers, jobcircleci.NewApproveJobWorker(deps.Database, deps.CircleCIToken))
-	river.AddWorker(workers, jobgithub.NewPostPRCommentWorker(deps.GitHubToken))
+	river.AddWorker(workers, jobgithub.NewPostPRCommentWorker(deps.GitHubToken, deps.GitHubAPIURL))
 
 	periodicJobs, err := setupPeriodicJobs(workers, deps, auditAnchorConfig)
 	if err != nil {

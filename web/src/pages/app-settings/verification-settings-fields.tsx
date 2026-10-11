@@ -12,6 +12,7 @@ type VerificationSettingsFieldsProps = {
   displayRequirePRForBranch: boolean
   displayDefaultBranch: string
   displayVerifyGitCommitMode: string
+  displayVcsRepo: string
   onToggleGithubVerification: (value: boolean) => void
   onToggleAllowDeployFromDefaultBranch: (value: boolean) => void
   onToggleRequirePRForBranch: (value: boolean) => void
@@ -28,6 +29,7 @@ export function VerificationSettingsFields({
   displayRequirePRForBranch,
   displayDefaultBranch,
   displayVerifyGitCommitMode,
+  displayVcsRepo,
   onToggleGithubVerification,
   onToggleAllowDeployFromDefaultBranch,
   onToggleRequirePRForBranch,
@@ -35,16 +37,28 @@ export function VerificationSettingsFields({
   onChangeVerifyGitCommitMode,
 }: VerificationSettingsFieldsProps) {
   const sectionDisabled = disabled || !githubAvailable
+  // Verification can always be turned off, even when the gateway can't run it.
+  const verificationToggleDisabled = disabled || !(githubAvailable || displayGithubVerification)
+  const missing = missingVerificationConfig(githubAvailable, displayVcsRepo)
 
   return (
     <div className="space-y-4">
+      {displayGithubVerification && missing && (
+        <p
+          className="rounded-md border border-destructive/50 p-3 text-destructive text-sm"
+          role="alert"
+        >
+          Deploy approval requests for this app are refused: GitHub verification is on, but{' '}
+          {missing}. Set it, or turn off GitHub verification.
+        </p>
+      )}
       <div className="space-y-4">
         <label
-          className={`flex items-center gap-3 ${sectionDisabled ? 'cursor-not-allowed opacity-50' : ''}`}
+          className={`flex items-center gap-3 ${verificationToggleDisabled ? 'cursor-not-allowed opacity-50' : ''}`}
         >
           <input
             checked={displayGithubVerification}
-            disabled={sectionDisabled}
+            disabled={verificationToggleDisabled}
             onChange={(event) => onToggleGithubVerification(event.target.checked)}
             type="checkbox"
           />
@@ -127,4 +141,17 @@ export function VerificationSettingsFields({
       </div>
     </div>
   )
+}
+
+// missingVerificationConfig describes what GitHub verification needs but doesn't have (matching the gateway's
+// check when it creates a request), or returns ''.
+function missingVerificationConfig(githubAvailable: boolean, vcsRepo: string): string {
+  const missing: string[] = []
+  if (!githubAvailable) {
+    missing.push('the gateway has no GITHUB_TOKEN')
+  }
+  if (!vcsRepo.trim()) {
+    missing.push('no GitHub repository is set')
+  }
+  return missing.join(' and ')
 }

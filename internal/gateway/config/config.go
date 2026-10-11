@@ -36,6 +36,7 @@ type Config struct {
 	RackTLSPinningEnabled bool
 	TrustedProxies        []string
 	GitHubToken           string
+	GitHubAPIURL          string
 	CircleCIToken         string
 	DBMaxOpenConns        int
 	DBMaxIdleConns        int
@@ -183,6 +184,7 @@ func (c *Config) loadTrustedProxies() {
 
 func (c *Config) loadIntegrationTokens() {
 	c.GitHubToken = strings.TrimSpace(getEnv("GITHUB_TOKEN", ""))
+	c.GitHubAPIURL = strings.TrimSpace(getEnv("GITHUB_API_URL", ""))
 	c.CircleCIToken = strings.TrimSpace(getEnv("CIRCLECI_TOKEN", ""))
 }
 
