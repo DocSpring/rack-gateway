@@ -59,3 +59,6 @@ scripts/cli-e2e-testdata/convox.valid-image-tag.yml
 
 # Renamify workspace
 .renamify/
+
+# Claude Code agent worktrees
+.claude/worktrees/

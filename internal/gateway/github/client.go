@@ -22,11 +22,16 @@ type Client struct {
 	httpClient *http.Client
 }
 
-// NewClient creates a new GitHub API client
-func NewClient(token string) *Client {
+// NewClient creates a GitHub API client. apiBaseURL is the REST API root (GITHUB_API_URL), e.g. for GitHub
+// Enterprise; empty means api.github.com.
+func NewClient(token, apiBaseURL string) *Client {
+	apiBaseURL = strings.TrimRight(strings.TrimSpace(apiBaseURL), "/")
+	if apiBaseURL == "" {
+		apiBaseURL = defaultAPIBaseURL
+	}
 	return &Client{
 		token:      token,
-		apiBaseURL: defaultAPIBaseURL,
+		apiBaseURL: apiBaseURL,
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},

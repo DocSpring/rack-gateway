@@ -39,8 +39,7 @@ func newVerifyServer(t *testing.T, compareStatus string) (*Client, *[]string) {
 		}
 	}))
 	t.Cleanup(server.Close)
-	client := NewClient("token")
-	client.apiBaseURL = server.URL
+	client := NewClient("token", server.URL)
 	return client, &paths
 }
 

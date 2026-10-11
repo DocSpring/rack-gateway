@@ -96,6 +96,7 @@ export function DeployApprovalRequestDetailPage() {
         onReject={handleRejectClick}
         rejectMutationPending={rejectMutationPending}
         requestStatus={request.status}
+        wasApproved={Boolean(request.approved_at)}
       />
 
       <RequestDetailsCard request={request} />

@@ -99,6 +99,7 @@ type ActionButtonsProps = {
   extendMutationPending: boolean
   rejectMutationPending: boolean
   requestStatus: string
+  wasApproved: boolean
   onApprove: () => void
   onExtend: () => void
   onReject: () => void
@@ -109,14 +110,16 @@ export function ActionButtons({
   extendMutationPending,
   rejectMutationPending,
   requestStatus,
+  wasApproved,
   onApprove,
   onExtend,
   onReject,
 }: ActionButtonsProps) {
   const isPending = requestStatus === 'pending'
   const isApproved = requestStatus === 'approved'
-  // A lapsed approval is marked expired; extending it approves it again.
-  const canExtend = isApproved || requestStatus === 'expired'
+  // A lapsed approval is marked expired; extending it approves it again. A request that expired while pending was
+  // never approved, so there's nothing to extend.
+  const canExtend = isApproved || (requestStatus === 'expired' && wasApproved)
 
   return (
     <div className="flex flex-wrap gap-2">

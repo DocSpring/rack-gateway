@@ -42,7 +42,7 @@ func (h *APIHandler) shouldPostPRComment(prURL string) bool {
 	return h.settingsService != nil && prURL != "" && h.config != nil && h.config.GitHubToken != ""
 }
 
-func (h *APIHandler) postPRCommentAsync(c *gin.Context, app, prURL, publicID string) {
+func (h *APIHandler) postPRCommentAsync(c *gin.Context, app, prURL, publicID, gitCommitHash string) {
 	postComment, err := getAppSettingBool(h.settingsService, app, settings.KeyGitHubPostPRComment, true)
 	if err != nil {
 		log.Printf("WARN: Failed to get github_post_pr_comment setting: %v", err)
@@ -78,12 +78,7 @@ func (h *APIHandler) postPRCommentAsync(c *gin.Context, app, prURL, publicID str
 		return
 	}
 
-	comment := fmt.Sprintf(
-		"#### Deploy Approval Request for %s\n\n"+
-			"A deploy approval request has been created for this PR.\n\n**View request:** %s",
-		rackName,
-		approvalURL,
-	)
+	comment := deployApprovalPRComment(app, rackName, gitCommitHash, approvalURL)
 
 	h.enqueueGitHubComment(c, owner, repo, prNumber, comment)
 }
@@ -148,4 +143,18 @@ func canViewDeployApprovalRequest(
 
 func sameID(field *int64, id int64) bool {
 	return field != nil && *field == id
+}
+
+// deployApprovalPRComment names the app, rack and commit, so the comments for a deploy of several apps or racks
+// can be told apart.
+func deployApprovalPRComment(app, rackName, gitCommitHash, approvalURL string) string {
+	commit := gitCommitHash
+	if len(commit) > 7 {
+		commit = commit[:7]
+	}
+	return fmt.Sprintf(
+		"#### Deploy approval requested: %s on %s\n\n"+
+			"A deploy approval request has been created for **%s** at commit `%s`.\n\n**View request:** %s",
+		app, rackName, app, commit, approvalURL,
+	)
 }

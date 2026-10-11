@@ -17,6 +17,7 @@ import (
 	"github.com/riverqueue/river/riverdriver/riverpgxv5"
 	"github.com/riverqueue/river/rivertype"
 
+	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	"github.com/DocSpring/rack-gateway/internal/gateway/email"
 	jobaudit "github.com/DocSpring/rack-gateway/internal/gateway/jobs/audit"
@@ -43,6 +44,10 @@ type Dependencies struct {
 	// arguments, which are persisted in river_job and returned by the jobs API.
 	CircleCIToken string
 	GitHubToken   string
+	// GitHubAPIURL is the GitHub REST API root ("" for api.github.com).
+	GitHubAPIURL string
+	// DeployApprovalPendingMaxAge is how long a deploy approval request can stay pending (0: forever).
+	DeployApprovalPendingMaxAge time.Duration
 }
 
 // AuditAnchorConfig holds configuration for WORM S3 anchor writer
@@ -80,7 +85,7 @@ func NewClient(pool *pgxpool.Pool, deps *Dependencies, auditAnchorConfig *AuditA
 
 	// CI/GitHub workers
 	river.AddWorker(workers, jobcircleci.NewApproveJobWorker(deps.Database, deps.CircleCIToken))
-	river.AddWorker(workers, jobgithub.NewPostPRCommentWorker(deps.GitHubToken))
+	river.AddWorker(workers, jobgithub.NewPostPRCommentWorker(deps.GitHubToken, deps.GitHubAPIURL))
 
 	periodicJobs, err := setupPeriodicJobs(workers, deps, auditAnchorConfig)
 	if err != nil {
@@ -115,7 +120,10 @@ func setupPeriodicJobs(
 	auditAnchorConfig *AuditAnchorConfig,
 ) ([]*river.PeriodicJob, error) {
 	// Approvals past their window are marked expired, so they stop counting as open requests.
-	river.AddWorker(workers, jobdeployapprovals.NewExpireWorker(deps.Database))
+	river.AddWorker(workers, jobdeployapprovals.NewExpireWorker(
+		deps.Database, deps.DeployApprovalPendingMaxAge,
+		func(al *db.AuditLog) error { return audit.LogDB(deps.Database, al) },
+	))
 	periodicJobs := []*river.PeriodicJob{river.NewPeriodicJob(
 		river.PeriodicInterval(jobdeployapprovals.ExpireInterval),
 		func() (river.JobArgs, *river.InsertOpts) { return jobdeployapprovals.ExpireArgs{}, nil },

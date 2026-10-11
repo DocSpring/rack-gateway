@@ -289,6 +289,9 @@ func (a *App) initJobsClient(sender email.Sender, notifier *slackpkg.Notifier) e
 		SlackNotifier: notifier,
 		CircleCIToken: a.Config.CircleCIToken,
 		GitHubToken:   a.Config.GitHubToken,
+		GitHubAPIURL:  a.Config.GitHubAPIURL,
+
+		DeployApprovalPendingMaxAge: a.Config.DeployApprovalPendingMaxAge,
 	}, auditAnchorConfig)
 	if err != nil {
 		return fmt.Errorf("failed to initialize jobs client: %w", err)

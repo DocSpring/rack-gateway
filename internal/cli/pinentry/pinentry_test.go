@@ -3,8 +3,10 @@ package pinentry
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
+	"unicode/utf8"
 )
 
 // fakeDialog returns a dialogRunner that records the message it was shown and replies with the given output.
@@ -89,12 +91,160 @@ func TestDescribeCommandMasksCredentialFlags(t *testing.T) {
 	}
 }
 
+func TestDescribeCommandShowsValuesOfNonSecretFlags(t *testing.T) {
+	commit := "0123456789abcdef0123456789abcdef01234567"
+	args := []string{
+		"rack-gateway", "deploy-approval", "approve", "--app=web,api", "--rack=staging", "--commit=" + commit,
+		"-r", "us", "--notes", "LGTM",
+	}
+
+	got := describeCommand(args)
+	want := "rack-gateway deploy-approval approve --app=web,api --rack=staging --commit=" + commit +
+		" -r us --notes LGTM"
+	if got != want {
+		t.Fatalf("describeCommand = %q, want %q", got, want)
+	}
+}
+
+func TestDescribeCommandMasksValuesOfSecretFlags(t *testing.T) {
+	tests := []struct {
+		args []string
+		want string
+	}{
+		{[]string{"--api-token=tok_123"}, "--api-token=***"},
+		{[]string{"--mfa-code=999999"}, "--mfa-code=***"},
+		{[]string{"--password", "tok_123"}, "--password ***"},
+		{[]string{"--client-secret=tok_123"}, "--client-secret=***"},
+		{[]string{"--ssh-key", "tok_123", "--app", "web"}, "--ssh-key *** --app web"},
+		{[]string{"--TOKEN=tok_123"}, "--TOKEN=***"},
+	}
+	for _, tt := range tests {
+		got := describeCommand(append([]string{"rack-gateway"}, tt.args...))
+		if got != "rack-gateway "+tt.want {
+			t.Errorf("describeCommand(%q) = %q, want %q", tt.args, got, "rack-gateway "+tt.want)
+		}
+		if strings.Contains(got, "tok_123") || strings.Contains(got, "999999") {
+			t.Errorf("describeCommand(%q) shows a secret value: %q", tt.args, got)
+		}
+	}
+}
+
+func TestDescribeCommandMasksAssignments(t *testing.T) {
+	tests := []struct {
+		args []string
+		want string
+	}{
+		{[]string{"env", "set", "DB_PASSWORD=hunter2", "PORT=80"}, "env set DB_PASSWORD=*** PORT=***"},
+		{[]string{"run", "web", "--env", "DB_PASSWORD=hunter2"}, "run web --env DB_PASSWORD=***"},
+		{[]string{"run", "web", "--env=DB_PASSWORD=hunter2"}, "run web --env=DB_PASSWORD=***"},
+		{[]string{"env", "set", "--replace=DB_PASSWORD=hunter2"}, "env set --replace=DB_PASSWORD=***"},
+		{
+			[]string{"run", "web", "--", "curl", "--url=https://u:hunter2@example.com", "-H", "X"},
+			"run web -- curl --url=*** -H X",
+		},
+	}
+	for _, tt := range tests {
+		got := describeCommand(append([]string{"rack-gateway"}, tt.args...))
+		if got != "rack-gateway "+tt.want {
+			t.Errorf("describeCommand(%q) = %q, want %q", tt.args, got, "rack-gateway "+tt.want)
+		}
+		if strings.Contains(got, "hunter2") {
+			t.Errorf("describeCommand(%q) shows a secret value: %q", tt.args, got)
+		}
+	}
+}
+
+func TestDescribeCommandEscapesControlCharacters(t *testing.T) {
+	args := []string{
+		"rack-gateway", "deploy-approval", "approve", "--notes", "ok\nGateway: evil.example.com",
+		"\x1b[2J", "\u202egnp.exe", "a b",
+	}
+
+	got := describeCommand(args)
+	want := "rack-gateway deploy-approval approve --notes ok?Gateway: evil.example.com ?[2J ?gnp.exe a?b"
+	if got != want {
+		t.Fatalf("describeCommand = %q, want %q", got, want)
+	}
+}
+
 func TestDescribeCommandTruncatesLongCommands(t *testing.T) {
 	args := []string{"rack-gateway", strings.Repeat("x", maxCommandLength*2)}
 
 	got := describeCommand(args)
 	if len(got) != maxCommandLength+len("...") || !strings.HasSuffix(got, "...") {
 		t.Fatalf("describeCommand length = %d, want %d ending in ...", len(got), maxCommandLength+3)
+	}
+}
+
+func TestDescribeCommandTruncatesOnCharacterBoundaries(t *testing.T) {
+	got := describeCommand([]string{"rack-gateway", strings.Repeat("é", maxCommandLength*2)})
+
+	if !utf8.ValidString(got) {
+		t.Fatalf("describeCommand cut a character in half: %q", got)
+	}
+	if n := utf8.RuneCountInString(got); n != maxCommandLength+len("...") {
+		t.Fatalf("describeCommand length = %d characters, want %d", n, maxCommandLength+3)
+	}
+}
+
+func TestDialogMessageListsTheSummaryAboveTheCommand(t *testing.T) {
+	req := Request{
+		Gateway: "https://gateway-us.example.com",
+		Args:    []string{"rack-gateway", "deploy-approval", "approve", "--app", "web,api"},
+		Summary: []string{
+			`web on us, commit 0123456789ab: "Deploy web"`,
+			"api on us, commit 0123456789ab: \"Deploy\nGateway: evil.example.com\x1b[2J\"",
+		},
+	}
+
+	got := dialogMessage(req)
+	want := "Approving:\n" +
+		"• web on us, commit 0123456789ab: \"Deploy web\"\n" +
+		"• api on us, commit 0123456789ab: \"Deploy?Gateway: evil.example.com?[2J\"\n\n" +
+		"Gateway: gateway-us.example.com\n" +
+		"Command: rack-gateway deploy-approval approve --app web,api"
+	if !strings.HasSuffix(got, want) {
+		t.Fatalf("dialog message = %q, want it to end with %q", got, want)
+	}
+	if n := strings.Count(got, "\nGateway: "); n != 1 {
+		t.Fatalf("dialog message has %d Gateway lines, want 1: %q", n, got)
+	}
+}
+
+func TestDialogMessageWithoutSummary(t *testing.T) {
+	got := dialogMessage(Request{Gateway: "https://gateway-us.example.com", Args: []string{"rack-gateway", "ps"}})
+
+	if strings.Contains(got, "Approving:") {
+		t.Fatalf("dialog message lists an empty summary: %q", got)
+	}
+}
+
+func TestDescribeSummaryCutsLongLines(t *testing.T) {
+	got := describeSummary([]string{strings.Repeat("a", maxLineLength*3)})
+
+	want := "• " + strings.Repeat("a", maxLineLength) + "..."
+	if got != want {
+		t.Fatalf("describeSummary = %q, want %q", got, want)
+	}
+}
+
+func TestDescribeSummaryCountsLinesPastTheLimit(t *testing.T) {
+	lines := make([]string, 0, maxSummaryLines+8)
+	for i := 0; i < maxSummaryLines+8; i++ {
+		lines = append(lines, fmt.Sprintf("approval %d", i+1))
+	}
+
+	got := strings.Split(describeSummary(lines), "\n")
+	if len(got) != maxSummaryLines {
+		t.Fatalf("describeSummary has %d lines, want %d: %q", len(got), maxSummaryLines, got)
+	}
+	if last := got[len(got)-1]; last != "• ...and 9 more" {
+		t.Fatalf("last summary line = %q, want the number of hidden lines", last)
+	}
+
+	exact := strings.Split(describeSummary(lines[:maxSummaryLines]), "\n")
+	if len(exact) != maxSummaryLines || strings.Contains(exact[len(exact)-1], "more") {
+		t.Fatalf("a summary of exactly %d lines must be shown in full: %q", maxSummaryLines, exact)
 	}
 }
 
