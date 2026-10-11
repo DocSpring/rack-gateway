@@ -224,7 +224,7 @@ func TestCLILoginBrowserStepsRequireBindingCookie(t *testing.T) {
 	require.NoError(t, json.NewDecoder(res.Body).Decode(&body))
 	require.Equal(t, "browser_mismatch", body["error"])
 
-	wrong := &http.Cookie{Name: cliLoginCookie, Value: "not-the-binding"}
+	wrong := testCookie(cliLoginCookie, "not-the-binding")
 	res = e.send(t, http.MethodGet, cliReturnRoute(state), nil, wrong)
 	require.Contains(t, res.Header.Get("Location"), "error=browser_mismatch")
 
@@ -315,7 +315,7 @@ func TestCLILoginEnrollmentInAnotherSessionDoesNotCompleteCLILogin(t *testing.T)
 	otherToken, _, err := e.sessions.CreateSession(user, auth.SessionMetadata{Channel: "web"})
 	require.NoError(t, err)
 	e.confirmFirstFactor(t)
-	e.markSessionVerified(t, &http.Cookie{Name: "session_token", Value: otherToken})
+	e.markSessionVerified(t, testCookie("session_token", otherToken))
 
 	res = e.send(t, http.MethodGet, cliReturnRoute(state), nil, binding, sessionCookie)
 	require.Equal(t, cliMFARoute(state), res.Header.Get("Location"), "no login code without enrolling here")

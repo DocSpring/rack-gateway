@@ -49,7 +49,7 @@ func TestAuthServiceAllowsCookieSession(t *testing.T) {
 	})
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/info", nil)
-	req.AddCookie(&http.Cookie{Name: "session_token", Value: sessionToken})
+	req.AddCookie(sessionCookie(sessionToken))
 	rw := httptest.NewRecorder()
 
 	svc.Middleware(next).ServeHTTP(rw, req)
