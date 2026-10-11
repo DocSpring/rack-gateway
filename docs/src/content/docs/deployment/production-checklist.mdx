@@ -318,7 +318,8 @@ LOG_RETENTION_DAYS=90  # Shorter for staging
 
 - Using the same `APP_SECRET_KEY` across environments
 - Storing secrets in git or environment files
-- Running with `DEV_MODE=true` in production
+- Deploying anything but a release image or binary (`rack-gateway-api build-info` must report
+  `test bypasses: compiled out`; see [Test Bypasses](/configuration/environment-variables/#test-bypasses))
 - Using overly permissive RBAC roles
 - Skipping MFA for "convenience"
 - Not rotating API tokens regularly

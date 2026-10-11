@@ -81,8 +81,19 @@ jobs:
           context: .
           platforms: linux/amd64
           no-cache: true
+          load: true
+          tags: rack-gateway-api:release-check
           build-args: |
             COMMIT_SHA=${{ github.sha }}
+
+      # The published binary must be a release build: the test bypasses (DEV_MODE, E2E_TEST_MODE, the endpoint
+      # overrides) compiled out, not just switched off.
+      - name: Check the image has no test bypasses
+        run: |
+          set -euo pipefail
+          info="$(docker run --rm rack-gateway-api:release-check ./rack-gateway-api build-info)"
+          echo "$info"
+          grep -qx 'test bypasses: compiled out' <<<"$info"
 
       - name: Wait for CI and E2E checks on the tagged commit
         uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0

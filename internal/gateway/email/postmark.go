@@ -10,6 +10,7 @@ import (
 	"time"
 
 	gtwlog "github.com/DocSpring/rack-gateway/internal/gateway/logging"
+	"github.com/DocSpring/rack-gateway/internal/gateway/testbypass"
 )
 
 // Sender is a minimal interface for sending emails.
@@ -39,23 +40,27 @@ type PostmarkSender struct {
 var postmarkHTTPClient = &http.Client{Timeout: 10 * time.Second}
 
 // NewSender chooses the best available sender based on token and dev flags.
-// - With POSTMARK token -> PostmarkSender
-// - Else if DEV_EMAIL_LOG=true or DEV_MODE=true -> LoggerSender (prints to stdout)
+// - With POSTMARK token -> PostmarkSender (at POSTMARK_API_BASE in a testbypass build)
+// - Else if DEV_EMAIL_LOG=true or dev mode -> LoggerSender (prints to stdout)
 // - Else -> NoopSender
 func NewSender(token, from, stream string) Sender {
 	if token != "" {
 		if stream == "" {
 			stream = "outbound"
 		}
+		apiBase := testbypass.PostmarkAPIBase()
+		if apiBase == "" {
+			apiBase = "https://api.postmarkapp.com"
+		}
 		return &PostmarkSender{
 			Token:   token,
 			From:    from,
 			Stream:  stream,
-			APIBase: getEnv("POSTMARK_API_BASE", "https://api.postmarkapp.com"),
+			APIBase: apiBase,
 			client:  postmarkHTTPClient,
 		}
 	}
-	if getEnv("DEV_EMAIL_LOG", "") == "true" || getEnv("DEV_MODE", "") == "true" {
+	if os.Getenv("DEV_EMAIL_LOG") == "true" || testbypass.DevMode() {
 		return &LoggerSender{From: from}
 	}
 	return NoopSender{}
@@ -161,13 +166,6 @@ func (_ *LoggerSender) SendMany(to []string, subject, textBody, htmlBody string)
 	gtwlog.DebugTopicf(gtwlog.TopicEmailSummary, "to=%s bcc=%s subject=%q", primary, string(b), subject)
 	appendDevEmail(to, subject, textBody, htmlBody)
 	return nil
-}
-
-func getEnv(key, def string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-	return def
 }
 
 // DevEmail represents an in-memory email for E2E tests and local development.

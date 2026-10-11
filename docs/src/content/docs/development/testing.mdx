@@ -16,6 +16,16 @@ Use `task` commands to keep codegen, containers, and test dependencies in sync.
 | Web Unit | `web/src/**/*.test.ts*` | `task web:test` |
 | Web E2E | `web/e2e/` | `task web:e2e` |
 | CLI E2E | `scripts/cli-e2e.sh` | `task go:e2e` |
+| Release image smoke test | `scripts/release-smoke.sh` | `task docker:release:smoke` |
+
+## Test Bypasses
+
+The unit tests and the E2E stacks run the gateway with `DEV_MODE` and `E2E_TEST_MODE`, which only work in a build
+compiled with the `testbypass` Go build tag (see [Test Bypasses](/configuration/environment-variables/#test-bypasses)).
+The `task` commands pass the tag for you. The release image is built without it, so the E2E suite never runs it;
+`task docker:release:smoke` builds the release image and checks it with a production configuration instead: the
+bypasses are compiled out and refused at startup, and it boots with HSTS, a strict CSP, origin checks and Secure
+cookies. It needs network access to Google for OIDC discovery.
 
 ## Running Tests
 

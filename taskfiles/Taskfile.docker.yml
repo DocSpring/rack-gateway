@@ -62,11 +62,17 @@ tasks:
     desc: Tear down everything (all profiles) and remove volumes
     run: once
     cmds:
-      - docker compose --profile dev --profile preview --profile test down -v --remove-orphans
+      - docker compose --profile dev --profile preview --profile test --profile release down -v --remove-orphans
 
   build:
-    desc: Build Docker image for the gateway API
+    desc: Build the release Docker image for the gateway API (no test bypasses)
     run: once
     cmds:
       - docker build --build-arg COMMIT_SHA=$(git rev-parse HEAD) -t rack-gateway-api:latest .
+
+  release:smoke:
+    desc: Build the release image and smoke-test it with a production configuration (no test bypasses)
+    cmds:
+      - docker compose --profile release build gateway-api-release
+      - bash "{{.TASKFILE_DIR}}/../scripts/release-smoke.sh"
 

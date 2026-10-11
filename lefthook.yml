@@ -21,7 +21,10 @@ pre-commit:
 
     go-lint:
       glob: "**/*.go"
-      run: golangci-lint run --fix ./cmd/... ./internal/...
+      # The second run lints the testbypass package's files for builds with that tag (see Taskfile go:lint).
+      run: >-
+        golangci-lint run --fix ./cmd/... ./internal/... &&
+        golangci-lint run --fix --build-tags testbypass ./internal/gateway/testbypass/...
       stage_fixed: true
 
     golangci-config-verify:
