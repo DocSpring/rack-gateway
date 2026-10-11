@@ -21,10 +21,7 @@ func TestNewAuditEventWorker(t *testing.T) {
 
 // Test DeployApprovalArgs.Kind
 func TestDeployApprovalArgs_Kind(t *testing.T) {
-	args := DeployApprovalArgs{
-		DeployApprovalRequestID: 456,
-		GatewayDomain:           "gateway.example.com",
-	}
+	args := DeployApprovalArgs{DeployApprovalRequestID: 456}
 	assert.Equal(t, "slack:deploy_approval", args.Kind())
 }
 
