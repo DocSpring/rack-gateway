@@ -13,7 +13,7 @@ The gateway's audit log uses a cryptographic chain (HMAC-SHA256) to make logs ta
 
 - **External immutability** - Checkpoints written to S3 with COMPLIANCE mode cannot be modified
 - **Non-repudiation** - Once written, anchors cannot be deleted (even by AWS account owner)
-- **Independent verification** - External auditors can verify without database access
+- **Independent verification** - Auditors can read the anchors with read-only credentials and check the database against them
 - **Regulatory compliance** - Meets SOC 2, financial records, and audit requirements
 
 ```mermaid
@@ -39,13 +39,9 @@ graph LR
 
 ### Anchor Cadence
 
-Anchors are written based on time and volume:
-
-| Trigger | Frequency | Purpose |
-|---------|-----------|---------|
-| **Time-based** | Every hour at :00 | Regular checkpoints |
-| **Event-based** | Every 10,000 events | Volume-based checkpoints |
-| **Key rotation** | On HMAC key change | Chain continuity |
+The gateway writes at most one anchor per hour. A periodic job runs every `AUDIT_ANCHOR_INTERVAL_MINUTES` (default
+60) and when the gateway starts; anchors are keyed by hour, so a run that finds this hour's anchor already written
+does nothing. `rack-gateway-api write-anchor` writes one by hand.
 
 ### Anchor Content
 
@@ -56,31 +52,42 @@ Each anchor is a JSON blob containing chain state:
   "chain_id": "production",
   "last_seq": 8723412,
   "last_hash": "b7e9f82a3c1d4e5f6a7b8c9d0e1f2a3b...",
-  "ts_utc": "2025-01-15T14:00:00Z",
-  "db_snapshot_lsn": "0/9F000A50",
-  "prev_anchor_hash": "1d4f90e2b3c4d5e6f7a8b9c0d1e2f3a4..."
+  "ts_utc": "2025-01-15T14:00:03Z",
+  "db_snapshot_lsn": "",
+  "prev_anchor_hash": "1d4f90e2b3c4d5e6f7a8b9c0d1e2f3a4...",
+  "format": 2,
+  "hash_v2_from_seq": 8100000
 }
 ```
 
 | Field | Purpose |
 |-------|---------|
-| `chain_id` | Environment identifier |
-| `last_seq` | Last event's chain index |
-| `last_hash` | Last event's hash (hex-encoded) |
-| `ts_utc` | Anchor creation timestamp |
-| `db_snapshot_lsn` | PostgreSQL LSN for PITR verification |
-| `prev_anchor_hash` | SHA-256 of previous anchor (creates anchor chain) |
+| `chain_id` | Environment identifier (`AUDIT_ANCHOR_CHAIN_ID`) |
+| `last_seq` | Latest event's chain index (0 with an empty `last_hash` when there are no events) |
+| `last_hash` | Latest event's hash (hex-encoded) |
+| `ts_utc` | When the anchor job was scheduled; the key is derived from its hour |
+| `db_snapshot_lsn` | Reserved, always empty |
+| `prev_anchor_hash` | SHA-256 of the anchor written before this one (creates the anchor chain) |
+| `format` | `2` for anchors written by current versions; absent in older anchors |
+| `hash_v2_from_seq` | Chain index of the first hash v2 event, once there is one |
+
+Older anchors (no `format`) have a known bug: once the bucket held more than 1000 anchors, the writer only saw the
+first 1000, so their `prev_anchor_hash` stopped pointing at the previous anchor. Verification counts these instead
+of failing.
 
 ### S3 Object Structure
 
 ```
-s3://bucket/chain_id/year/month/day/hour/anchor-timestamp.json
+s3://bucket/chain_id/YYYY/MM/DD/HH/anchor-YYYYMMDDTHH.json
 ```
 
 Example:
 ```
-s3://audit-anchors-prod/production/2025/01/15/14/anchor-20250115T140000Z.json
+s3://audit-anchors-prod/production/2025/01/15/14/anchor-20250115T14.json
 ```
+
+Object Lock buckets are always versioned. Writing an anchor's key again doesn't replace the locked version, it adds
+another one, and deleting it only adds a delete marker. Verification lists every version, so either shows up.
 
 ## Cost Analysis
 
@@ -313,6 +320,7 @@ resource "aws_iam_role_policy" "anchor_verifier" {
           "s3:GetObject",
           "s3:GetObjectVersion",
           "s3:ListBucket",
+          "s3:ListBucketVersions",
           "s3:GetObjectRetention"
         ]
         Resource = [
@@ -351,62 +359,85 @@ AWS_REGION=us-east-1
 
 ## Verification
 
-### Automated Verification Job
-
-The gateway runs hourly verification:
-
-1. Fetch latest anchor from S3
-2. Verify anchor checksum matches S3 metadata
-3. Compare anchor hash to database chain head
-4. Verify chain integrity since last anchor
-5. Alert on any discrepancies
-
-### Manual Verification
+`rack-gateway-api verify-audit` checks the audit chain in the database and every anchor in the bucket. It only
+reads.
 
 ```bash
-#!/bin/bash
-BUCKET="audit-anchors-prod"
-CHAIN_ID="production"
+rack-gateway-api verify-audit [--from N] [--to N] [--no-anchors]
+```
 
-# Get latest anchor
-LATEST_KEY=$(aws s3api list-objects-v2 \
-  --bucket "$BUCKET" \
-  --prefix "$CHAIN_ID/" \
-  --query 'reverse(sort_by(Contents, &LastModified))[0].Key' \
-  --output text)
+| Option | Meaning |
+|--------|---------|
+| `--from N` | First chain index to check (default 0). The event before it is still read to check the link. |
+| `--to N` | Last chain index to check (default: the latest event) |
+| `--no-anchors` | Skip the S3 checks and only check the database |
 
-echo "Latest anchor: s3://$BUCKET/$LATEST_KEY"
+It prints a summary and exits non-zero if it finds any integrity failure. Warnings don't change the exit code.
 
-# Download and verify checksum
-aws s3api get-object \
-  --bucket "$BUCKET" \
-  --key "$LATEST_KEY" \
-  --checksum-mode ENABLED \
-  /tmp/anchor.json > /tmp/metadata.json
+### Requirements
 
-# Compare checksums
-COMPUTED=$(sha256sum /tmp/anchor.json | awk '{print $1}')
-STORED=$(jq -r '.ChecksumSHA256' /tmp/metadata.json | base64 -d | xxd -p -c 256)
+- `AUDIT_HMAC_SECRET`: the secret the gateway writes events with. There's no fallback; without it the command
+  fails.
+- `RGW_DATABASE_URL`, `GATEWAY_DATABASE_URL` or `DATABASE_URL`, for a role with `SELECT` on `audit.audit_event`
+  (the `audit_reader` role is enough).
+- Unless `--no-anchors` is given: `AUDIT_ANCHOR_BUCKET`, `AUDIT_ANCHOR_CHAIN_ID` and AWS credentials allowed
+  `s3:ListBucket`, `s3:ListBucketVersions`, `s3:GetObject` and `s3:GetObjectVersion` on the bucket, and
+  `kms:Decrypt` on its key (the verifier role above).
 
-if [ "$COMPUTED" != "$STORED" ]; then
-    echo "❌ ANCHOR TAMPERED"
-    exit 1
-fi
+The anchor checks read every anchor, one request per hour of history, so a full run gets slower as the bucket
+grows. `--from` only limits the database checks.
 
-echo "✅ Anchor integrity verified"
+### What It Checks
 
-# Verify against database
-LAST_SEQ=$(jq -r '.last_seq' /tmp/anchor.json)
-LAST_HASH=$(jq -r '.last_hash' /tmp/anchor.json)
+Events, in chain order:
 
-DB_HASH=$(psql -t -A -c "SELECT encode(event_hash, 'hex') FROM audit_events WHERE chain_index = $LAST_SEQ")
+- The chain starts with the genesis event (index 0, no previous hash).
+- Each event's `previous_hash` is the hash of the event before it.
+- Hash v2 events have consecutive indexes, and their HMAC is recomputed from the stored row and compared with
+  `event_hash`.
+- Legacy (v1) events only come before the first hash v2 event.
 
-if [ "$DB_HASH" != "$LAST_HASH" ]; then
-    echo "❌ CHAIN TAMPERED"
-    exit 1
-fi
+Anchors, in the order they were written:
 
-echo "✅ Chain verified against anchor"
+- Each anchor key has exactly one version and no delete marker.
+- `chain_id` matches, and the key matches `ts_utc`.
+- The event at `last_seq` exists and its hash equals `last_hash`.
+- `last_seq` never goes down (events removed from the end of the chain).
+- `prev_anchor_hash` is the SHA-256 of the anchor written before it (failure for `format` 2 anchors; older anchors
+  are counted, see above).
+- `hash_v2_from_seq` matches where hash v2 starts in the database, so hash v2 events can't be relabeled as legacy
+  events to skip their HMAC check.
+
+It warns about hours without an anchor and about events written after the latest anchor.
+
+### What It Can't Detect
+
+- **Events that were never written**, for example when an audit write failed.
+- **Changes after the latest anchor by someone who has `AUDIT_HMAC_SECRET`.** With the secret and write access to
+  the database, they can rewrite the unanchored tail and recompute every hash. Only history up to the latest
+  anchor is protected from them, so keep the secret away from people who administer the database.
+- **Forgery by anyone who can verify.** The HMAC is symmetric: whoever holds the secret to verify can also compute
+  valid hashes. Treat every copy of the secret (including where `verify-audit` runs) as able to write the chain.
+- **Edits to legacy (v1) events.** Events written before hash v2 can't have their HMAC recomputed from the stored
+  row: it covered values the database doesn't keep exactly (nanosecond timestamps, some fields before they were
+  normalized for storage, and a chain index that could differ from the stored one). Only their `previous_hash`
+  links are checked. An anchor still pins the hash of the event it recorded, but not the content of legacy events.
+
+### Running It on a Schedule
+
+The gateway doesn't run the verifier itself. Run `verify-audit` from a scheduled task (a Convox timer, a cron job
+or a CI schedule) and alert when it exits non-zero. For a check that doesn't depend on the gateway's own
+credentials, run it with the read-only verifier role and a database role that can only read the audit schema.
+
+To run it inside the gateway app instead, for example as a Convox timer, add `s3:ListBucketVersions` and
+`s3:GetObjectVersion` to the gateway's role (the writer policy above doesn't include them):
+
+```yaml
+timers:
+  verify-audit:
+    schedule: "17 * * * *"
+    command: ./rack-gateway-api verify-audit
+    service: gateway
 ```
 
 ## Cross-Region Replication
@@ -475,16 +506,15 @@ resource "aws_s3_bucket_lifecycle_configuration" "audit_anchors" {
       days          = 30
       storage_class = "GLACIER_IR"  # Instant retrieval
     }
-
-    transition {
-      days          = 90
-      storage_class = "DEEP_ARCHIVE"
-    }
   }
 }
 ```
 
-Cost reduction: Storage drops from $0.023/GB to $0.00099/GB (~96%).
+<Aside type="caution">
+`verify-audit` reads every anchor. Objects in `GLACIER` or `DEEP_ARCHIVE` can't be read without restoring them
+first, so keep anchors in a class with instant retrieval (`GLACIER_IR` or warmer). At a few kilobytes an hour,
+anchors cost cents a year in any class.
+</Aside>
 
 ## Monitoring
 

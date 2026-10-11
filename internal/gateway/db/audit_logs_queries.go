@@ -184,32 +184,6 @@ func scanAuditLogs(rows *sql.Rows) ([]*AuditLog, error) {
 	return logs, nil
 }
 
-// VerifyChainIntegrity verifies the cryptographic chain integrity
-// Returns nil if chain is valid, error describing the first break if invalid
-func (d *Database) VerifyChainIntegrity(startIndex, endIndex int64) error {
-	query := `SELECT broken_at_index, event_id, error_message FROM audit.verify_chain(?, ?)`
-
-	var brokenAtIndex sql.NullInt64
-	var eventID sql.NullInt64
-	var errorMessage sql.NullString
-
-	err := d.queryRow(query, startIndex, endIndex).Scan(&brokenAtIndex, &eventID, &errorMessage)
-	if err == sql.ErrNoRows {
-		// No rows means chain is valid
-		return nil
-	}
-	if err != nil {
-		return fmt.Errorf("failed to verify chain: %w", err)
-	}
-
-	if brokenAtIndex.Valid {
-		return fmt.Errorf("chain broken at index %d (event ID %d): %s",
-			brokenAtIndex.Int64, eventID.Int64, errorMessage.String)
-	}
-
-	return nil
-}
-
 // CleanupOldAuditLogs is DISABLED for append-only audit logs
 // Audit logs are immutable and should NEVER be deleted from the database
 // For compliance, export old logs to S3 Glacier and keep database entries intact

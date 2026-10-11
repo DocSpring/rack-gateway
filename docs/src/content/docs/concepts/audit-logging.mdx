@@ -174,29 +174,47 @@ flowchart LR
 
 **Cryptographic Chaining**
 
-Each anchor includes a hash of the previous anchor:
+Every audit event is chained to the one before it. Its `event_hash` is an HMAC-SHA256, keyed with
+`AUDIT_HMAC_SECRET`, over every stored column of the event: its id, chain index, timestamp, the previous event's
+hash and all of its content. Each value is length-prefixed, so content can't move from one field to another without
+changing the hash. Changing, deleting or reordering an event breaks the chain at that event.
+
+Values are normalized before they're hashed: timestamps are kept to the microsecond, IP addresses in canonical
+form, and a value too long for its column is cut with a visible marker (`…[truncated from N characters]`), so an
+oversized value never makes the write fail.
+
+Every hour the gateway also writes an anchor to S3 Object Lock: the latest event's chain index and hash, plus the
+SHA-256 of the previous anchor:
 
 ```
-Anchor 1: hash(logs_1_100) | prev_hash: null
-Anchor 2: hash(logs_101_200) | prev_hash: hash(anchor_1)
-Anchor 3: hash(logs_201_300) | prev_hash: hash(anchor_2)
+Anchor 1: last_seq 100, last_hash h(event 100) | prev_anchor_hash: none
+Anchor 2: last_seq 250, last_hash h(event 250) | prev_anchor_hash: sha256(anchor 1)
+Anchor 3: last_seq 400, last_hash h(event 400) | prev_anchor_hash: sha256(anchor 2)
 ```
 
-This creates a verifiable chain:
-- Any modification breaks the chain
-- Deletion is detectable
-- Sequence is provable
+Anchors live outside the database and can't be changed or deleted during their retention period, so they pin the
+chain: rewriting any event up to an anchor would change the hash the anchor recorded.
 
 ### Verifying Integrity
 
 ```bash
-# Verify audit chain integrity
-rack-gateway admin audit verify --from 2024-01-01 --to 2024-01-31
-
-✓ Verified 45 anchors
-✓ Chain integrity confirmed
-✓ No gaps detected
+rack-gateway-api verify-audit
 ```
+
+```
+Audit chain: checked 48210 events (0..48209), latest event 48209
+  hash v2 from event 31877: 16333 events checked, HMAC recomputed
+  legacy (v1) events: 31877 checked, previous_hash links only (HMAC not recomputable)
+Anchors: 1460 checked, latest production/2025/03/02/13/anchor-20250302T13.json
+Warnings (1):
+  - events 48190..48209 (20) were written after the latest anchor and aren't anchored yet
+Result: OK
+```
+
+The command checks every link in the chain, recomputes the HMAC of every hash v2 event, checks every anchor and
+exits non-zero on any integrity failure. See
+[Verification](/deployment/terraform/s3-worm-storage/#verification) for its options, the permissions it needs, and
+what it can and can't detect.
 
 ## Log Retention
 
@@ -367,7 +385,7 @@ Rack Gateway provides:
 - Audit log viewer in web UI
 - WORM bucket configuration documentation
 - RBAC for log access (admin only)
-- Verification command for chain integrity
+- `rack-gateway-api verify-audit` to verify the hash chain and its anchors
 
 ## Key Takeaways
 

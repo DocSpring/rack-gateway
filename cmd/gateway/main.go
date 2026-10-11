@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -77,6 +78,11 @@ func handleMaintenanceCommand(args []string) (bool, error) {
 
 	cmd := args[1]
 
+	// verify-audit is the only command that takes flags.
+	if cmd == "verify-audit" {
+		return true, verifyAudit(args[2:])
+	}
+
 	// Check if this is a valid command first
 	var isValidCommand bool
 	switch cmd {
@@ -106,12 +112,14 @@ func handleMaintenanceCommand(args []string) (bool, error) {
 		fmt.Println(buildInfo())
 		return true, nil
 	case "help", "--help", "-h":
-		helpText := "rack-gateway commands:\n" +
+		helpText := "rack-gateway-api commands:\n" +
 			"  (no args)            Start the API server\n" +
 			"  migrate             Apply database migrations\n" +
 			"  reset-db            Drop and recreate the database (requires env guards)\n" +
 			"  write-anchor        Manually trigger an audit anchor write to S3\n" +
-			"  build-info          Show the version, commit and whether test bypasses are compiled in"
+			"  build-info          Show the version, commit and whether test bypasses are compiled in\n" +
+			"  verify-audit        Verify the audit log hash chain and its S3 anchors\n" +
+			"                      [--from N] [--to N] [--no-anchors] (exits non-zero on any integrity failure)"
 		fmt.Println(helpText)
 		return true, nil
 	default:
@@ -133,18 +141,17 @@ func buildInfo() string {
 // getAdminDatabaseURL returns the database URL for admin operations (migrations, resets).
 // Prefers ADMIN_DATABASE_URL if available, falls back to other connection strings.
 func getAdminDatabaseURL() (string, error) {
-	var dsn string
-	if dsn = os.Getenv("ADMIN_DATABASE_URL"); dsn == "" {
-		if dsn = os.Getenv("RGW_DATABASE_URL"); dsn == "" {
-			if dsn = os.Getenv("GATEWAY_DATABASE_URL"); dsn == "" {
-				dsn = os.Getenv("DATABASE_URL")
-			}
+	return firstDatabaseURL("ADMIN_DATABASE_URL", "RGW_DATABASE_URL", "GATEWAY_DATABASE_URL", "DATABASE_URL")
+}
+
+// firstDatabaseURL returns the first of the named environment variables that is set.
+func firstDatabaseURL(names ...string) (string, error) {
+	for _, name := range names {
+		if dsn := os.Getenv(name); dsn != "" {
+			return dsn, nil
 		}
 	}
-	if dsn == "" {
-		return "", fmt.Errorf("ADMIN_DATABASE_URL, RGW_DATABASE_URL, GATEWAY_DATABASE_URL, or DATABASE_URL is required")
-	}
-	return dsn, nil
+	return "", fmt.Errorf("one of %s is required", strings.Join(names, ", "))
 }
 
 func runMigrations() error {

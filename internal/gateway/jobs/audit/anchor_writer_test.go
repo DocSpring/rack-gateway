@@ -351,13 +351,7 @@ func TestAnchorWriterWorker_FilenameGeneration(t *testing.T) {
 	// Expected values
 	expectedKey := "staging/2025/11/01/12/anchor-20251101T12.json"
 
-	// Verify format
-	key := fmt.Sprintf("%s/%s/anchor-%s.json",
-		"staging",
-		testTime.Format("2006/01/02/15"),
-		testTime.Format("20060102T15"))
-
-	assert.Equal(t, expectedKey, key, "Filename should be hour-based with no minutes/seconds")
+	assert.Equal(t, expectedKey, AnchorKey("staging", testTime), "Filename should be hour-based")
 }
 
 func TestAnchorWriterWorker_TimestampDeterminism(t *testing.T) {
@@ -447,7 +441,7 @@ func TestAnchorWriterWorker_getLatestAnchor_NoObjects(t *testing.T) {
 		chainID:  "staging",
 	}
 
-	hash, err := worker.getLatestAnchor(context.Background())
+	hash, err := worker.getLatestAnchor(context.Background(), time.Date(2025, 11, 1, 13, 0, 0, 0, time.UTC))
 	assert.NoError(t, err)
 	assert.Equal(t, "", hash, "Should return empty string when no anchors exist")
 }
@@ -496,7 +490,7 @@ func TestAnchorWriterWorker_getLatestAnchor_WithObjects(t *testing.T) {
 		chainID:  "staging",
 	}
 
-	hash, err := worker.getLatestAnchor(context.Background())
+	hash, err := worker.getLatestAnchor(context.Background(), time.Date(2025, 11, 1, 13, 0, 0, 0, time.UTC))
 	require.NoError(t, err)
 	assert.NotEmpty(t, hash, "Should return hash of latest anchor")
 }
@@ -518,7 +512,7 @@ func TestAnchorWriterWorker_getLatestAnchor_ListError(t *testing.T) {
 		chainID:  "staging",
 	}
 
-	hash, err := worker.getLatestAnchor(context.Background())
+	hash, err := worker.getLatestAnchor(context.Background(), time.Date(2025, 11, 1, 13, 0, 0, 0, time.UTC))
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to list anchors")
 	assert.Equal(t, "", hash)
@@ -555,7 +549,7 @@ func TestAnchorWriterWorker_getLatestAnchor_GetObjectError(t *testing.T) {
 		chainID:  "staging",
 	}
 
-	hash, err := worker.getLatestAnchor(context.Background())
+	hash, err := worker.getLatestAnchor(context.Background(), time.Date(2025, 11, 1, 13, 0, 0, 0, time.UTC))
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to get previous anchor")
 	assert.Equal(t, "", hash)
