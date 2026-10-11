@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"fmt"
+	"net/http"
 
 	"github.com/getsentry/sentry-go"
 	sentrygin "github.com/getsentry/sentry-go/gin"
@@ -17,6 +18,11 @@ type sentryResponseWriter struct {
 func (w *sentryResponseWriter) WriteHeader(code int) {
 	w.statusCode = code
 	w.ResponseWriter.WriteHeader(code)
+}
+
+// Unwrap lets http.ResponseController reach the connection, e.g. to extend a long request's write deadline.
+func (w *sentryResponseWriter) Unwrap() http.ResponseWriter {
+	return w.ResponseWriter
 }
 
 // SentryErrorCapture is a middleware that automatically captures 500-level errors to Sentry.
