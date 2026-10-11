@@ -19,8 +19,13 @@ const KEY_BYTES = 32
 
 type ColumnScope = { column: string; row: string }
 
-export function mfaSecretScope(userId: number | string): ColumnScope {
-  return { column: 'mfa_methods.secret', row: `user:${userId}` }
+/**
+ * The scope of mfa_methods.secret: the method's user and type. A pending WebAuthn method has the type of a
+ * confirmed one (colcrypt.MFASecretScope).
+ */
+export function mfaSecretScope(userId: number | string, methodType: string): ColumnScope {
+  const type = methodType.startsWith('webauthn') ? 'webauthn' : methodType
+  return { column: 'mfa_methods.secret', row: `user:${userId}|type:${type}` }
 }
 
 export function parseColumnKey(encoded: string): Buffer {
@@ -89,10 +94,10 @@ export function decryptColumnValue(key: Buffer, envelope: string, scope: ColumnS
 
 /** Encrypts a TOTP seed for a user's mfa_methods row, as the gateway stores it. */
 export function encryptMfaSecret(userId: number | string, secret: string): string {
-  return encryptColumnValue(columnKeyFromEnv(), secret, mfaSecretScope(userId))
+  return encryptColumnValue(columnKeyFromEnv(), secret, mfaSecretScope(userId, 'totp'))
 }
 
-/** Decrypts a user's stored mfa_methods.secret. */
+/** Decrypts the stored mfa_methods.secret of a user's TOTP method. */
 export function decryptMfaSecret(userId: number | string, stored: string): string {
-  return decryptColumnValue(columnKeyFromEnv(), stored, mfaSecretScope(userId))
+  return decryptColumnValue(columnKeyFromEnv(), stored, mfaSecretScope(userId, 'totp'))
 }

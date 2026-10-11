@@ -52,8 +52,9 @@ against a database, it marks the database as `production`, or `development` in a
 
 `COLUMN_ENCRYPTION_KEY` encrypts the secrets the gateway stores in its database: TOTP seeds and YubiKey
 public IDs (`mfa_methods.secret`) and the Slack bot token. Values are encrypted with AES-256-GCM and bound
-to the user or Slack workspace they belong to, so a value copied to another row can't be decrypted there,
-and a plaintext value written straight into the database is never accepted.
+to where they belong (the user and MFA method type, or the Slack workspace), so a value copied to another
+user's row, or to a method of another type, can't be decrypted there, and a plaintext value written straight
+into the database is never accepted.
 
 - **Generate it once** with `openssl rand -base64 32` and store it with your other secrets. Use a
   different key per environment. It is separate from `APP_SECRET_KEY`, so rotating the session secret
@@ -61,15 +62,19 @@ and a plaintext value written straight into the database is never accepted.
 - **It is required in every mode.** The server and every maintenance command that opens the database
   (`migrate`, `reset-db`, `write-anchor`) refuse to run without a valid key, so a missing key fails a
   deploy before the new release is promoted. Development setups use a published key from `mise.toml` and
-  `docker-compose.yml`; the gateway refuses to start with that key against a production database.
+  `docker-compose.yml`. The published image refuses to start with that key, and so does any build against a
+  production database.
 - **Back it up.** If the key is lost or changed, stored TOTP seeds, YubiKey public IDs and the Slack
   token can't be read. Those MFA methods stop working (WebAuthn security keys and backup codes still
   work): users sign in with another factor or a backup code, remove the broken method and enroll again.
+  Codes from an authenticator app that can't be used get a message saying so, and don't count toward the
+  automatic account lock.
   Slack must be reconnected. The gateway logs (and reports to Sentry, if configured) every value it fails
   to decrypt when it tries to use it.
 - **Existing data is upgraded at startup.** Secrets stored by releases before column encryption (plaintext
   TOTP seeds, base64 Slack tokens) are encrypted the first time the new release starts, before it serves
-  requests. The upgrade is safe to repeat and logs only counts.
+  requests, and once more 10 minutes later, in case the previous release stored more during the rollout. The
+  upgrade is safe to repeat and logs only counts.
 - **Rotation isn't supported yet.** Every encrypted value records which key encrypted it, so rotation can
   be added later without changing the stored format.
 

@@ -17,7 +17,7 @@ func checkProductionSafety(dbEnvironment string, getenv func(string) string) err
 		return nil
 	}
 	refused := testbypass.Active(getenv)
-	if strings.TrimSpace(getenv(colcrypt.EnvVar)) == colcrypt.DevKey {
+	if colcrypt.IsDevelopmentKey(getenv(colcrypt.EnvVar)) {
 		refused = append(refused, colcrypt.EnvVar+" (the published development key)")
 	}
 	if len(refused) > 0 {

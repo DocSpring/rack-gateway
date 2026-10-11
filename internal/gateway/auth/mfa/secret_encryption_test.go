@@ -1,6 +1,7 @@
 package mfa
 
 import (
+	"errors"
 	"testing"
 	"time"
 
@@ -189,5 +190,49 @@ func assertBackupCodeStillWorks(t *testing.T, svc *Service, user *db.User) {
 	}
 	if _, err := svc.VerifyTOTP(user, codes[0], "127.0.0.1", "test", nil); err != nil {
 		t.Fatalf("backup code failed next to an undecryptable TOTP method: %v", err)
+	}
+}
+
+// A user whose authenticator app is unusable keeps entering codes from it. Those attempts must not lock the
+// account, which would also block the backup code that gets them back in.
+func TestUnusableTOTPAttemptsDoNotLockTheAccount(t *testing.T) {
+	t.Parallel()
+
+	database := dbtest.NewDatabase(t)
+	svc, err := NewService(
+		database, "Test", 24*time.Hour, 10*time.Minute, []byte("test-pepper"),
+		"", "", "localhost", "http://localhost", nil,
+	)
+	if err != nil {
+		t.Fatalf("failed to create service: %v", err)
+	}
+	user := mustCreateUser(t, database, "unusable@example.com", "Unusable")
+	key := createConfirmedTOTP(t, database, user)
+	methods, err := database.ListMFAMethods(user.ID)
+	if err != nil {
+		t.Fatalf("failed to list methods: %v", err)
+	}
+	for _, method := range methods {
+		plantSecret(t, database, method.ID, key.Secret()) // not encrypted, so unusable
+	}
+	backupCodes, err := svc.GenerateBackupCodes(user.ID)
+	if err != nil {
+		t.Fatalf("failed to generate backup codes: %v", err)
+	}
+
+	for range 6 {
+		code, err := totp.GenerateCode(key.Secret(), time.Now())
+		if err != nil {
+			t.Fatalf("failed to generate code: %v", err)
+		}
+		if _, err := svc.VerifyTOTP(user, code, "127.0.0.1", "test", nil); !errors.Is(err, ErrTOTPUnusable) {
+			t.Fatalf("VerifyTOTP err = %v, want ErrTOTPUnusable", err)
+		}
+	}
+	if locked, err := database.IsUserLocked(user.ID); err != nil || locked {
+		t.Fatalf("IsUserLocked = %v, %v; want unlocked", locked, err)
+	}
+	if _, err := svc.VerifyTOTP(user, backupCodes[0], "127.0.0.1", "test", nil); err != nil {
+		t.Fatalf("backup code: %v", err)
 	}
 }

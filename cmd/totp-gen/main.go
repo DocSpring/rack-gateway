@@ -90,7 +90,7 @@ func encryptSecret(args []string) error {
 	if err != nil {
 		return err
 	}
-	envelope, err := cipher.Encrypt(strings.TrimSpace(flags.Arg(0)), colcrypt.MFASecretScope(*userID))
+	envelope, err := cipher.Encrypt(strings.TrimSpace(flags.Arg(0)), colcrypt.MFASecretScope(*userID, "totp"))
 	if err != nil {
 		return err
 	}
@@ -108,7 +108,7 @@ func generateFromDB(emailFilter string) error {
 	if err != nil {
 		return err
 	}
-	secret, err := cipher.Decrypt(stored.value, colcrypt.MFASecretScope(stored.userID))
+	secret, err := cipher.Decrypt(stored.value, colcrypt.MFASecretScope(stored.userID, "totp"))
 	if err != nil {
 		return fmt.Errorf("decrypting the TOTP secret for %s: %w", stored.email, err)
 	}

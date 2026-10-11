@@ -132,9 +132,14 @@ func (d *Database) CreateMFAMethod(
 		meta = string(b)
 	}
 
-	encryptedSecret, err := d.cipher.Encrypt(secret, colcrypt.MFASecretScope(userID))
-	if err != nil {
-		return nil, fmt.Errorf("failed to encrypt MFA secret: %w", err)
+	// Methods without a secret (WebAuthn) store NULL.
+	var encryptedSecret sql.NullString
+	if secret != "" {
+		value, err := d.cipher.Encrypt(secret, colcrypt.MFASecretScope(userID, methodType))
+		if err != nil {
+			return nil, fmt.Errorf("failed to encrypt MFA secret: %w", err)
+		}
+		encryptedSecret = sql.NullString{String: value, Valid: true}
 	}
 
 	var id int64

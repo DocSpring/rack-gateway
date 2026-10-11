@@ -15,9 +15,11 @@ import (
 func (n *Notifier) NotifyDeployApprovalCreated(req *db.DeployApprovalRequest, gatewayDomain string) error {
 	// Get Slack integration
 	integration, err := n.database.GetSlackIntegration()
-	if err != nil || integration == nil {
-		// No integration configured, silently skip
-		return nil
+	if err != nil {
+		return fmt.Errorf("slack notifier: load integration: %w", err)
+	}
+	if integration == nil {
+		return nil // no integration configured
 	}
 
 	// Check if deploy approval alerts are enabled

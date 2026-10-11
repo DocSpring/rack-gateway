@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"strconv"
+	"strings"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/colcrypt"
 )
@@ -26,7 +27,7 @@ func (d *Database) decryptMFASecret(method *MFAMethod, stored sql.NullString) {
 	if !stored.Valid {
 		return
 	}
-	plaintext, err := d.cipher.Decrypt(stored.String, colcrypt.MFASecretScope(method.UserID))
+	plaintext, err := d.cipher.Decrypt(stored.String, colcrypt.MFASecretScope(method.UserID, method.Type))
 	if err != nil {
 		method.SecretErr = fmt.Errorf("MFA method %d secret: %w", method.ID, err)
 		return
@@ -55,13 +56,14 @@ type legacyColumn struct {
 var legacyColumns = []legacyColumn{
 	{
 		name: "mfa_methods.secret",
-		selectSQL: `SELECT id, user_id::text, secret FROM mfa_methods
+		selectSQL: `SELECT id, user_id::text || ':' || type, secret FROM mfa_methods
 			WHERE secret IS NOT NULL AND secret NOT LIKE $1`,
 		updateSQL: `UPDATE mfa_methods SET secret = $1 WHERE id = $2 AND secret = $3`,
 		plaintext: func(stored string) (string, error) { return stored, nil },
 		scope: func(binding string) (colcrypt.Scope, error) {
-			userID, err := strconv.ParseInt(binding, 10, 64)
-			return colcrypt.MFASecretScope(userID), err
+			user, methodType, _ := strings.Cut(binding, ":")
+			userID, err := strconv.ParseInt(user, 10, 64)
+			return colcrypt.MFASecretScope(userID, methodType), err
 		},
 	},
 	{
@@ -82,7 +84,7 @@ var legacyColumns = []legacyColumn{
 
 type legacyRow struct {
 	id      int64
-	binding string // user_id or workspace_id
+	binding string // "user_id:type" or workspace_id
 	value   string
 }
 

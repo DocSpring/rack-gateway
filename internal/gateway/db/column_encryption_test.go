@@ -2,6 +2,7 @@ package db_test
 
 import (
 	"context"
+	"database/sql"
 	"encoding/base64"
 	"testing"
 	"time"
@@ -119,6 +120,39 @@ func TestMFASecretCopiedToAnotherUserDoesNotDecrypt(t *testing.T) {
 	require.Empty(t, methods[0].Secret)
 }
 
+// A YubiKey's public ID isn't secret (it starts every OTP the key sends), so a yubiotp method switched to totp
+// must not turn it into a TOTP seed someone already knows.
+func TestMFASecretDoesNotDecryptAsAnotherMethodType(t *testing.T) {
+	database := dbtest.NewDatabase(t)
+	user, err := database.CreateUser("switched@example.com", "Switched", []string{"admin"})
+	require.NoError(t, err)
+	yubikey, err := database.CreateMFAMethod(user.ID, "yubiotp", "YubiKey", "cccccccccccc", nil, nil, nil, nil)
+	require.NoError(t, err)
+	_, err = database.DB().Exec(`UPDATE mfa_methods SET type = 'totp' WHERE id = $1`, yubikey.ID)
+	require.NoError(t, err)
+
+	method, err := database.GetMFAMethodByID(yubikey.ID)
+	require.NoError(t, err)
+	require.ErrorIs(t, method.SecretErr, colcrypt.ErrCorrupt)
+	require.Empty(t, method.Secret)
+}
+
+// WebAuthn methods have no secret, so confirming one (which changes its type) leaves nothing to decrypt.
+func TestWebAuthnMethodsStoreNoSecret(t *testing.T) {
+	database := dbtest.NewDatabase(t)
+	user, err := database.CreateUser("keys@example.com", "Keys", []string{"admin"})
+	require.NoError(t, err)
+	pending, err := database.CreateMFAMethod(user.ID, "webauthn_pending", "Security Key", "", nil, nil, nil, nil)
+	require.NoError(t, err)
+
+	var stored sql.NullString
+	require.NoError(t, database.DB().QueryRow(`SELECT secret FROM mfa_methods WHERE id = $1`, pending.ID).Scan(&stored))
+	require.False(t, stored.Valid)
+	method, err := database.GetMFAMethodByID(pending.ID)
+	require.NoError(t, err)
+	require.NoError(t, method.SecretErr)
+}
+
 func TestPlaintextMFASecretIsNotUsable(t *testing.T) {
 	database := dbtest.NewDatabase(t)
 	user, err := database.CreateUser("planted@example.com", "Planted", []string{"admin"})
@@ -177,7 +211,7 @@ func TestUpgradePlaintextColumns(t *testing.T) {
 
 	otherCipher, err := colcrypt.New(base64.StdEncoding.EncodeToString(make([]byte, 32)))
 	require.NoError(t, err)
-	otherKeyValue, err := otherCipher.Encrypt(testSeed, colcrypt.MFASecretScope(bob.ID))
+	otherKeyValue, err := otherCipher.Encrypt(testSeed, colcrypt.MFASecretScope(bob.ID, "totp"))
 	require.NoError(t, err)
 	otherKey := insertRawMFAMethod(t, database, bob.ID, "totp", otherKeyValue)
 

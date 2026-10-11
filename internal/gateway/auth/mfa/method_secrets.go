@@ -1,6 +1,9 @@
 package mfa
 
 import (
+	"errors"
+	"regexp"
+
 	"github.com/getsentry/sentry-go"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
@@ -31,4 +34,30 @@ func reportUnusableSecret(method *db.MFAMethod) {
 	gtwlog.Errorf("mfa: %s method %d of user %d is unusable: %v",
 		method.Type, method.ID, method.UserID, method.SecretErr)
 	sentry.CaptureException(method.SecretErr)
+}
+
+// ErrTOTPUnusable is returned for a TOTP code when every authenticator app the user has is unusable (its secret
+// can't be decrypted). No code could verify, so the attempt doesn't count toward the automatic account lock,
+// which would also block the user's other factors and backup codes.
+var ErrTOTPUnusable = errors.New(
+	"your authenticator app can't be used: sign in with a security key or a backup code, then remove the app " +
+		"and add it again",
+)
+
+// totpCodePattern matches a TOTP code. Backup codes are 12 hex characters, so they never match.
+var totpCodePattern = regexp.MustCompile(`^[0-9]{6}$`)
+
+// onlyUnusableTOTP reports whether the user has TOTP methods and none of them can verify a code.
+func onlyUnusableTOTP(methods []*db.MFAMethod) bool {
+	found := false
+	for _, method := range methods {
+		if method.Type != "totp" {
+			continue
+		}
+		if method.SecretErr == nil {
+			return false
+		}
+		found = true
+	}
+	return found
 }

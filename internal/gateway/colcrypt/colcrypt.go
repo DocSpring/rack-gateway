@@ -15,8 +15,9 @@
 //     (reading with the previous key while writing with the new one). Rotation is not implemented yet.
 //
 // The additional authenticated data is "rgwenc:v1:<kid>|<table.column>|<row binding>", for example
-// "rgwenc:v1:1a2b3c4d|mfa_methods.secret|user:42". A ciphertext copied to another column or to another
-// user's row fails authentication, so database write access alone can't move a secret between accounts.
+// "rgwenc:v1:1a2b3c4d|mfa_methods.secret|user:42|type:totp". A ciphertext copied to another column, to another
+// user's row, or to a method of another type fails authentication, so database write access alone can't move a
+// secret between accounts, or turn a YubiKey's public ID (which isn't secret) into a TOTP seed.
 //
 // web/e2e/column-crypto.ts implements the same format for E2E tests. A shared test vector in both test
 // suites keeps the two in step.
@@ -80,9 +81,16 @@ type Scope struct {
 	Row    string
 }
 
-// MFASecretScope is the scope of mfa_methods.secret, bound to the method's user.
-func MFASecretScope(userID int64) Scope {
-	return Scope{Column: "mfa_methods.secret", Row: "user:" + strconv.FormatInt(userID, 10)}
+// MFASecretScope is the scope of mfa_methods.secret, bound to the method's user and type. A pending WebAuthn
+// method has the type of a confirmed one, since confirming it changes the type but keeps the row.
+func MFASecretScope(userID int64, methodType string) Scope {
+	if strings.HasPrefix(methodType, "webauthn") {
+		methodType = "webauthn"
+	}
+	return Scope{
+		Column: "mfa_methods.secret",
+		Row:    "user:" + strconv.FormatInt(userID, 10) + "|type:" + methodType,
+	}
 }
 
 // SlackBotTokenScope is the scope of slack_integration.bot_token_encrypted, bound to the workspace.
@@ -116,6 +124,18 @@ func New(encodedKey string) (*Cipher, error) {
 		return nil, fmt.Errorf("colcrypt: %w", err)
 	}
 	return &Cipher{aead: aead, kid: keyID(key), random: rand.Reader}, nil
+}
+
+// IsDevelopmentKey reports whether encodedKey is DevKey, however it is spaced or wrapped: base64 decoding
+// ignores line breaks, so comparing the strings alone could miss it.
+func IsDevelopmentKey(encodedKey string) bool {
+	compact := strings.Join(strings.Fields(encodedKey), "")
+	key, err := base64.StdEncoding.DecodeString(compact)
+	if err != nil {
+		return false
+	}
+	dev, _ := base64.StdEncoding.DecodeString(DevKey)
+	return hmac.Equal(key, dev)
 }
 
 func keyID(key []byte) string {

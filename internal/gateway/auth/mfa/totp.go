@@ -111,6 +111,12 @@ func (s *Service) VerifyTOTP(
 		return result, err
 	}
 
+	if totpCodePattern.MatchString(sanitized) {
+		if methods, err := s.db.ListMFAMethods(user.ID); err == nil && onlyUnusableTOTP(methods) {
+			return nil, ErrTOTPUnusable
+		}
+	}
+
 	// Log failed attempt (generic error, don't leak why it failed)
 	_ = s.db.LogTOTPAttempt(user.ID, nil, false, "invalid_code", ipAddress, userAgent, sessionID)
 

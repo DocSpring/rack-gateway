@@ -13,12 +13,12 @@ const VECTOR = {
   nonce: 'a0a1a2a3a4a5a6a7a8a9aaab',
   plaintext: 'JBSWY3DPEHPK3PXP',
   userId: 42,
-  envelope: 'rgwenc:v1:c2fa4cfe:oKGio6SlpqeoqaqrrFovehz4Ru8nLdeYNCqYjr00ndgsQACJ_Y4l0s1K82s',
+  envelope: 'rgwenc:v1:c2fa4cfe:oKGio6SlpqeoqaqrrFovehz4Ru8nLdeYNCqYjj75XvCHi5qUNLQy-T7NX2E',
 }
 
 describe('E2E column encryption helper', () => {
   const key = parseColumnKey(VECTOR.key)
-  const scope = mfaSecretScope(VECTOR.userId)
+  const scope = mfaSecretScope(VECTOR.userId, 'totp')
 
   it('produces the same envelope as the gateway', () => {
     const envelope = encryptColumnValue(
@@ -39,7 +39,7 @@ describe('E2E column encryption helper', () => {
   })
 
   it("rejects a value bound to another user's row", () => {
-    expect(() => decryptColumnValue(key, VECTOR.envelope, mfaSecretScope(43))).toThrow()
+    expect(() => decryptColumnValue(key, VECTOR.envelope, mfaSecretScope(43, 'totp'))).toThrow()
   })
 
   it('rejects a value encrypted under another key', () => {

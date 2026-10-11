@@ -252,9 +252,8 @@ services:
       DOMAIN: gateway.example.test
       PORT: ${RELEASE_GATEWAY_PORT:-9460}
       AUDIT_HMAC_SECRET: release-smoke-audit-secret
-      # Not the published development key: the release smoke test runs against a production-marked database,
-      # which refuses that key.
-      COLUMN_ENCRYPTION_KEY: cmVsZWFzZS1zbW9rZS10ZXN0LWNvbHVtbi1rZXktMzI=
+      # A fresh key from scripts/release-smoke.sh: release builds refuse the published development key.
+      COLUMN_ENCRYPTION_KEY: ${RELEASE_COLUMN_ENCRYPTION_KEY:-}
       DATABASE_URL: postgres://postgres:postgres@postgres:5432/gateway_release?sslmode=disable
     ports:
       - "${RELEASE_GATEWAY_PORT:-9460}:${RELEASE_GATEWAY_PORT:-9460}"

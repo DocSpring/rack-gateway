@@ -16,7 +16,7 @@ const (
 	vectorNonce     = "a0a1a2a3a4a5a6a7a8a9aaab"
 	vectorPlaintext = "JBSWY3DPEHPK3PXP"
 	vectorUserID    = 42
-	vectorEnvelope  = "rgwenc:v1:c2fa4cfe:oKGio6SlpqeoqaqrrFovehz4Ru8nLdeYNCqYjr00ndgsQACJ_Y4l0s1K82s"
+	vectorEnvelope  = "rgwenc:v1:c2fa4cfe:oKGio6SlpqeoqaqrrFovehz4Ru8nLdeYNCqYjj75XvCHi5qUNLQy-T7NX2E"
 )
 
 const otherKey = "//////////////////////////////////////////8=" // 32 bytes of 0xff
@@ -46,10 +46,10 @@ func TestSharedTestVector(t *testing.T) {
 		t.Fatal(err)
 	}
 	c.random = bytes.NewReader(nonce)
-	if got := mustEncrypt(t, c, vectorPlaintext, MFASecretScope(vectorUserID)); got != vectorEnvelope {
+	if got := mustEncrypt(t, c, vectorPlaintext, MFASecretScope(vectorUserID, "totp")); got != vectorEnvelope {
 		t.Fatalf("envelope mismatch:\n got  %s\n want %s", got, vectorEnvelope)
 	}
-	plaintext, err := c.Decrypt(vectorEnvelope, MFASecretScope(vectorUserID))
+	plaintext, err := c.Decrypt(vectorEnvelope, MFASecretScope(vectorUserID, "totp"))
 	if err != nil || plaintext != vectorPlaintext {
 		t.Fatalf("Decrypt = %q, %v; want %q", plaintext, err, vectorPlaintext)
 	}
@@ -58,14 +58,14 @@ func TestSharedTestVector(t *testing.T) {
 func TestRoundTrip(t *testing.T) {
 	c := mustCipher(t, DevKey)
 	for _, plaintext := range []string{"", "JBSWY3DPEHPK3PXP", "xoxb-1234-abcd", "with:colons|and|pipes"} {
-		envelope := mustEncrypt(t, c, plaintext, MFASecretScope(7))
+		envelope := mustEncrypt(t, c, plaintext, MFASecretScope(7, "totp"))
 		if !strings.HasPrefix(envelope, c.EnvelopePrefix()) || !IsEncrypted(envelope) {
 			t.Fatalf("envelope %q lacks prefix %q", envelope, c.EnvelopePrefix())
 		}
 		if plaintext != "" && strings.Contains(envelope, plaintext) {
 			t.Fatalf("envelope contains the plaintext")
 		}
-		got, err := c.Decrypt(envelope, MFASecretScope(7))
+		got, err := c.Decrypt(envelope, MFASecretScope(7, "totp"))
 		if err != nil || got != plaintext {
 			t.Fatalf("Decrypt = %q, %v; want %q", got, err, plaintext)
 		}
@@ -74,8 +74,8 @@ func TestRoundTrip(t *testing.T) {
 
 func TestEncryptionsDiffer(t *testing.T) {
 	c := mustCipher(t, DevKey)
-	first := mustEncrypt(t, c, "same", MFASecretScope(1))
-	second := mustEncrypt(t, c, "same", MFASecretScope(1))
+	first := mustEncrypt(t, c, "same", MFASecretScope(1, "totp"))
+	second := mustEncrypt(t, c, "same", MFASecretScope(1, "totp"))
 	if first == second {
 		t.Fatal("two encryptions of the same value must use different nonces")
 	}
@@ -83,10 +83,11 @@ func TestEncryptionsDiffer(t *testing.T) {
 
 func TestDecryptRejectsOtherScopes(t *testing.T) {
 	c := mustCipher(t, DevKey)
-	envelope := mustEncrypt(t, c, "JBSWY3DPEHPK3PXP", MFASecretScope(1))
+	envelope := mustEncrypt(t, c, "JBSWY3DPEHPK3PXP", MFASecretScope(1, "totp"))
 
 	for name, scope := range map[string]Scope{
-		"another user":   MFASecretScope(2),
+		"another user":   MFASecretScope(2, "totp"),
+		"another type":   MFASecretScope(1, "yubiotp"),
 		"another column": {Column: "slack_integration.bot_token_encrypted", Row: "user:1"},
 		"slack scope":    SlackBotTokenScope("1"),
 	} {
@@ -98,7 +99,7 @@ func TestDecryptRejectsOtherScopes(t *testing.T) {
 
 func TestDecryptRejectsTamperedPayload(t *testing.T) {
 	c := mustCipher(t, DevKey)
-	envelope := mustEncrypt(t, c, "JBSWY3DPEHPK3PXP", MFASecretScope(1))
+	envelope := mustEncrypt(t, c, "JBSWY3DPEHPK3PXP", MFASecretScope(1, "totp"))
 	encoded := strings.TrimPrefix(envelope, c.EnvelopePrefix())
 	payload, err := base64.RawURLEncoding.DecodeString(encoded)
 	if err != nil {
@@ -109,22 +110,22 @@ func TestDecryptRejectsTamperedPayload(t *testing.T) {
 		tampered := append([]byte(nil), payload...)
 		tampered[index] ^= 0x01
 		value := c.EnvelopePrefix() + base64.RawURLEncoding.EncodeToString(tampered)
-		if _, err := c.Decrypt(value, MFASecretScope(1)); !errors.Is(err, ErrCorrupt) {
+		if _, err := c.Decrypt(value, MFASecretScope(1, "totp")); !errors.Is(err, ErrCorrupt) {
 			t.Errorf("byte %d flipped: err = %v, want ErrCorrupt", index, err)
 		}
 	}
 }
 
 func TestDecryptRejectsWrongKey(t *testing.T) {
-	envelope := mustEncrypt(t, mustCipher(t, DevKey), "JBSWY3DPEHPK3PXP", MFASecretScope(1))
+	envelope := mustEncrypt(t, mustCipher(t, DevKey), "JBSWY3DPEHPK3PXP", MFASecretScope(1, "totp"))
 	other := mustCipher(t, otherKey)
-	if _, err := other.Decrypt(envelope, MFASecretScope(1)); !errors.Is(err, ErrWrongKey) {
+	if _, err := other.Decrypt(envelope, MFASecretScope(1, "totp")); !errors.Is(err, ErrWrongKey) {
 		t.Fatalf("err = %v, want ErrWrongKey", err)
 	}
 
 	// A value relabelled with this key's id still fails authentication.
 	relabelled := other.EnvelopePrefix() + strings.TrimPrefix(envelope, mustCipher(t, DevKey).EnvelopePrefix())
-	if _, err := other.Decrypt(relabelled, MFASecretScope(1)); !errors.Is(err, ErrCorrupt) {
+	if _, err := other.Decrypt(relabelled, MFASecretScope(1, "totp")); !errors.Is(err, ErrCorrupt) {
 		t.Fatalf("relabelled: err = %v, want ErrCorrupt", err)
 	}
 }
@@ -143,7 +144,7 @@ func TestDecryptRejectsUnencryptedAndMalformedValues(t *testing.T) {
 		c.EnvelopePrefix() + "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA": ErrCorrupt,
 	}
 	for value, want := range cases {
-		if _, err := c.Decrypt(value, MFASecretScope(1)); !errors.Is(err, want) {
+		if _, err := c.Decrypt(value, MFASecretScope(1, "totp")); !errors.Is(err, want) {
 			t.Errorf("Decrypt(%q) err = %v, want %v", value, err, want)
 		}
 	}
@@ -171,5 +172,26 @@ func TestNewAcceptsSurroundingWhitespace(t *testing.T) {
 	c := mustCipher(t, " "+DevKey+"\n")
 	if c.kid != mustCipher(t, DevKey).kid {
 		t.Fatal("whitespace around the key must not change it")
+	}
+}
+
+// Confirming a WebAuthn method changes its type from webauthn_pending to webauthn; both have the same scope.
+func TestPendingAndConfirmedWebAuthnShareAScope(t *testing.T) {
+	if MFASecretScope(1, "webauthn_pending") != MFASecretScope(1, "webauthn") {
+		t.Fatal("pending and confirmed WebAuthn methods have different scopes")
+	}
+}
+
+// Base64 decoding ignores line breaks, so a wrapped or padded development key must still be recognized.
+func TestIsDevelopmentKey(t *testing.T) {
+	for _, key := range []string{DevKey, " " + DevKey + "\n", DevKey[:20] + "\n" + DevKey[20:]} {
+		if !IsDevelopmentKey(key) {
+			t.Errorf("IsDevelopmentKey(%q) = false", key)
+		}
+	}
+	for _, key := range []string{"", "not base64", vectorKey} {
+		if IsDevelopmentKey(key) {
+			t.Errorf("IsDevelopmentKey(%q) = true", key)
+		}
 	}
 }
