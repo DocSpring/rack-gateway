@@ -77,12 +77,13 @@ func (h *Handler) prepareReleaseCreate(
 	}
 
 	posted, order := parsePostedEnv(envStr)
+	keys := h.loadAppEnvKeys(app)
 
-	if err := h.validateSecretsPermissions(r, email, app, posted, order); err != nil {
+	if err := h.validateSecretsPermissions(r, email, keys, posted, order); err != nil {
 		return nil, err
 	}
 
-	if err := h.validateProtectedKeys(r, email, app, posted); err != nil {
+	if err := h.validateProtectedKeys(r, email, keys, posted); err != nil {
 		return nil, err
 	}
 
@@ -96,7 +97,7 @@ func (h *Handler) prepareReleaseCreate(
 	}
 
 	canSecretsSet := h.callerCan(r, rbac.ResourceSecret, rbac.ActionSet)
-	merged, diffs, err := h.mergeEnvAndComputeDiffs(r, email, app, posted, order, baseEnv, canSecretsSet)
+	merged, diffs, err := h.mergeEnvAndComputeDiffs(r, email, keys, posted, order, baseEnv, canSecretsSet)
 	if err != nil {
 		return nil, err
 	}
@@ -163,7 +164,8 @@ func parsePostedEnv(envStr string) (map[string]string, []string) {
 
 func (h *Handler) validateSecretsPermissions(
 	r *http.Request,
-	email, app string,
+	email string,
+	keys appEnvKeys,
 	posted map[string]string,
 	order []string,
 ) error {
@@ -173,7 +175,7 @@ func (h *Handler) validateSecretsPermissions(
 	}
 	offending := make([]string, 0)
 	for _, k := range order {
-		if h.isSecretKeyForApp(k, app) && posted[k] != maskedSecret {
+		if keys.isSecret(k) && posted[k] != maskedSecret {
 			offending = append(offending, k)
 		}
 	}
@@ -181,9 +183,8 @@ func (h *Handler) validateSecretsPermissions(
 		return nil
 	}
 	for _, key := range offending {
-		h.logDeniedRBACAction(
-			r, email, rbac.ResourceSecret, rbac.ActionSet, fmt.Sprintf("%s/%s", app, key), "{}", http.StatusForbidden,
-		)
+		resource := fmt.Sprintf("%s/%s", keys.app, key)
+		h.logDeniedRBACAction(r, email, rbac.ResourceSecret, rbac.ActionSet, resource, "{}", http.StatusForbidden)
 	}
 	return secretsDenied(offending)
 }
@@ -230,7 +231,8 @@ func (h *Handler) validateEnvPermissions(
 
 func (h *Handler) mergeEnvAndComputeDiffs(
 	r *http.Request,
-	email, app string,
+	email string,
+	keys appEnvKeys,
 	posted map[string]string,
 	order []string,
 	baseEnv map[string]string,
@@ -242,7 +244,7 @@ func (h *Handler) mergeEnvAndComputeDiffs(
 	for _, key := range order {
 		val := posted[key]
 		base := baseEnv[key]
-		isSecret := h.isSecretKeyForApp(key, app)
+		isSecret := keys.isSecret(key)
 		if val == maskedSecret {
 			merged[key] = base
 			continue
@@ -256,14 +258,14 @@ func (h *Handler) mergeEnvAndComputeDiffs(
 		}
 	}
 
-	removed, err := h.removedKeyDiffs(r, app, posted, baseEnv, merged, canSecretsSet)
+	removed, err := removedKeyDiffs(r, keys, posted, baseEnv, merged, canSecretsSet)
 	if err != nil {
 		return nil, nil, err
 	}
 	diffs = append(diffs, removed...)
 
-	h.markProtectedDiffs(app, diffs)
-	if err := h.validateProtectedDiffs(r, email, app, diffs); err != nil {
+	markProtectedDiffs(keys, diffs)
+	if err := h.validateProtectedDiffs(r, email, keys.app, diffs); err != nil {
 		return nil, nil, err
 	}
 
@@ -274,9 +276,9 @@ func (h *Handler) mergeEnvAndComputeDiffs(
 // Protected keys left out are kept (copied into merged): the CLI does not post them back. A protected key the
 // request names in X-Allow-Protected-Env is removed like any other key (`env unset --allow-protected`), and
 // the removal is then authorized as a protected change. Removing a secret needs secret:set.
-func (h *Handler) removedKeyDiffs(
+func removedKeyDiffs(
 	r *http.Request,
-	app string,
+	keys appEnvKeys,
 	posted, baseEnv, merged map[string]string,
 	canSecretsSet bool,
 ) ([]envutil.EnvDiff, error) {
@@ -286,11 +288,11 @@ func (h *Handler) removedKeyDiffs(
 		if _, ok := posted[key]; ok {
 			continue
 		}
-		if h.isProtectedKeyForApp(key, app) && !optedIn.has(key) {
+		if keys.isProtected(key) && !optedIn.has(key) {
 			merged[key] = base
 			continue
 		}
-		isSecret := h.isSecretKeyForApp(key, app)
+		isSecret := keys.isSecret(key)
 		if isSecret && !canSecretsSet {
 			return nil, secretsDenied([]string{key})
 		}
