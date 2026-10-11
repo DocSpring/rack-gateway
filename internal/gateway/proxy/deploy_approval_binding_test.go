@@ -176,6 +176,26 @@ func TestTokenBuildRejectsObjectNotUploadedUnderApproval(t *testing.T) {
 	require.ErrorContains(t, err, "must use the archive uploaded for deploy approval")
 }
 
+// The rack uses a build's url and manifest exactly as sent. A trimmed copy could name a different object, or a
+// different file in the archive ("convox.yml " rather than the convox.yml that was checked), so whitespace around
+// either is refused.
+func TestBuildRefusesWhitespaceAroundURLAndManifest(t *testing.T) {
+	f := newBindingFixture(t)
+	f.manifest = imageManifest("docker.io/docspringcom/app:" + approvedCommit)
+
+	var approvalErr *deployApprovalError
+	require.ErrorAs(t, f.build(t, "url="+approvedObjectURL+"%20"), &approvalErr, "a padded url finds no approval")
+	require.Equal(t, http.StatusForbidden, approvalErr.status)
+
+	err := f.build(t, "url="+approvedObjectURL+"&manifest=convox.yml%20")
+	require.ErrorContains(t, err, "manifest must not start or end with whitespace")
+
+	user := &auth.User{Email: "admin@example.com"}
+	r := httptest.NewRequest(http.MethodPost, buildPath, nil)
+	err = f.h.validateBuildRequest(r, buildPath, []byte("url=%20"+approvedObjectURL), user)
+	require.ErrorContains(t, err, "url must not start or end with whitespace")
+}
+
 func TestTokenBuildRejectsGitSHAMismatch(t *testing.T) {
 	f := newBindingFixture(t)
 	f.manifest = imageManifest("docker.io/docspringcom/app:" + approvedCommit)

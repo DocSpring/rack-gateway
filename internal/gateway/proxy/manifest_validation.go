@@ -191,13 +191,19 @@ func sanitizeObjectFetchPath(value string) (string, error) {
 // parseManifestFromTarball reads the manifest at manifestPath from a gzipped tarball as it streams in, holding no
 // more than the manifest in memory, and parses it.
 func parseManifestFromTarball(r io.Reader, manifestPath string) (*convoxManifest, error) {
-	limited := &io.LimitedReader{R: r, N: maxTarballSize}
+	return parseManifestFromTarballWithin(r, manifestPath, maxTarballSize)
+}
+
+// parseManifestFromTarballWithin is parseManifestFromTarball with a size limit. An archive that reaches the limit
+// is refused even when the scan ended cleanly: the limit can fall exactly between two gzip members, where gzip and
+// tar both see a normal end, and the rack would still extract the rest (which could hold another manifest).
+func parseManifestFromTarballWithin(r io.Reader, manifestPath string, limit int64) (*convoxManifest, error) {
+	limited := &io.LimitedReader{R: r, N: limit}
 	manifestData, err := readManifestFromTarball(limited, manifestPath)
+	if limited.N <= 0 {
+		return nil, fmt.Errorf("tarball exceeds maximum size of %d bytes", limit)
+	}
 	if err != nil {
-		// Running out of bytes surfaces as a truncated gzip or tar stream; say why.
-		if limited.N <= 0 {
-			return nil, fmt.Errorf("tarball exceeds maximum size of %d bytes", maxTarballSize)
-		}
 		return nil, err
 	}
 

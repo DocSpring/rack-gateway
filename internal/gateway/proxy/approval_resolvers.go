@@ -218,7 +218,8 @@ func buildRequestObjectURL(r *http.Request) (string, error) {
 	if err != nil {
 		return "", &deployApprovalError{status: http.StatusBadRequest, message: "invalid build request body"}
 	}
-	return strings.TrimSpace(vals.Get("url")), nil
+	// Not trimmed: the rack uses the url as sent, and validateBuildRequest refuses one with surrounding whitespace.
+	return vals.Get("url"), nil
 }
 
 func (h *Handler) findApprovalForBuildRead(

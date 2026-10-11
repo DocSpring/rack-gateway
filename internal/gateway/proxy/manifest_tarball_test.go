@@ -23,6 +23,12 @@ type tarEntry struct {
 
 // writeTarball writes entries to w as a gzipped tarball.
 func writeTarball(w io.Writer, entries ...tarEntry) error {
+	return writeGzippedTar(w, true, entries...)
+}
+
+// writeGzippedTar writes entries to w as one gzip member. Without endArchive it leaves out the tar end-of-archive
+// blocks, so another member can carry on the same archive.
+func writeGzippedTar(w io.Writer, endArchive bool, entries ...tarEntry) error {
 	gz := gzip.NewWriter(w)
 	tw := tar.NewWriter(gz)
 	for _, entry := range entries {
@@ -38,7 +44,11 @@ func writeTarball(w io.Writer, entries ...tarEntry) error {
 			return err
 		}
 	}
-	if err := tw.Close(); err != nil {
+	finish := tw.Flush
+	if endArchive {
+		finish = tw.Close
+	}
+	if err := finish(); err != nil {
 		return err
 	}
 	return gz.Close()
@@ -165,5 +175,22 @@ func TestManifestScanStreamsTheWholeTarball(t *testing.T) {
 
 	replacement := tarEntry{name: "convox.yml", body: []byte("services:\n  web:\n    image: attacker/app\n")}
 	_, err = parseManifestFromTarball(streamedTarball(t, append(entries, replacement)...), defaultManifestPath)
+	require.ErrorContains(t, err, "tarball contains convox.yml more than once")
+}
+
+// The size limit can fall exactly between two gzip members, where gzip and tar both see a normal end of the archive.
+// The scan must still refuse it: the rack extracts every member, and a later one can hold another manifest.
+func TestManifestScanRefusesAnArchiveThatReachesTheSizeLimit(t *testing.T) {
+	var first, second bytes.Buffer
+	require.NoError(t, writeGzippedTar(&first, false, tarEntry{name: "convox.yml", body: []byte(webManifest)}))
+	replacement := tarEntry{name: "convox.yml", body: []byte("services:\n  web:\n    image: attacker/app\n")}
+	require.NoError(t, writeGzippedTar(&second, true, replacement))
+	archive := append(append([]byte{}, first.Bytes()...), second.Bytes()...)
+
+	_, err := parseManifestFromTarballWithin(bytes.NewReader(archive), defaultManifestPath, int64(first.Len()))
+	require.ErrorContains(t, err, "tarball exceeds maximum size")
+
+	// Read in full, the same archive has two manifests.
+	_, err = parseManifestFromTarballWithin(bytes.NewReader(archive), defaultManifestPath, int64(len(archive)+1))
 	require.ErrorContains(t, err, "tarball contains convox.yml more than once")
 }

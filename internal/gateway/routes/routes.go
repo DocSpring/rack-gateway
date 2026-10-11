@@ -16,6 +16,15 @@ type Config struct {
 	App interface{} // Reference to app for handlers that need it
 }
 
+// Request body limits for the gateway's own API. The rack proxy (/api/v1/rack-proxy) has its own: archive uploads
+// stream through, and every other body is capped as it's read (internal/gateway/proxy).
+const (
+	// maxUnauthenticatedBodyBytes covers login and the CLI login flow, whose bodies are a few small JSON fields.
+	maxUnauthenticatedBodyBytes = 64 << 10
+	// maxAPIBodyBytes covers the signed-in API. The largest body is the web env editor's whole env, well under 1 MB.
+	maxAPIBodyBytes = 10 << 20
+)
+
 // Setup configures all routes for the application
 func Setup(router *gin.Engine, cfg *Config) {
 	setupGlobalMiddleware(router, cfg)
@@ -41,6 +50,7 @@ func Setup(router *gin.Engine, cfg *Config) {
 	api.GET("/health", h.health.Health)
 
 	authenticated := api.Group("")
+	authenticated.Use(middleware.LimitRequestBody(maxAPIBodyBytes))
 	authenticated.Use(middleware.Authenticated(cfg.AuthService))
 	authenticated.Use(middleware.Authorize(cfg.RBACManager))
 	authenticated.Use(middleware.RequireMFAEnrollmentWeb(cfg.Database, cfg.MFASettings))

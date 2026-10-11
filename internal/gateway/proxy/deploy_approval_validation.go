@@ -25,7 +25,7 @@ func (h *Handler) validateBuildManifestForAllUsers(r *http.Request, vals url.Val
 		return nil
 	}
 
-	objectURL := strings.TrimSpace(vals.Get("url"))
+	objectURL := vals.Get("url")
 	if objectURL == "" {
 		return fmt.Errorf("build request missing object URL")
 	}
@@ -50,7 +50,7 @@ func (h *Handler) validateBuildManifestForAllUsers(r *http.Request, vals url.Val
 // The approved commit always comes from the approval record, never from the client.
 func (h *Handler) validateTokenBuildBinding(r *http.Request, vals url.Values, tracker *deployApprovalTracker) error {
 	approval := tracker.request
-	objectURL := strings.TrimSpace(vals.Get("url"))
+	objectURL := vals.Get("url")
 	if objectURL == "" || objectURL != approval.ObjectURL {
 		return fmt.Errorf("build must use the archive uploaded for deploy approval %s", approval.PublicID)
 	}
@@ -87,8 +87,10 @@ func (h *Handler) validateTokenBuildBinding(r *http.Request, vals url.Values, tr
 	return nil
 }
 
+// manifestPathFrom returns the build's manifest path. validateBuildRequest has already refused one with
+// surrounding whitespace, so it's used as sent, like the rack does.
 func manifestPathFrom(vals url.Values) string {
-	if manifestPath := strings.TrimSpace(vals.Get("manifest")); manifestPath != "" {
+	if manifestPath := vals.Get("manifest"); manifestPath != "" {
 		return manifestPath
 	}
 	return defaultManifestPath

@@ -39,6 +39,9 @@ func (h *Handler) validateBuildRequest(
 	if err != nil {
 		return fmt.Errorf("invalid build request body")
 	}
+	if err := refuseSurroundingWhitespace(vals, "url", "manifest"); err != nil {
+		return err
+	}
 
 	if authUser.IsAPIToken {
 		if tracker := getDeployApprovalTracker(r.Context()); tracker != nil && tracker.request != nil {
@@ -46,6 +49,18 @@ func (h *Handler) validateBuildRequest(
 		}
 	}
 	return h.validateBuildManifestForAllUsers(r, vals)
+}
+
+// refuseSurroundingWhitespace refuses a build whose archive or manifest value starts or ends with whitespace. The
+// rack uses these values exactly as sent, so "convox.yml " would be a different manifest (and a trailing space in
+// the url a different object) from the one the gateway checked.
+func refuseSurroundingWhitespace(vals url.Values, names ...string) error {
+	for _, name := range names {
+		if value := vals.Get(name); value != strings.TrimSpace(value) {
+			return fmt.Errorf("invalid build request: %s must not start or end with whitespace", name)
+		}
+	}
+	return nil
 }
 
 func (h *Handler) validateProcessCommand(
@@ -249,9 +264,10 @@ const (
 	// minutes each while deploys hard-failed).
 	promoteForwardTimeout = 10 * time.Minute
 
-	// uploadForwardTimeout gives an archive room to reach the rack: the gateway streams it from the client as it
-	// arrives, and the rack answers once it has the whole archive.
-	uploadForwardTimeout = 10 * time.Minute
+	// uploadForwardTimeout gives an archive room to reach the rack and be processed: the gateway streams it from
+	// the client as it arrives (up to uploadReadTimeout), and the rack answers once it has the whole archive and
+	// has stored it, or for an import, pushed its images.
+	uploadForwardTimeout = 20 * time.Minute
 )
 
 var promotePathPattern = regexp.MustCompile(`^/apps/[^/]+/releases/[^/]+/promote$`)
