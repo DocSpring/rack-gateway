@@ -16,6 +16,7 @@ import (
 	"github.com/riverqueue/river/rivertype"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/app"
+	"github.com/DocSpring/rack-gateway/internal/gateway/colcrypt"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	"github.com/DocSpring/rack-gateway/internal/gateway/jobs"
 	jobaudit "github.com/DocSpring/rack-gateway/internal/gateway/jobs/audit"
@@ -41,6 +42,10 @@ func main() {
 	// A release build (without the testbypass tag) refuses to run at all while a test bypass is set.
 	if err := testbypass.Check(os.Getenv); err != nil {
 		log.Fatal(err)
+	}
+	// The development column key is published in this repository, so a release build never uses it.
+	if !testbypass.Compiled && colcrypt.IsDevelopmentKey(os.Getenv(colcrypt.EnvVar)) {
+		log.Fatalf("refusing to start: %s is the development key published in this repository", colcrypt.EnvVar)
 	}
 
 	handled, err := handleMaintenanceCommand(os.Args)

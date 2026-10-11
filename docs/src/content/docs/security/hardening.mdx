@@ -182,6 +182,7 @@ Store secrets securely:
 |--------|-----------------|-------|
 | `GOOGLE_CLIENT_SECRET` | AWS Secrets Manager | Or Convox environment |
 | `APP_SECRET_KEY` | AWS Secrets Manager | Critical - rotate annually |
+| `COLUMN_ENCRYPTION_KEY` | AWS Secrets Manager | Critical - back it up; without it TOTP enrollments and the Slack integration are lost. Rotation is not supported yet |
 | `DATABASE_URL` | Convox environment | With password |
 | API tokens | CI/CD secrets | GitHub/CircleCI secrets |
 

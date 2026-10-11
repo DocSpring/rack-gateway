@@ -168,6 +168,7 @@ tasks:
       - go.*
       - Taskfile.go.yml
       - cmd/totp-gen/**/*.go
+      - internal/gateway/colcrypt/**/*.go
     generates:
       - bin/totp-gen
     cmds:

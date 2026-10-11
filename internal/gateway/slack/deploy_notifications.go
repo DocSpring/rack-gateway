@@ -1,7 +1,6 @@
 package slack
 
 import (
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"time"
@@ -16,9 +15,11 @@ import (
 func (n *Notifier) NotifyDeployApprovalCreated(req *db.DeployApprovalRequest, gatewayDomain string) error {
 	// Get Slack integration
 	integration, err := n.database.GetSlackIntegration()
-	if err != nil || integration == nil {
-		// No integration configured, silently skip
-		return nil
+	if err != nil {
+		return fmt.Errorf("slack notifier: load integration: %w", err)
+	}
+	if integration == nil {
+		return nil // no integration configured
 	}
 
 	// Check if deploy approval alerts are enabled
@@ -32,14 +33,10 @@ func (n *Notifier) NotifyDeployApprovalCreated(req *db.DeployApprovalRequest, ga
 		return nil
 	}
 
-	// Decrypt bot token
-	botToken, err := base64.StdEncoding.DecodeString(integration.BotTokenEncrypted)
-	if err != nil {
-		return fmt.Errorf("failed to decrypt bot token: %w", err)
+	client := botClient(integration)
+	if client == nil {
+		return nil
 	}
-
-	// Create Slack client
-	client := NewClient(string(botToken))
 
 	// Format rich message
 	text, blocks := n.formatDeployApprovalAlert(req, gatewayDomain)

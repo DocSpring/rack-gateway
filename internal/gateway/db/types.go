@@ -164,11 +164,16 @@ type DeployApprovalRequest struct {
 
 // MFAMethod represents a configured MFA factor for a user.
 type MFAMethod struct {
-	ID           int64      `json:"id"`
-	UserID       int64      `json:"user_id"`
-	Type         string     `json:"type"`
-	Label        string     `json:"label,omitempty"`
-	Secret       string     `json:"-"`
+	ID     int64  `json:"id"`
+	UserID int64  `json:"user_id"`
+	Type   string `json:"type"`
+	Label  string `json:"label,omitempty"`
+	// Secret is the decrypted TOTP seed, YubiKey public ID or WebAuthn enrollment placeholder.
+	Secret string `json:"-"`
+	// SecretErr is set when the stored secret can't be decrypted (another COLUMN_ENCRYPTION_KEY, a tampered
+	// or copied value, or plaintext written directly to the database). Secret is then empty and the method
+	// must not be used to verify anything; the user's other methods are unaffected.
+	SecretErr    error      `json:"-"`
 	CredentialID []byte     `json:"credential_id,omitempty"`
 	PublicKey    []byte     `json:"public_key,omitempty"`
 	Transports   []string   `json:"transports,omitempty"`

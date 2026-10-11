@@ -2,6 +2,8 @@ x-gateway-env: &gateway_common_env
   LOG_LEVEL: ${LOG_LEVEL:-info}
   LOG_SQL_QUERIES: "true"
   APP_SECRET_KEY: dev-secret-key-change-in-production
+  # Published development/test key (see mise.toml); refused against a production database.
+  COLUMN_ENCRYPTION_KEY: cmFjay1nYXRld2F5LWRldi1vbmx5LWNvbHVtbi1rZXk=
   GOOGLE_CLIENT_ID: mock-client-id
   GOOGLE_CLIENT_SECRET: mock-client-secret
   GOOGLE_ALLOWED_DOMAIN: ${GOOGLE_ALLOWED_DOMAIN:-example.com}
@@ -250,6 +252,8 @@ services:
       DOMAIN: gateway.example.test
       PORT: ${RELEASE_GATEWAY_PORT:-9460}
       AUDIT_HMAC_SECRET: release-smoke-audit-secret
+      # A fresh key from scripts/release-smoke.sh: release builds refuse the published development key.
+      COLUMN_ENCRYPTION_KEY: ${RELEASE_COLUMN_ENCRYPTION_KEY:-}
       DATABASE_URL: postgres://postgres:postgres@postgres:5432/gateway_release?sslmode=disable
     ports:
       - "${RELEASE_GATEWAY_PORT:-9460}:${RELEASE_GATEWAY_PORT:-9460}"

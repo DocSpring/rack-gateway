@@ -60,6 +60,10 @@ func (s *Service) ConfirmTOTP(user *db.User, methodID int64, code string) error 
 	if method == nil || method.UserID != user.ID || method.Type != "totp" {
 		return fmt.Errorf("invalid MFA method")
 	}
+	if method.SecretErr != nil {
+		reportUnusableSecret(method)
+		return fmt.Errorf("invalid MFA method")
+	}
 	if err := s.validateTOTPCode(method.Secret, user.Email, code); err != nil {
 		return err
 	}
@@ -107,6 +111,12 @@ func (s *Service) VerifyTOTP(
 		return result, err
 	}
 
+	if totpCodePattern.MatchString(sanitized) {
+		if methods, err := s.db.ListMFAMethods(user.ID); err == nil && onlyUnusableTOTP(methods) {
+			return nil, ErrTOTPUnusable
+		}
+	}
+
 	// Log failed attempt (generic error, don't leak why it failed)
 	_ = s.db.LogTOTPAttempt(user.ID, nil, false, "invalid_code", ipAddress, userAgent, sessionID)
 
@@ -149,10 +159,7 @@ func (s *Service) verifyTOTPMethods(
 	if err != nil {
 		return nil, err
 	}
-	for _, method := range methods {
-		if method.Type != "totp" {
-			continue
-		}
+	for _, method := range methodsWithSecret(methods, "totp") {
 		result, handled, err := s.verifySingleTOTPMethod(
 			userID, method, code, ipAddress, userAgent, sessionID,
 		)
@@ -213,6 +220,11 @@ func (s *Service) verifyBackupCodes(
 // validateTOTPCodeWithTimeStep validates a TOTP code and returns the time-step it was valid for.
 // Returns (timeStep, nil) on success, or (0, error) on failure.
 func (_ *Service) validateTOTPCodeWithTimeStep(secret, code string) (int64, error) {
+	// An empty secret decodes to an empty HMAC key without an error, and anyone can compute its codes.
+	if strings.Trim(strings.TrimSpace(secret), "=") == "" {
+		return 0, fmt.Errorf("TOTP secret is empty")
+	}
+
 	now := time.Now()
 	currentStep := now.Unix() / totpPeriodSeconds
 

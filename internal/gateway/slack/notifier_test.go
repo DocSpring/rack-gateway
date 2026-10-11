@@ -1,8 +1,8 @@
 package slack
 
 import (
-	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"testing"
 	"time"
 
@@ -47,7 +47,7 @@ func TestNotifyAuditEvent_NoMatchingChannels(t *testing.T) {
 			"actions": []string{"deploy.*"}, // Won't match mfa_method.enroll
 		},
 	}
-	botToken := base64.StdEncoding.EncodeToString([]byte("xoxb-test-token"))
+	botToken := fakeSlackBot
 	_, err = database.CreateSlackIntegration(
 		"T123",
 		"Test",
@@ -71,6 +71,14 @@ func TestNotifyAuditEvent_NoMatchingChannels(t *testing.T) {
 	// Should not error when no channels match
 	err = notifier.NotifyAuditEvent(auditLog)
 	require.NoError(t, err)
+}
+
+func TestBotClient_UndecryptableTokenSkipsNotification(t *testing.T) {
+	require.Nil(t, botClient(&db.SlackIntegration{BotTokenErr: errors.New("slack bot token: wrong key")}))
+
+	client := botClient(&db.SlackIntegration{BotToken: fakeSlackBot})
+	require.NotNil(t, client)
+	require.Equal(t, fakeSlackBot, client.botToken)
 }
 
 func TestMatchGlob(t *testing.T) {
@@ -295,7 +303,7 @@ func TestNotifyDeployApprovalCreated(t *testing.T) {
 		require.NoError(t, err)
 
 		// Create integration with alerts disabled
-		botToken := base64.StdEncoding.EncodeToString([]byte("xoxb-test-token"))
+		botToken := fakeSlackBot
 		_, err = database.CreateSlackIntegration(
 			"T123456-1",
 			"Test Team 1",
@@ -326,7 +334,7 @@ func TestNotifyDeployApprovalCreated(t *testing.T) {
 		require.NoError(t, err)
 
 		// Create integration with alerts enabled but no channel
-		botToken := base64.StdEncoding.EncodeToString([]byte("xoxb-test-token"))
+		botToken := fakeSlackBot
 		_, err = database.CreateSlackIntegration(
 			"T123456-2",
 			"Test Team 2",

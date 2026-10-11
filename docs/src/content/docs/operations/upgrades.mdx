@@ -294,6 +294,24 @@ aws rds restore-db-instance-from-db-snapshot \
 
 ## Release Notes That Need Action
 
+### Column encryption key required
+
+TOTP seeds, YubiKey public IDs and the Slack bot token are now stored encrypted with a dedicated key. See
+[Column Encryption](/configuration/environment-variables/#column-encryption).
+
+1. **Set `COLUMN_ENCRYPTION_KEY` before deploying** (`openssl rand -base64 32`) and back it up. Every command
+   that opens the database, including `migrate`, refuses to run without it, so a deploy without the key
+   fails before the new release is promoted.
+2. **Existing secrets are encrypted when the new release starts**, before it serves requests. The log shows
+   a `Column encryption:` line with counts. This happens at startup rather than in `migrate` because the
+   previous release keeps serving while `migrate` runs. It runs again 10 minutes after startup, for anything
+   the previous release stored during the rollout (a TOTP enrollment or a Slack reconnect).
+3. **Expect a short gap for TOTP and YubiKey OTP.** Once the new release has upgraded the data, any process
+   still running the previous release can't read the encrypted values, so its TOTP and YubiKey OTP checks
+   and Slack notifications fail until it is replaced. WebAuthn and backup codes keep working.
+4. **Rolling back** to a release from before column encryption has the same effect until you deploy this
+   release again.
+
 ### Test bypasses compiled out of the release image
 
 The published image no longer contains the development and test bypasses. It refuses to start, `migrate`,

@@ -24,6 +24,7 @@ An optional `admin` service is included in `convox.yml` for running migrations o
    convox env set \
      DOMAIN=gateway.example.com \
      APP_SECRET_KEY=$(openssl rand -base64 32) \
+     COLUMN_ENCRYPTION_KEY=$(openssl rand -base64 32) \
      GOOGLE_CLIENT_ID=your-client-id \
      GOOGLE_CLIENT_SECRET=your-client-secret \
      GOOGLE_ALLOWED_DOMAIN=example.com \
@@ -34,6 +35,12 @@ An optional `admin` service is included in `convox.yml` for running migrations o
    <Aside type="note">
    If you’re not running inside the same Convox rack (or want to override), set `RACK_HOST`
    to the Convox API URL (e.g., `https://api.rack.convox.cloud`).
+   </Aside>
+
+   <Aside type="caution">
+   Set `COLUMN_ENCRYPTION_KEY` once and back it up. It encrypts TOTP seeds and the Slack token, so
+   changing or losing it means users re-enroll TOTP and Slack is reconnected. See
+   [Column Encryption](/configuration/environment-variables/#column-encryption).
    </Aside>
 
 2. **(Optional) Configure audit anchors**
@@ -68,6 +75,7 @@ An optional `admin` service is included in `convox.yml` for running migrations o
 |----------|-------------|
 | `DOMAIN` | Gateway domain (used for OAuth redirects) |
 | `APP_SECRET_KEY` | Session/CSRF secret |
+| `COLUMN_ENCRYPTION_KEY` | Encrypts stored TOTP seeds and the Slack token (`openssl rand -base64 32`) |
 | `GOOGLE_CLIENT_ID` | OAuth client ID |
 | `GOOGLE_CLIENT_SECRET` | OAuth client secret |
 | `GOOGLE_ALLOWED_DOMAIN` | Allowed email domain |
@@ -119,6 +127,8 @@ Use the `admin` service in `convox.yml` for database tasks:
 ```bash
 convox run admin -- ./rack-gateway-api migrate -a rack-gateway
 ```
+
+`migrate` needs `COLUMN_ENCRYPTION_KEY` like the server does (`convox.yml` shares it with every service).
 
 ## Convox Manifest
 

@@ -21,12 +21,19 @@ psql_exec() {
 setup_user_mfa() {
     local email="$1"
     local secret="$2"
-    local sql
+    local user_id encrypted_secret sql
+    user_id=$(psql_query "SELECT id FROM users WHERE email = '${email}';")
+    if [[ -z "$user_id" ]]; then
+        echo -e "${RED}setup_user_mfa: no user ${email}${NC}" >&2
+        exit 1
+    fi
+    # Seeds are stored encrypted and bound to the user; COLUMN_ENCRYPTION_KEY must match the gateway's.
+    encrypted_secret=$("${ROOT_DIR}/scripts/totp-gen" encrypt --user-id "$user_id" "$secret")
     sql=$(cat <<SQL
-DELETE FROM mfa_methods WHERE user_id = (SELECT id FROM users WHERE email = '${email}') AND type = 'totp';
+DELETE FROM mfa_methods WHERE user_id = ${user_id} AND type = 'totp';
 INSERT INTO mfa_methods (user_id, type, label, secret, created_at, confirmed_at, last_used_at)
-SELECT id, 'totp', 'CLI E2E', '${secret}', NOW(), NOW(), NOW() FROM users WHERE email = '${email}';
-UPDATE users SET mfa_enrolled = TRUE, mfa_enforced_at = COALESCE(mfa_enforced_at, NOW()) WHERE email = '${email}';
+VALUES (${user_id}, 'totp', 'CLI E2E', '${encrypted_secret}', NOW(), NOW(), NOW());
+UPDATE users SET mfa_enrolled = TRUE, mfa_enforced_at = COALESCE(mfa_enforced_at, NOW()) WHERE id = ${user_id};
 SQL
     )
     psql_exec "$sql"
