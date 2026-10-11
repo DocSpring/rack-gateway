@@ -23,7 +23,7 @@ and in the end-to-end tests:
 | `GOOGLE_OAUTH_BASE_URL` without `https://` | Accepts identity tokens over plain HTTP |
 
 They only work in a build compiled with the `testbypass` Go build tag, which the development and E2E stacks use. The
-published Docker image and release binaries are built without it, so they can't honour these settings: a release
+published Docker image and the published image is built without it, so they can't honour these settings: a release
 build refuses to start while any of them is set, and the error names each one. Remove them from the environment and
 restart. `rack-gateway-api build-info` shows whether a binary has the bypasses compiled in.
 

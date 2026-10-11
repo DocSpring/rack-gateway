@@ -636,7 +636,7 @@ When in doubt, choose the straightforward, well‑named, maintainable structure 
 | `task test`     | Run all tests                      | Quick test run during development           |
 | `task lint`     | Run all linters and typecheck      | Before committing code                      |
 | `task lint:fix` | Auto-fix linting issues            | When linters report fixable issues          |
-| `task build`    | Build all binaries                 | Creating release artifacts                  |
+| `task build`    | Build all binaries                 | Local binaries (the gateway is a testbypass build) |
 
 ### 🐳 Docker Development
 

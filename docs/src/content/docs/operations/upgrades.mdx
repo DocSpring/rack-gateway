@@ -294,6 +294,23 @@ aws rds restore-db-instance-from-db-snapshot \
 
 ## Release Notes That Need Action
 
+### Test bypasses compiled out of the release image
+
+The published image no longer contains the development and test bypasses. It refuses to start, `migrate`,
+`reset-db` or `write-anchor` while any of these is set, naming each one:
+
+- `DEV_MODE` or `E2E_TEST_MODE` set to a true value (`DEV_MODE=false` is fine)
+- `COOKIE_SECURE=false` (session cookies always have `Secure`, so serve the gateway over HTTPS)
+- `AWS_ENDPOINT_URL`, `AWS_ENDPOINT_URL_S3`, `AWS_ENDPOINT_URL_STS`, `AWS_ENDPOINT_URL_KMS` or `POSTMARK_API_BASE`
+- a `GOOGLE_OAUTH_BASE_URL` that isn't `https://`
+
+Before upgrading, remove them from the gateway's environment. `rack-gateway-api build-info` shows whether an image
+has the bypasses compiled in.
+
+A database the gateway first started with `DEV_MODE` on is marked `development`, and stays marked that way. Check
+`SELECT environment FROM rgw_internal_metadata` on production databases; a production
+gateway should report `production`.
+
 ### Deploy approvals bound to commits (v0.1.3)
 
 Approval-bound CI builds now have to use pre-built images tagged with the approved commit, from a repository

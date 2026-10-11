@@ -49,9 +49,10 @@ refute() {
   fi
 }
 
-# Runs the release image with the given arguments; the output goes to stdout either way.
+# Runs the release image with the given arguments; the output goes to stdout either way. The timeout stops a
+# server that should have refused to start from hanging the job.
 run_gateway() {
-  compose run --rm --no-deps -T "$@" 2>&1
+  timeout 120 docker compose --profile release run --rm --no-deps -T "$@" 2>&1
 }
 
 echo "== Build info"
@@ -85,7 +86,7 @@ run_gateway "$SERVICE" ./rack-gateway-api migrate
 echo "== Start"
 compose up -d --no-build "$SERVICE"
 for attempt in $(seq 1 "$MAX_WAIT_SECONDS"); do
-  if curl -fsS "${BASE_URL}/api/v1/health" >/dev/null 2>&1; then
+  if curl --max-time 10 -fsS "${BASE_URL}/api/v1/health" >/dev/null 2>&1; then
     break
   fi
   if [ "$attempt" -eq "$MAX_WAIT_SECONDS" ]; then
@@ -99,22 +100,22 @@ environment="$(compose exec -T postgres psql -U postgres -d "$DATABASE" -tAc \
 echo "Healthy; database marked production"
 
 echo "== Production behaviour"
-headers="$(curl -fsS -D - -o /dev/null "${BASE_URL}/api/v1/health")"
+headers="$(curl --max-time 10 -fsS -D - -o /dev/null "${BASE_URL}/api/v1/health")"
 expect "HSTS" "$headers" "Strict-Transport-Security: max-age=63072000"
 expect "CSP" "$headers" "Content-Security-Policy: default-src 'self'"
 refute "CSP" "$headers" "unsafe-inline"
 refute "CSP" "$headers" "localhost"
 
-status="$(curl -sS -o /dev/null -w '%{http_code}' -H "Origin: http://localhost:5223" "${BASE_URL}/api/v1/health")"
+status="$(curl --max-time 10 -sS -o /dev/null -w '%{http_code}' -H "Origin: http://localhost:5223" "${BASE_URL}/api/v1/health")"
 [ "$status" = "400" ] || fail "a localhost Origin got ${status}, expected 400 (dev mode allows it)"
 
-login="$(curl -sS -D - -o /dev/null "${BASE_URL}/api/v1/auth/web/login")"
+login="$(curl --max-time 10 -sS -D - -o /dev/null "${BASE_URL}/api/v1/auth/web/login")"
 expect "OAuth login" "$login" "Location: https://accounts.google.com/"
 expect "OAuth login" "$login" "redirect_uri=https%3A%2F%2Fgateway.example.test%2F"
 state_cookie="$(grep -i '^Set-Cookie: rgw_oauth_state=' <<<"$login" || true)"
 expect "OAuth state cookie" "$state_cookie" "Secure"
 
-page="$(curl -fsS "${BASE_URL}/app/login")"
+page="$(curl --max-time 10 -fsS "${BASE_URL}/app/login")"
 expect "web UI" "$page" "window.__nonce__"
 refute "web UI" "$page" "__e2e_test_mode__"
 

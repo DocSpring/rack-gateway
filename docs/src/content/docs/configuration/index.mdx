@@ -113,7 +113,7 @@ The published Docker image is built without the tag, and refuses to start with `
 
 ### Production Requirements
 
-For production, run the published image or a release binary, serve it over HTTPS (cookies are always `Secure`),
+For production, run the published image (or an image built with `task docker`), serve it over HTTPS (cookies are always `Secure`),
 and set:
 
 - `APP_SECRET_KEY` (secure random value)
