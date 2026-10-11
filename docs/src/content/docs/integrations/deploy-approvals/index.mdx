@@ -223,9 +223,9 @@ rack-gateway deploy-approval approve <request-id> \
   --notes "Reviewed diff, LGTM"
 ```
 
-Requires MFA step-up authentication. The command first shows the request (rack, app, full commit, message, branch
-and requesting token). From a terminal it then asks you to press Enter before approving. Only a pending request
-can be approved; one that is already approved or deployed counts as done.
+Requires MFA step-up authentication. The command first shows the request (rack, app, full commit, message, branch,
+pull request and requesting token). From a terminal it then asks you to press Enter before approving. Only a
+pending request can be approved; one that is already approved or deployed counts as done.
 
 ### Approve a Commit (Several Apps, Several Racks)
 
@@ -260,7 +260,18 @@ rack-gateway deploy-approval list --status pending
 rack-gateway deploy-approval list --open --app api-proxy --commit <sha>
 ```
 
-The table shows each request's app and short commit, and the full message.
+The table shows each request's app and short commit, and the full message. `-o json` prints each request as JSON,
+including the pull request URL (`pr_url`) that GitHub verification found.
+
+### Show Request
+
+```bash
+rack-gateway deploy-approval show <request-id>
+rack-gateway deploy-approval show --app myapp --commit <sha> -o json
+```
+
+Prints the request's status, message, app, token, commit, branch, pull request (`PR:`) and approval times.
+`-o json` prints the same fields as JSON, with the pull request as `pr_url`.
 
 ### Wait for Approval
 

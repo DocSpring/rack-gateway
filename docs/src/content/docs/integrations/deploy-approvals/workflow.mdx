@@ -303,12 +303,27 @@ The complete workflow generates audit entries:
 
 | Event | Actor | Details |
 |-------|-------|---------|
-| `deploy_approval_request.create` | CI/CD token | Commit, branch, message |
+| `deploy_approval_request.create` | CI/CD token | Commit, branch, message, GitHub verification result, PR URL |
 | `deploy_approval_request.approve` | Admin user | Notes, MFA method |
 | `build.create` | CI/CD token | Build ID, manifest |
 | `release.promote` | CI/CD token | Release ID |
 | `deploy_approval_request.reject` | Admin user | Notes |
 | `deploy_approval_request.expire` | `system` | Previous status (approved or pending) |
+
+The `deploy_approval_request.create` entry records what [GitHub verification](/integrations/deploy-approvals/github/)
+did for the request:
+
+| Detail | Value |
+|--------|-------|
+| `github_verification` | `passed`, or `skipped` when `github_verification` is off for the app |
+| `github_verification_skip_reason` | Why verification was skipped (only when skipped) |
+| `vcs_repo` | Repository the commit was verified against (only when passed) |
+| `verify_git_commit_mode` | `latest` or `branch` (only when passed) |
+| `require_pr_for_branch` | `true` or `false`: whether an open PR was required (only when passed) |
+| `pr_url` | The branch's open pull request, if it has one |
+
+With verification on, a request that fails it is refused, as is one the gateway can't check because `GITHUB_TOKEN`
+or the app's `vcs_repo` is missing. No request or `create` entry exists for a refused request.
 
 ## Error Handling
 
