@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"mime"
 	"net/http"
 	"net/url"
 	"strings"
@@ -56,11 +57,18 @@ func (h *Handler) prepareReleaseCreate(
 		return nil, err
 	}
 
-	envStr := vals.Get("env")
-	if envStr == "" {
+	// The rack treats a present env as the release's whole env, even when it's empty, so only an absent env
+	// leaves the env alone. Without an env, parent-release would give the new release that release's env.
+	if !vals.Has("env") {
 		r.Body = io.NopCloser(bytes.NewReader(bodyBuf))
+		if vals.Has("parent-release") {
+			return nil, &envChangeDeniedError{
+				message: "parent-release needs an env: the new release would take that release's env unchecked",
+			}
+		}
 		return nil, nil
 	}
+	envStr := vals.Get("env")
 
 	app := extractAppFromPath(r.URL.Path)
 	if app == "" {
@@ -101,7 +109,15 @@ func (h *Handler) prepareReleaseCreate(
 	return diffs, nil
 }
 
+// readAndParseRequestBody reads a form-encoded body. Any other body is refused: the rack would parse fields (such
+// as env) out of it that the gateway can't see.
 func readAndParseRequestBody(r *http.Request) ([]byte, url.Values, error) {
+	if contentType := r.Header.Get("Content-Type"); contentType != "" {
+		mediaType, _, err := mime.ParseMediaType(contentType)
+		if err != nil || mediaType != "application/x-www-form-urlencoded" {
+			return nil, nil, fmt.Errorf("release requests must be form-encoded, got %q", contentType)
+		}
+	}
 	var bodyBuf []byte
 	if r.Body != nil {
 		var err error

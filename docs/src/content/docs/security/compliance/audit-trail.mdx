@@ -125,9 +125,11 @@ Every env var a release changes gets its own entry, with the resource `app/KEY` 
 | `secret.set`, `secret.unset` | Secret env var | `[REDACTED]` |
 | `env.set_protected`, `env.unset_protected` | Protected env var, changed with `--allow-protected` | `[REDACTED]` |
 
-A refused change is logged per key with `status: denied`. Attempts to change a protected env var without
-`--allow-protected` are logged as `env.set`; `--allow-protected` attempts refused for permissions or MFA are
-logged as `env.set_protected`.
+Refused protected changes are logged per key with `status: denied`: without `--allow-protected` as `env.set`,
+and `--allow-protected` attempts refused for permissions, or for MFA while the session's step-up window is open,
+as `env.set_protected`. When the step-up window has expired, the request is refused at the MFA check before the
+env is looked at, like any other request needing MFA: that refusal is in the MFA attempt log and the request log,
+not as `env.set_protected`.
 
 ## Storage Layers
 

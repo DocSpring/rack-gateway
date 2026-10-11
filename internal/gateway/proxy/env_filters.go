@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/envutil"
+	gtwlog "github.com/DocSpring/rack-gateway/internal/gateway/logging"
 	"github.com/DocSpring/rack-gateway/internal/gateway/logutil"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 )
@@ -68,29 +69,31 @@ func (h *Handler) maskSecretAndProtectedEnvVars(s string, app string) string {
 }
 
 func (h *Handler) isSecretKey(key string) bool {
-	extra := make([]string, 0, len(h.secretNames)+len(h.protectedEnv))
+	extra := make([]string, 0, len(h.secretNames))
 	for k := range h.secretNames {
-		extra = append(extra, k)
-	}
-	for k := range h.protectedEnv {
 		extra = append(extra, k)
 	}
 	return envutil.IsSecretKey(key, extra)
 }
 
+// isProtectedKeyForApp reports whether key is in the app's protected_env_vars. When the setting can't be read,
+// every key counts as protected: masked, and refused unless opted in.
 func (h *Handler) isProtectedKeyForApp(key, app string) bool {
-	if h.settingsService != nil && app != "" {
-		if protectedKeys, err := h.settingsService.GetProtectedEnvVars(app); err == nil {
-			upperKey := strings.ToUpper(strings.TrimSpace(key))
-			for _, protected := range protectedKeys {
-				if strings.ToUpper(strings.TrimSpace(protected)) == upperKey {
-					return true
-				}
-			}
+	if h.settingsService == nil || app == "" {
+		return false
+	}
+	protectedKeys, err := h.settingsService.GetProtectedEnvVars(app)
+	if err != nil {
+		gtwlog.Errorf("proxy: can't read protected env vars for app %q, so every key counts as protected: %v", app, err)
+		return true
+	}
+	upperKey := strings.ToUpper(strings.TrimSpace(key))
+	for _, protected := range protectedKeys {
+		if strings.ToUpper(strings.TrimSpace(protected)) == upperKey {
+			return true
 		}
 	}
-	_, ok := h.protectedEnv[strings.ToUpper(strings.TrimSpace(key))]
-	return ok
+	return false
 }
 
 func transformEnvPayload(payload interface{}, transform func(string) string) ([]byte, bool) {

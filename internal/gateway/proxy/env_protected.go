@@ -13,10 +13,10 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 )
 
-// Protected env vars (an app's protected_env_vars setting plus the gateway-wide protected set) can't be changed
-// by accident. The only way to change or remove one without unprotecting it is an explicit opt-in: the request
-// names the key in X-Allow-Protected-Env (`env set/unset --allow-protected`), the caller is a user holding
-// convox:env:set_protected (admins), and MFA is verified on that request, whatever the session's step-up state.
+// Protected env vars (an app's protected_env_vars setting) can't be changed by accident. The only way to change or
+// remove one without unprotecting it is an explicit opt-in: the request names the key in X-Allow-Protected-Env
+// (`env set/unset --allow-protected`), the caller is a user holding convox:env:set_protected (admins), and MFA is
+// verified on that request, whatever the session's step-up state.
 
 // protectedKeySet holds env var names upper-cased, matching how isProtectedKeyForApp compares keys.
 type protectedKeySet map[string]struct{}
