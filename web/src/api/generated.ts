@@ -277,7 +277,7 @@ export const getRackGatewayAPI = () => {
   };
 
   /**
-   * Deletes multiple app settings from the database, reverting to env or default values
+   * Deletes app settings' database values; their environment variables or defaults apply
    * @summary Delete multiple app settings
    */
   const deleteAppsAppSettings = (
@@ -1174,7 +1174,7 @@ export const getRackGatewayAPI = () => {
   };
 
   /**
-   * Deletes multiple global settings from the database, reverting to env or default values
+   * Deletes global settings' database values; their environment variables or defaults apply
    * @summary Delete multiple global settings
    */
   const deleteSettings = (

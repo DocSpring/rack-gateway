@@ -6,7 +6,7 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 )
 
-// GetMFASettings returns MFA configuration with environment fallback.
+// GetMFASettings returns the MFA configuration.
 func (s *Service) GetMFASettings() (*db.MFASettings, error) {
 	requireAll, err := s.GetGlobalSetting(KeyMFARequireAllUsers, true)
 	if err != nil {

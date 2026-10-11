@@ -44,7 +44,8 @@ export function AppSettingsPage() {
         </div>
       ) : null}
 
-      <div className="grid gap-6">
+      {/* Keyed by app: the cards keep unsaved edits in local state, which must not carry over to another app */}
+      <div className="grid gap-6" key={app}>
         <VCSCIProvidersCard
           app={app}
           disabled={!isAdmin}

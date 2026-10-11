@@ -1,6 +1,11 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
-import { getSettingValue, SourceIndicator } from '@/components/settings/source-indicator'
+import {
+  getSettingValue,
+  hasStoredValue,
+  isSetByEnv,
+  SourceIndicator,
+} from '@/components/settings/source-indicator'
 import { StringArrayInput } from '@/components/settings/string-array-input'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -36,7 +41,10 @@ export function StringArrayCard({
   const setting = settings?.[settingKey]
   const currentValue = getSettingValue<string[] | null>(setting, null) ?? []
 
-  const [items, setItems] = useState<string[]>(currentValue)
+  // Unsaved edits. Until the user edits, the card shows the server's current list, so a refetch that brings a
+  // newer list (changed elsewhere) replaces it instead of leaving a stale copy that Save would write back.
+  const [edits, setEdits] = useState<string[] | null>(null)
+  const items = edits ?? currentValue
 
   const hasChanges =
     items.length !== currentValue.length ||
@@ -47,8 +55,9 @@ export function StringArrayCard({
       const filtered = items.map((value) => value.trim()).filter((value) => value.length > 0)
       await api.put(`/api/v1/apps/${app}/settings/${pathSegment}`, filtered)
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['appSettings', app] })
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ['appSettings', app] })
+      setEdits(null)
       toast.success('Setting updated')
     },
     onError: (error: unknown) => {
@@ -63,7 +72,7 @@ export function StringArrayCard({
     },
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ['appSettings', app] })
-      setItems([])
+      setEdits(null)
       toast.success('Setting cleared')
     },
     onError: (error: unknown) => {
@@ -73,7 +82,7 @@ export function StringArrayCard({
   })
 
   const handleCancel = () => {
-    setItems(currentValue)
+    setEdits(null)
   }
 
   const handleSave = () => {
@@ -84,7 +93,7 @@ export function StringArrayCard({
     clearMutation.mutate()
   }
 
-  const hasDbSetting = setting?.source === 'db'
+  const hasDbSetting = hasStoredValue(setting)
 
   return (
     <Card>
@@ -96,8 +105,8 @@ export function StringArrayCard({
 
         <div className="space-y-2">
           <StringArrayInput
-            disabled={disabled}
-            onChange={setItems}
+            disabled={disabled || isSetByEnv(setting)}
+            onChange={setEdits}
             placeholder={placeholder ?? 'Enter value'}
             value={items}
           />

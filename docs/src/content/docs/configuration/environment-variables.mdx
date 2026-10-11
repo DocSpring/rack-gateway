@@ -108,7 +108,25 @@ The error names every offending variable. Remove them from the production enviro
 
 ## Settings (Env Overrides)
 
-Settings resolve in this order: DB value → env var → default.
+Settings resolve in this order: env var → DB value → default.
+
+An environment variable pins its setting: the web UI shows it read-only, and the API refuses to change it
+(`409 Conflict`). Change it in the deployment config instead. Values are parsed strictly by the setting's type:
+
+- Booleans: `true` or `false`
+- Numbers: whole numbers of at least 1
+- Lists: a JSON array of strings, or a comma-separated list (use the JSON form when a value contains a comma,
+  e.g. an approved deploy command)
+- Maps (`service_image_patterns`): a JSON object of strings
+- Strings: the plain value, or a JSON string (`"main"`, as Terraform's `jsonencode` writes it). Other quoting is
+  refused. `verify_git_commit_mode` must be `latest` or `branch`.
+
+Every value can be JSON-encoded, so a deployment tool can write `jsonencode(value)` for all of them.
+
+The gateway refuses to start when a `RGW_SETTING_*` or `RGW_APP_*_SETTING_*` variable names an unknown setting,
+isn't spelled the way the gateway reads it (upper case, with dashes in app names written as underscores), or has a
+value that doesn't fit its type. A database value that an environment variable overrides has no effect: the
+startup log lists them, and the settings page marks them and lets an admin clear them.
 
 | Variable | Description |
 |----------|-------------|
@@ -130,10 +148,12 @@ Per-app overrides use:
 RGW_APP_<APP>_SETTING_<KEY>=value
 ```
 
-Example:
+`<APP>` is the app name in upper case, with dashes replaced by underscores. Examples:
 
 ```
-RGW_APP_MYAPP_SETTING_CI_PROVIDER=circleci
+RGW_APP_MY_APP_SETTING_CI_PROVIDER=circleci
+RGW_APP_MY_APP_SETTING_PROTECTED_ENV_VARS=DATABASE_URL,SECRET_KEY_BASE
+RGW_APP_MY_APP_SETTING_SERVICE_IMAGE_PATTERNS={"*":"registry\\.example\\.com/my-app:{{GIT_COMMIT}}"}
 ```
 
 See [Deploy Approvals](/integrations/deploy-approvals/) for common keys.
