@@ -96,6 +96,7 @@ func NewClient(pool *pgxpool.Pool, deps *Dependencies, auditAnchorConfig *AuditA
 		},
 		Workers:      workers,
 		PeriodicJobs: periodicJobs,
+		ErrorHandler: jobErrorHandler{},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create river client: %w", err)

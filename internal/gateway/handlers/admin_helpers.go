@@ -54,7 +54,7 @@ func (h *AdminHandler) TriggerSentryTest(c *gin.Context) {
 			hub.WithScope(func(scope *sentry.Scope) {
 				scope.SetTag("trigger", "admin-api")
 				scope.SetTag("test", "sentry-api")
-				scope.SetExtra("triggered_at", time.Now().UTC().Format(time.RFC3339))
+				scope.SetContext("test", sentry.Context{"triggered_at": time.Now().UTC().Format(time.RFC3339)})
 				if user := h.currentAuthUser(c); user != nil {
 					scope.SetUser(sentry.User{Email: user.Email, Username: user.Name})
 				}
