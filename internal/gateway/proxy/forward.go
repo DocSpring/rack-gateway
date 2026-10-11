@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"log"
@@ -38,6 +39,9 @@ func (h *Handler) validateBuildRequest(
 	if err != nil {
 		return fmt.Errorf("invalid build request body")
 	}
+	if err := refuseSurroundingWhitespace(vals, "url", "manifest"); err != nil {
+		return err
+	}
 
 	if authUser.IsAPIToken {
 		if tracker := getDeployApprovalTracker(r.Context()); tracker != nil && tracker.request != nil {
@@ -45,6 +49,18 @@ func (h *Handler) validateBuildRequest(
 		}
 	}
 	return h.validateBuildManifestForAllUsers(r, vals)
+}
+
+// refuseSurroundingWhitespace refuses a build whose archive or manifest value starts or ends with whitespace. The
+// rack uses these values exactly as sent, so "convox.yml " would be a different manifest (and a trailing space in
+// the url a different object) from the one the gateway checked.
+func refuseSurroundingWhitespace(vals url.Values, names ...string) error {
+	for _, name := range names {
+		if value := vals.Get(name); value != strings.TrimSpace(value) {
+			return fmt.Errorf("invalid build request: %s must not start or end with whitespace", name)
+		}
+	}
+	return nil
 }
 
 func (h *Handler) validateProcessCommand(
@@ -248,9 +264,10 @@ const (
 	// minutes each while deploys hard-failed).
 	promoteForwardTimeout = 10 * time.Minute
 
-	// uploadForwardTimeout gives an archive room to reach the rack: the gateway sends the whole archive before the
-	// rack answers.
-	uploadForwardTimeout = 10 * time.Minute
+	// uploadForwardTimeout gives an archive room to reach the rack and be processed: the gateway streams it from
+	// the client as it arrives (up to uploadReadTimeout), and the rack answers once it has the whole archive and
+	// has stored it, or for an import, pushed its images.
+	uploadForwardTimeout = 20 * time.Minute
 )
 
 var promotePathPattern = regexp.MustCompile(`^/apps/[^/]+/releases/[^/]+/promote$`)
@@ -307,12 +324,8 @@ func (h *Handler) forwardRequest(
 		return h.proxyWebSocket(w, r, rack, targetURL, authUser, path)
 	}
 
-	bodyBytes, err := readRequestBody(r)
+	body, err := h.requestBodyForRack(r, path, authUser)
 	if err != nil {
-		return 0, err
-	}
-
-	if err := h.validateBuildRequest(r, path, bodyBytes, authUser); err != nil {
 		return 0, err
 	}
 
@@ -320,7 +333,7 @@ func (h *Handler) forwardRequest(
 		return 0, err
 	}
 
-	proxyReq, err := prepareProxyRequest(r, targetURL, bodyBytes, rack, authUser)
+	proxyReq, err := prepareProxyRequest(r, targetURL, body, rack, authUser)
 	if err != nil {
 		return 0, err
 	}
@@ -341,4 +354,25 @@ func (h *Handler) forwardRequest(
 	defer resp.Body.Close() //nolint:errcheck,gosec // G104: cleanup
 
 	return h.processProxyResponse(w, r, resp, path, authUser.Email)
+}
+
+// requestBodyForRack returns the body to send to the rack. An archive upload streams straight through as it
+// arrives: the gateway doesn't inspect it (a source archive's manifest is checked when a build is created from it),
+// and an archive can be far larger than the gateway should hold in memory. Every other body is read, within
+// maxBufferedBodyBytes, so the gateway can check it.
+func (h *Handler) requestBodyForRack(r *http.Request, path string, authUser *auth.User) (rackRequestBody, error) {
+	if isArchiveUpload(r, path) {
+		return rackRequestBody{reader: r.Body, length: r.ContentLength}, nil
+	}
+
+	bodyBytes, err := readBufferedBody(r)
+	if err != nil {
+		return rackRequestBody{}, err
+	}
+
+	if err := h.validateBuildRequest(r, path, bodyBytes, authUser); err != nil {
+		return rackRequestBody{}, err
+	}
+
+	return rackRequestBody{reader: bytes.NewReader(bodyBytes), length: int64(len(bodyBytes))}, nil
 }

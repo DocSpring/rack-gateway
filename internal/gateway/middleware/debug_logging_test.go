@@ -1,6 +1,16 @@
 package middleware
 
-import "testing"
+import (
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+
+	"github.com/stretchr/testify/require"
+
+	"github.com/DocSpring/rack-gateway/internal/gateway/httputil"
+)
 
 func TestShouldFilterHTTPLog(t *testing.T) {
 	t.Parallel()
@@ -40,4 +50,31 @@ func TestShouldFilterHTTPLog(t *testing.T) {
 			}
 		})
 	}
+}
+
+// countingReader counts the bytes read through it.
+type countingReader struct {
+	r io.Reader
+	n int
+}
+
+func (c *countingReader) Read(p []byte) (int, error) {
+	n, err := c.r.Read(p)
+	c.n += n
+	return n, err
+}
+
+// Logging a request body reads only the part that's logged, and the handler still gets the whole body.
+func TestLogRequestBodyReadsOnlyWhatItLogs(t *testing.T) {
+	body := `{"data":"` + strings.Repeat("a", 4*httputil.BodyTruncationLimit) + `"}`
+	source := &countingReader{r: strings.NewReader(body)}
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/example", io.NopCloser(source))
+	req.Header.Set("Content-Type", "application/json")
+
+	logRequestBody(req, true)
+	require.LessOrEqual(t, source.n, httputil.BodyTruncationLimit+1)
+
+	got, err := io.ReadAll(req.Body)
+	require.NoError(t, err)
+	require.Equal(t, body, string(got))
 }

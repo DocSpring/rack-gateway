@@ -35,7 +35,8 @@ var staticAssetExtensions = map[string]struct{}{
 	"zip":         {},
 }
 
-// DebugLogging logs request and response bodies for debugging purposes.
+// DebugLogging logs requests (their line, headers and the start of JSON bodies) and response headers for
+// debugging purposes. Rack responses are logged by the proxy, under the same topics.
 // This middleware should be added early in the chain to capture all requests.
 func DebugLogging(_ *config.Config) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -43,9 +44,9 @@ func DebugLogging(_ *config.Config) gin.HandlerFunc {
 		if c.Request.URL.RawQuery != "" {
 			path += "?" + audit.RedactQuery(c.Request.URL.RawQuery)
 		}
-		logReqInfo, logReqHeaders, logReqBody, logRespHeaders, logRespBody := shouldLogDebugTopics(path)
+		logReqInfo, logReqHeaders, logReqBody, logRespHeaders := shouldLogDebugTopics(path)
 
-		if !logReqInfo && !logReqHeaders && !logReqBody && !logRespHeaders && !logRespBody {
+		if !logReqInfo && !logReqHeaders && !logReqBody && !logRespHeaders {
 			c.Next()
 			return
 		}
@@ -53,15 +54,9 @@ func DebugLogging(_ *config.Config) gin.HandlerFunc {
 		logRequestInfo(c.Request, path, logReqInfo, logReqHeaders)
 		logRequestBody(c.Request, logReqBody)
 
-		writer := setupResponseBodyLogging(c, logRespBody)
-
 		c.Next()
 
 		logResponseHeaders(c, logRespHeaders)
-
-		if logRespBody && writer != nil {
-			logResponseBody(c, logRespBody)
-		}
 	}
 }
 

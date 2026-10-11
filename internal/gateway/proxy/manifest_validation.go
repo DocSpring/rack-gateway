@@ -2,15 +2,14 @@ package proxy
 
 import (
 	"archive/tar"
-	"bytes"
 	"compress/gzip"
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
-	"os"
 	"path"
 	"path/filepath"
 	"strings"
@@ -20,11 +19,11 @@ import (
 )
 
 const (
-	maxExtractedSize = 100 * 1024 * 1024 // 100MB max total extracted size
-	maxFiles         = 10000             // Max number of files to extract
+	maxExtractedSize = 100 * 1024 * 1024 // 100MB max total size of a tarball's files, uncompressed
+	maxFiles         = 10000             // Max number of entries in a tarball
 	maxFileSize      = 10 * 1024 * 1024  // 10MB max per file
 	maxManifestSize  = 1 * 1024 * 1024   // 1MB max for convox.yml
-	maxTarballSize   = 500 * 1024 * 1024 // 500MB max tarball download
+	maxTarballSize   = 500 * 1024 * 1024 // 500MB max tarball read
 )
 
 type convoxManifest struct {
@@ -57,13 +56,14 @@ func (h *Handler) validateBuildManifest(
 	objectKey := parts[1]
 
 	// Fetch the tarball from Convox API
-	tarballData, err := h.fetchObject(ctx, app, objectKey)
+	tarball, err := h.fetchObject(ctx, app, objectKey)
 	if err != nil {
 		return fmt.Errorf("failed to fetch tarball: %w", err)
 	}
+	defer func() { _ = tarball.Close() }()
 
 	// Extract and parse the manifest
-	manifest, err := extractAndParseManifestFromPath(tarballData, manifestPath)
+	manifest, err := parseManifestFromTarball(tarball, manifestPath)
 	if err != nil {
 		return fmt.Errorf("failed to extract manifest: %w", err)
 	}
@@ -71,8 +71,8 @@ func (h *Handler) validateBuildManifest(
 	return policy.validate(manifest)
 }
 
-// fetchObject fetches an object from the Convox API
-func (h *Handler) fetchObject(ctx context.Context, app, key string) ([]byte, error) {
+// fetchObject opens an object on the Convox API, for the caller to stream and close.
+func (h *Handler) fetchObject(ctx context.Context, app, key string) (io.ReadCloser, error) {
 	// Get the rack config (there's only one per gateway instance)
 	rack, exists := h.config.Racks["default"]
 	if !exists {
@@ -106,26 +106,14 @@ func (h *Handler) fetchObject(ctx context.Context, app, key string) ([]byte, err
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch object: %w", err)
 	}
-	//nolint:errcheck,gosec // G104: cleanup
-	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+		_ = resp.Body.Close()
 		return nil, fmt.Errorf("object fetch failed with status %d: %s", resp.StatusCode, string(body))
 	}
 
-	// Read the tarball with size limit
-	data, err := io.ReadAll(io.LimitReader(resp.Body, maxTarballSize))
-	if err != nil {
-		return nil, fmt.Errorf("failed to read tarball: %w", err)
-	}
-
-	// Check if we hit the size limit
-	if len(data) >= maxTarballSize {
-		return nil, fmt.Errorf("tarball exceeds maximum size of %d bytes", maxTarballSize)
-	}
-
-	return data, nil
+	return resp.Body, nil
 }
 
 func buildObjectFetchURL(rackURL, app, key string) (string, error) {
@@ -200,34 +188,23 @@ func sanitizeObjectFetchPath(value string) (string, error) {
 	return cleanValue, nil
 }
 
-// extractAndParseManifestFromPath safely extracts a gzipped tarball and parses the specified manifest file
-func extractAndParseManifestFromPath(tarballData []byte, manifestPath string) (*convoxManifest, error) {
-	// Create temp directory for extraction
-	tmpDir, err := os.MkdirTemp("", "convox-manifest-*")
-	if err != nil {
-		return nil, fmt.Errorf("failed to create temp dir: %w", err)
-	}
-	defer os.RemoveAll(tmpDir) //nolint:errcheck // cleanup
+// parseManifestFromTarball reads the manifest at manifestPath from a gzipped tarball as it streams in, holding no
+// more than the manifest in memory, and parses it.
+func parseManifestFromTarball(r io.Reader, manifestPath string) (*convoxManifest, error) {
+	return parseManifestFromTarballWithin(r, manifestPath, maxTarballSize)
+}
 
-	// Extract tarball with safety limits, looking for the specified manifest file
-	extractedManifestPath, err := extractTarballSafely(bytes.NewReader(tarballData), tmpDir, manifestPath)
+// parseManifestFromTarballWithin is parseManifestFromTarball with a size limit. An archive that reaches the limit
+// is refused even when the scan ended cleanly: the limit can fall exactly between two gzip members, where gzip and
+// tar both see a normal end, and the rack would still extract the rest (which could hold another manifest).
+func parseManifestFromTarballWithin(r io.Reader, manifestPath string, limit int64) (*convoxManifest, error) {
+	limited := &io.LimitedReader{R: r, N: limit}
+	manifestData, err := readManifestFromTarball(limited, manifestPath)
+	if limited.N <= 0 {
+		return nil, fmt.Errorf("tarball exceeds maximum size of %d bytes", limit)
+	}
 	if err != nil {
 		return nil, err
-	}
-
-	if extractedManifestPath == "" {
-		return nil, fmt.Errorf("%s not found in tarball", manifestPath)
-	}
-
-	// Read and parse manifest
-	//nolint:gosec // G304: Path validated by extraction process
-	manifestData, err := os.ReadFile(extractedManifestPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read manifest: %w", err)
-	}
-
-	if len(manifestData) > maxManifestSize {
-		return nil, fmt.Errorf("manifest too large: %d bytes (max %d)", len(manifestData), maxManifestSize)
 	}
 
 	var manifest convoxManifest
@@ -238,136 +215,101 @@ func extractAndParseManifestFromPath(tarballData []byte, manifestPath string) (*
 	return &manifest, nil
 }
 
-// extractTarballSafely extracts a gzipped tarball with safety limits and returns path to the specified manifest file
-func extractTarballSafely(r io.Reader, destDir string, manifestPath string) (string, error) {
+// readManifestFromTarball returns the contents of the manifest at manifestPath in a gzipped tarball. It reads the
+// whole archive rather than stopping at the manifest: the rack extracts every entry in order, writing each file over
+// any earlier one at the same path, so a second manifest entry would change the manifest the rack builds from after
+// this one was checked. An archive with more than one is refused.
+func readManifestFromTarball(r io.Reader, manifestPath string) ([]byte, error) {
 	gzr, err := gzip.NewReader(r)
 	if err != nil {
-		return "", fmt.Errorf("failed to create gzip reader: %w", err)
+		return nil, fmt.Errorf("failed to create gzip reader: %w", err)
 	}
-	defer gzr.Close() //nolint:errcheck // cleanup
 
 	tr := tar.NewReader(gzr)
-
-	var totalSize int64
-	var fileCount int
-	var foundManifestPath string
-
+	scan := manifestScan{path: filepath.Clean(manifestPath)}
 	for {
 		header, err := tr.Next()
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			break
 		}
 		if err != nil {
-			return "", fmt.Errorf("failed to read tar header: %w", err)
+			return nil, fmt.Errorf("failed to read tar header: %w", err)
 		}
-
-		if err := incrementAndCheckFileCount(&fileCount); err != nil {
-			return "", err
-		}
-		if err := validateTarPath(header.Name); err != nil {
-			return "", err
-		}
-
-		//nolint:gosec // G305: Path validated by validateTarPath()
-		targetPath := filepath.Join(destDir, header.Name)
-		foundManifestPath = updateFoundManifestPath(header.Name, manifestPath, foundManifestPath, targetPath)
-
-		if err := handleTarEntry(tr, header, targetPath, &totalSize); err != nil {
-			if err == errSkipEntry {
-				continue
-			}
-			return "", err
+		if err := scan.visit(tr, header); err != nil {
+			return nil, err
 		}
 	}
 
-	return foundManifestPath, nil
+	if !scan.found {
+		return nil, fmt.Errorf("%s not found in tarball", manifestPath)
+	}
+	return scan.manifest, nil
 }
 
-var errSkipEntry = fmt.Errorf("skip")
+// manifestScan is one pass over a build tarball, looking for its manifest.
+type manifestScan struct {
+	// path is the manifest's path, cleaned: the rack joins entry names onto its build directory, so
+	// "./convox.yml" is convox.yml.
+	path      string
+	files     int
+	totalSize int64
+	found     bool
+	manifest  []byte
+}
 
-func incrementAndCheckFileCount(fileCount *int) error {
-	*fileCount++
-	if *fileCount > maxFiles {
+// visit checks a tarball entry against the archive limits, and reads it if it's the manifest.
+func (s *manifestScan) visit(entry io.Reader, header *tar.Header) error {
+	if err := s.checkLimits(header); err != nil {
+		return err
+	}
+	if filepath.Clean(header.Name) != s.path {
+		return nil
+	}
+	if s.found {
+		return fmt.Errorf("tarball contains %s more than once", s.path)
+	}
+	// The rack only extracts regular files, so a link or directory here isn't the manifest it would build from.
+	if header.Typeflag != tar.TypeReg {
+		return fmt.Errorf("%s in tarball is not a regular file", s.path)
+	}
+	if header.Size > maxManifestSize {
+		return fmt.Errorf("manifest too large: %d bytes (max %d)", header.Size, maxManifestSize)
+	}
+
+	data, err := io.ReadAll(entry)
+	if err != nil {
+		return fmt.Errorf("failed to read manifest: %w", err)
+	}
+	s.found, s.manifest = true, data
+	return nil
+}
+
+// checkLimits bounds the work of reading through an untrusted tarball: how many entries it has, how large its files
+// are, and that every path stays inside the archive.
+func (s *manifestScan) checkLimits(header *tar.Header) error {
+	s.files++
+	if s.files > maxFiles {
 		return fmt.Errorf("too many files in tarball (max %d)", maxFiles)
 	}
-	return nil
-}
-
-func updateFoundManifestPath(name, manifestPath, current, targetPath string) string {
-	if name == manifestPath && current == "" {
-		return targetPath
+	if err := validateTarPath(header.Name); err != nil {
+		return err
 	}
-	return current
-}
-
-func handleTarEntry(
-	tr *tar.Reader,
-	header *tar.Header,
-	targetPath string,
-	totalSize *int64,
-) error {
-	switch header.Typeflag {
-	case tar.TypeDir:
-		return extractTarDirectory(targetPath)
-	case tar.TypeReg:
-		newTotal, err := extractTarFile(tr, targetPath, header, *totalSize)
-		if err != nil {
-			return err
-		}
-		*totalSize = newTotal
+	if header.Typeflag != tar.TypeReg {
 		return nil
-	default:
-		return errSkipEntry
 	}
-}
 
-// handleTarHeader processes a single tar header entry with safety checks and extraction logic.
-// handleTarHeader was inlined into extractTarballSafely to avoid unnecessary complexity.
-
-func extractTarDirectory(targetPath string) error {
-	if err := os.MkdirAll(targetPath, 0o750); err != nil {
-		return fmt.Errorf("failed to create directory: %w", err)
-	}
-	return nil
-}
-
-func extractTarFile(tr *tar.Reader, targetPath string, header *tar.Header, currentSize int64) (int64, error) {
-	// Check individual file size
 	if header.Size > maxFileSize {
-		return 0, fmt.Errorf("file %s too large: %d bytes (max %d)", header.Name, header.Size, maxFileSize)
+		return fmt.Errorf("file %s too large: %d bytes (max %d)", header.Name, header.Size, maxFileSize)
 	}
-
-	// Check total extracted size
-	newSize := currentSize + header.Size
-	if newSize > maxExtractedSize {
-		return 0, fmt.Errorf(
+	s.totalSize += header.Size
+	if s.totalSize > maxExtractedSize {
+		return fmt.Errorf(
 			"total extracted size exceeds limit: %d bytes (max %d)",
-			newSize,
+			s.totalSize,
 			maxExtractedSize,
 		)
 	}
-
-	// Create parent directory
-	if err := os.MkdirAll(filepath.Dir(targetPath), 0o750); err != nil {
-		return 0, fmt.Errorf("failed to create parent directory: %w", err)
-	}
-
-	// Extract file
-	//nolint:gosec // G304: targetPath validated by validateTarPath()
-	outFile, err := os.Create(targetPath)
-	if err != nil {
-		return 0, fmt.Errorf("failed to create file: %w", err)
-	}
-
-	if _, err := io.CopyN(outFile, tr, header.Size); err != nil {
-		outFile.Close() //nolint:errcheck,gosec // G104: cleanup on error
-		return 0, fmt.Errorf("failed to write file: %w", err)
-	}
-	if err := outFile.Close(); err != nil {
-		return 0, fmt.Errorf("failed to close file: %w", err)
-	}
-
-	return newSize, nil
+	return nil
 }
 
 // validateTarPath validates that a tar entry path is safe (no directory traversal)

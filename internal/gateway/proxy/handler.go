@@ -299,7 +299,7 @@ func (h *Handler) handleForwardError(
 		h.handleError(w, r, "rack certificate verification failed", http.StatusBadGateway, rackName, start)
 		return
 	}
-	h.handleError(w, r, err.Error(), http.StatusInternalServerError, rackName, start)
+	h.handleError(w, r, err.Error(), bodyErrorStatus(err, http.StatusInternalServerError), rackName, start)
 }
 
 func (h *Handler) isAllowedConvoxRoute(r *http.Request, rackPath string) bool {
@@ -424,7 +424,7 @@ func (h *Handler) prepareReleaseIfNeeded(
 		h.handleError(w, r, "rack certificate verification failed", http.StatusBadGateway, rackConfig.Name, start)
 		return nil, err
 	}
-	h.handleError(w, r, err.Error(), http.StatusBadRequest, rackConfig.Name, start)
+	h.handleError(w, r, err.Error(), bodyErrorStatus(err, http.StatusBadRequest), rackConfig.Name, start)
 	return nil, err
 }
 

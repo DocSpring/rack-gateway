@@ -19,6 +19,7 @@ func registerStaticRoutes(router *gin.Engine, h *handlerSet) {
 
 func registerAuthRoutes(api *gin.RouterGroup, cfg *Config, h *handlerSet) {
 	authGroup := api.Group("")
+	authGroup.Use(middleware.LimitRequestBody(maxUnauthenticatedBodyBytes))
 	authGroup.Use(middleware.RateLimit(cfg.Config, cfg.SecurityNotifier))
 	authGroup.POST("/auth/cli/start", h.auth.CLILoginStart)
 	authGroup.GET("/auth/cli/callback", h.auth.CLILoginCallback)
