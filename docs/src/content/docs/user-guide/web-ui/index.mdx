@@ -74,7 +74,8 @@ Non-admins can browse the read-only views their role allows, manage their own se
 App-level settings live under **Apps → `{app}` → Settings**. This is where admins configure:
 
 - VCS/CI integration per app (GitHub + CircleCI)
-- Protected and secret environment variables
+- Protected and secret environment variables. The env editor refuses protected ones; admins change them
+  with [`env set --allow-protected`](/user-guide/cli/commands/#protected-env-vars)
 - Approved deploy commands
 - Service image patterns used for deploy verification
 

@@ -21,6 +21,11 @@ import (
 // MaskedSecret is the placeholder string displayed in place of actual secret values.
 const MaskedSecret = "********************"
 
+// AllowProtectedHeader is the request header in which `env set/unset --allow-protected` names the protected
+// env vars the command changes, comma-separated. The gateway only accepts it from callers holding
+// convox:env:set_protected who verify MFA on that request, and never forwards it to the rack.
+const AllowProtectedHeader = "X-Allow-Protected-Env"
+
 var (
 	// ErrSecretPermission is returned when a secret update is attempted without proper permissions.
 	ErrSecretPermission = errors.New("secrets:set permission required")
@@ -51,6 +56,8 @@ type EnvDiff struct {
 	OldVal string
 	NewVal string
 	Secret bool
+	// Protected marks a change to one of the app's protected env vars. Its values are never logged.
+	Protected bool
 }
 
 // MergeOptions controls how MergeEnv applies updates.

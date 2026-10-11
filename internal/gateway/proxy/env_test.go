@@ -224,7 +224,8 @@ func TestValidateProtectedKeysBlocksActualChanges(t *testing.T) {
 	err := h.validateProtectedKeys(req, "admin@test.com", appName, posted)
 	require.EqualError(
 		t, err,
-		"ADMIN_PASSWORD is a protected env var for docspring. Unprotect it in rack-gateway settings to change it.",
+		"ADMIN_PASSWORD is a protected env var for docspring. An admin can change it with --allow-protected "+
+			"and MFA, or unprotect it in rack-gateway settings.",
 	)
 }
 
@@ -289,7 +290,7 @@ func TestProxyBlocksProtectedEnvChangesAndAudits(t *testing.T) {
 	// Set protected env var for the app (app-scoped setting)
 	appName := "app"
 	require.NoError(t, database.UpsertSetting(&appName, "protected_env_vars", []string{"DATABASE_URL"}, nil))
-	// Admin user (even admin should be blocked from protected changes)
+	// Admin user (even admin is blocked from protected changes without --allow-protected)
 	require.NoError(t, mgr.SaveUser("admin@test.com", &rbac.UserConfig{Name: "Admin", Roles: []string{"admin"}}))
 
 	// Attempt to change protected key via releases form
@@ -304,7 +305,8 @@ func TestProxyBlocksProtectedEnvChangesAndAudits(t *testing.T) {
 	// The refusal names the key and how to change it, not a generic permission error.
 	require.Contains(
 		t, rr.Body.String(),
-		"DATABASE_URL is a protected env var for app. Unprotect it in rack-gateway settings to change it.",
+		"DATABASE_URL is a protected env var for app. An admin can change it with --allow-protected and MFA, "+
+			"or unprotect it in rack-gateway settings.",
 	)
 
 	logs, err := database.GetAuditLogs("admin@test.com", time.Time{}, 50)

@@ -423,9 +423,7 @@ func (h *Handler) prepareReleaseIfNeeded(
 	if err == nil {
 		return diffs, nil
 	}
-	var denied *envChangeDeniedError
-	if errors.As(err, &denied) {
-		http.Error(w, denied.Error(), http.StatusForbidden)
+	if writeEnvChangeRefusal(w, err) {
 		return nil, err
 	}
 	if fpErr, ok := rackcert.AsFingerprintMismatch(err); ok {

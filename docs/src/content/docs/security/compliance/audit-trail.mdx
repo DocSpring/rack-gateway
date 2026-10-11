@@ -114,6 +114,21 @@ var redactPatterns = []string{
 Redaction happens before any logging, including stdout and database storage. Secrets never appear in logs.
 </Aside>
 
+### Environment Variable Changes
+
+Every env var a release changes gets its own entry, with the resource `app/KEY` and the old and new values in
+`details`:
+
+| Action | Change | Values logged |
+|--------|--------|---------------|
+| `env.set`, `env.unset` | Ordinary env var | Yes |
+| `secret.set`, `secret.unset` | Secret env var | `[REDACTED]` |
+| `env.set_protected`, `env.unset_protected` | Protected env var, changed with `--allow-protected` | `[REDACTED]` |
+
+A refused change is logged per key with `status: denied`. Attempts to change a protected env var without
+`--allow-protected` are logged as `env.set`; `--allow-protected` attempts refused for permissions or MFA are
+logged as `env.set_protected`.
+
 ## Storage Layers
 
 ### PostgreSQL (Primary)

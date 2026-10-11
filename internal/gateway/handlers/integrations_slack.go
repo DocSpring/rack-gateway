@@ -27,6 +27,8 @@ var defaultChannelActions = map[string]interface{}{
 			audit.ActionScopeMFAMethod + ".*",    // MFA enrollment events
 			audit.BuildAction(rbac.ResourceUser.String(), audit.ActionVerbUpdateRoles),
 			audit.ActionScopeAPIToken + ".*", // Matches all API token actions
+			// Protected env var changes (env.set_protected, env.unset_protected) and refused attempts to make them
+			rbac.ResourceEnv.String() + ".*_protected",
 		},
 	},
 	"infrastructure": map[string]interface{}{
