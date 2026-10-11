@@ -99,14 +99,9 @@ Exports include all fields, not just the columns visible in the UI.
 
 ### Tamper Detection
 
-Logs include cryptographic chain hashes. Any tampering is detectable:
-
-```
-Chain verification: ✓ Valid
-Entries: 1,234,567
-First entry: 2024-01-01T00:00:00Z
-Last entry: 2024-01-15T14:30:00Z
-```
+Each event is HMAC-chained to the one before it, and the chain is anchored hourly in S3 Object Lock storage when
+anchoring is configured. The web UI doesn't check the chain; run `rack-gateway-api verify-audit` to verify it (see
+[Verification](/deployment/terraform/s3-worm-storage/#verification)).
 
 ### Retention
 

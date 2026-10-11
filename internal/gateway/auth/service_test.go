@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	"github.com/DocSpring/rack-gateway/internal/gateway/testutil/dbtest"
@@ -165,12 +166,14 @@ func TestInvalidAPITokenAuditRecordsClient(t *testing.T) {
 		svc.Middleware(next).ServeHTTP(httptest.NewRecorder(), req)
 
 		entry := tokenValidateAuditRow(t, database)
-		wantAgent := agent
-		if agent == longAgent {
-			wantAgent = agent[:512]
+		if entry.IPAddress != "203.0.113.7" {
+			t.Fatalf("audit row has ip %q", entry.IPAddress)
 		}
-		if entry.IPAddress != "203.0.113.7" || entry.UserAgent != wantAgent {
-			t.Fatalf("audit row has ip %q, user agent %q", entry.IPAddress, entry.UserAgent)
+		// An oversized user agent is cut to the column's 512 characters, ending in a truncation marker.
+		truncated := utf8.RuneCountInString(entry.UserAgent) <= 512 && strings.HasPrefix(entry.UserAgent, "aaaa") &&
+			strings.HasSuffix(entry.UserAgent, "[truncated from 600 characters]")
+		if agent == longAgent && !truncated || agent != longAgent && entry.UserAgent != agent {
+			t.Fatalf("audit row has user agent %q", entry.UserAgent)
 		}
 	}
 }

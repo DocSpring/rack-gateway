@@ -9,13 +9,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
-	"github.com/jackc/pgx/v5"
 	"github.com/riverqueue/river"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
@@ -55,6 +53,11 @@ func NewAnchorWriterWorker(
 	}
 }
 
+// AnchorFormat is the format of the anchors this version writes. A format 2 anchor's prev_anchor_hash always
+// names the anchor written just before it (earlier versions only looked at the first 1000 anchors in the
+// bucket), and it records where hash v2 starts. Anchors without a format were written by earlier versions.
+const AnchorFormat = 2
+
 // AnchorPayload represents the anchor JSON structure
 type AnchorPayload struct {
 	ChainID        string `json:"chain_id"`
@@ -63,68 +66,85 @@ type AnchorPayload struct {
 	TimestampUTC   string `json:"ts_utc"`
 	DBSnapshotLSN  string `json:"db_snapshot_lsn"`
 	PrevAnchorHash string `json:"prev_anchor_hash,omitempty"`
+	// Format is AnchorFormat, or 0 (absent) for anchors written by earlier versions.
+	Format int `json:"format,omitempty"`
+	// HashV2FromSeq is the chain index of the first hash v2 event, once there is one.
+	HashV2FromSeq *int64 `json:"hash_v2_from_seq,omitempty"`
 }
 
-// checkS3FileExists returns true if the file exists in S3
-func (w *AnchorWriterWorker) checkS3FileExists(ctx context.Context, key string) bool {
+// AnchorKey returns the S3 key of the anchor for the hour of ts. Retries of a job write the same key.
+func AnchorKey(chainID string, ts time.Time) string {
+	ts = ts.UTC()
+	return fmt.Sprintf("%s/%s/anchor-%s.json", chainID, ts.Format("2006/01/02/15"), ts.Format("20060102T15"))
+}
+
+// anchorExists reports whether the anchor for key has been written. Any error other than "not found" fails the
+// job: writing again would add a second version of the anchor, which verification reports as a replacement.
+func (w *AnchorWriterWorker) anchorExists(ctx context.Context, key string) (bool, error) {
 	_, err := w.s3Client.HeadObject(ctx, &s3.HeadObjectInput{
 		Bucket: aws.String(w.bucket),
 		Key:    aws.String(key),
 	})
-	return err == nil
+	if err == nil {
+		return true, nil
+	}
+	var notFound *types.NotFound
+	if errors.As(err, &notFound) {
+		return false, nil
+	}
+	return false, fmt.Errorf("failed to check for anchor %s: %w", key, err)
 }
 
-// Work writes an audit anchor to S3
+// anchorBusySnooze is how long the job waits before trying again when another anchor write holds the lock.
+const anchorBusySnooze = time.Minute
+
+// Work writes the anchor for the hour the job was created in. When another anchor write is running, the job is
+// snoozed and tries again later.
 func (w *AnchorWriterWorker) Work(ctx context.Context, job *river.Job[AnchorWriterArgs]) error {
-	// Use job creation time as anchor timestamp - this ensures deterministic filenames on retries
-	// All retries of the same job will use the same timestamp and try to write the same file
-	timestamp := job.CreatedAt.UTC()
+	// The job's creation time names the anchor, so retries of a job write the same key.
+	err := w.WriteAnchor(ctx, job.CreatedAt)
+	if errors.Is(err, db.ErrAuditAnchorLockBusy) {
+		return river.JobSnooze(anchorBusySnooze)
+	}
+	return err
+}
 
-	// Generate S3 key using hour-based timestamp (deterministic for retries within same hour)
-	key := fmt.Sprintf("%s/%s/anchor-%s.json",
-		w.chainID,
-		timestamp.Format("2006/01/02/15"),
-		timestamp.Format("20060102T15")) // Hour precision only - no minutes/seconds
+// WriteAnchor writes the anchor for the hour of ts unless it's already written. It holds the audit anchor lock
+// from the existence check through the write, so concurrent writes can't add a second version of a key or link
+// two anchors to the same predecessor, which verification would report as failures that Object Lock keeps
+// forever. It returns db.ErrAuditAnchorLockBusy when another anchor write holds the lock.
+func (w *AnchorWriterWorker) WriteAnchor(ctx context.Context, ts time.Time) error {
+	timestamp := ts.UTC()
+	return w.db.WithAuditAnchorLock(ctx, func(ctx context.Context, lock *db.AuditAnchorTx) error {
+		return w.writeAnchorLocked(ctx, lock, timestamp)
+	})
+}
 
-	// Check if anchor file already exists - skip if already written
-	if w.checkS3FileExists(ctx, key) {
+func (w *AnchorWriterWorker) writeAnchorLocked(ctx context.Context, lock *db.AuditAnchorTx, timestamp time.Time) error {
+	key := AnchorKey(w.chainID, timestamp) // Hour precision only - no minutes/seconds
+
+	exists, err := w.anchorExists(ctx, key)
+	if err != nil {
+		return err
+	}
+	if exists {
 		// File exists - job already completed successfully
 		return nil
 	}
 
-	// Get latest event from database
-	latest, err := w.getLatestEvent(ctx, nil)
+	head, err := lock.AuditChainHead(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get latest event: %w", err)
 	}
 
-	// Get previous anchor hash if exists
-	prevAnchorHash := ""
-	prevAnchor, err := w.getLatestAnchor(ctx)
-	if err == nil && prevAnchor != "" {
-		prevAnchorHash = prevAnchor
-	}
-
-	// Create anchor payload
-	lastSeq := latest.ChainIndex
-	if lastSeq < 0 {
-		lastSeq = 0 // Empty chain starts at 0
-	}
-	lastHash := ""
-	if len(latest.EventHash) > 0 {
-		lastHash = hex.EncodeToString(latest.EventHash)
-	}
-	anchor := AnchorPayload{
-		ChainID:        w.chainID,
-		LastSeq:        lastSeq,
-		LastHash:       lastHash,
-		TimestampUTC:   timestamp.Format(time.RFC3339),
-		DBSnapshotLSN:  "", // TODO: Get current LSN from PostgreSQL if needed
-		PrevAnchorHash: prevAnchorHash,
+	// Without the previous anchor's hash this anchor would break the anchor chain, so fail and retry.
+	prevAnchorHash, err := w.getLatestAnchor(ctx, timestamp)
+	if err != nil {
+		return err
 	}
 
 	// Marshal to canonical JSON (sorted keys)
-	canonicalJSON, err := json.Marshal(anchor)
+	canonicalJSON, err := json.Marshal(newAnchorPayload(w.chainID, timestamp, head, prevAnchorHash))
 	if err != nil {
 		return fmt.Errorf("failed to marshal anchor: %w", err)
 	}
@@ -143,6 +163,25 @@ func (w *AnchorWriterWorker) Work(ctx context.Context, job *river.Job[AnchorWrit
 	}
 
 	return nil
+}
+
+// newAnchorPayload describes the chain head. An empty chain is anchored with last_seq 0 and no hash.
+func newAnchorPayload(chainID string, ts time.Time, head db.AuditChainHead, prevAnchorHash string) AnchorPayload {
+	anchor := AnchorPayload{
+		ChainID:        chainID,
+		TimestampUTC:   ts.Format(time.RFC3339),
+		PrevAnchorHash: prevAnchorHash,
+		Format:         AnchorFormat,
+	}
+	if !head.Empty {
+		anchor.LastSeq = head.LastIndex
+		anchor.LastHash = hex.EncodeToString(head.LastHash)
+	}
+	if head.HashV2From.Valid {
+		hashV2From := head.HashV2From.Int64
+		anchor.HashV2FromSeq = &hashV2From
+	}
+	return anchor
 }
 
 // putObjectWithRetention writes an object to S3 with appropriate retention and encryption settings.
@@ -182,91 +221,4 @@ func (w *AnchorWriterWorker) putObjectWithRetention(
 		)
 	}
 	return nil
-}
-
-// latestEvent represents the latest event in the chain
-type latestEvent struct {
-	ChainIndex     int64
-	EventHash      []byte
-	CheckpointID   string
-	CheckpointHash []byte
-}
-
-func (w *AnchorWriterWorker) getLatestEvent(ctx context.Context, _ interface{}) (latestEvent, error) {
-	var latest latestEvent
-	query := `SELECT chain_index, event_hash, COALESCE(checkpoint_id, '')::varchar, COALESCE(checkpoint_hash, ''::bytea)
-		FROM audit.audit_event
-		ORDER BY chain_index DESC
-		LIMIT 1`
-
-	err := w.db.Pool().QueryRow(ctx, query).Scan(
-		&latest.ChainIndex,
-		&latest.EventHash,
-		&latest.CheckpointID,
-		&latest.CheckpointHash,
-	)
-	if err != nil {
-		// No rows is OK - means chain is empty
-		if errors.Is(err, pgx.ErrNoRows) {
-			latest.ChainIndex = -1
-			return latest, nil
-		}
-		return latest, fmt.Errorf("failed to scan latest event: %w", err)
-	}
-
-	return latest, nil
-}
-
-func (w *AnchorWriterWorker) getLatestAnchor(ctx context.Context) (string, error) {
-	// List objects in bucket with chain ID prefix
-	listInput := &s3.ListObjectsV2Input{
-		Bucket: aws.String(w.bucket),
-		Prefix: aws.String(w.chainID + "/"),
-	}
-
-	listOutput, err := w.s3Client.ListObjectsV2(ctx, listInput)
-	if err != nil {
-		return "", fmt.Errorf("failed to list anchors: %w", err)
-	}
-
-	if len(listOutput.Contents) == 0 {
-		return "", nil // No previous anchors
-	}
-
-	// Find the latest JSON anchor file (not .sha256)
-	var latestKey string
-	var latestTime time.Time
-	for _, obj := range listOutput.Contents {
-		if obj.Key == nil || *obj.Key == "" || !strings.HasSuffix(*obj.Key, ".json") {
-			continue
-		}
-		if obj.LastModified != nil && obj.LastModified.After(latestTime) {
-			latestTime = *obj.LastModified
-			latestKey = *obj.Key
-		}
-	}
-
-	if latestKey == "" {
-		return "", nil // No previous anchors found
-	}
-
-	// Download and hash the previous anchor
-	getInput := &s3.GetObjectInput{
-		Bucket: aws.String(w.bucket),
-		Key:    aws.String(latestKey),
-	}
-
-	getOutput, err := w.s3Client.GetObject(ctx, getInput)
-	if err != nil {
-		return "", fmt.Errorf("failed to get previous anchor: %w", err)
-	}
-	defer func() { _ = getOutput.Body.Close() }()
-
-	var buf bytes.Buffer
-	if _, err := buf.ReadFrom(getOutput.Body); err != nil {
-		return "", fmt.Errorf("failed to read previous anchor: %w", err)
-	}
-
-	hash := sha256.Sum256(buf.Bytes())
-	return hex.EncodeToString(hash[:]), nil
 }

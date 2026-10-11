@@ -249,7 +249,8 @@ Rolling back migrations can cause data loss. Only do this if absolutely necessar
 
 1. Restore from backup if needed
 2. Deploy the previous version
-3. Migrations are forward-only; previous versions must be compatible
+3. Migrations are forward-only. Most leave the schema usable by the previous version, but not all: a release note
+   below says when the previous version can't run (or can't fully run) against the new schema.
 
 ## Rollback Procedures
 
@@ -293,6 +294,49 @@ aws rds restore-db-instance-from-db-snapshot \
 ```
 
 ## Release Notes That Need Action
+
+### Audit hash v2 and `verify-audit`
+
+This release changes how audit events are hashed (hash v2: every stored column, recomputable from the row) and
+adds `rack-gateway-api verify-audit`, which checks the chain and the S3 anchors.
+
+1. **The previous version can't write audit events to the database once you've migrated.** The migration replaces
+   `audit.append_audit_event`. From `migrate` until the new release is promoted, the running release's audit
+   writes fail; requests aren't blocked, the failures are logged, and every event still goes to stdout (and so to
+   CloudWatch). Promote straight after migrating (`scripts/deploy.sh` does). The same applies if you roll back:
+   the earlier release can't write audit events to the database until you roll forward again. Events from those
+   windows are only in the logs, never in the chain.
+2. **Existing events become legacy (v1) events.** `verify-audit` can't recompute their HMAC (it covered values
+   the database doesn't store exactly), so it only checks their `previous_hash` links. Events written from now on
+   are hash v2 and fully checked.
+3. **Pin where hash v2 starts.** Right after promoting, run `verify-audit` (see below). It prints
+   `hash v2 from event N` or, before the new release has written an event, a failure naming the event that will
+   be the first. Set `AUDIT_HASH_V2_FROM=N` wherever `verify-audit` runs. Without it, `verify-audit` fails while
+   legacy events exist, until an anchor written by this release (within the hour) confirms the start, and always
+   with `--no-anchors`. See
+   [Pinning where hash v2 starts](/deployment/terraform/s3-worm-storage/#pinning-where-hash-v2-starts).
+4. **Give `verify-audit` its permissions.** It needs `AUDIT_HMAC_SECRET`, a database role that can read
+   `audit.audit_event` (`audit_reader` is enough), and for the anchor checks `AUDIT_ANCHOR_BUCKET`,
+   `AUDIT_ANCHOR_CHAIN_ID` and AWS credentials allowed `s3:ListBucket`, `s3:ListBucketVersions`, `s3:GetObject` and
+   `s3:GetObjectVersion` on the anchor bucket and `kms:Decrypt` on its key. The gateway's own writer policy has no
+   `s3:ListBucketVersions` or `s3:GetObjectVersion`; add them to run it from the gateway app.
+5. **Run it, then schedule it.**
+
+   ```bash
+   convox run gateway -a rack-gateway ./rack-gateway-api verify-audit
+   ```
+
+   Run it on a schedule and alert when it exits non-zero
+   ([Running it on a schedule](/deployment/terraform/s3-worm-storage/#running-it-on-a-schedule)). It also fails
+   when no anchor has been written for 3 hours (`--max-anchor-age`).
+6. **Expect findings in anchors from earlier versions.** Anchors written before this release have no `format`.
+   Their `prev_anchor_hash` stopped naming the previous anchor once the bucket held 1000 anchors; those are
+   counted, not failures. Earlier releases didn't serialise anchor writes, so concurrent runs could write an hour's
+   key twice, which `verify-audit` reports as an overwritten anchor; check the versions' timestamps and contents
+   to confirm they're from the same hour's job. Builds from before v0.0.1 wrote per-second keys
+   (`anchor-YYYYMMDDTHHMMSSZ.json`, reported as not matching `ts_utc`) and `.sha256` files (ignored, with a
+   warning). Locked anchors can't be changed, so these findings repeat on every run until the anchors' retention
+   ends and they're deleted.
 
 ### Column encryption key required
 
@@ -371,9 +415,10 @@ The CLI should match the gateway major version:
 
 ### Database Compatibility
 
-Database migrations are additive within major versions. Rollback requires:
+Database migrations are usually additive within major versions. Rollback requires:
 
-1. Previous version must be able to read new schema
+1. Previous version must be able to use the new schema (check the release notes above: after the audit hash v2
+   migration, earlier versions can't write audit events to the database)
 2. Or restore from backup
 
 ## Upgrade Checklist
