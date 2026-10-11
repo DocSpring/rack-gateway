@@ -218,7 +218,7 @@ var Commands = []Command{
 			rbac.Convox(rbac.ResourceRelease, rbac.ActionCreate),
 			rbac.Convox(rbac.ResourceRelease, rbac.ActionPromote), // Required when --promote flag is used
 		},
-		AllowedFlags: []string{"promote", "replace"},
+		AllowedFlags: []string{"promote", "replace", "allow-protected"},
 		Description:  "Set env var(s)",
 	},
 	{
@@ -228,7 +228,7 @@ var Commands = []Command{
 			rbac.Convox(rbac.ResourceRelease, rbac.ActionCreate),
 			rbac.Convox(rbac.ResourceRelease, rbac.ActionPromote), // Required when --promote flag is used
 		},
-		AllowedFlags: []string{"promote"},
+		AllowedFlags: []string{"promote", "allow-protected"},
 		Description:  "Unset env var(s)",
 	},
 	{

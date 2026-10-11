@@ -16,6 +16,7 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
 	"github.com/DocSpring/rack-gateway/internal/gateway/config"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
+	"github.com/DocSpring/rack-gateway/internal/gateway/envutil"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 )
 
@@ -83,6 +84,8 @@ func TestProxyForwardsOnlyAllowlistedHeaders(t *testing.T) {
 		"Proxy-Authorization": "Basic Zm9vOmJhcg==",
 		"X-Something-Else":    "1",
 		"Env":                 "SECRET=1",
+		// Read by the gateway on release creation only
+		envutil.AllowProtectedHeader: "DATABASE_URL",
 	}
 	for k, v := range spoofed {
 		req.Header.Set(k, v)

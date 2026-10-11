@@ -52,6 +52,16 @@ run_admin_tests() {
     verify_rgw_command "env unset TEST_PROTECTED --promote" \
         "Unsetting TEST_PROTECTED..." "Release:"
 
+    # Changing a protected env var needs --allow-protected, and MFA on the command itself
+    verify_rgw_command_failure "env set DATABASE_URL=postgres://rotated" \
+        "DATABASE_URL is a protected env var for rack-gateway"
+
+    clear_mfa_replay_protection
+    local protected_mfa_code
+    protected_mfa_code=$(generate_totp_code "$(get_totp_secret 'admin@example.com')")
+    verify_rgw_command "env set DATABASE_URL=postgres://rotated --allow-protected --mfa-code $protected_mfa_code" \
+        "Setting DATABASE_URL..." "Release:"
+
     # Clean up the protected_env_vars setting
     psql_exec "DELETE FROM settings WHERE app_name = 'rack-gateway' AND key = 'protected_env_vars';"
 

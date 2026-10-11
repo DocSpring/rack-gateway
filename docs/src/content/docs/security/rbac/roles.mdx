@@ -303,6 +303,7 @@ The wildcard permissions grant access to everything, including:
 | View and export everyone's audit logs | `gateway:audit_log:read` |
 | List deploy approval requests and approve them | `gateway:deploy_approval_request:list`, `:approve` |
 | Run processes with privileged options | `convox:process:run_privileged` |
+| Change or remove protected env vars (`--allow-protected`, MFA on every change) | `convox:env:set_protected` |
 | Delete applications | `convox:app:delete` |
 | Configure gateway settings | `gateway:setting_group:*` |
 

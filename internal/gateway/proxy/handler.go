@@ -35,7 +35,6 @@ type Handler struct {
 	secretNames      map[string]struct{}
 	database         *db.Database
 	settingsService  *settings.Service
-	protectedEnv     map[string]struct{}
 	allowDestructive bool
 	emailer          email.Sender
 	rackName         string
@@ -69,7 +68,6 @@ func NewHandler(
 		secretNames:      make(map[string]struct{}),
 		database:         database,
 		settingsService:  settingsService,
-		protectedEnv:     make(map[string]struct{}),
 		allowDestructive: false,
 		emailer:          mailer,
 		rackName:         rackName,
@@ -128,20 +126,6 @@ func (h *Handler) rackDisplay() string {
 
 // SetAllowDestructive toggles whether destructive Convox operations are allowed.
 func (h *Handler) SetAllowDestructive(v bool) { h.allowDestructive = v }
-
-// ReplaceProtectedEnv replaces the set of environment keys treated as
-// protected (masked in responses unless explicitly allowed).
-func (h *Handler) ReplaceProtectedEnv(keys []string) {
-	m := make(map[string]struct{}, len(keys))
-	for _, k := range keys {
-		k = strings.ToUpper(strings.TrimSpace(k))
-		if k == "" {
-			continue
-		}
-		m[k] = struct{}{}
-	}
-	h.protectedEnv = m
-}
 
 // ProxyToRack handles proxying requests to the Convox rack with RBAC, MFA, and audit logging.
 func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
@@ -429,9 +413,7 @@ func (h *Handler) prepareReleaseIfNeeded(
 	if err == nil {
 		return diffs, nil
 	}
-	var denied *envChangeDeniedError
-	if errors.As(err, &denied) {
-		http.Error(w, denied.Error(), http.StatusForbidden)
+	if writeEnvChangeRefusal(w, err) {
 		return nil, err
 	}
 	if fpErr, ok := rackcert.AsFingerprintMismatch(err); ok {

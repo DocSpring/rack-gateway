@@ -248,15 +248,18 @@ const (
 	// ActionRunPrivileged represents starting a process with options that escape the app's release
 	// image or scheduling constraints (custom image, host volumes, privileged mode, node placement).
 	ActionRunPrivileged // run_privileged
+	// ActionSetProtected represents changing or removing an app's protected env vars, which nobody can do
+	// through the normal env:set permission. It also needs MFA verified on the request.
+	ActionSetProtected // set_protected
 )
 
 // IsValid reports whether the action represents a defined value.
-func (a Action) IsValid() bool { return a <= ActionRunPrivileged }
+func (a Action) IsValid() bool { return a <= ActionSetProtected }
 
 // ParseAction converts a string name into an Action value.
 func ParseAction(v string) (Action, error) {
 	// Try each known value
-	for a := ActionAdd; a <= ActionRunPrivileged; a++ {
+	for a := ActionAdd; a <= ActionSetProtected; a++ {
 		if a.String() == v {
 			return a, nil
 		}

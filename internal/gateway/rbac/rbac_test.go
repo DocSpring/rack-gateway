@@ -64,6 +64,8 @@ func TestAuthorizeRolePermissions(t *testing.T) {
 		{"deployer@test.com", Gateway(ResourceAPIToken, ActionDelete), true},
 		{"deployer@test.com", Gateway(ResourceAPIToken, ActionManage), false},
 		{"deployer@test.com", Convox(ResourceDeploy, ActionDeployWithApproval), true},
+		{"deployer@test.com", Convox(ResourceEnv, ActionSetProtected), false},
+		{"admin@test.com", Convox(ResourceEnv, ActionSetProtected), true},
 		{"admin@test.com", Gateway(ResourceAPIToken, ActionManage), true},
 		{"admin@test.com", Convox(ResourceApp, ActionDelete), true},
 		{"admin@test.com", Gateway(ResourceDeployApprovalRequest, ActionApprove), true},

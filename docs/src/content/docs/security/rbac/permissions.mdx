@@ -101,7 +101,9 @@ Authentication and MFA resources:
 | `read` | Read/view a resource |
 | `remove` | Remove item from collection |
 | `restart` | Restart a service |
+| `run_privileged` | Start a process with privileged options |
 | `set` | Set a value |
+| `set_protected` | Change or remove a protected value |
 | `start` | Start a resource |
 | `stop` | Stop a resource |
 | `terminate` | Terminate a resource |
@@ -156,9 +158,14 @@ Releases contain environment variable snapshots, so viewing releases is more res
 | `convox:env:read` | View environment variables | ops, deployer, admin |
 | `convox:env:set` | Set environment variables | deployer, admin |
 | `convox:env:unset` | Remove environment variables | deployer, admin |
+| `convox:env:set_protected` | Change or remove an app's protected environment variables with `--allow-protected` | admin |
 
 <Aside type="caution" title="Sensitive Data">
 Environment variables often contain secrets (API keys, database passwords). Only grant `env:read` to users who need to debug configuration issues.
+</Aside>
+
+<Aside type="note">
+`set_protected` is checked in addition to `release:create` when an `env set` or `env unset` names a protected key with `--allow-protected`. The request must also carry MFA, which the gateway verifies even within the step-up window. API tokens can never change protected env vars, whatever their permissions. See [Protected env vars](/user-guide/cli/commands/#protected-env-vars).
 </Aside>
 
 </TabItem>

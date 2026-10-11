@@ -4,9 +4,9 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"mime"
 	"net/http"
 	"net/url"
-	"sort"
 	"strings"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
@@ -18,36 +18,35 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 )
 
+// logDeniedRBACAction records a refused env or secret change to one key (resourceName is app/KEY).
 func (h *Handler) logDeniedRBACAction(
 	r *http.Request,
-	email,
-	userName string,
+	email string,
 	resource rbac.Resource,
 	action rbac.Action,
-	resourceType,
-	resourceName,
-	details string,
+	resourceName, details string,
+	status int,
 ) {
 	_ = h.logAudit(r, &db.AuditLog{
 		UserEmail:      email,
-		UserName:       userName,
+		UserName:       r.Header.Get("X-User-Name"),
 		ActionType:     "convox",
 		Action:         audit.BuildAction(resource.String(), action.String()),
-		ResourceType:   resourceType,
+		ResourceType:   resource.String(),
 		Resource:       resourceName,
 		Details:        details,
 		IPAddress:      netutil.ClientIP(r),
 		UserAgent:      r.UserAgent(),
 		Status:         "denied",
 		RBACDecision:   "deny",
-		HTTPStatus:     http.StatusForbidden,
+		HTTPStatus:     status,
 		ResponseTimeMs: 0,
 	})
 }
 
 // prepareReleaseCreate checks the env in a release create request against the caller's permissions and the
 // app's protected keys, merges masked values with the current env, and rewrites the request body. Refused
-// changes are returned as *envChangeDeniedError.
+// changes are returned as *envChangeDeniedError, or *protectedEnvMFAError when a protected change lacks MFA.
 func (h *Handler) prepareReleaseCreate(
 	r *http.Request,
 	rack config.RackConfig,
@@ -58,11 +57,18 @@ func (h *Handler) prepareReleaseCreate(
 		return nil, err
 	}
 
-	envStr := vals.Get("env")
-	if envStr == "" {
+	// The rack treats a present env as the release's whole env, even when it's empty, so only an absent env
+	// leaves the env alone. Without an env, parent-release would give the new release that release's env.
+	if !vals.Has("env") {
 		r.Body = io.NopCloser(bytes.NewReader(bodyBuf))
+		if vals.Has("parent-release") {
+			return nil, &envChangeDeniedError{
+				message: "parent-release needs an env: the new release would take that release's env unchecked",
+			}
+		}
 		return nil, nil
 	}
+	envStr := vals.Get("env")
 
 	app := extractAppFromPath(r.URL.Path)
 	if app == "" {
@@ -103,7 +109,15 @@ func (h *Handler) prepareReleaseCreate(
 	return diffs, nil
 }
 
+// readAndParseRequestBody reads a form-encoded body. Any other body is refused: the rack would parse fields (such
+// as env) out of it that the gateway can't see.
 func readAndParseRequestBody(r *http.Request) ([]byte, url.Values, error) {
+	if contentType := r.Header.Get("Content-Type"); contentType != "" {
+		mediaType, _, err := mime.ParseMediaType(contentType)
+		if err != nil || mediaType != "application/x-www-form-urlencoded" {
+			return nil, nil, fmt.Errorf("release requests must be form-encoded, got %q", contentType)
+		}
+	}
 	var bodyBuf []byte
 	if r.Body != nil {
 		var err error
@@ -166,29 +180,12 @@ func (h *Handler) validateSecretsPermissions(
 	if len(offending) == 0 {
 		return nil
 	}
-	userName := r.Header.Get("X-User-Name")
 	for _, key := range offending {
 		h.logDeniedRBACAction(
-			r, email, userName,
-			rbac.ResourceSecret, rbac.ActionSet,
-			"secret", fmt.Sprintf("%s/%s", app, key), "{}",
+			r, email, rbac.ResourceSecret, rbac.ActionSet, fmt.Sprintf("%s/%s", app, key), "{}", http.StatusForbidden,
 		)
 	}
 	return secretsDenied(offending)
-}
-
-func (h *Handler) validateProtectedKeys(
-	r *http.Request,
-	email, app string,
-	posted map[string]string,
-) error {
-	var changed []string
-	for k, v := range posted {
-		if h.isProtectedKeyForApp(k, app) && v != maskedSecret {
-			changed = append(changed, k)
-		}
-	}
-	return h.denyProtectedKeys(r, email, app, changed)
 }
 
 func (h *Handler) fetchBaseEnv(
@@ -222,12 +219,9 @@ func (h *Handler) validateEnvPermissions(
 	if canEnvSet {
 		return nil
 	}
-	userName := r.Header.Get("X-User-Name")
 	for _, key := range order {
 		h.logDeniedRBACAction(
-			r, email, userName,
-			rbac.ResourceEnv, rbac.ActionSet,
-			"env", fmt.Sprintf("%s/%s", app, key), "{}",
+			r, email, rbac.ResourceEnv, rbac.ActionSet, fmt.Sprintf("%s/%s", app, key), "{}", http.StatusForbidden,
 		)
 	}
 	return &envChangeDeniedError{message: "You don't have permission to change environment variables: " +
@@ -262,12 +256,13 @@ func (h *Handler) mergeEnvAndComputeDiffs(
 		}
 	}
 
-	removed, err := h.removedKeyDiffs(app, posted, baseEnv, merged, canSecretsSet)
+	removed, err := h.removedKeyDiffs(r, app, posted, baseEnv, merged, canSecretsSet)
 	if err != nil {
 		return nil, nil, err
 	}
 	diffs = append(diffs, removed...)
 
+	h.markProtectedDiffs(app, diffs)
 	if err := h.validateProtectedDiffs(r, email, app, diffs); err != nil {
 		return nil, nil, err
 	}
@@ -276,19 +271,22 @@ func (h *Handler) mergeEnvAndComputeDiffs(
 }
 
 // removedKeyDiffs returns diffs for keys in the current env that the request leaves out, i.e. removes.
-// Protected keys left out are kept (copied into merged): the CLI does not post them back. Removing a secret
-// needs secret:set.
+// Protected keys left out are kept (copied into merged): the CLI does not post them back. A protected key the
+// request names in X-Allow-Protected-Env is removed like any other key (`env unset --allow-protected`), and
+// the removal is then authorized as a protected change. Removing a secret needs secret:set.
 func (h *Handler) removedKeyDiffs(
+	r *http.Request,
 	app string,
 	posted, baseEnv, merged map[string]string,
 	canSecretsSet bool,
 ) ([]envutil.EnvDiff, error) {
+	optedIn := optedInProtectedKeys(r)
 	var diffs []envutil.EnvDiff
 	for key, base := range baseEnv {
 		if _, ok := posted[key]; ok {
 			continue
 		}
-		if h.isProtectedKeyForApp(key, app) {
+		if h.isProtectedKeyForApp(key, app) && !optedIn.has(key) {
 			merged[key] = base
 			continue
 		}
@@ -299,38 +297,6 @@ func (h *Handler) removedKeyDiffs(
 		diffs = append(diffs, envutil.EnvDiff{Key: key, OldVal: base, NewVal: "", Secret: isSecret})
 	}
 	return diffs, nil
-}
-
-func (h *Handler) validateProtectedDiffs(
-	r *http.Request,
-	email, app string,
-	diffs []envutil.EnvDiff,
-) error {
-	var changed []string
-	for _, d := range diffs {
-		if h.isProtectedKeyForApp(d.Key, app) {
-			changed = append(changed, d.Key)
-		}
-	}
-	return h.denyProtectedKeys(r, email, app, changed)
-}
-
-// denyProtectedKeys audits and refuses changes to the app's protected keys. It returns nil when keys is empty.
-func (h *Handler) denyProtectedKeys(r *http.Request, email, app string, keys []string) error {
-	if len(keys) == 0 {
-		return nil
-	}
-	sort.Strings(keys)
-	userName := r.Header.Get("X-User-Name")
-	for _, key := range keys {
-		h.logDeniedRBACAction(
-			r, email, userName,
-			rbac.ResourceEnv, rbac.ActionSet,
-			"env", fmt.Sprintf("%s/%s", app, key),
-			"{\"error\":\"protected key change denied\"}",
-		)
-	}
-	return protectedKeysDenied(app, keys)
 }
 
 func recomposeEnvString(
@@ -381,27 +347,15 @@ func (h *Handler) logEnvDiffs(r *http.Request, email, _ string, diffs []envutil.
 	userName := r.Header.Get("X-User-Name")
 	app := extractAppFromPath(r.URL.Path)
 	for _, d := range diffs {
-		// Mask only secret values in audit details
+		// Values of secret and protected keys never reach the audit log.
 		oldVal := d.OldVal
 		newVal := d.NewVal
-		if d.Secret {
+		if d.Secret || d.Protected {
 			oldVal = "[REDACTED]"
 			newVal = "[REDACTED]"
 		}
 		details := fmt.Sprintf("{\"old\":\"%s\",\"new\":\"%s\"}", escapeJSONString(oldVal), escapeJSONString(newVal))
-		action := audit.BuildAction(rbac.ResourceEnv.String(), rbac.ActionSet.String())
-		rtype := "env"
-		if d.Secret {
-			action = audit.BuildAction(rbac.ResourceSecret.String(), rbac.ActionSet.String())
-			rtype = "secret"
-		}
-		if strings.TrimSpace(d.NewVal) == "" {
-			if d.Secret {
-				action = audit.BuildAction(rbac.ResourceSecret.String(), audit.ActionVerbUnset)
-			} else {
-				action = audit.BuildAction(rbac.ResourceEnv.String(), audit.ActionVerbUnset)
-			}
-		}
+		action, rtype := envDiffAuditAction(d)
 		_ = h.logAudit(r, &db.AuditLog{
 			UserEmail:      email,
 			UserName:       userName,
@@ -417,6 +371,26 @@ func (h *Handler) logEnvDiffs(r *http.Request, email, _ string, diffs []envutil.
 			HTTPStatus:     200,
 			ResponseTimeMs: 0,
 		})
+	}
+}
+
+// envDiffAuditAction returns the audit action and resource type for an env change. Protected keys get their
+// own actions, so every protected change stands out in the audit log and can be routed to Slack.
+func envDiffAuditAction(d envutil.EnvDiff) (string, string) {
+	unset := strings.TrimSpace(d.NewVal) == ""
+	switch {
+	case d.Protected && unset:
+		return audit.BuildAction(rbac.ResourceEnv.String(), audit.ActionVerbUnsetProtected), "env"
+	case d.Protected:
+		return audit.BuildAction(rbac.ResourceEnv.String(), rbac.ActionSetProtected.String()), "env"
+	case d.Secret && unset:
+		return audit.BuildAction(rbac.ResourceSecret.String(), audit.ActionVerbUnset), "secret"
+	case d.Secret:
+		return audit.BuildAction(rbac.ResourceSecret.String(), rbac.ActionSet.String()), "secret"
+	case unset:
+		return audit.BuildAction(rbac.ResourceEnv.String(), audit.ActionVerbUnset), "env"
+	default:
+		return audit.BuildAction(rbac.ResourceEnv.String(), rbac.ActionSet.String()), "env"
 	}
 }
 

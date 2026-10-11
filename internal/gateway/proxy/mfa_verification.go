@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -114,7 +115,23 @@ func (h *Handler) verifyInlineMFA(
 	}
 
 	h.updateSessionStepUp(authUser)
+	markInlineMFAVerified(r)
 	return nil
+}
+
+type inlineMFAContextKeyType string
+
+// inlineMFAVerifiedContextKey marks a request whose inline MFA proof has been verified, so later checks on the
+// same request don't verify the single-use proof again (TOTP replay protection would reject it).
+const inlineMFAVerifiedContextKey inlineMFAContextKeyType = "inlineMFAVerified"
+
+func markInlineMFAVerified(r *http.Request) {
+	*r = *r.WithContext(context.WithValue(r.Context(), inlineMFAVerifiedContextKey, true))
+}
+
+func inlineMFAVerified(r *http.Request) bool {
+	verified, _ := r.Context().Value(inlineMFAVerifiedContextKey).(bool)
+	return verified
 }
 
 func (h *Handler) verifyMFAByType(r *http.Request, authUser *auth.User, userRecord *db.User) error {
