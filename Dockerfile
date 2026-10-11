@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-FROM oven/bun:1.3.2-alpine@sha256:adda30fd4db7d8ef9a2113cb935c6f751de3daad39373713b56eefe49db78471 AS webbuild
+FROM oven/bun:1.4.2-alpine@sha256:d888c0ae6c86d7866ff10c5aafdd9077b36aee6455b33dd270fb93c0dd5cef6f AS webbuild
 
 WORKDIR /app/web
 
@@ -14,7 +14,7 @@ RUN test -n "$COMMIT_SHA" || (echo "COMMIT_SHA build arg is required" && exit 1)
 ENV COMMIT_SHA=${COMMIT_SHA}
 RUN bun run build
 
-FROM golang:1.26.9-alpine@sha256:cdfd4fe2da6b225d8b40c6b7a105736e548e83ff56d5d8f9394446eeb5eb84e0 AS builder
+FROM golang:1.27.0-alpine@sha256:4c9fe60190a2a3350ddc51de80d0224b8a6698d12bdfc999fee45ea9d6c46dbc AS builder
 
 RUN apk add --no-cache git ca-certificates make gcc musl-dev nodejs npm
 
