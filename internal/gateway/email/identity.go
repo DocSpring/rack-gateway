@@ -4,29 +4,20 @@ import (
 	"fmt"
 	"html"
 	"strings"
-)
 
-// Identity names the gateway an email comes from. One gateway runs per rack, so someone who gets email
-// from several gateways needs every message to say which one sent it.
-type Identity struct {
-	// Name is the rack's display name, e.g. "Staging" or "US".
-	Name string
-	// URL is the gateway's base URL, e.g. https://rack-gateway-staging.example.ts.net.
-	URL string
-}
+	"github.com/DocSpring/rack-gateway/internal/gateway/config"
+)
 
 // IdentifiedSender wraps a Sender so every email names its gateway: the subject is prefixed with
 // "Rack Gateway (<name>): " and a footer with the gateway's name and URL is appended to both bodies.
 // Callers write subjects without a rack prefix.
 type IdentifiedSender struct {
 	inner    Sender
-	identity Identity
+	identity config.GatewayIdentity
 }
 
 // NewIdentifiedSender returns a Sender that identifies the gateway in every email it sends through inner.
-func NewIdentifiedSender(inner Sender, identity Identity) *IdentifiedSender {
-	identity.Name = strings.TrimSpace(identity.Name)
-	identity.URL = strings.TrimRight(strings.TrimSpace(identity.URL), "/")
+func NewIdentifiedSender(inner Sender, identity config.GatewayIdentity) *IdentifiedSender {
 	return &IdentifiedSender{inner: inner, identity: identity}
 }
 
@@ -42,10 +33,7 @@ func (s *IdentifiedSender) SendMany(to []string, subject, textBody, htmlBody str
 
 // identifySubject prefixes subject with the gateway's name.
 func (s *IdentifiedSender) identifySubject(subject string) string {
-	if s.identity.Name == "" {
-		return "Rack Gateway: " + subject
-	}
-	return fmt.Sprintf("Rack Gateway (%s): %s", s.identity.Name, subject)
+	return s.identity.Label() + ": " + subject
 }
 
 // identifyText appends the gateway footer to a plain-text body.
@@ -97,22 +85,15 @@ func lowerASCII(c byte) byte {
 	return c
 }
 
-func (s *IdentifiedSender) gatewayName() string {
-	if s.identity.Name == "" {
-		return "Rack Gateway"
-	}
-	return s.identity.Name + " Rack Gateway"
-}
-
 func (s *IdentifiedSender) footerText() string {
 	if s.identity.URL == "" {
-		return "Sent by the " + s.gatewayName() + "."
+		return "Sent by the " + s.identity.FullName() + "."
 	}
-	return fmt.Sprintf("Sent by the %s (%s).", s.gatewayName(), s.identity.URL)
+	return fmt.Sprintf("Sent by the %s (%s).", s.identity.FullName(), s.identity.URL)
 }
 
 func (s *IdentifiedSender) footerHTML() string {
-	name := "<strong>" + html.EscapeString(s.gatewayName()) + "</strong>"
+	name := "<strong>" + html.EscapeString(s.identity.FullName()) + "</strong>"
 	if s.identity.URL == "" {
 		return "Sent by the " + name + "."
 	}

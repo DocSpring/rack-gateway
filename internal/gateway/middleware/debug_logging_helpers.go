@@ -18,6 +18,11 @@ type bodyWriter struct {
 	body *bytes.Buffer
 }
 
+// Unwrap lets http.ResponseController reach the connection, e.g. to extend a long request's write deadline.
+func (w *bodyWriter) Unwrap() http.ResponseWriter {
+	return w.ResponseWriter
+}
+
 func (w *bodyWriter) Write(b []byte) (int, error) {
 	w.body.Write(b)
 	return w.ResponseWriter.Write(b)

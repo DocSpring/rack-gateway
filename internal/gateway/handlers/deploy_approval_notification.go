@@ -27,7 +27,6 @@ func (h *APIHandler) sendSlackNotification(c *gin.Context, recordID int64) {
 
 	_, err := h.jobsClient.Insert(c.Request.Context(), jobslack.DeployApprovalArgs{
 		DeployApprovalRequestID: recordID,
-		GatewayDomain:           h.config.Domain,
 	}, &river.InsertOpts{
 		Queue:       jobs.QueueNotifications,
 		MaxAttempts: jobs.MaxAttemptsNotification,

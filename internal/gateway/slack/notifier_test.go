@@ -18,7 +18,7 @@ import (
 func TestNotifyAuditEvent_NoIntegration(t *testing.T) {
 	database := dbtest.NewDatabase(t)
 
-	notifier := NewNotifier(database)
+	notifier := NewNotifier(database, testGateway)
 
 	auditLog := &db.AuditLog{
 		Action:    audit.BuildAction(audit.ActionScopeMFAMethod, audit.ActionVerbEnroll),
@@ -59,7 +59,7 @@ func TestNotifyAuditEvent_NoMatchingChannels(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	notifier := NewNotifier(database)
+	notifier := NewNotifier(database, testGateway)
 
 	auditLog := &db.AuditLog{
 		Action:    audit.BuildAction(audit.ActionScopeMFAMethod, audit.ActionVerbEnroll),
@@ -111,7 +111,7 @@ func TestMatchGlob(t *testing.T) {
 func TestMatchActionToChannels(t *testing.T) {
 	database := dbtest.NewDatabase(t)
 
-	notifier := NewNotifier(database)
+	notifier := NewNotifier(database, testGateway)
 
 	channelActions := map[string]interface{}{
 		"security": map[string]interface{}{
@@ -158,7 +158,7 @@ func TestMatchActionToChannels(t *testing.T) {
 func TestFormatAuditLogMessage(t *testing.T) {
 	database := dbtest.NewDatabase(t)
 
-	notifier := NewNotifier(database)
+	notifier := NewNotifier(database, testGateway)
 
 	tests := []struct {
 		name          string
@@ -256,7 +256,7 @@ func TestFormatAuditLogMessage(t *testing.T) {
 // Slack copies an audit entry's details verbatim, so an env change's message carries no values unless the app's
 // audit_visible_env_vars lists the key.
 func TestFormatAuditLogMessageRedactsEnvValues(t *testing.T) {
-	notifier := NewNotifier(dbtest.NewDatabase(t))
+	notifier := NewNotifier(dbtest.NewDatabase(t), testGateway)
 	change := envutil.EnvDiff{Key: "DATABASE_PASSWORD", OldVal: "old-value", NewVal: "new-value"}
 	auditLog := &db.AuditLog{
 		Action:       audit.BuildAction(rbac.ResourceEnv.String(), rbac.ActionSet.String()),
@@ -283,7 +283,7 @@ func TestNotifyDeployApprovalCreated(t *testing.T) {
 	database := dbtest.NewDatabase(t)
 
 	t.Run("skips when no integration configured", func(t *testing.T) {
-		notifier := NewNotifier(database)
+		notifier := NewNotifier(database, testGateway)
 		req := &db.DeployApprovalRequest{
 			App:           "myapp",
 			GitBranch:     "feature-branch",
@@ -291,12 +291,12 @@ func TestNotifyDeployApprovalCreated(t *testing.T) {
 			Message:       "Deploy feature X",
 		}
 
-		err := notifier.NotifyDeployApprovalCreated(req, "gateway.example.com")
+		err := notifier.NotifyDeployApprovalCreated(req)
 		require.NoError(t, err)
 	})
 
 	t.Run("skips when alerts disabled", func(t *testing.T) {
-		notifier := NewNotifier(database)
+		notifier := NewNotifier(database, testGateway)
 
 		// Create user for integration
 		user, err := database.CreateUser("admin1@example.com", "Admin User", []string{"admin"})
@@ -322,12 +322,12 @@ func TestNotifyDeployApprovalCreated(t *testing.T) {
 			Message:       "Deploy feature X",
 		}
 
-		err = notifier.NotifyDeployApprovalCreated(req, "gateway.example.com")
+		err = notifier.NotifyDeployApprovalCreated(req)
 		require.NoError(t, err)
 	})
 
 	t.Run("skips when channel not configured", func(t *testing.T) {
-		notifier := NewNotifier(database)
+		notifier := NewNotifier(database, testGateway)
 
 		// Create user for integration
 		user, err := database.CreateUser("admin2@example.com", "Admin User", []string{"admin"})
@@ -357,14 +357,14 @@ func TestNotifyDeployApprovalCreated(t *testing.T) {
 			Message:       "Deploy feature X",
 		}
 
-		err = notifier.NotifyDeployApprovalCreated(req, "gateway.example.com")
+		err = notifier.NotifyDeployApprovalCreated(req)
 		require.NoError(t, err)
 	})
 }
 
 func TestFormatDeployApprovalAlert_BasicMessage(t *testing.T) {
 	database := dbtest.NewDatabase(t)
-	notifier := NewNotifier(database)
+	notifier := NewNotifier(database, testGateway)
 
 	now := time.Now()
 	req := &db.DeployApprovalRequest{
@@ -377,7 +377,7 @@ func TestFormatDeployApprovalAlert_BasicMessage(t *testing.T) {
 		CreatedAt:     now,
 	}
 
-	text, blocks := notifier.formatDeployApprovalAlert(req, "gateway.example.com")
+	text, blocks := notifier.formatDeployApprovalAlert(req)
 
 	// Check text contains key elements
 	require.Contains(t, text, "feature-branch")
@@ -392,12 +392,12 @@ func TestFormatDeployApprovalAlert_BasicMessage(t *testing.T) {
 	require.Contains(t, blocksStr, "feature-branch")
 	require.Contains(t, blocksStr, "myapp")
 	require.Contains(t, blocksStr, "abc123d") // First 7 chars of commit
-	require.Contains(t, blocksStr, "gateway.example.com/app/deploy-approval-requests/req_abc123")
+	require.Contains(t, blocksStr, "https://gateway.example.com/app/deploy-approval-requests/req_abc123")
 }
 
 func TestFormatDeployApprovalAlert_WithPRAndCI(t *testing.T) {
 	database := dbtest.NewDatabase(t)
-	notifier := NewNotifier(database)
+	notifier := NewNotifier(database, testGateway)
 
 	now := time.Now()
 	ciMeta := map[string]interface{}{
@@ -420,7 +420,7 @@ func TestFormatDeployApprovalAlert_WithPRAndCI(t *testing.T) {
 		CreatedAt:      now,
 	}
 
-	text, blocks := notifier.formatDeployApprovalAlert(req, "gateway.example.com")
+	text, blocks := notifier.formatDeployApprovalAlert(req)
 
 	require.Contains(t, text, "feature-branch")
 
@@ -431,14 +431,14 @@ func TestFormatDeployApprovalAlert_WithPRAndCI(t *testing.T) {
 	// Check all links are present
 	require.Contains(t, blocksStr, "github.com/org/repo/pull/42")
 	require.Contains(t, blocksStr, "circleci.com/gh/org/repo/123")
-	require.Contains(t, blocksStr, "gateway.example.com/app/deploy-approval-requests/req_abc123")
+	require.Contains(t, blocksStr, "https://gateway.example.com/app/deploy-approval-requests/req_abc123")
 	require.Contains(t, blocksStr, "Test User")
 	require.Contains(t, blocksStr, "user@example.com")
 }
 
 func TestFormatDeployApprovalAlert_WithAPIToken(t *testing.T) {
 	database := dbtest.NewDatabase(t)
-	notifier := NewNotifier(database)
+	notifier := NewNotifier(database, testGateway)
 
 	now := time.Now()
 	req := &db.DeployApprovalRequest{
@@ -452,7 +452,7 @@ func TestFormatDeployApprovalAlert_WithAPIToken(t *testing.T) {
 		CreatedAt:             now,
 	}
 
-	text, blocks := notifier.formatDeployApprovalAlert(req, "gateway.example.com")
+	text, blocks := notifier.formatDeployApprovalAlert(req)
 
 	require.Contains(t, text, "feature-branch")
 
@@ -466,7 +466,7 @@ func TestFormatDeployApprovalAlert_WithAPIToken(t *testing.T) {
 
 func TestFormatDeployApprovalAlert_WithoutBranch(t *testing.T) {
 	database := dbtest.NewDatabase(t)
-	notifier := NewNotifier(database)
+	notifier := NewNotifier(database, testGateway)
 
 	now := time.Now()
 	req := &db.DeployApprovalRequest{
@@ -479,7 +479,7 @@ func TestFormatDeployApprovalAlert_WithoutBranch(t *testing.T) {
 		CreatedAt:     now,
 	}
 
-	text, blocks := notifier.formatDeployApprovalAlert(req, "gateway.example.com")
+	text, blocks := notifier.formatDeployApprovalAlert(req)
 
 	// Should fall back to "unknown branch"
 	require.Contains(t, text, "unknown branch")
