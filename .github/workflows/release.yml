@@ -11,11 +11,12 @@ on:
 permissions: {}
 
 jobs:
+  # The image and the CLI are built while CI and E2E finish on the tagged commit. Each job waits for those
+  # checks before it publishes anything (image push, attestations).
   verify_tag:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      checks: read # wait-for-checks.js reads check runs for the tagged commit
     outputs:
       version: ${{ steps.version.outputs.version }}
       tag: ${{ steps.version.outputs.tag }}
@@ -49,22 +50,16 @@ jobs:
             echo "short_sha=${COMMIT:0:7}"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Wait for CI and E2E checks on the tagged commit
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
-        with:
-          script: |
-            const script = require('./.github/wait-for-checks.js');
-            await script({ github, context, core });
-
   docker_build:
     runs-on: ubuntu-latest
     needs: verify_tag
     permissions:
       contents: read
+      checks: read # wait-for-checks.js reads check runs for the tagged commit
       id-token: write # sign the build provenance attestation
       attestations: write
     outputs:
-      digest: ${{ steps.build.outputs.digest }}
+      digest: ${{ steps.push.outputs.digest }}
     env:
       IMAGE: docker.io/docspringcom/rack-gateway
       VERSION: ${{ needs.verify_tag.outputs.version }}
@@ -78,22 +73,38 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
 
+      # No build cache: release images are built from scratch so a cache written by
+      # another workflow run can't influence what gets published.
+      - name: Build Docker image
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          context: .
+          platforms: linux/amd64
+          no-cache: true
+          build-args: |
+            COMMIT_SHA=${{ github.sha }}
+
+      - name: Wait for CI and E2E checks on the tagged commit
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
+        with:
+          script: |
+            const script = require('./.github/wait-for-checks.js');
+            await script({ github, context, core });
+
       - name: Log in to Docker Hub
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
         with:
           username: ${{ secrets.DOCKER_HUB_USERNAME }}
           password: ${{ secrets.DOCKER_HUB_TOKEN }}
 
-      # No build cache: release images are built from scratch so a cache written by
-      # another workflow run can't influence what gets published.
-      - name: Build and push Docker image
-        id: build
+      # The same build again, served from this job's builder, which only holds the from-scratch build above.
+      - name: Push Docker image
+        id: push
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
         with:
           context: .
           platforms: linux/amd64
           push: true
-          no-cache: true
           build-args: |
             COMMIT_SHA=${{ github.sha }}
           # Prerelease versions (vX.Y.Z-rc.1) don't move :latest.
@@ -106,7 +117,7 @@ jobs:
         uses: actions/attest-build-provenance@96278af6caaf10aea03fd8d33a09a777ca52d62f # v3.2.0
         with:
           subject-name: index.docker.io/docspringcom/rack-gateway
-          subject-digest: ${{ steps.build.outputs.digest }}
+          subject-digest: ${{ steps.push.outputs.digest }}
           push-to-registry: true
 
   release_build:
@@ -114,6 +125,7 @@ jobs:
     needs: verify_tag
     permissions:
       contents: read
+      checks: read # wait-for-checks.js reads check runs for the tagged commit
       id-token: write # sign the build provenance attestation
       attestations: write
     env:
@@ -155,6 +167,13 @@ jobs:
           mkdir -p dist
           tar czf dist/rack-gateway-linux-amd64.tar.gz rack-gateway-linux-amd64
           (cd dist && sha256sum rack-gateway-linux-amd64.tar.gz > rack-gateway-linux-amd64.tar.gz.sha256)
+
+      - name: Wait for CI and E2E checks on the tagged commit
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
+        with:
+          script: |
+            const script = require('./.github/wait-for-checks.js');
+            await script({ github, context, core });
 
       - name: Attest binary build provenance
         uses: actions/attest-build-provenance@96278af6caaf10aea03fd8d33a09a777ca52d62f # v3.2.0

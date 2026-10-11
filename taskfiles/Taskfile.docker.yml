@@ -70,8 +70,3 @@ tasks:
     cmds:
       - docker build --build-arg COMMIT_SHA=$(git rev-parse HEAD) -t rack-gateway-api:latest .
 
-  build:mocks:
-    desc: Build mock services (OAuth and Convox)
-    run: once
-    cmds:
-      - docker compose build mock-oauth mock-convox

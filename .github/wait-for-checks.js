@@ -21,6 +21,7 @@ module.exports = async function waitForChecks({
     "mock-oauth-tests",
     // E2E workflow jobs
     "build-image",
+    "build-mocks",
     "web-e2e",
     "cli-e2e",
   ];
@@ -51,7 +52,19 @@ module.exports = async function waitForChecks({
       per_page: 100,
     });
 
-    const runs = allRuns.filter((run) => checkSet.has(run.name));
+    // Only GitHub Actions runs count: another app (e.g. a code scanner) can post a check with the same name.
+    // A re-run job adds another check run with the same name, and only the latest one counts.
+    const latestByName = new Map();
+    for (const run of allRuns) {
+      if (!checkSet.has(run.name) || run.app?.slug !== "github-actions") {
+        continue;
+      }
+      const latest = latestByName.get(run.name);
+      if (!latest || run.id > latest.id) {
+        latestByName.set(run.name, run);
+      }
+    }
+    const runs = [...latestByName.values()];
 
     if (runs.length === checkSet.size) {
       const incomplete = runs.filter((run) => run.status !== "completed");

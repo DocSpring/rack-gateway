@@ -142,7 +142,6 @@ func TestAnchorWriterWorker_Work_BothFilesExist(t *testing.T) {
 func TestAnchorWriterWorker_Work_JSONExistsSHA256Missing(t *testing.T) {
 	// Setup: JSON file exists but SHA256 is missing - should write SHA256 only
 	database := dbtest.NewDatabase(t)
-	dbtest.Reset(t, database)
 
 	// Create an audit event so we have data to anchor
 	auditLog := &db.AuditLog{
@@ -214,7 +213,6 @@ func TestAnchorWriterWorker_Work_JSONExistsSHA256Missing(t *testing.T) {
 func TestAnchorWriterWorker_Work_BothFilesMissing_EmptyChain(t *testing.T) {
 	// Setup: Both files missing, empty chain (no audit events)
 	database := dbtest.NewDatabase(t)
-	dbtest.Reset(t, database)
 
 	key := "staging/2025/11/01/12/anchor-20251101T12.json"
 
@@ -281,7 +279,6 @@ func TestAnchorWriterWorker_Work_BothFilesMissing_EmptyChain(t *testing.T) {
 func TestAnchorWriterWorker_Work_PutJSONFails(t *testing.T) {
 	// Setup: Both files missing, but PutObject fails for JSON
 	database := dbtest.NewDatabase(t)
-	dbtest.Reset(t, database)
 
 	// Create an audit event so we have data to anchor
 	auditLog := &db.AuditLog{
@@ -637,7 +634,6 @@ func TestAnchorWriterWorker_S3KeyPrefix(t *testing.T) {
 func TestAnchorWriterWorker_ObjectLockParameters(t *testing.T) {
 	// Verify that Object Lock parameters are set correctly in PutObject
 	database := dbtest.NewDatabase(t)
-	dbtest.Reset(t, database)
 
 	// Create an audit event so we have data to anchor
 	auditLog := &db.AuditLog{
@@ -725,7 +721,6 @@ func TestAnchorWriterWorker_ObjectLockParameters(t *testing.T) {
 func TestAnchorWriterWorker_NoIfNoneMatch(t *testing.T) {
 	// Verify that IfNoneMatch is NOT used (incompatible with Object Lock)
 	database := dbtest.NewDatabase(t)
-	dbtest.Reset(t, database)
 
 	// Create an audit event so we have data to anchor
 	auditLog := &db.AuditLog{

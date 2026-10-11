@@ -14,38 +14,8 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 )
 
-// Reset truncates all application tables to provide a clean slate for tests.
-// Uses TRUNCATE ... CASCADE so FK references are handled.
-// Silently ignores tables that don't exist (for tests that run before migrations).
-func Reset(t *testing.T, database *db.Database) {
-	t.Helper()
-
-	// Truncate each table individually, ignoring "does not exist" errors
-	tables := []string{
-		"api_tokens",
-		"audit.audit_event",
-		"audit.audit_event_aggregated",
-		"cli_login_states",
-		"mfa_attempts",
-		"users",
-	}
-
-	for _, table := range tables {
-		_, err := database.DB().Exec(fmt.Sprintf("TRUNCATE TABLE %s RESTART IDENTITY CASCADE", table))
-		if err != nil && !strings.Contains(err.Error(), "does not exist") {
-			t.Fatalf("failed to truncate %s: %v", table, err)
-		}
-	}
-
-	// Reset audit sequence (ignore if doesn't exist)
-	_, err := database.DB().Exec("ALTER SEQUENCE audit.audit_event_chain_index_seq RESTART WITH 0")
-	if err != nil && !strings.Contains(err.Error(), "does not exist") {
-		t.Fatalf("failed to reset audit sequence: %v", err)
-	}
-}
-
-// NewDatabase creates a unique temporary Postgres database for a test, runs migrations,
-// and returns a connected *db.Database. The database is dropped on test cleanup.
+// NewDatabase creates a unique temporary Postgres database for a test, copied from a fully migrated
+// template (see template.go), and returns a connected *db.Database. The database is dropped on test cleanup.
 // Sets TEST_DATABASE_URL env var to the created database DSN for subprocesses.
 func NewDatabase(t *testing.T) *db.Database {
 	t.Helper()
@@ -53,7 +23,7 @@ func NewDatabase(t *testing.T) *db.Database {
 	admin, adminCleanup := setupAdminConnection(t, baseDSN)
 
 	dbName := generateTestDBName()
-	createDatabase(t, admin, dbName)
+	cloneTemplate(t, admin, dbName, ensureTemplate(t, admin, baseDSN))
 
 	dsn := buildTestDSN(t, baseDSN, dbName)
 	waitForDatabaseReady(t, dsn)
@@ -113,13 +83,6 @@ func generateTestDBName() string {
 	return fmt.Sprintf("rgw_test_%d_%d", time.Now().UnixNano(), randomNum)
 }
 
-func createDatabase(t *testing.T, admin *sql.DB, name string) {
-	t.Helper()
-	if _, err := admin.Exec("CREATE DATABASE " + pqQuoteIdent(name)); err != nil {
-		t.Fatalf("create database: %v", err)
-	}
-}
-
 func buildTestDSN(t *testing.T, baseDSN, dbName string) string {
 	t.Helper()
 	u, err := url.Parse(baseDSN)
@@ -153,18 +116,8 @@ func waitForDatabaseReady(t *testing.T, dsn string) {
 func connectAppDatabase(t *testing.T, dsn string) *db.Database {
 	t.Helper()
 
-	// Create audit roles before running migrations
-	// These roles are required by migration 20251008173116_audit_logs.sql
-	testDB, err := sql.Open("pgx", dsn)
-	if err != nil {
-		t.Fatalf("open db for audit roles: %v", err)
-	}
-	defer testDB.Close() //nolint:errcheck,gosec // G104: test cleanup
-
-	createAuditRoles(t, testDB)
-
-	// Always run migrations for test databases
-	app, err := db.NewWithPoolConfigAndMigration(dsn, nil, true)
+	// The database is a copy of the migrated template, so there's nothing to migrate.
+	app, err := db.NewWithPoolConfigAndMigration(dsn, nil, false)
 	if err != nil {
 		t.Fatalf("open app db: %v", err)
 	}

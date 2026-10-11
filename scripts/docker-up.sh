@@ -11,6 +11,7 @@ GATEWAY_PORT="${GATEWAY_PORT:-8447}"
 MOCK_OAUTH_PORT="${MOCK_OAUTH_PORT:-3345}"
 MOCK_CONVOX_PORT="${MOCK_CONVOX_PORT:-5443}"
 SKIP_BUILD="${SKIP_BUILD:-false}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Additional configuration (can be overridden by environment variables)
 TEST_GATEWAY_PORT="${TEST_GATEWAY_PORT:-9447}"
@@ -191,7 +192,10 @@ fi
 echo "Waiting for postgres and ensuring databases exist..."
 if docker ps --format '{{.Names}}' | grep -q '^rack-gateway-postgres-1$'; then
   for _ in $(seq 1 20); do
-    if docker compose exec -T postgres pg_isready -U postgres >/dev/null 2>&1; then
+    # Over TCP: the image's temporary init server only listens on the Unix socket, then restarts.
+    if docker compose exec -T postgres pg_isready -U postgres -h 127.0.0.1 >/dev/null 2>&1; then
+      # The migrations need the cluster-wide audit roles.
+      docker compose exec -T postgres psql -U postgres -d postgres -v ON_ERROR_STOP=1 -q <"$SCRIPT_DIR/audit-roles.sql"
       for dbname in "${DATABASES[@]}"; do
         if ! docker compose exec -T postgres psql -U postgres -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname='${dbname}'" | grep -q 1; then
           echo "Creating database: $dbname"
@@ -236,7 +240,7 @@ if [ "${#GATEWAY_SERVICES[@]}" -gt 0 ]; then
       continue
     fi
 
-    migration_script="${migration_script}echo 'Migrating $dbname...'; DATABASE_URL=\"postgres://postgres:postgres@postgres:5432/${dbname}?sslmode=disable\" ./rack-gateway-api migrate > /dev/null 2>&1 && echo '  ✓ $dbname migrated' || echo '  ✗ $dbname migration failed'; "
+    migration_script="${migration_script}echo 'Migrating $dbname...'; DATABASE_URL=\"postgres://postgres:postgres@postgres:5432/${dbname}?sslmode=disable\" ./rack-gateway-api migrate >/dev/null || exit 1; echo '  ✓ $dbname migrated'; "
   done
 
   docker compose --profile "$PROFILE" run --rm "$first_gateway" sh -c "$migration_script"

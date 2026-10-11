@@ -14,7 +14,7 @@ compose_cmd() {
 compose_cmd up -d postgres
 # Wait for postgres to be ready
 for _i in {1..30}; do
-  if compose_cmd exec -T postgres pg_isready -U postgres >/dev/null 2>&1; then
+  if compose_cmd exec -T postgres pg_isready -U postgres -h 127.0.0.1 >/dev/null 2>&1; then
     echo "Postgres is ready"
     break
   fi

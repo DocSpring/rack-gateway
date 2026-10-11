@@ -15,7 +15,6 @@ import (
 func TestAuditAggregationTimestamps(t *testing.T) {
 	db := dbtest.NewDatabase(t)
 	defer db.Close() //nolint:errcheck,gosec // G104: test cleanup
-	dbtest.Reset(t, db)
 
 	// Create a log entry
 	log1 := &gwdb.AuditLog{

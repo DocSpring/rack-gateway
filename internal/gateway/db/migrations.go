@@ -2,8 +2,10 @@ package db
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
 	"embed"
+	"encoding/hex"
 	"fmt"
 	"log"
 	"sort"
@@ -38,7 +40,7 @@ func (d *Database) migrateAll() error {
 		return err
 	}
 
-	migrationFiles, err := d.loadMigrationFiles()
+	migrationFiles, err := loadMigrationFiles()
 	if err != nil {
 		return err
 	}
@@ -94,7 +96,7 @@ func (d *Database) loadAppliedMigrations() (map[string]bool, error) {
 	return applied, rows.Err()
 }
 
-func (_ *Database) loadMigrationFiles() ([]string, error) {
+func loadMigrationFiles() ([]string, error) {
 	entries, err := migrationsFS.ReadDir("migrations")
 	if err != nil {
 		return nil, err
@@ -191,4 +193,25 @@ func (d *Database) migrateRiver(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// MigrationsFingerprint identifies the embedded migrations by their file names and contents. Tests use it to
+// reuse one migrated template database until a migration changes.
+func MigrationsFingerprint() (string, error) {
+	names, err := loadMigrationFiles()
+	if err != nil {
+		return "", err
+	}
+	h := sha256.New()
+	for _, name := range names {
+		data, err := migrationsFS.ReadFile("migrations/" + name)
+		if err != nil {
+			return "", err
+		}
+		h.Write([]byte(name))
+		h.Write([]byte{0})
+		h.Write(data)
+		h.Write([]byte{0})
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
 }

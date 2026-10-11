@@ -12,15 +12,10 @@ import (
 
 // Test a matrix of sensitive routes mapped to RBAC permissions for deployer vs admin.
 func TestPermissionMatrix_DeployerVsAdmin(t *testing.T) {
-	database, err := db.NewFromEnv()
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		database.Close() //nolint:errcheck,gosec // G104: test cleanup
-	})
-	dbtest.Reset(t, database)
+	database := dbtest.NewDatabase(t)
 
 	// Users
-	_, err = database.CreateUser("deployer@test.com", "Deployer", []string{"deployer"})
+	_, err := database.CreateUser("deployer@test.com", "Deployer", []string{"deployer"})
 	require.NoError(t, err)
 	_, err = database.CreateUser("admin@test.com", "Admin", []string{"admin"})
 	require.NoError(t, err)

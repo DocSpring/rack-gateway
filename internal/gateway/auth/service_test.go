@@ -12,7 +12,6 @@ import (
 
 func TestAuthServiceAllowsCookieSession(t *testing.T) {
 	database := dbtest.NewDatabase(t)
-	t.Cleanup(func() { dbtest.Reset(t, database) })
 
 	if err := database.InitializeAdmin("user@example.com", "User"); err != nil {
 		t.Fatalf("initialize admin: %v", err)
@@ -63,7 +62,6 @@ func TestAuthServiceAllowsCookieSession(t *testing.T) {
 
 func TestValidateSessionRejectsLockedUser(t *testing.T) {
 	database := dbtest.NewDatabase(t)
-	t.Cleanup(func() { dbtest.Reset(t, database) })
 
 	if err := database.InitializeAdmin("user@example.com", "User"); err != nil {
 		t.Fatalf("initialize admin: %v", err)
@@ -114,7 +112,6 @@ func TestValidateSessionRejectsLockedUser(t *testing.T) {
 // A locked owner's API tokens stop working, including on routes that need no specific permission.
 func TestAPITokenRejectedWhenOwnerLocked(t *testing.T) {
 	database := dbtest.NewDatabase(t)
-	t.Cleanup(func() { dbtest.Reset(t, database) })
 
 	owner, err := database.CreateUser("owner@example.com", "Owner", []string{"admin"})
 	if err != nil {

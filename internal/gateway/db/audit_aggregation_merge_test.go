@@ -16,7 +16,6 @@ import (
 func TestAuditAggregationMergeProcessExec(t *testing.T) {
 	db := dbtest.NewDatabase(t)
 	defer db.Close() //nolint:errcheck,gosec // G104: test cleanup
-	dbtest.Reset(t, db)
 
 	// 1. Log process.exec.start (Visibility)
 	startLog := &gwdb.AuditLog{

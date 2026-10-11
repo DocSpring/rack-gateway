@@ -17,7 +17,6 @@ import (
 func TestAuditAggregationOnlyAdjacentEvents(t *testing.T) {
 	db := dbtest.NewDatabase(t)
 	defer db.Close() //nolint:errcheck,gosec // G104: test cleanup
-	dbtest.Reset(t, db)
 
 	// Create a login.start event
 	login1 := &gwdb.AuditLog{
@@ -93,7 +92,6 @@ func TestAuditAggregationOnlyAdjacentEvents(t *testing.T) {
 func TestAuditAggregationDifferentActionsBreakSequence(t *testing.T) {
 	db := dbtest.NewDatabase(t)
 	defer db.Close() //nolint:errcheck,gosec // G104: test cleanup
-	dbtest.Reset(t, db)
 
 	// Create: rack.read, rack.read, build.create, rack.read
 	// Expected aggregation: [rack.read (×1)], [build.create (×1)], [rack.read (×2)]
