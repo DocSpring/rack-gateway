@@ -76,7 +76,7 @@ func (h *AuthHandler) sessionsTTL() time.Duration {
 func (h *AuthHandler) setWebOAuthStateCookie(c *gin.Context, value string) {
 	secure := h.cookieSecure()
 	c.SetSameSite(http.SameSiteLaxMode)
-	maxAge := int((webOAuthStateTTL) / time.Second)
+	maxAge := int(webOAuthStateTTL / time.Second)
 	c.SetCookie(webOAuthStateCookie, value, maxAge, "/", "", secure, true)
 	c.SetSameSite(http.SameSiteDefaultMode)
 }
