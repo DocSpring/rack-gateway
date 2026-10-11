@@ -1,4 +1,4 @@
-import { SourceIndicator } from '@/components/settings/source-indicator'
+import { isSetByEnv, SourceIndicator } from '@/components/settings/source-indicator'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import type { AppSettingsResponse } from '@/pages/app-settings/types'
@@ -12,11 +12,25 @@ type VerificationSettingsFieldsProps = {
   displayRequirePRForBranch: boolean
   displayDefaultBranch: string
   displayVerifyGitCommitMode: string
+  displayVcsRepo: string
   onToggleGithubVerification: (value: boolean) => void
   onToggleAllowDeployFromDefaultBranch: (value: boolean) => void
   onToggleRequirePRForBranch: (value: boolean) => void
   onChangeDefaultBranch: (value: string) => void
   onChangeVerifyGitCommitMode: (value: string) => void
+}
+
+// missingVerificationConfig describes what GitHub verification needs but doesn't have (matching the gateway's
+// check when it creates a request), or returns ''.
+function missingVerificationConfig(githubAvailable: boolean, vcsRepo: string): string {
+  const missing: string[] = []
+  if (!githubAvailable) {
+    missing.push('the gateway has no GITHUB_TOKEN')
+  }
+  if (!vcsRepo.trim()) {
+    missing.push('no GitHub repository is set')
+  }
+  return missing.join(' and ')
 }
 
 export function VerificationSettingsFields({
@@ -28,6 +42,7 @@ export function VerificationSettingsFields({
   displayRequirePRForBranch,
   displayDefaultBranch,
   displayVerifyGitCommitMode,
+  displayVcsRepo,
   onToggleGithubVerification,
   onToggleAllowDeployFromDefaultBranch,
   onToggleRequirePRForBranch,
@@ -35,16 +50,28 @@ export function VerificationSettingsFields({
   onChangeVerifyGitCommitMode,
 }: VerificationSettingsFieldsProps) {
   const sectionDisabled = disabled || !githubAvailable
+  // Verification can always be turned off, even when the gateway can't run it.
+  const verificationToggleDisabled = disabled || !(githubAvailable || displayGithubVerification)
+  const missing = missingVerificationConfig(githubAvailable, displayVcsRepo)
 
   return (
     <div className="space-y-4">
+      {displayGithubVerification && missing && (
+        <p
+          className="rounded-md border border-destructive/50 p-3 text-destructive text-sm"
+          role="alert"
+        >
+          Deploy approval requests for this app are refused: GitHub verification is on, but{' '}
+          {missing}. Set it, or turn off GitHub verification.
+        </p>
+      )}
       <div className="space-y-4">
         <label
-          className={`flex items-center gap-3 ${sectionDisabled ? 'cursor-not-allowed opacity-50' : ''}`}
+          className={`flex items-center gap-3 ${verificationToggleDisabled ? 'cursor-not-allowed opacity-50' : ''}`}
         >
           <input
             checked={displayGithubVerification}
-            disabled={sectionDisabled}
+            disabled={verificationToggleDisabled || isSetByEnv(settings?.github_verification)}
             onChange={(event) => onToggleGithubVerification(event.target.checked)}
             type="checkbox"
           />
@@ -60,7 +87,7 @@ export function VerificationSettingsFields({
         >
           <input
             checked={displayAllowDeployFromDefaultBranch}
-            disabled={sectionDisabled}
+            disabled={sectionDisabled || isSetByEnv(settings?.allow_deploy_from_default_branch)}
             onChange={(event) => onToggleAllowDeployFromDefaultBranch(event.target.checked)}
             type="checkbox"
           />
@@ -76,7 +103,7 @@ export function VerificationSettingsFields({
         >
           <input
             checked={displayRequirePRForBranch}
-            disabled={sectionDisabled}
+            disabled={sectionDisabled || isSetByEnv(settings?.require_pr_for_branch)}
             onChange={(event) => onToggleRequirePRForBranch(event.target.checked)}
             type="checkbox"
           />
@@ -92,7 +119,7 @@ export function VerificationSettingsFields({
         <Label htmlFor="default-branch">Default Branch</Label>
         <div className="flex items-center gap-2">
           <Input
-            disabled={sectionDisabled}
+            disabled={sectionDisabled || isSetByEnv(settings?.default_branch)}
             id="default-branch"
             onChange={(event) => onChangeDefaultBranch(event.target.value)}
             placeholder="main"
@@ -111,7 +138,7 @@ export function VerificationSettingsFields({
         <div className="flex items-center gap-2">
           <select
             className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-            disabled={sectionDisabled}
+            disabled={sectionDisabled || isSetByEnv(settings?.verify_git_commit_mode)}
             id="verify-git-commit-mode"
             onChange={(event) => onChangeVerifyGitCommitMode(event.target.value)}
             value={displayVerifyGitCommitMode}

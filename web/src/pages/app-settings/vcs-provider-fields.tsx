@@ -1,4 +1,4 @@
-import { SourceIndicator } from '@/components/settings/source-indicator'
+import { isSetByEnv, SourceIndicator } from '@/components/settings/source-indicator'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import type { AppSettingsResponse } from '@/pages/app-settings/types'
@@ -34,7 +34,7 @@ export function VcsProviderFields({
         <div className="flex items-center gap-2">
           <select
             className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-            disabled={disabled}
+            disabled={disabled || isSetByEnv(settings?.vcs_provider)}
             id="vcs-provider"
             onChange={(event) => onChangeVcsProvider(event.target.value || null)}
             value={displayVcsProvider}
@@ -49,7 +49,7 @@ export function VcsProviderFields({
         <Label htmlFor="vcs-repo">GitHub Repo</Label>
         <div className="flex items-center gap-2">
           <Input
-            disabled={disabled || !githubAvailable}
+            disabled={disabled || !githubAvailable || isSetByEnv(settings?.vcs_repo)}
             id="vcs-repo"
             onChange={(event) => onChangeVcsRepo(event.target.value)}
             placeholder="org/repo"
@@ -67,7 +67,7 @@ export function VcsProviderFields({
         <div className="flex items-center gap-2">
           <select
             className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-            disabled={disabled}
+            disabled={disabled || isSetByEnv(settings?.ci_provider)}
             id="ci-provider"
             onChange={(event) => onChangeCiProvider(event.target.value || null)}
             value={displayCiProvider}

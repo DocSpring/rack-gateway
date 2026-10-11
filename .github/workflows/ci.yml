@@ -16,7 +16,7 @@ jobs:
       GOFLAGS: -count=1
       DATABASE_URL: postgres://postgres:postgres@localhost:55432/gateway_test?sslmode=disable
       TEST_DATABASE_URL: postgres://postgres:postgres@localhost:55432/gateway_test?sslmode=disable
-      GOLANGCI_LINT_VERSION: v2.11.1
+      GOLANGCI_LINT_VERSION: v2.14.0
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
@@ -27,7 +27,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "1.26.9"
+          go-version: "1.27.2"
           cache: false
 
       - name: Restore Go test cache
@@ -73,14 +73,14 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     env:
-      GOLANGCI_LINT_VERSION: v2.11.1
+      GOLANGCI_LINT_VERSION: v2.14.0
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Setup Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "1.26.9"
+          go-version: "1.27.2"
 
       - name: Cache golangci-lint cache
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
@@ -100,12 +100,28 @@ jobs:
       - name: Go deps (lint warmup)
         run: task go:deps
 
-      # The action installs the pinned golangci-lint release and verifies .golangci.yml
-      # against its JSON schema (verify: true) before linting.
+      - name: Install golangci-lint
+        uses: golangci/golangci-lint-action@4afd733a84b1f43292c63897423277bb7f4313a9 # v8.0.0
+        with:
+          version: ${{ env.GOLANGCI_LINT_VERSION }}
+          install-only: true
+
+      # Verifies .golangci.yml against golangci-lint's JSON schema, which it downloads from golangci-lint.run. That
+      # download sometimes times out, so it gets a few attempts (the action's own verify step makes one).
+      - name: Verify golangci-lint config
+        run: |
+          for attempt in 1 2 3; do
+            golangci-lint config verify && exit 0
+            echo "golangci-lint config verify failed (attempt $attempt)"
+            sleep 15
+          done
+          exit 1
+
       - name: golangci-lint
         uses: golangci/golangci-lint-action@4afd733a84b1f43292c63897423277bb7f4313a9 # v8.0.0
         with:
           version: ${{ env.GOLANGCI_LINT_VERSION }}
+          verify: false
         env:
           CGO_ENABLED: 1
 
@@ -161,7 +177,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "1.26.9"
+          go-version: "1.27.2"
 
       - name: Setup Node
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -171,7 +187,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          bun-version: "1.3.1"
+          bun-version: "1.4.2"
 
       - name: Install NPM packages
         working-directory: web
@@ -198,7 +214,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          bun-version: "1.3.1"
+          bun-version: "1.4.2"
 
       - name: Install Task
         uses: ./.github/actions/install-task

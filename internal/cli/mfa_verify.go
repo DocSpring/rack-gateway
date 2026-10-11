@@ -120,6 +120,7 @@ func tryWebAuthnVerification(baseURL, sessionToken string) error {
 	if err != nil {
 		return err
 	}
+	options.Prompt.Notify = touchNotificationsEnabled()
 
 	assertion, err := webauthn.GetAssertion(options)
 	if err != nil {

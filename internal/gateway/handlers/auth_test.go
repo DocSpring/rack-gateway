@@ -120,7 +120,7 @@ func TestHandlePostLoginMFAClearsStaleTrustedDevice(t *testing.T) {
 	handler := NewAuthHandler(oauth, database, cfg, sessionManager, mfaService, settings, nil, auditLogger)
 
 	c, w := newTestContext(http.MethodGet, "/api/v1/auth/web/callback")
-	c.Request.AddCookie(&http.Cookie{Name: trustedDeviceCookie, Value: "stale-token"})
+	c.Request.AddCookie(testCookie(trustedDeviceCookie, "stale-token"))
 	c.Request.Header.Set("User-Agent", "Playwright Test")
 
 	if err := handler.handlePostLoginMFA(c, user, session); err != nil {
@@ -163,7 +163,7 @@ func TestWebLoginCallbackSetsCookieInDev(t *testing.T) {
 	)
 
 	c, w := newTestContext(http.MethodGet, "/api/v1/auth/web/callback?code=abc&state=state")
-	c.Request.AddCookie(&http.Cookie{Name: webOAuthStateCookie, Value: "state"})
+	c.Request.AddCookie(testCookie(webOAuthStateCookie, "state"))
 	handler.WebLoginCallback(c)
 
 	res := w.Result()
@@ -209,7 +209,7 @@ func TestWebLoginCallbackSetsCookieSecureInProd(t *testing.T) {
 	)
 
 	c, w := newTestContext(http.MethodGet, "/api/v1/auth/web/callback?code=abc&state=state")
-	c.Request.AddCookie(&http.Cookie{Name: webOAuthStateCookie, Value: "state", Secure: true})
+	c.Request.AddCookie(testCookie(webOAuthStateCookie, "state"))
 	handler.WebLoginCallback(c)
 
 	res := w.Result()
@@ -315,7 +315,7 @@ func TestWebLoginCallbackRejectsInvalidState(t *testing.T) {
 	)
 
 	c, w := newTestContext(http.MethodGet, "/api/v1/auth/web/callback?code=abc&state=other")
-	c.Request.AddCookie(&http.Cookie{Name: webOAuthStateCookie, Value: "state"})
+	c.Request.AddCookie(testCookie(webOAuthStateCookie, "state"))
 	handler.WebLoginCallback(c)
 
 	res := w.Result()

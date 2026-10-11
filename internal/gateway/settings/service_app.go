@@ -25,7 +25,7 @@ func (s *Service) GetAppSetting(appName, key string, defaultValue interface{}) (
 	return setting, nil
 }
 
-// GetAllAppSettings retrieves all app-specific settings with environment fallback.
+// GetAllAppSettings resolves every app-specific setting.
 // For VCS/CI provider fields, if the app setting is nil/empty, it will use the global default
 // and mark the source as SourceGlobalDefault.
 func (s *Service) GetAllAppSettings(appName string) (map[string]*Setting, error) {
@@ -70,14 +70,18 @@ func (s *Service) GetAllAppSettings(appName string) (map[string]*Setting, error)
 }
 
 // SetAppSetting saves an app-specific setting to the database.
+// A setting its environment variable defines can't be changed (ErrSetByEnvironment).
 func (s *Service) SetAppSetting(appName, key string, value interface{}, updatedByUserID *int64) error {
 	if err := ValidateAppSettingValue(key, value); err != nil {
+		return err
+	}
+	if store, err := checkEnvDefined(&appName, key, value); !store {
 		return err
 	}
 	return s.db.UpsertSetting(&appName, key, value, updatedByUserID)
 }
 
-// DeleteAppSetting removes an app-specific setting from the database (reverts to env/default).
+// DeleteAppSetting removes an app setting's database value. Its environment variable or default applies.
 func (s *Service) DeleteAppSetting(appName, key string) error {
 	return s.db.DeleteSetting(&appName, key)
 }

@@ -4,8 +4,8 @@ This document describes all available settings in Rack Gateway. Settings can be 
 
 ## Settings Resolution Order
 
-1. **Database** - Settings saved via web UI or API
-2. **Environment Variable** - Settings from deployment configuration
+1. **Environment Variable** - Settings from deployment configuration (read-only in the web UI and API)
+2. **Database** - Settings saved via web UI or API
 3. **Default Value** - Hardcoded default
 
 ## Environment Variable Naming Convention

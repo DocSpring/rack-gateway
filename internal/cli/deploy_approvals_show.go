@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -93,33 +94,32 @@ func executeDeployApprovalShow(cmd *cobra.Command, args []string, opts deployApp
 }
 
 func showByID(cmd *cobra.Command, racks []string, publicID, output string) error {
-	// Try each rack until we find the request
+	found, err := findRequestByID(cmd, racks, publicID)
+	if err != nil {
+		return err
+	}
+	if output == "json" {
+		return printJSON(cmd, *found.req)
+	}
+	return printDeployApprovalDetails(cmd.OutOrStdout(), found.req, found.rack, len(racks) > 1)
+}
+
+// findRequestByID looks the request up on each rack in turn and returns the first match.
+func findRequestByID(cmd *cobra.Command, racks []string, publicID string) (rackApproval, error) {
+	endpoint := fmt.Sprintf("/deploy-approval-requests/%s", publicID)
 	for _, rack := range racks {
-		endpoint := fmt.Sprintf("/deploy-approval-requests/%s", publicID)
 		var result deployApprovalRequest
 		if err := gatewayRequest(cmd, rack, http.MethodGet, endpoint, nil, &result); err != nil {
 			if isGatewayStatus(err, http.StatusNotFound) {
 				continue
 			}
-			return rackScopedError(rack, err, len(racks))
+			return rackApproval{}, rackScopedError(rack, err, len(racks))
 		}
-
-		if result.PublicID == "" {
-			continue
+		if result.PublicID != "" {
+			return rackApproval{rack: rack, req: &result}, nil
 		}
-
-		if output == "json" {
-			return printJSON(cmd, result)
-		}
-		return printDeployApprovalDetails(&result, rack, len(racks) > 1)
 	}
-
-	return fmt.Errorf("deploy approval request %s not found", publicID)
-}
-
-type rackResult struct {
-	rack string
-	req  *deployApprovalRequest
+	return rackApproval{}, fmt.Errorf("deploy approval request %s not found", publicID)
 }
 
 func showBySearch(cmd *cobra.Command, racks []string, app, branch, commit, output string) error {
@@ -138,13 +138,13 @@ func showBySearch(cmd *cobra.Command, racks []string, app, branch, commit, outpu
 	if output == "json" {
 		return outputResultsAsJSON(cmd, results)
 	}
-	return outputResultsAsText(results, len(racks) > 1)
+	return outputResultsAsText(cmd.OutOrStdout(), results, len(racks) > 1)
 }
 
 func collectResultsFromRacks(
 	cmd *cobra.Command, racks []string, app, branch, commit string,
-) ([]rackResult, error) {
-	var results []rackResult
+) ([]rackApproval, error) {
+	var results []rackApproval
 	for _, rack := range racks {
 		for _, status := range []string{"pending", "approved"} {
 			req, found, err := searchForRequestInRack(cmd, rack, app, branch, commit, status)
@@ -152,7 +152,7 @@ func collectResultsFromRacks(
 				return nil, rackScopedError(rack, err, len(racks))
 			}
 			if found {
-				results = append(results, rackResult{rack: rack, req: req})
+				results = append(results, rackApproval{rack: rack, req: req})
 				break
 			}
 		}
@@ -160,7 +160,7 @@ func collectResultsFromRacks(
 	return results, nil
 }
 
-func outputResultsAsJSON(cmd *cobra.Command, results []rackResult) error {
+func outputResultsAsJSON(cmd *cobra.Command, results []rackApproval) error {
 	if len(results) == 1 {
 		return printJSON(cmd, *results[0].req)
 	}
@@ -171,57 +171,67 @@ func outputResultsAsJSON(cmd *cobra.Command, results []rackResult) error {
 	return printJSON(cmd, reqs)
 }
 
-func outputResultsAsText(results []rackResult, showRack bool) error {
+func outputResultsAsText(out io.Writer, results []rackApproval, showRack bool) error {
 	for i, r := range results {
 		if i > 0 {
-			fmt.Println()
+			if err := writeLine(out); err != nil {
+				return err
+			}
 		}
-		if err := printDeployApprovalDetails(r.req, r.rack, showRack); err != nil {
+		if err := printDeployApprovalDetails(out, r.req, r.rack, showRack); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func printDeployApprovalDetails(req *deployApprovalRequest, rack string, showRack bool) error {
+// printDeployApprovalDetails prints every field of a request, one per line. Text that CI supplies (message, app,
+// branch, commit, token name, notes) goes through displayText.
+func printDeployApprovalDetails(out io.Writer, req *deployApprovalRequest, rack string, showRack bool) error {
+	var details strings.Builder
 	if showRack {
-		fmt.Printf("%s %s\n", dim("Rack:    "), rack)
+		writeDetail(&details, "Rack:    ", rack)
 	}
-	fmt.Printf("%s %s\n", dim("ID:      "), req.PublicID)
-	fmt.Printf("%s %s\n", dim("Status:  "), statusColor(req.Status))
-	fmt.Printf("%s %s\n", dim("Message: "), displayText(req.Message))
+	writeDetail(&details, "ID:      ", req.PublicID)
+	writeDetail(&details, "Status:  ", statusColor(req.Status))
+	writeDetail(&details, "Message: ", displayText(req.Message))
 	if req.App != "" {
-		fmt.Printf("%s %s\n", dim("App:     "), displayText(req.App))
+		writeDetail(&details, "App:     ", displayText(req.App))
 	}
-	fmt.Printf("%s %s\n", dim("Created: "), req.CreatedAt.Format(time.RFC3339))
-	fmt.Printf("%s %s\n", dim("Updated: "), req.UpdatedAt.Format(time.RFC3339))
+	writeDetail(&details, "Created: ", req.CreatedAt.Format(time.RFC3339))
+	writeDetail(&details, "Updated: ", req.UpdatedAt.Format(time.RFC3339))
 
 	if req.TargetAPITokenName != "" {
 		tokenID := dim("(" + req.TargetAPITokenID + ")")
-		fmt.Printf("%s %s %s\n", dim("Token:   "), displayText(req.TargetAPITokenName), tokenID)
+		writeDetail(&details, "Token:   ", displayText(req.TargetAPITokenName)+" "+tokenID)
 	} else {
-		fmt.Printf("%s %s\n", dim("Token ID:"), req.TargetAPITokenID)
+		writeDetail(&details, "Token ID:", req.TargetAPITokenID)
 	}
 
 	if req.GitCommitHash != "" {
-		fmt.Printf("%s %s\n", dim("Commit:  "), req.GitCommitHash)
+		writeDetail(&details, "Commit:  ", displayText(req.GitCommitHash))
 	}
 	if req.GitBranch != "" {
-		fmt.Printf("%s %s\n", dim("Branch:  "), displayText(req.GitBranch))
+		writeDetail(&details, "Branch:  ", displayText(req.GitBranch))
 	}
 
-	if req.ApprovedAt != nil {
-		fmt.Printf("%s %s\n", dim("Approved:"), req.ApprovedAt.Format(time.RFC3339))
-	}
-	if req.ApprovalExpiresAt != nil {
-		fmt.Printf("%s %s\n", dim("Expires: "), req.ApprovalExpiresAt.Format(time.RFC3339))
-	}
-	if req.RejectedAt != nil {
-		fmt.Printf("%s %s\n", dim("Rejected:"), req.RejectedAt.Format(time.RFC3339))
-	}
+	writeTimeDetail(&details, "Approved:", req.ApprovedAt)
+	writeTimeDetail(&details, "Expires: ", req.ApprovalExpiresAt)
+	writeTimeDetail(&details, "Rejected:", req.RejectedAt)
 	if req.ApprovalNotes != "" {
-		fmt.Printf("%s %s\n", dim("Notes:   "), displayText(req.ApprovalNotes))
+		writeDetail(&details, "Notes:   ", displayText(req.ApprovalNotes))
 	}
 
-	return nil
+	_, err := io.WriteString(out, details.String())
+	return err
+}
+
+func writeDetail(details *strings.Builder, label, value string) {
+	details.WriteString(dim(label) + " " + value + "\n")
+}
+
+func writeTimeDetail(details *strings.Builder, label string, value *time.Time) {
+	if value != nil {
+		writeDetail(details, label, value.Format(time.RFC3339))
+	}
 }

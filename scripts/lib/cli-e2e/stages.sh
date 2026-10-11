@@ -225,7 +225,7 @@ run_api_token_tests() {
         echo -e "${RED}Expected duplicate upload to fail, but it succeeded${NC}" >&2
         exit 1
     fi
-    if ! echo "$duplicate_upload_output" | grep -q "an archive has already been uploaded for this deploy approval request"; then
+    if ! echo "$duplicate_upload_output" | grep -q "an archive has already been uploaded for the newest deploy approval request"; then
         echo -e "${RED}Expected 'an archive has already been uploaded' error message${NC}" >&2
         exit 1
     fi

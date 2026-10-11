@@ -35,11 +35,16 @@ The CLI supports multiple MFA methods:
     **Security Keys** (YubiKey 5, Touch ID, Windows Hello)
 
     ```bash
-    Touch your security key...
+    Touch your security key to approve api on staging (2 of 4)...
     ```
 
-    The CLI prompts you to touch your hardware security key. User verification is required, so you also
-    enter the key's PIN (or use the biometric sensor). A key with no PIN set can't be used until you set one.
+    The CLI prompts you to touch your hardware security key, and says what the touch is for. User verification is
+    required, so you also enter the key's PIN (or use the biometric sensor). A key with no PIN set can't be used
+    until you set one. A command that approves several requests asks for the PIN once, then a touch per approval.
+
+    Each time a touch is needed, the CLI also shows a desktop notification (macOS, or Linux with `notify-send`), so
+    you don't miss one while the terminal is out of sight. On macOS, allow notifications for Script Editor if they
+    don't appear. To turn them off, set `"touch_notifications": false` in `~/.config/rack-gateway/config.json`.
 
     <Aside type="note">
     WebAuthn requires system libraries on Linux. See [Installation](/user-guide/cli/installation/#webauthn-support-optional).

@@ -193,6 +193,9 @@ func (d *Database) GetAPITokenByPublicID(publicID string) (*APIToken, error) {
 	if trimmed == "" {
 		return nil, fmt.Errorf("token public id required")
 	}
+	if !isPublicID(trimmed) {
+		return nil, nil
+	}
 	row := d.queryRow(
 		"SELECT t.id FROM api_tokens t WHERE t.public_id = ?",
 		trimmed,

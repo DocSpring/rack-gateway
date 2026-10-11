@@ -131,7 +131,7 @@ func (h *Handler) SetAllowDestructive(v bool) { h.allowDestructive = v }
 func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 
-	r, rackConfig, authUser, allowed, _, envDiffs, err := h.prepareProxyRequest(w, r, start)
+	r, rackConfig, authUser, allowed, approvalTracker, envDiffs, err := h.prepareProxyRequest(w, r, start)
 	if err != nil {
 		return
 	}
@@ -161,9 +161,15 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err := h.claimPromote(r, rackPath, approvalTracker); err != nil {
+		_, _, _ = h.handlePermissionError(w, r, authUser, err, rackConfig.Name, start)
+		return
+	}
+
 	beforeParams := h.captureRackParamsIfNeeded(r, rackPath, rackConfig)
 
 	status, err := h.forwardRequest(w, r, rackConfig, rackPath, authUser)
+	h.releasePromoteClaimAfterFailure(r, rackPath, status, err)
 	if err != nil {
 		h.handleForwardError(w, r, err, rackConfig.Name, start)
 		return
