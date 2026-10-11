@@ -265,7 +265,7 @@ A: All API requests are logged with user, action, resource, decision, and timest
 A: Retention is operator-managed. Use database policies plus S3 WORM anchors (`AUDIT_ANCHOR_RETENTION_DAYS`) for compliance.
 
 **Q: How are secrets protected in logs?**
-A: Automatic regex-based redaction before logging. Patterns include passwords, tokens, and keys.
+A: Audit entries never record env var values unless an admin lists the key in the app's `audit_visible_env_vars`, and never for secret or protected keys. Rack parameter changes record the parameter names only. See [Secret Redaction](/security/compliance/audit-trail/#secret-redaction).
 
 **Q: How is the audit log protected from tampering?**
 A: Audit events are cryptographically chained, and optional S3 Object Lock anchors preserve chain integrity.

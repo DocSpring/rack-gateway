@@ -33,6 +33,21 @@ describe('AppSettingsPage', () => {
     })
   })
 
+  // Env values are redacted in the audit log unless the app lists the env var here.
+  it('shows the env vars whose values audit logs may show', async () => {
+    params.app = 'web'
+    mockGet.mockResolvedValue({ audit_visible_env_vars: { value: ['RAILS_ENV'], source: 'db' } })
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(
+      <QueryClientProvider client={client}>
+        <AppSettingsPage />
+      </QueryClientProvider>
+    )
+    expect(await screen.findByText('Environment Variables Shown in Audit Logs')).toBeInTheDocument()
+    expect(screen.getByText('RAILS_ENV')).toBeInTheDocument()
+    expect(screen.getByText(/Secret and protected values are always redacted/)).toBeInTheDocument()
+  })
+
   // An unsaved edit on one app's settings must not show up on another app's (cached) settings page.
   it('drops unsaved edits when switching to another app', async () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })

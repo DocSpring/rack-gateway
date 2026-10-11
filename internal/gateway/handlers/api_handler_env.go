@@ -19,6 +19,8 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 )
 
+// logEnvUpdateDiffs writes one audit entry per env change. Its values are redacted unless the app's
+// audit_visible_env_vars lists the key and it is neither secret nor protected.
 func (h *APIHandler) logEnvUpdateDiffs(
 	c *gin.Context,
 	app, email, name string,
@@ -32,17 +34,14 @@ func (h *APIHandler) logEnvUpdateDiffs(
 	ms := int(elapsed.Milliseconds())
 	ip := c.ClientIP()
 	ua := c.GetHeader("User-Agent")
+	visible := h.auditVisibleKeys(app)
 
 	for _, diff := range diffs {
-		oldVal := diff.OldVal
-		newVal := diff.NewVal
 		action := audit.BuildAction(rbac.ResourceEnv.String(), rbac.ActionSet.String())
 		resourceType := "env"
 		if diff.Secret {
 			action = audit.BuildAction(rbac.ResourceSecret.String(), rbac.ActionSet.String())
 			resourceType = "secret"
-			oldVal = "[REDACTED]"
-			newVal = "[REDACTED]"
 		}
 		if strings.TrimSpace(diff.NewVal) == "" {
 			if diff.Secret {
@@ -52,9 +51,6 @@ func (h *APIHandler) logEnvUpdateDiffs(
 			}
 		}
 
-		detailPayload := map[string]string{"old": oldVal, "new": newVal}
-		detailsJSON, _ := json.Marshal(detailPayload)
-
 		_ = h.auditLogger.LogDBEntry(&db.AuditLog{
 			UserEmail:      email,
 			UserName:       name,
@@ -62,7 +58,7 @@ func (h *APIHandler) logEnvUpdateDiffs(
 			Action:         action,
 			ResourceType:   resourceType,
 			Resource:       fmt.Sprintf("%s/%s", app, diff.Key),
-			Details:        string(detailsJSON),
+			Details:        visible.AuditDetails(diff),
 			IPAddress:      ip,
 			UserAgent:      ua,
 			Status:         "success",
@@ -122,7 +118,11 @@ func (h *APIHandler) GetEnvValues(c *gin.Context) {
 		return
 	}
 
-	extraSecrets, _ := h.secretAndProtectedKeys(app)
+	extraSecrets, _, err := h.secretAndProtectedKeys(app)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read the app's env var settings"})
+		return
+	}
 	h.maskSecretsIfNeeded(envMap, extraSecrets, allowedSecrets)
 
 	if key != "" {
@@ -347,7 +347,12 @@ func (h *APIHandler) prepareEnvUpdateContext(c *gin.Context) (*envUpdateContext,
 	}
 	ctx.baseEnv = baseEnv
 
-	ctx.extraSecrets, ctx.protectedKeys = h.secretAndProtectedKeys(ctx.app)
+	extraSecrets, protectedKeys, err := h.secretAndProtectedKeys(ctx.app)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read the app's env var settings"})
+		return nil, false
+	}
+	ctx.extraSecrets, ctx.protectedKeys = extraSecrets, protectedKeys
 	ctx.allowSecrets = callerCan(c, h.rbac, rbac.Convox(rbac.ResourceSecret, rbac.ActionSet))
 	ctx.canViewSecrets = callerCan(c, h.rbac, rbac.Convox(rbac.ResourceSecret, rbac.ActionRead))
 

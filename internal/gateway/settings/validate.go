@@ -15,6 +15,7 @@ var ErrInvalidSettingValue = errors.New("invalid setting value")
 // read back as an empty list, and an empty approved_deploy_commands list allows no commands.
 var stringListKeys = map[string]bool{
 	KeyApprovedDeployCommands: true,
+	KeyAuditVisibleEnvVars:    true,
 	KeyProtectedEnvVars:       true,
 	KeySecretEnvVars:          true,
 }

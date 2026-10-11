@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -13,16 +14,11 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/config"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	emailtemplates "github.com/DocSpring/rack-gateway/internal/gateway/email/templates"
+	"github.com/DocSpring/rack-gateway/internal/gateway/envutil"
 	"github.com/DocSpring/rack-gateway/internal/gateway/netutil"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rackcert"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 )
-
-type paramChange struct {
-	Key string
-	Old string
-	New string
-}
 
 func (h *Handler) fetchSystemParams(ctx context.Context, rack config.RackConfig) (map[string]string, error) {
 	base := strings.TrimRight(rack.URL, "/")
@@ -72,12 +68,11 @@ func (h *Handler) fetchSystemParams(ctx context.Context, rack config.RackConfig)
 	return out, nil
 }
 
-func diffParams(before, after map[string]string) []paramChange {
-	changes := []paramChange{}
+// changedParams returns the names of the rack parameters whose values differ, sorted.
+func changedParams(before, after map[string]string) []string {
 	if after == nil {
-		return changes
+		return nil
 	}
-	// include keys from both maps
 	keys := map[string]struct{}{}
 	for k := range after {
 		keys[k] = struct{}{}
@@ -85,50 +80,44 @@ func diffParams(before, after map[string]string) []paramChange {
 	for k := range before {
 		keys[k] = struct{}{}
 	}
+	changed := make([]string, 0, len(keys))
 	for k := range keys {
-		ov := before[k]
-		nv := after[k]
-		if ov != nv {
-			changes = append(changes, paramChange{Key: k, Old: ov, New: nv})
+		if before[k] != after[k] {
+			changed = append(changed, k)
 		}
 	}
-	return changes
+	sort.Strings(changed)
+	return changed
 }
 
-func (h *Handler) notifyRackParamsChanged(_ *http.Request, actor string, changes []paramChange) {
-	if h.rbacManager == nil || len(changes) == 0 {
+// Rack parameter values can hold credentials (a database password, a private key), so the admin email and the
+// audit log name the changed parameters and never their values.
+
+// notifyRackParamsChanged emails the admins the names of the changed rack parameters.
+func (h *Handler) notifyRackParamsChanged(actor string, keys []string) {
+	if h.rbacManager == nil || len(keys) == 0 {
 		return
 	}
 	admins := h.getAdminEmails()
 	if len(admins) == 0 {
 		return
 	}
-	// Build value string listing changes
-	var b strings.Builder
-	for i, c := range changes {
-		if i > 0 {
-			b.WriteString("\n")
-		}
-		fmt.Fprintf(&b, "%s: %s -> %s", c.Key, c.Old, c.New)
-	}
 	subject := actor + " changed rack parameters"
-	text, html, _ := emailtemplates.RenderRackParamsChanged(h.rackDisplay(), actor, b.String())
+	text, html, _ := emailtemplates.RenderRackParamsChanged(h.rackDisplay(), actor, strings.Join(keys, "\n"))
 	_ = h.emailer.SendMany(admins, subject, text, html)
 }
 
-func (h *Handler) auditRackParamsChanged(r *http.Request, actor string, changes []paramChange) {
-	if h.database == nil || len(changes) == 0 {
+// auditRackParamsChanged logs the changed rack parameters, with their values redacted.
+func (h *Handler) auditRackParamsChanged(r *http.Request, actor string, keys []string) {
+	if h.database == nil || len(keys) == 0 {
 		return
 	}
-	// Build details JSON
-	payload := map[string]interface{}{"changes": func() map[string]map[string]string {
-		m := map[string]map[string]string{}
-		for _, c := range changes {
-			m[c.Key] = map[string]string{"old": c.Old, "new": c.New}
-		}
-		return m
-	}()}
-	b, _ := json.Marshal(payload)
+	redacted := map[string]string{"old": envutil.RedactedValue, "new": envutil.RedactedValue}
+	changes := make(map[string]map[string]string, len(keys))
+	for _, key := range keys {
+		changes[key] = redacted
+	}
+	b, _ := json.Marshal(map[string]interface{}{"changes": changes})
 	_ = h.logAudit(r, &db.AuditLog{
 		UserEmail:    actor,
 		UserName:     r.Header.Get("X-User-Name"),

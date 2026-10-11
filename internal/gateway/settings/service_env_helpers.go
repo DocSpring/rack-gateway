@@ -12,6 +12,11 @@ func (s *Service) GetSecretEnvVars(appName string) ([]string, error) {
 	return s.getEnvVarList(appName, KeySecretEnvVars)
 }
 
+// GetAuditVisibleEnvVars returns the env vars whose values an app's audit log entries may show.
+func (s *Service) GetAuditVisibleEnvVars(appName string) ([]string, error) {
+	return s.getEnvVarList(appName, KeyAuditVisibleEnvVars)
+}
+
 func (s *Service) getEnvVarList(appName, key string) ([]string, error) {
 	setting, err := s.GetAppSetting(appName, key, []string{})
 	if err != nil {

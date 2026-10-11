@@ -10,6 +10,7 @@ import (
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
+	"github.com/DocSpring/rack-gateway/internal/gateway/envutil"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 	"github.com/DocSpring/rack-gateway/internal/gateway/testutil/dbtest"
 )
@@ -249,6 +250,32 @@ func TestFormatAuditLogMessage(t *testing.T) {
 				require.Contains(t, blocksStr, s)
 			}
 		})
+	}
+}
+
+// Slack copies an audit entry's details verbatim, so an env change's message carries no values unless the app's
+// audit_visible_env_vars lists the key.
+func TestFormatAuditLogMessageRedactsEnvValues(t *testing.T) {
+	notifier := NewNotifier(dbtest.NewDatabase(t))
+	change := envutil.EnvDiff{Key: "DATABASE_PASSWORD", OldVal: "old-value", NewVal: "new-value"}
+	auditLog := &db.AuditLog{
+		Action:       audit.BuildAction(rbac.ResourceEnv.String(), rbac.ActionSet.String()),
+		UserEmail:    "admin@example.com",
+		ResourceType: "env",
+		Resource:     "web/DATABASE_PASSWORD",
+		Status:       audit.StatusSuccess,
+		Timestamp:    time.Now(),
+		Details:      envutil.AuditVisibleKeys{}.AuditDetails(change),
+	}
+
+	text, blocks := notifier.formatAuditLogMessage(auditLog)
+	blocksJSON, err := json.Marshal(blocks)
+	require.NoError(t, err)
+	require.Contains(t, string(blocksJSON), "web/DATABASE_PASSWORD")
+	require.Contains(t, string(blocksJSON), envutil.RedactedValue)
+	for _, out := range []string{text, string(blocksJSON)} {
+		require.NotContains(t, out, "old-value")
+		require.NotContains(t, out, "new-value")
 	}
 }
 

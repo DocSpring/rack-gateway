@@ -127,6 +127,7 @@ var MFARequirements = map[string]MFALevel{
 	GatewayAppSettingGroup(settings.AppSettingGroupVCSCIDeploy):         MFAAlways, // GitHub verify/PR reqs
 	GatewayAppSetting(settings.AppSettingAllowDeployFromDefaultBranch):  MFAStepUp, // Allowing more deploys
 	GatewayAppSetting(settings.AppSettingApprovedDeployCommands):        MFAStepUp, // Defining allowed commands
+	GatewayAppSetting(settings.AppSettingAuditVisibleEnvVars):           MFAStepUp, // Showing values in audit logs
 	GatewayAppSetting(settings.AppSettingCIProvider):                    MFANone,   // Just configuration
 	GatewayAppSetting(settings.AppSettingCircleCIApprovalJobName):       MFANone,   // Just configuration
 	GatewayAppSetting(settings.AppSettingCircleCIAutoApproveOnApproval): MFAStepUp, // Auto-approving

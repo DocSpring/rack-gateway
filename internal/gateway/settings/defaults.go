@@ -74,6 +74,7 @@ type AppSettingKey uint8
 const (
 	AppSettingAllowDeployFromDefaultBranch AppSettingKey = iota
 	AppSettingApprovedDeployCommands
+	AppSettingAuditVisibleEnvVars
 	AppSettingCIProvider
 	AppSettingCircleCIApprovalJobName
 	AppSettingCircleCIAutoApproveOnApproval
@@ -93,6 +94,7 @@ const (
 const (
 	KeyAllowDeployFromDefaultBranch  = "allow_deploy_from_default_branch"
 	KeyApprovedDeployCommands        = "approved_deploy_commands"
+	KeyAuditVisibleEnvVars           = "audit_visible_env_vars"
 	KeyCIProvider                    = "ci_provider"
 	KeyCircleCIApprovalJobName       = "circleci_approval_job_name"
 	KeyCircleCIAutoApproveOnApproval = "circleci_auto_approve_on_approval"
@@ -112,6 +114,7 @@ const (
 var appSettingKeyToString = [...]string{
 	KeyAllowDeployFromDefaultBranch,
 	KeyApprovedDeployCommands,
+	KeyAuditVisibleEnvVars,
 	KeyCIProvider,
 	KeyCircleCIApprovalJobName,
 	KeyCircleCIAutoApproveOnApproval,
@@ -173,6 +176,7 @@ var DefaultGlobalSettings = map[string]interface{}{
 var DefaultAppSettings = map[string]interface{}{
 	KeyAllowDeployFromDefaultBranch:  false,
 	KeyApprovedDeployCommands:        []string(nil),
+	KeyAuditVisibleEnvVars:           []string(nil),
 	KeyCIProvider:                    nil, // nil means use global default
 	KeyCircleCIApprovalJobName:       "",
 	KeyCircleCIAutoApproveOnApproval: false,
