@@ -20,6 +20,19 @@ type VerificationSettingsFieldsProps = {
   onChangeVerifyGitCommitMode: (value: string) => void
 }
 
+// missingVerificationConfig describes what GitHub verification needs but doesn't have (matching the gateway's
+// check when it creates a request), or returns ''.
+function missingVerificationConfig(githubAvailable: boolean, vcsRepo: string): string {
+  const missing: string[] = []
+  if (!githubAvailable) {
+    missing.push('the gateway has no GITHUB_TOKEN')
+  }
+  if (!vcsRepo.trim()) {
+    missing.push('no GitHub repository is set')
+  }
+  return missing.join(' and ')
+}
+
 export function VerificationSettingsFields({
   disabled,
   githubAvailable,
@@ -141,17 +154,4 @@ export function VerificationSettingsFields({
       </div>
     </div>
   )
-}
-
-// missingVerificationConfig describes what GitHub verification needs but doesn't have (matching the gateway's
-// check when it creates a request), or returns ''.
-function missingVerificationConfig(githubAvailable: boolean, vcsRepo: string): string {
-  const missing: string[] = []
-  if (!githubAvailable) {
-    missing.push('the gateway has no GITHUB_TOKEN')
-  }
-  if (!vcsRepo.trim()) {
-    missing.push('no GitHub repository is set')
-  }
-  return missing.join(' and ')
 }
