@@ -150,7 +150,7 @@ func (h *SettingsHandler) updateGlobalSettingsWithKeys(c *gin.Context, allowedKe
 
 // DeleteGlobalSettings godoc
 // @Summary Delete multiple global settings
-// @Description Deletes multiple global settings from the database, reverting to env or default values
+// @Description Deletes global settings' database values; their environment variables or defaults apply
 // @Tags Settings
 // @Produce json
 // @Param key query []string true "Setting keys to delete"
@@ -260,7 +260,7 @@ func (h *SettingsHandler) updateAppSettingsWithKeys(c *gin.Context, allowedKeys 
 
 // DeleteAppSettings godoc
 // @Summary Delete multiple app settings
-// @Description Deletes multiple app settings from the database, reverting to env or default values
+// @Description Deletes app settings' database values; their environment variables or defaults apply
 // @Tags Settings
 // @Produce json
 // @Param app path string true "App name"

@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -76,7 +78,7 @@ func parseEnvSetting(isApp bool, key, raw string) (interface{}, error) {
 		return nil, fmt.Errorf("unknown setting %q", key)
 	}
 
-	typed, err := parseTyped(defaultValue, raw)
+	typed, err := parseTyped(key, defaultValue, raw)
 	if err != nil {
 		return nil, err
 	}
@@ -88,18 +90,19 @@ func parseEnvSetting(isApp bool, key, raw string) (interface{}, error) {
 	return toJSONShape(typed)
 }
 
-func parseTyped(defaultValue interface{}, raw string) (interface{}, error) {
+// allowedSettingValues lists the only values some string settings can take.
+var allowedSettingValues = map[string][]string{
+	KeyVerifyGitCommitMode: {VerifyGitCommitModeBranch, VerifyGitCommitModeLatest},
+}
+
+func parseTyped(key string, defaultValue interface{}, raw string) (interface{}, error) {
 	switch defaultValue.(type) {
 	case bool:
-		b, err := strconv.ParseBool(raw)
-		if err != nil {
-			return nil, fmt.Errorf("must be true or false, got %q", raw)
-		}
-		return b, nil
+		return parseEnvBool(raw)
 	case int:
 		n, err := strconv.Atoi(raw)
-		if err != nil || n < 0 {
-			return nil, fmt.Errorf("must be a whole number, got %q", raw)
+		if err != nil || n < 1 {
+			return nil, fmt.Errorf("must be a whole number of at least 1, got %q", raw)
 		}
 		return n, nil
 	case []string:
@@ -111,8 +114,31 @@ func parseTyped(defaultValue interface{}, raw string) (interface{}, error) {
 		}
 		return m, nil
 	default: // strings, including optional ones with a nil default
-		return raw, nil
+		return parseEnvString(key, raw)
 	}
+}
+
+func parseEnvBool(raw string) (bool, error) {
+	switch strings.ToLower(raw) {
+	case "true":
+		return true, nil
+	case "false":
+		return false, nil
+	default:
+		return false, fmt.Errorf("must be true or false, got %q", raw)
+	}
+}
+
+// parseEnvString takes a string value as it is. Quotes would become part of the value, so they're refused.
+func parseEnvString(key, raw string) (string, error) {
+	if strings.HasPrefix(raw, `"`) || strings.HasPrefix(raw, "'") || raw == "null" {
+		return "", fmt.Errorf("must be a plain value without quotes, got %s", raw)
+	}
+	allowed, restricted := allowedSettingValues[key]
+	if restricted && !slices.Contains(allowed, raw) {
+		return "", fmt.Errorf("must be one of %s, got %q", strings.Join(allowed, ", "), raw)
+	}
+	return raw, nil
 }
 
 // parseEnvList reads a JSON array of strings, or a comma-separated list.
@@ -146,17 +172,16 @@ func toJSONShape(value interface{}) (interface{}, error) {
 }
 
 // ValidateEnvironment checks every setting environment variable (RGW_SETTING_*, RGW_APP_*_SETTING_*) in environ:
-// the setting must exist and the value must fit its type. The gateway refuses to start otherwise, instead of
-// quietly using the default.
+// the name must be one the gateway reads, the setting must exist and the value must fit its type. The gateway
+// refuses to start otherwise, instead of quietly using another value.
 func ValidateEnvironment(environ []string) error {
 	var problems []string
 	for _, entry := range environ {
 		name, raw, _ := strings.Cut(entry, "=")
-		isApp, key, ok := settingEnvKey(name)
-		if !ok || strings.TrimSpace(raw) == "" {
+		if !looksLikeSettingEnv(name) || strings.TrimSpace(raw) == "" {
 			continue
 		}
-		if _, err := parseEnvSetting(isApp, key, strings.TrimSpace(raw)); err != nil {
+		if err := validateSettingEnv(name, strings.TrimSpace(raw)); err != nil {
 			problems = append(problems, fmt.Sprintf("%s: %v", name, err))
 		}
 	}
@@ -167,18 +192,43 @@ func ValidateEnvironment(environ []string) error {
 	return fmt.Errorf("invalid setting environment variables:\n  %s", strings.Join(problems, "\n  "))
 }
 
-// settingEnvKey maps a setting environment variable name to its setting key.
-func settingEnvKey(name string) (isApp bool, key string, ok bool) {
+// looksLikeSettingEnv reports a name meant as a setting variable, in any case.
+func looksLikeSettingEnv(name string) bool {
+	upper := strings.ToUpper(name)
+	return strings.HasPrefix(upper, globalSettingEnvPrefix) ||
+		(strings.HasPrefix(upper, appSettingEnvPrefix) && strings.Contains(upper, appSettingEnvInfix))
+}
+
+func validateSettingEnv(name, raw string) error {
+	isApp, key, err := settingEnvKey(name)
+	if err != nil {
+		return err
+	}
+	_, err = parseEnvSetting(isApp, key, raw)
+	return err
+}
+
+// envAppNamePattern is an app name as setting variables spell it: upper case, with dashes written as underscores.
+var envAppNamePattern = regexp.MustCompile(`^[A-Z0-9_]+$`)
+
+// settingEnvKey maps a setting environment variable name to its setting key. The gateway only reads names in the
+// form getEnvVarName builds, so any other spelling is an error rather than a variable that's silently ignored.
+func settingEnvKey(name string) (isApp bool, key string, err error) {
+	if name != strings.ToUpper(name) {
+		return false, "", errors.New("setting variable names are upper case")
+	}
 	if rest, found := strings.CutPrefix(name, globalSettingEnvPrefix); found {
-		return false, strings.ToLower(rest), rest != ""
+		return false, strings.ToLower(rest), nil
 	}
-	if rest, found := strings.CutPrefix(name, appSettingEnvPrefix); found {
-		if i := strings.LastIndex(rest, appSettingEnvInfix); i > 0 {
-			key = rest[i+len(appSettingEnvInfix):]
-			return true, strings.ToLower(key), key != ""
-		}
+	rest := strings.TrimPrefix(name, appSettingEnvPrefix)
+	i := strings.LastIndex(rest, appSettingEnvInfix)
+	if i <= 0 {
+		return false, "", errors.New("missing the app name (RGW_APP_<APP>_SETTING_<KEY>)")
 	}
-	return false, "", false
+	if !envAppNamePattern.MatchString(rest[:i]) {
+		return false, "", errors.New("the app name must be letters, digits and underscores (dashes become underscores)")
+	}
+	return true, strings.ToLower(rest[i+len(appSettingEnvInfix):]), nil
 }
 
 // ShadowedSettings lists the stored settings an environment variable now overrides. They have no effect, so they

@@ -108,13 +108,16 @@ An environment variable pins its setting: the web UI shows it read-only, and the
 (`409 Conflict`). Change it in the deployment config instead. Values are parsed strictly by the setting's type:
 
 - Booleans: `true` or `false`
-- Numbers: whole numbers
-- Lists: a JSON array of strings, or a comma-separated list
+- Numbers: whole numbers of at least 1
+- Lists: a JSON array of strings, or a comma-separated list (use the JSON form when a value contains a comma,
+  e.g. an approved deploy command)
 - Maps (`service_image_patterns`): a JSON object of strings
+- Strings: the plain value, without quotes. `verify_git_commit_mode` must be `latest` or `branch`.
 
-The gateway refuses to start when a `RGW_SETTING_*` or `RGW_APP_*_SETTING_*` variable names an unknown setting or
-has a value that doesn't fit its type. At startup it also logs any stored database values that an environment
-variable now overrides; they have no effect and can be cleared.
+The gateway refuses to start when a `RGW_SETTING_*` or `RGW_APP_*_SETTING_*` variable names an unknown setting,
+isn't spelled the way the gateway reads it (upper case, with dashes in app names written as underscores), or has a
+value that doesn't fit its type. A database value that an environment variable overrides has no effect: the
+startup log lists them, and the settings page marks them and lets an admin clear them.
 
 | Variable | Description |
 |----------|-------------|

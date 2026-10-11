@@ -267,8 +267,8 @@ flowchart LR
 
 ```bash
 # MFA Settings
-RGW_SETTING_MFA_REQUIRED_ROLES=admin,operator  # Require MFA for these roles
-RGW_SETTING_MFA_TIMEOUT_SECONDS=300            # Step-up MFA timeout
+RGW_SETTING_MFA_REQUIRE_ALL_USERS=true         # Require every user to enroll MFA
+RGW_SETTING_MFA_STEP_UP_WINDOW_MINUTES=10      # How long a step-up MFA verification lasts
 ```
 
 ### User Experience

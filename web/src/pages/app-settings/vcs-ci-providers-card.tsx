@@ -3,6 +3,7 @@ import { useCallback, useMemo, useState } from 'react'
 
 import {
   getSettingValue,
+  hasStoredValue,
   isSetByEnv,
   SourceIndicator,
 } from '@/components/settings/source-indicator'
@@ -334,16 +335,16 @@ export function VCSCIProvidersCard({
   }
 
   const hasDbSettings =
-    settings?.vcs_provider?.source === 'db' ||
-    settings?.vcs_repo?.source === 'db' ||
-    settings?.ci_provider?.source === 'db' ||
-    settings?.github_verification?.source === 'db' ||
-    settings?.allow_deploy_from_default_branch?.source === 'db' ||
-    settings?.require_pr_for_branch?.source === 'db' ||
-    settings?.default_branch?.source === 'db' ||
-    settings?.verify_git_commit_mode?.source === 'db' ||
-    settings?.circleci_auto_approve_on_approval?.source === 'db' ||
-    settings?.circleci_approval_job_name?.source === 'db'
+    hasStoredValue(settings?.vcs_provider) ||
+    hasStoredValue(settings?.vcs_repo) ||
+    hasStoredValue(settings?.ci_provider) ||
+    hasStoredValue(settings?.github_verification) ||
+    hasStoredValue(settings?.allow_deploy_from_default_branch) ||
+    hasStoredValue(settings?.require_pr_for_branch) ||
+    hasStoredValue(settings?.default_branch) ||
+    hasStoredValue(settings?.verify_git_commit_mode) ||
+    hasStoredValue(settings?.circleci_auto_approve_on_approval) ||
+    hasStoredValue(settings?.circleci_approval_job_name)
 
   return (
     <Card>

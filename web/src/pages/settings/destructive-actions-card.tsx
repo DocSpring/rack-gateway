@@ -3,6 +3,7 @@ import { useState } from 'react'
 import type { SettingsSetting } from '@/api/schemas'
 import {
   getSettingValue,
+  hasStoredValue,
   isSetByEnv,
   SourceIndicator,
 } from '@/components/settings/source-indicator'
@@ -100,7 +101,7 @@ export function DestructiveActionsCard({ settings, disabled }: DestructiveAction
     }
   }
 
-  const hasDbSetting = settings?.allow_destructive_actions?.source === 'db'
+  const hasDbSetting = hasStoredValue(settings?.allow_destructive_actions)
 
   return (
     <Card>

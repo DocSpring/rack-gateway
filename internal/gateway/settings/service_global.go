@@ -7,7 +7,7 @@ func (s *Service) GetGlobalSetting(key string, defaultValue interface{}) (*Setti
 	return s.getSetting(nil, key, defaultValue)
 }
 
-// GetAllGlobalSettings retrieves all global settings with environment fallback.
+// GetAllGlobalSettings resolves every global setting.
 func (s *Service) GetAllGlobalSettings() (map[string]*Setting, error) {
 	rawSettings, err := s.db.GetAllSettings(nil)
 	if err != nil {
@@ -35,7 +35,7 @@ func (s *Service) SetGlobalSetting(key string, value interface{}, updatedByUserI
 	return s.db.UpsertSetting(nil, key, value, updatedByUserID)
 }
 
-// DeleteGlobalSetting removes a global setting from the database (reverts to env/default).
+// DeleteGlobalSetting removes a global setting's database value. Its environment variable or default applies.
 func (s *Service) DeleteGlobalSetting(key string) error {
 	return s.db.DeleteSetting(nil, key)
 }

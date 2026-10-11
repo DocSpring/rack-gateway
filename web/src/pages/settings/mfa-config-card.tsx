@@ -3,6 +3,7 @@ import { useState } from 'react'
 import type { SettingsSetting } from '@/api/schemas'
 import {
   getSettingValue,
+  hasStoredValue,
   isSetByEnv,
   SourceIndicator,
 } from '@/components/settings/source-indicator'
@@ -74,13 +75,13 @@ export function MfaConfigCard({ settings, disabled }: MfaConfigCardProps) {
   const clearMutation = useMutation({
     mutationFn: async () => {
       const keys: string[] = []
-      if (settings?.mfa_require_all_users?.source === 'db') {
+      if (hasStoredValue(settings?.mfa_require_all_users)) {
         keys.push('mfa_require_all_users')
       }
-      if (settings?.mfa_trusted_device_ttl_days?.source === 'db') {
+      if (hasStoredValue(settings?.mfa_trusted_device_ttl_days)) {
         keys.push('mfa_trusted_device_ttl_days')
       }
-      if (settings?.mfa_step_up_window_minutes?.source === 'db') {
+      if (hasStoredValue(settings?.mfa_step_up_window_minutes)) {
         keys.push('mfa_step_up_window_minutes')
       }
       if (keys.length > 0) {
@@ -134,9 +135,9 @@ export function MfaConfigCard({ settings, disabled }: MfaConfigCardProps) {
   }
 
   const hasDbSettings =
-    settings?.mfa_require_all_users?.source === 'db' ||
-    settings?.mfa_trusted_device_ttl_days?.source === 'db' ||
-    settings?.mfa_step_up_window_minutes?.source === 'db'
+    hasStoredValue(settings?.mfa_require_all_users) ||
+    hasStoredValue(settings?.mfa_trusted_device_ttl_days) ||
+    hasStoredValue(settings?.mfa_step_up_window_minutes)
 
   return (
     <Card>

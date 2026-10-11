@@ -581,7 +581,7 @@
                         "CSRFToken": []
                     }
                 ],
-                "description": "Deletes multiple app settings from the database, reverting to env or default values",
+                "description": "Deletes app settings' database values; their environment variables or defaults apply",
                 "produces": [
                     "application/json"
                 ],
@@ -3248,7 +3248,7 @@
                         "CSRFToken": []
                     }
                 ],
-                "description": "Deletes multiple global settings from the database, reverting to env or default values",
+                "description": "Deletes global settings' database values; their environment variables or defaults apply",
                 "produces": [
                     "application/json"
                 ],
@@ -5757,6 +5757,10 @@
                 },
                 "source": {
                     "$ref": "#/definitions/settings.SettingSource"
+                },
+                "stored_value_ignored": {
+                    "description": "StoredValueIgnored reports a database value that the environment variable overrides. It has no effect, and\ncan be cleared.",
+                    "type": "boolean"
                 },
                 "value": {}
             }

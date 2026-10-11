@@ -2,6 +2,7 @@ package settings
 
 import (
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -22,9 +23,12 @@ func TestEnvironmentOverridesTheDatabase(t *testing.T) {
 	require.Equal(t, SourceEnv, setting.Source)
 	require.Equal(t, "RGW_APP_WEB_SETTING_GITHUB_VERIFICATION", setting.EnvVar)
 
+	require.True(t, setting.StoredValueIgnored, "the stored value is reported, so it can be cleared")
+
 	all, err := svc.GetAllAppSettings("web")
 	require.NoError(t, err)
 	require.Equal(t, SourceEnv, all[KeyGitHubVerification].Source)
+	require.True(t, all[KeyGitHubVerification].StoredValueIgnored)
 
 	shadowed, err := svc.ShadowedSettings()
 	require.NoError(t, err)
@@ -91,20 +95,28 @@ func TestValidateEnvironment(t *testing.T) {
 		"RGW_SETTING_ALLOW_DESTRUCTIVE_ACTIONS=", // blank: not set
 	}))
 
-	err := ValidateEnvironment([]string{
+	invalid := []string{
 		"RGW_SETTING_MFA_REQUIRE_ALL_USERS=yes-please",
+		"RGW_SETTING_ALLOW_DESTRUCTIVE_ACTIONS=1",
 		"RGW_SETTING_DEPLOY_APPROVAL_WINDOW_MINUTES=fifteen",
+		"RGW_SETTING_SESSION_TIMEOUT_MINUTES=0",
 		"RGW_SETTING_NO_SUCH_SETTING=1",
 		"RGW_APP_WEB_SETTING_SERVICE_IMAGE_PATTERNS=not json",
 		"RGW_APP_WEB_SETTING_GITHUB_VERIFICATION=1.5",
-	})
+		`RGW_APP_WEB_SETTING_DEFAULT_BRANCH="main"`,
+		"RGW_APP_WEB_SETTING_VCS_REPO=null",
+		"RGW_APP_WEB_SETTING_VERIFY_GIT_COMMIT_MODE=Latest",
+		// Names the gateway never reads: they'd be silently ignored.
+		"RGW_SETTING_mfa_step_up_window_minutes=10",
+		"RGW_APP_web_SETTING_GITHUB_VERIFICATION=true",
+		"RGW_APP_MY-APP_SETTING_GITHUB_VERIFICATION=true",
+		"RGW_APP_SETTING_GITHUB_VERIFICATION=true",
+	}
+	err := ValidateEnvironment(invalid)
 	require.Error(t, err)
-	for _, name := range []string{
-		"RGW_SETTING_MFA_REQUIRE_ALL_USERS", "RGW_SETTING_DEPLOY_APPROVAL_WINDOW_MINUTES",
-		"RGW_SETTING_NO_SUCH_SETTING", "RGW_APP_WEB_SETTING_SERVICE_IMAGE_PATTERNS",
-		"RGW_APP_WEB_SETTING_GITHUB_VERIFICATION",
-	} {
-		require.ErrorContains(t, err, name)
+	for _, entry := range invalid {
+		name, _, _ := strings.Cut(entry, "=")
+		require.ErrorContains(t, err, name+":")
 	}
 }
 

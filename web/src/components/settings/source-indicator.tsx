@@ -9,6 +9,12 @@ export function isSetByEnv(setting: SettingsSetting | undefined): boolean {
   return setting?.source === 'env'
 }
 
+// hasStoredValue reports a value saved in the database, which Clear removes. That includes a stored value an
+// environment variable overrides: it has no effect, but would apply again if the variable were removed.
+export function hasStoredValue(setting: SettingsSetting | undefined): boolean {
+  return setting?.source === 'db' || setting?.stored_value_ignored === true
+}
+
 export function SourceIndicator({ setting }: { setting: SettingsSetting | undefined }) {
   if (!setting) {
     return null
@@ -29,7 +35,9 @@ export function SourceIndicator({ setting }: { setting: SettingsSetting | undefi
     let tooltipText = ''
 
     if (setting.source === 'env') {
-      label = '(from env var, read-only)'
+      label = setting.stored_value_ignored
+        ? '(from env var, read-only; a stored value is ignored)'
+        : '(from env var, read-only)'
       tooltipText = `Set by ${setting.env_var} in the deployment config; change it there - click to copy`
     } else if (setting.source === 'default') {
       label = '(default)'

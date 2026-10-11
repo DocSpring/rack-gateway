@@ -36,6 +36,9 @@ type Setting struct {
 	Value  interface{}   `json:"value"`
 	Source SettingSource `json:"source"`
 	EnvVar string        `json:"env_var,omitempty"` // e.g., "RGW_SETTING_MFA_REQUIRE_ALL_USERS"
+	// StoredValueIgnored reports a database value that the environment variable overrides. It has no effect, and
+	// can be cleared.
+	StoredValueIgnored bool `json:"stored_value_ignored,omitempty"`
 }
 
 // normalizeAppNameForEnv converts app name to environment variable format.
@@ -54,31 +57,35 @@ func getEnvVarName(appName *string, key string) string {
 	return fmt.Sprintf("RGW_APP_%s_SETTING_%s", normalizedApp, normalizedKey)
 }
 
-// getSetting retrieves a setting with environment fallback.
-// targetType is used to determine how to parse the value (e.g., bool, string, []string).
+// getSetting resolves a setting: its environment variable, then the database, then the default.
 func (s *Service) getSetting(appName *string, key string, defaultValue interface{}) (*Setting, error) {
 	return s.resolveSetting(appName, key, defaultValue, nil)
 }
 
-// resolveSetting retrieves a setting using either a preloaded map of DB values or
-// by querying the database directly, then falling back to env/default values.
+// resolveSetting resolves a setting: its environment variable, then the database value (from preloaded, or a
+// query), then the default.
 func (s *Service) resolveSetting(
 	appName *string,
 	key string,
 	defaultValue interface{},
 	preloaded map[string][]byte,
 ) (*Setting, error) {
-	// 1. An environment variable (the deployment config) overrides the database
-	if setting, ok, err := envSetting(appName, key); ok {
-		return setting, err
-	}
-	envVarName := getEnvVarName(appName, key)
-
-	// 2. Check database (preloaded map avoids multiple round-trips)
 	raw, found, err := s.loadSettingValue(appName, key, preloaded)
 	if err != nil {
 		return nil, err
 	}
+
+	// 1. An environment variable (the deployment config) overrides the database
+	if setting, ok, err := envSetting(appName, key); ok {
+		if err != nil {
+			return nil, err
+		}
+		setting.StoredValueIgnored = found
+		return setting, nil
+	}
+	envVarName := getEnvVarName(appName, key)
+
+	// 2. The database value
 	if found {
 		var value interface{}
 		if err := json.Unmarshal(raw, &value); err != nil {

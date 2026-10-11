@@ -3,6 +3,7 @@ import { useState } from 'react'
 import type { SettingsSetting } from '@/api/schemas'
 import {
   getSettingValue,
+  hasStoredValue,
   isSetByEnv,
   SourceIndicator,
 } from '@/components/settings/source-indicator'
@@ -66,10 +67,10 @@ export function VcsCiCard({ settings, disabled }: VcsCiCardProps) {
   const clearMutation = useMutation({
     mutationFn: async () => {
       const keys: string[] = []
-      if (settings?.default_vcs_provider?.source === 'db') {
+      if (hasStoredValue(settings?.default_vcs_provider)) {
         keys.push('default_vcs_provider')
       }
-      if (settings?.default_ci_provider?.source === 'db') {
+      if (hasStoredValue(settings?.default_ci_provider)) {
         keys.push('default_ci_provider')
       }
       if (keys.length > 0) {
@@ -121,8 +122,7 @@ export function VcsCiCard({ settings, disabled }: VcsCiCardProps) {
   }
 
   const hasDbSettings =
-    settings?.default_vcs_provider?.source === 'db' ||
-    settings?.default_ci_provider?.source === 'db'
+    hasStoredValue(settings?.default_vcs_provider) || hasStoredValue(settings?.default_ci_provider)
 
   return (
     <Card>

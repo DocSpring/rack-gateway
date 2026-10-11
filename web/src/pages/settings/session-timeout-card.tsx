@@ -3,6 +3,7 @@ import { useState } from 'react'
 import type { SettingsSetting } from '@/api/schemas'
 import {
   getSettingValue,
+  hasStoredValue,
   isSetByEnv,
   SourceIndicator,
 } from '@/components/settings/source-indicator'
@@ -58,7 +59,7 @@ export function SessionTimeoutCard({ settings, disabled }: SessionTimeoutCardPro
   const clearMutation = useMutation({
     mutationFn: async () => {
       const keys: string[] = []
-      if (settings?.session_timeout_minutes?.source === 'db') {
+      if (hasStoredValue(settings?.session_timeout_minutes)) {
         keys.push('session_timeout_minutes')
       }
       if (keys.length > 0) {
@@ -107,7 +108,7 @@ export function SessionTimeoutCard({ settings, disabled }: SessionTimeoutCardPro
     }
   }
 
-  const hasDbSettings = settings?.session_timeout_minutes?.source === 'db'
+  const hasDbSettings = hasStoredValue(settings?.session_timeout_minutes)
 
   return (
     <Card>

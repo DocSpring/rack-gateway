@@ -3,6 +3,7 @@ import { useState } from 'react'
 
 import {
   getSettingValue,
+  hasStoredValue,
   isSetByEnv,
   SourceIndicator,
 } from '@/components/settings/source-indicator'
@@ -94,7 +95,7 @@ export function ServiceImagePatternsCard({
     clearMutation.mutate()
   }
 
-  const hasDbSetting = setting?.source === 'db'
+  const hasDbSetting = hasStoredValue(setting)
 
   return (
     <Card>

@@ -620,7 +620,7 @@ export interface paths {
         post?: never;
         /**
          * Delete multiple app settings
-         * @description Deletes multiple app settings from the database, reverting to env or default values
+         * @description Deletes app settings' database values; their environment variables or defaults apply
          */
         delete: {
             parameters: {
@@ -3809,7 +3809,7 @@ export interface paths {
         post?: never;
         /**
          * Delete multiple global settings
-         * @description Deletes multiple global settings from the database, reverting to env or default values
+         * @description Deletes global settings' database values; their environment variables or defaults apply
          */
         delete: {
             parameters: {
@@ -5272,6 +5272,11 @@ export interface components {
             /** @description e.g., "RGW_SETTING_MFA_REQUIRE_ALL_USERS" */
             env_var?: string;
             source?: components["schemas"]["settings.SettingSource"];
+            /**
+             * @description StoredValueIgnored reports a database value that the environment variable overrides. It has no effect, and
+             *     can be cleared.
+             */
+            stored_value_ignored?: boolean;
             value?: unknown;
         };
         /** @enum {string} */

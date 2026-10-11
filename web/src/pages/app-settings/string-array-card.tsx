@@ -2,6 +2,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import {
   getSettingValue,
+  hasStoredValue,
   isSetByEnv,
   SourceIndicator,
 } from '@/components/settings/source-indicator'
@@ -40,7 +41,10 @@ export function StringArrayCard({
   const setting = settings?.[settingKey]
   const currentValue = getSettingValue<string[] | null>(setting, null) ?? []
 
-  const [items, setItems] = useState<string[]>(currentValue)
+  // Unsaved edits. Until the user edits, the card shows the server's current list, so a refetch that brings a
+  // newer list (changed elsewhere) replaces it instead of leaving a stale copy that Save would write back.
+  const [edits, setEdits] = useState<string[] | null>(null)
+  const items = edits ?? currentValue
 
   const hasChanges =
     items.length !== currentValue.length ||
@@ -53,6 +57,7 @@ export function StringArrayCard({
     },
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ['appSettings', app] })
+      setEdits(null)
       toast.success('Setting updated')
     },
     onError: (error: unknown) => {
@@ -67,7 +72,7 @@ export function StringArrayCard({
     },
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ['appSettings', app] })
-      setItems([])
+      setEdits(null)
       toast.success('Setting cleared')
     },
     onError: (error: unknown) => {
@@ -77,7 +82,7 @@ export function StringArrayCard({
   })
 
   const handleCancel = () => {
-    setItems(currentValue)
+    setEdits(null)
   }
 
   const handleSave = () => {
@@ -88,7 +93,7 @@ export function StringArrayCard({
     clearMutation.mutate()
   }
 
-  const hasDbSetting = setting?.source === 'db'
+  const hasDbSetting = hasStoredValue(setting)
 
   return (
     <Card>
@@ -101,7 +106,7 @@ export function StringArrayCard({
         <div className="space-y-2">
           <StringArrayInput
             disabled={disabled || isSetByEnv(setting)}
-            onChange={setItems}
+            onChange={setEdits}
             placeholder={placeholder ?? 'Enter value'}
             value={items}
           />
