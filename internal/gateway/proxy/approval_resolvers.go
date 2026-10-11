@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -171,6 +172,12 @@ func (h *Handler) findApprovalForBuildCreate(
 	tokenID int64,
 	app string,
 ) (*db.DeployApprovalRequest, error) {
+	// A build import uploads an exported build rather than building an approved archive, so no approval covers
+	// it. Its body is an archive, which the gateway never reads.
+	if isArchiveUpload(r, rbac.NormalizeRackPath(r.URL.Path)) {
+		_, _, denyErr := deny()
+		return nil, denyErr
+	}
 	objectURL, err := buildRequestObjectURL(r)
 	if err != nil {
 		return nil, err
@@ -199,9 +206,12 @@ func buildRequestObjectURL(r *http.Request) (string, error) {
 	if r.Body == nil {
 		return "", nil
 	}
-	body, err := io.ReadAll(r.Body)
+	body, err := readBufferedBody(r)
+	if errors.Is(err, errBodyTooLarge) {
+		return "", &deployApprovalError{status: http.StatusRequestEntityTooLarge, message: err.Error()}
+	}
 	if err != nil {
-		return "", fmt.Errorf("failed to read build request: %w", err)
+		return "", err
 	}
 	r.Body = io.NopCloser(bytes.NewReader(body))
 	vals, err := url.ParseQuery(string(body))

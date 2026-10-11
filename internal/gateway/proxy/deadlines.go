@@ -20,12 +20,12 @@ const (
 
 // extendDeadlines lifts the server-wide read and write timeouts for the requests that legitimately take longer:
 // a promote, whose response can take minutes (the rack applies the whole release first), and an archive upload
-// (a build's source, or an exported build), which the gateway reads in full from the client and then sends to the
-// rack. Without this the gateway
-// would fail to read the upload, or would wait for the rack's response and then fail to write it, and the client
-// would see the connection close (a 502 behind a proxy) while the promote had succeeded. The server starts the
-// write deadline when it reads the request's headers, so for an upload it covers reading the archive too. Other
-// requests keep the defaults.
+// (a build's source, or an exported build), which the gateway streams from the client to the rack as it arrives.
+// Without this the gateway would fail to read the upload, or would wait for the rack's response and then fail to
+// write it, and the client would see the connection close (a 502 behind a proxy) while the promote had succeeded.
+// The server starts the write deadline when it reads the request's headers, so for an upload it covers reading the
+// archive too; reading it overlaps with sending it to the rack, so the longer of the two timeouts covers both.
+// Other requests keep the defaults.
 func extendDeadlines(w http.ResponseWriter, r *http.Request, rackPath string) {
 	controller := http.NewResponseController(w)
 	path := "/" + strings.TrimLeft(rackPath, "/")
@@ -40,7 +40,7 @@ func extendDeadlines(w http.ResponseWriter, r *http.Request, rackPath string) {
 	if readTimeout == 0 && timeout <= defaultForwardTimeout {
 		return
 	}
-	if err := controller.SetWriteDeadline(time.Now().Add(readTimeout + timeout + deadlineMargin)); err != nil {
+	if err := controller.SetWriteDeadline(time.Now().Add(max(readTimeout, timeout) + deadlineMargin)); err != nil {
 		gtwlog.Warnf("proxy: can't extend the write deadline for %s %s: %v", r.Method, path, err)
 	}
 }

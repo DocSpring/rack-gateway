@@ -248,6 +248,10 @@ Every service must use a pre-built image tagged with the full approved commit (`
 The gateway replaces `{{GIT_COMMIT}}` with the approved commit (regex-escaped) and requires each image to match
 its pattern exactly. The commit always comes from the approval, never from the client.
 
+The gateway reads the manifest from the uploaded archive as it streams from the rack, without holding the archive
+in memory. It refuses an archive that contains the manifest more than once, because the rack writes each copy over the
+one before. An archive may have at most 10,000 entries, 10 MB per file and 100 MB of files in total.
+
 ### What Gets Tracked
 
 After successful build:

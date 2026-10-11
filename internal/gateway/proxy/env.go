@@ -119,16 +119,9 @@ func readAndParseRequestBody(r *http.Request) ([]byte, url.Values, error) {
 			return nil, nil, fmt.Errorf("release requests must be form-encoded, got %q", contentType)
 		}
 	}
-	var bodyBuf []byte
-	if r.Body != nil {
-		var err error
-		bodyBuf, err = io.ReadAll(r.Body)
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to read request body: %w", err)
-		}
-		if err := r.Body.Close(); err != nil {
-			return nil, nil, fmt.Errorf("failed to close request body: %w", err)
-		}
+	bodyBuf, err := readBufferedBody(r)
+	if err != nil {
+		return nil, nil, err
 	}
 	vals, err := url.ParseQuery(string(bodyBuf))
 	if err != nil {

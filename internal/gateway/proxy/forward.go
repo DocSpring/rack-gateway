@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"log"
@@ -248,8 +249,8 @@ const (
 	// minutes each while deploys hard-failed).
 	promoteForwardTimeout = 10 * time.Minute
 
-	// uploadForwardTimeout gives an archive room to reach the rack: the gateway sends the whole archive before the
-	// rack answers.
+	// uploadForwardTimeout gives an archive room to reach the rack: the gateway streams it from the client as it
+	// arrives, and the rack answers once it has the whole archive.
 	uploadForwardTimeout = 10 * time.Minute
 )
 
@@ -307,12 +308,8 @@ func (h *Handler) forwardRequest(
 		return h.proxyWebSocket(w, r, rack, targetURL, authUser, path)
 	}
 
-	bodyBytes, err := readRequestBody(r)
+	body, err := h.requestBodyForRack(r, path, authUser)
 	if err != nil {
-		return 0, err
-	}
-
-	if err := h.validateBuildRequest(r, path, bodyBytes, authUser); err != nil {
 		return 0, err
 	}
 
@@ -320,7 +317,7 @@ func (h *Handler) forwardRequest(
 		return 0, err
 	}
 
-	proxyReq, err := prepareProxyRequest(r, targetURL, bodyBytes, rack, authUser)
+	proxyReq, err := prepareProxyRequest(r, targetURL, body, rack, authUser)
 	if err != nil {
 		return 0, err
 	}
@@ -341,4 +338,25 @@ func (h *Handler) forwardRequest(
 	defer resp.Body.Close() //nolint:errcheck,gosec // G104: cleanup
 
 	return h.processProxyResponse(w, r, resp, path, authUser.Email)
+}
+
+// requestBodyForRack returns the body to send to the rack. An archive upload streams straight through as it
+// arrives: the gateway doesn't inspect it (a source archive's manifest is checked when a build is created from it),
+// and an archive can be far larger than the gateway should hold in memory. Every other body is read, within
+// maxBufferedBodyBytes, so the gateway can check it.
+func (h *Handler) requestBodyForRack(r *http.Request, path string, authUser *auth.User) (rackRequestBody, error) {
+	if isArchiveUpload(r, path) {
+		return rackRequestBody{reader: r.Body, length: r.ContentLength}, nil
+	}
+
+	bodyBytes, err := readBufferedBody(r)
+	if err != nil {
+		return rackRequestBody{}, err
+	}
+
+	if err := h.validateBuildRequest(r, path, bodyBytes, authUser); err != nil {
+		return rackRequestBody{}, err
+	}
+
+	return rackRequestBody{reader: bytes.NewReader(bodyBytes), length: int64(len(bodyBytes))}, nil
 }
