@@ -6,12 +6,14 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
+	"github.com/DocSpring/rack-gateway/internal/gateway/jobs/deployapprovals"
 	gtwlog "github.com/DocSpring/rack-gateway/internal/gateway/logging"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 )
@@ -90,7 +92,7 @@ func (h *APIHandler) CreateDeployApprovalRequest(c *gin.Context) {
 		return
 	}
 
-	h.postPRCommentAsync(c, app, prURL, record.PublicID)
+	h.postPRCommentAsync(c, app, prURL, record.PublicID, record.GitCommitHash)
 	c.JSON(http.StatusCreated, toDeployApprovalRequestResponse(record))
 }
 
@@ -247,6 +249,13 @@ func (h *APIHandler) createApprovalRecord(
 	createdByAPITokenID *int64,
 	tokenID int64,
 ) (*db.DeployApprovalRequest, bool) {
+	// An approval past its window (or a stale pending request) no longer counts as open, so expire them first:
+	// otherwise one could block this request.
+	if err := h.expireDeployApprovals(); err != nil {
+		gtwlog.Errorf("deploy approvals: expiry sweep before create failed: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create deploy approval request"})
+		return nil, false
+	}
 	record, err := h.database.CreateDeployApprovalRequest(
 		message,
 		app,
@@ -310,5 +319,16 @@ func (h *APIHandler) logApprovalCreation(
 		Status:       audit.StatusSuccess,
 		RBACDecision: "allow",
 		HTTPStatus:   http.StatusCreated,
+	})
+}
+
+// expireDeployApprovals runs the expiry sweep, as the periodic job does.
+func (h *APIHandler) expireDeployApprovals() error {
+	var pendingMaxAge time.Duration
+	if h.config != nil {
+		pendingMaxAge = h.config.DeployApprovalPendingMaxAge
+	}
+	return deployapprovals.Expire(h.database, pendingMaxAge, func(al *db.AuditLog) error {
+		return audit.LogDB(h.database, al)
 	})
 }

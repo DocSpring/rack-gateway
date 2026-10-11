@@ -58,13 +58,16 @@ func TestOpenDeployApprovalRequestsAreUniquePerApp(t *testing.T) {
 	require.Equal(t, docspring.ID, conflict.Request.ID)
 }
 
-// An approval past its window is expired and no longer blocks a new request for the same app.
+// Once the sweep expires an approval past its window, it no longer blocks a new request for the same app. (The
+// create handler runs the sweep first.)
 func TestExpiredApprovalDoesNotBlockNewRequest(t *testing.T) {
 	database, userID, tokenID := newApprovalTestFixture(t)
 
 	stale, err := createApproval(t, database, userID, tokenID, "docspring")
 	require.NoError(t, err)
 	_, err = database.ApproveDeployApprovalRequest(stale.ID, userID, time.Now().Add(-time.Minute), "")
+	require.NoError(t, err)
+	_, err = database.ExpireDeployApprovalRequests(0)
 	require.NoError(t, err)
 
 	fresh, err := createApproval(t, database, userID, tokenID, "docspring")
@@ -79,7 +82,6 @@ func TestExpiredApprovalDoesNotBlockNewRequest(t *testing.T) {
 func TestExpireDeployApprovalRequestsOnlyExpiresPastWindows(t *testing.T) {
 	database, userID, tokenID := newApprovalTestFixture(t)
 
-	// Create both first: creating a request also runs the expiry sweep.
 	stale, err := createApproval(t, database, userID, tokenID, "docspring")
 	require.NoError(t, err)
 	live, err := createApproval(t, database, userID, tokenID, "api-proxy")
@@ -89,9 +91,13 @@ func TestExpireDeployApprovalRequestsOnlyExpiresPastWindows(t *testing.T) {
 	_, err = database.ApproveDeployApprovalRequest(live.ID, userID, time.Now().Add(time.Hour), "")
 	require.NoError(t, err)
 
-	expired, err := database.ExpireDeployApprovalRequests()
+	expired, err := database.ExpireDeployApprovalRequests(0)
 	require.NoError(t, err)
-	require.EqualValues(t, 1, expired)
+	require.Len(t, expired, 1)
+	require.Equal(t, gwdb.ExpiredDeployApproval{
+		ID: stale.ID, PublicID: stale.PublicID, App: "docspring", GitCommitHash: stale.GitCommitHash,
+		PreviousStatus: gwdb.DeployApprovalRequestStatusApproved,
+	}, expired[0])
 
 	for id, want := range map[int64]string{
 		stale.ID: gwdb.DeployApprovalRequestStatusExpired,
@@ -111,7 +117,7 @@ func TestExtendRevivesExpiredApprovalUnlessAnotherIsOpen(t *testing.T) {
 	require.NoError(t, err)
 	_, err = database.ApproveDeployApprovalRequest(lapsed.ID, userID, time.Now().Add(-time.Minute), "")
 	require.NoError(t, err)
-	_, err = database.ExpireDeployApprovalRequests()
+	_, err = database.ExpireDeployApprovalRequests(0)
 	require.NoError(t, err)
 	extended, err := database.ExtendDeployApprovalRequestExpiry(lapsed.PublicID, time.Now().Add(time.Hour))
 	require.NoError(t, err)
@@ -122,7 +128,9 @@ func TestExtendRevivesExpiredApprovalUnlessAnotherIsOpen(t *testing.T) {
 	require.NoError(t, err)
 	_, err = database.ApproveDeployApprovalRequest(old.ID, userID, time.Now().Add(-time.Minute), "")
 	require.NoError(t, err)
-	_, err = createApproval(t, database, userID, tokenID, "docspring") // expires the old one first
+	_, err = database.ExpireDeployApprovalRequests(0)
+	require.NoError(t, err)
+	_, err = createApproval(t, database, userID, tokenID, "docspring")
 	require.NoError(t, err)
 	_, err = database.ExtendDeployApprovalRequestExpiry(old.PublicID, time.Now().Add(time.Hour))
 	require.ErrorIs(t, err, gwdb.ErrDeployApprovalRequestActive)
@@ -143,11 +151,53 @@ func TestApprovalExpiredDuringPromoteIsMarkedDeployed(t *testing.T) {
 
 	// The window lapses while the promote runs.
 	require.NoError(t, database.SetDeployApprovalExpiryForTest(approval.ID, time.Now().Add(-time.Second)))
-	_, err = database.ExpireDeployApprovalRequests()
+	_, err = database.ExpireDeployApprovalRequests(0)
 	require.NoError(t, err)
 
 	require.NoError(t, database.MarkDeployApprovalAsDeployed(approval.ID))
 	reloaded, err := database.GetDeployApprovalRequest(approval.ID)
 	require.NoError(t, err)
 	require.Equal(t, gwdb.DeployApprovalRequestStatusDeployed, reloaded.Status)
+}
+
+// Pending requests older than the max age expire; newer ones and approvals inside their window don't.
+func TestExpireDeployApprovalRequestsExpiresOldPendingRequests(t *testing.T) {
+	database, userID, tokenID := newApprovalTestFixture(t)
+
+	old, err := createApproval(t, database, userID, tokenID, "docspring")
+	require.NoError(t, err)
+	fresh, err := createApproval(t, database, userID, tokenID, "api-proxy")
+	require.NoError(t, err)
+	require.NoError(t, database.SetDeployApprovalCreatedAtForTest(old.ID, time.Now().Add(-8*24*time.Hour)))
+
+	none, err := database.ExpireDeployApprovalRequests(0)
+	require.NoError(t, err)
+	require.Empty(t, none, "pending requests never expire without a max age")
+
+	expired, err := database.ExpireDeployApprovalRequests(7 * 24 * time.Hour)
+	require.NoError(t, err)
+	require.Len(t, expired, 1)
+	require.Equal(t, old.ID, expired[0].ID)
+	require.Equal(t, gwdb.DeployApprovalRequestStatusPending, expired[0].PreviousStatus)
+
+	reloaded, err := database.GetDeployApprovalRequest(fresh.ID)
+	require.NoError(t, err)
+	require.Equal(t, gwdb.DeployApprovalRequestStatusPending, reloaded.Status)
+}
+
+// Extend only revives approvals: a request that expired while pending was never approved.
+func TestExtendRefusesExpiredPendingRequest(t *testing.T) {
+	database, userID, tokenID := newApprovalTestFixture(t)
+
+	pending, err := createApproval(t, database, userID, tokenID, "docspring")
+	require.NoError(t, err)
+	require.NoError(t, database.SetDeployApprovalCreatedAtForTest(pending.ID, time.Now().Add(-8*24*time.Hour)))
+	_, err = database.ExpireDeployApprovalRequests(7 * 24 * time.Hour)
+	require.NoError(t, err)
+
+	_, err = database.ExtendDeployApprovalRequestExpiry(pending.PublicID, time.Now().Add(time.Hour))
+	require.ErrorIs(t, err, gwdb.ErrDeployApprovalRequestNotFound)
+	reloaded, err := database.GetDeployApprovalRequest(pending.ID)
+	require.NoError(t, err)
+	require.Equal(t, gwdb.DeployApprovalRequestStatusExpired, reloaded.Status)
 }

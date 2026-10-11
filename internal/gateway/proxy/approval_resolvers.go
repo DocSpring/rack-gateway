@@ -110,24 +110,57 @@ func (h *Handler) approvalResolverFor(resource rbac.Resource, action rbac.Action
 	return table[key]
 }
 
+// findApprovalForObjectCreate selects the approval an archive upload belongs to. The upload doesn't say which
+// commit it's for, so it binds to the newest open approval, and only when no other open approval is waiting for an
+// upload. It's refused when the newest already has its archive: uploads happen once per approval (unlike builds,
+// which can fail and retry), and the upload is most likely a retry of that deploy.
 func (h *Handler) findApprovalForObjectCreate(
 	tokenID int64,
 	app string,
 ) (*db.DeployApprovalRequest, error) {
-	req, err := h.database.FindDeployApprovalRequest(db.DeployApprovalLookup{
+	open, err := h.database.ListDeployApprovalRequests(db.DeployApprovalRequestListOptions{
 		TokenID:      tokenID,
 		App:          app,
-		StatusFilter: "approved",
+		OnlyApproved: true,
 	})
-	// Fail if object_url is already set - this means an object was already uploaded for this approval.
-	// Object uploads should only happen once per approval (unlike builds, which can fail and retry).
-	if err == nil && req != nil && req.ObjectURL != "" {
+	if err != nil {
+		return nil, err
+	}
+	if len(open) == 0 {
+		return nil, db.ErrDeployApprovalRequestNotFound
+	}
+	newest := open[0]
+	if newest.ObjectURL != "" {
 		return nil, &deployApprovalError{
-			status:  http.StatusConflict,
-			message: "an archive has already been uploaded for this deploy approval request",
+			status: http.StatusConflict,
+			message: fmt.Sprintf("an archive has already been uploaded for the newest deploy approval request "+
+				"for %s (commit %s)", app, shortCommit(newest.GitCommitHash)),
 		}
 	}
-	return req, err
+	var waiting []string
+	for _, req := range open {
+		if req.ObjectURL == "" {
+			waiting = append(waiting, shortCommit(req.GitCommitHash))
+		}
+	}
+	if len(waiting) > 1 {
+		return nil, &deployApprovalError{
+			status: http.StatusConflict,
+			message: fmt.Sprintf(
+				"%d approved deploy requests for %s are waiting for an upload (commits %s), so this upload is "+
+					"ambiguous; reject the ones that aren't being deployed",
+				len(waiting), app, strings.Join(waiting, ", "),
+			),
+		}
+	}
+	return newest, nil
+}
+
+func shortCommit(hash string) string {
+	if len(hash) > 7 {
+		return hash[:7]
+	}
+	return hash
 }
 
 // findApprovalForBuildCreate selects the approval whose uploaded archive this build uses.

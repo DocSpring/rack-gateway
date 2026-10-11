@@ -1,7 +1,12 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import type { SettingsSetting } from '@/api/schemas'
-import { getSettingValue, SourceIndicator } from '@/components/settings/source-indicator'
+import {
+  getSettingValue,
+  hasStoredValue,
+  isSetByEnv,
+  SourceIndicator,
+} from '@/components/settings/source-indicator'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -54,7 +59,7 @@ export function SessionTimeoutCard({ settings, disabled }: SessionTimeoutCardPro
   const clearMutation = useMutation({
     mutationFn: async () => {
       const keys: string[] = []
-      if (settings?.session_timeout_minutes?.source === 'db') {
+      if (hasStoredValue(settings?.session_timeout_minutes)) {
         keys.push('session_timeout_minutes')
       }
       if (keys.length > 0) {
@@ -103,7 +108,7 @@ export function SessionTimeoutCard({ settings, disabled }: SessionTimeoutCardPro
     }
   }
 
-  const hasDbSettings = settings?.session_timeout_minutes?.source === 'db'
+  const hasDbSettings = hasStoredValue(settings?.session_timeout_minutes)
 
   return (
     <Card>
@@ -121,7 +126,7 @@ export function SessionTimeoutCard({ settings, disabled }: SessionTimeoutCardPro
           <div className="flex items-center gap-2">
             <Input
               className="w-24"
-              disabled={disabled}
+              disabled={disabled || isSetByEnv(settings?.session_timeout_minutes)}
               id="session-timeout"
               min={1}
               onChange={(event) => {

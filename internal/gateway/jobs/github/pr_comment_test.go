@@ -29,6 +29,6 @@ func TestPostPRCommentArgs_DoNotContainToken(t *testing.T) {
 
 // Test NewPostPRCommentWorker
 func TestNewPostPRCommentWorker(t *testing.T) {
-	worker := NewPostPRCommentWorker("token")
+	worker := NewPostPRCommentWorker("token", "")
 	require.NotNil(t, worker)
 }

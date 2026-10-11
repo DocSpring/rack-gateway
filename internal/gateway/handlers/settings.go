@@ -105,6 +105,7 @@ func (h *SettingsHandler) GetGlobalSetting(c *gin.Context) {
 // @Param settings body map[string]interface{} true "Map of setting keys to values"
 // @Success 200 {object} map[string]settings.Setting
 // @Failure 400 {object} ErrorResponse
+// @Failure 409 {object} ErrorResponse
 // @Failure 404 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
 // @Security SessionCookie
@@ -149,7 +150,7 @@ func (h *SettingsHandler) updateGlobalSettingsWithKeys(c *gin.Context, allowedKe
 
 // DeleteGlobalSettings godoc
 // @Summary Delete multiple global settings
-// @Description Deletes multiple global settings from the database, reverting to env or default values
+// @Description Deletes global settings' database values; their environment variables or defaults apply
 // @Tags Settings
 // @Produce json
 // @Param key query []string true "Setting keys to delete"
@@ -233,6 +234,7 @@ func (h *SettingsHandler) GetAllAppSettings(c *gin.Context) {
 // @Param settings body map[string]interface{} true "Map of setting keys to values"
 // @Success 200 {object} map[string]settings.Setting
 // @Failure 400 {object} ErrorResponse
+// @Failure 409 {object} ErrorResponse
 // @Failure 404 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
 // @Security SessionCookie
@@ -258,7 +260,7 @@ func (h *SettingsHandler) updateAppSettingsWithKeys(c *gin.Context, allowedKeys 
 
 // DeleteAppSettings godoc
 // @Summary Delete multiple app settings
-// @Description Deletes multiple app settings from the database, reverting to env or default values
+// @Description Deletes app settings' database values; their environment variables or defaults apply
 // @Tags Settings
 // @Produce json
 // @Param app path string true "App name"
@@ -346,6 +348,7 @@ func (h *SettingsHandler) deleteAppSettingValue(c *gin.Context, key string) {
 // @Param body body []string true "Protected environment variable names"
 // @Success 200 {object} map[string]settings.Setting
 // @Failure 400 {object} ErrorResponse
+// @Failure 409 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
 // @Security SessionCookie
 // @Security CSRFToken
@@ -380,6 +383,7 @@ func (h *SettingsHandler) DeleteAppProtectedEnvVars(c *gin.Context) {
 // @Param body body []string true "Secret environment variable names"
 // @Success 200 {object} map[string]settings.Setting
 // @Failure 400 {object} ErrorResponse
+// @Failure 409 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
 // @Security SessionCookie
 // @Security CSRFToken
@@ -414,6 +418,7 @@ func (h *SettingsHandler) DeleteAppSecretEnvVars(c *gin.Context) {
 // @Param body body []string true "Approved command list"
 // @Success 200 {object} map[string]settings.Setting
 // @Failure 400 {object} ErrorResponse
+// @Failure 409 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
 // @Security SessionCookie
 // @Security CSRFToken
@@ -448,6 +453,7 @@ func (h *SettingsHandler) DeleteAppApprovedDeployCommands(c *gin.Context) {
 // @Param body body map[string]string true "Service image patterns"
 // @Success 200 {object} map[string]settings.Setting
 // @Failure 400 {object} ErrorResponse
+// @Failure 409 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
 // @Security SessionCookie
 // @Security CSRFToken

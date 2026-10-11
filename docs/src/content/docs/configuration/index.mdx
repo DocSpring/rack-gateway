@@ -133,7 +133,7 @@ Some settings can be configured via the web admin UI and stored in the database:
 | Step-up window | `RGW_SETTING_MFA_STEP_UP_WINDOW_MINUTES` | `mfa_step_up_window_minutes` |
 | Trusted device TTL | `RGW_SETTING_MFA_TRUSTED_DEVICE_TTL_DAYS` | `mfa_trusted_device_ttl_days` |
 
-**Precedence**: Database values take priority over environment variables when set.
+**Precedence**: An environment variable takes priority over the database, and makes the setting read-only in the UI.
 
 ## Next Steps
 

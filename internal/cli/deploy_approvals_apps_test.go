@@ -109,7 +109,7 @@ func TestWaitWaitsForEveryListedAppOnEveryRack(t *testing.T) {
 	done, err := waiter.pollNextRack()
 	require.NoError(t, err)
 	require.False(t, done, "api-proxy's request hasn't appeared yet")
-	require.Equal(t, "p-docspring", waiter.handled["staging"]["docspring"])
+	require.Equal(t, "p-docspring", waiter.handled["staging"]["docspring"].PublicID)
 }
 
 // Once promote marks requests deployed, an app that already deployed for the commit counts as done.

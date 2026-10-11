@@ -1,7 +1,12 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import type { SettingsSetting } from '@/api/schemas'
-import { getSettingValue, SourceIndicator } from '@/components/settings/source-indicator'
+import {
+  getSettingValue,
+  hasStoredValue,
+  isSetByEnv,
+  SourceIndicator,
+} from '@/components/settings/source-indicator'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -70,13 +75,13 @@ export function MfaConfigCard({ settings, disabled }: MfaConfigCardProps) {
   const clearMutation = useMutation({
     mutationFn: async () => {
       const keys: string[] = []
-      if (settings?.mfa_require_all_users?.source === 'db') {
+      if (hasStoredValue(settings?.mfa_require_all_users)) {
         keys.push('mfa_require_all_users')
       }
-      if (settings?.mfa_trusted_device_ttl_days?.source === 'db') {
+      if (hasStoredValue(settings?.mfa_trusted_device_ttl_days)) {
         keys.push('mfa_trusted_device_ttl_days')
       }
-      if (settings?.mfa_step_up_window_minutes?.source === 'db') {
+      if (hasStoredValue(settings?.mfa_step_up_window_minutes)) {
         keys.push('mfa_step_up_window_minutes')
       }
       if (keys.length > 0) {
@@ -130,9 +135,9 @@ export function MfaConfigCard({ settings, disabled }: MfaConfigCardProps) {
   }
 
   const hasDbSettings =
-    settings?.mfa_require_all_users?.source === 'db' ||
-    settings?.mfa_trusted_device_ttl_days?.source === 'db' ||
-    settings?.mfa_step_up_window_minutes?.source === 'db'
+    hasStoredValue(settings?.mfa_require_all_users) ||
+    hasStoredValue(settings?.mfa_trusted_device_ttl_days) ||
+    hasStoredValue(settings?.mfa_step_up_window_minutes)
 
   return (
     <Card>
@@ -148,7 +153,7 @@ export function MfaConfigCard({ settings, disabled }: MfaConfigCardProps) {
         <label className="flex items-center gap-3">
           <input
             checked={displayRequireMfa}
-            disabled={disabled}
+            disabled={disabled || isSetByEnv(settings?.mfa_require_all_users)}
             onChange={(event) => setRequireMfa(event.target.checked)}
             type="checkbox"
           />
@@ -161,7 +166,7 @@ export function MfaConfigCard({ settings, disabled }: MfaConfigCardProps) {
             <Label htmlFor="trusted-device-ttl">Trusted Device TTL (days)</Label>
             <div className="flex items-center gap-2">
               <Input
-                disabled={disabled}
+                disabled={disabled || isSetByEnv(settings?.mfa_trusted_device_ttl_days)}
                 id="trusted-device-ttl"
                 min={1}
                 onChange={(event) => {
@@ -186,7 +191,7 @@ export function MfaConfigCard({ settings, disabled }: MfaConfigCardProps) {
             <Label htmlFor="step-up-window">Step-Up Window (minutes)</Label>
             <div className="flex items-center gap-2">
               <Input
-                disabled={disabled}
+                disabled={disabled || isSetByEnv(settings?.mfa_step_up_window_minutes)}
                 id="step-up-window"
                 min={1}
                 onChange={(event) => {

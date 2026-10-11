@@ -13,6 +13,9 @@ func (d *Database) GetDeployApprovalRequest(id int64) (*DeployApprovalRequest, e
 
 // GetDeployApprovalRequestByPublicID retrieves a deploy approval request by its public ID
 func (d *Database) GetDeployApprovalRequestByPublicID(publicID string) (*DeployApprovalRequest, error) {
+	if !isPublicID(publicID) {
+		return nil, ErrDeployApprovalRequestNotFound
+	}
 	row := d.queryRow(deployApprovalRequestSelect+" WHERE dr.public_id = ?", publicID)
 	return scanDeployApprovalRequest(row)
 }
@@ -93,6 +96,8 @@ type DeployApprovalRequestListOptions struct {
 	GitBranch     string
 	GitCommitHash string
 	App           string
+	// OnlyApproved limits the list to approved, unexpired requests.
+	OnlyApproved bool
 }
 
 // ListDeployApprovalRequests returns a paginated list of deploy approval requests matching the given options
@@ -107,6 +112,10 @@ func (d *Database) ListDeployApprovalRequests(opts DeployApprovalRequestListOpti
 	} else if opts.Status != "" {
 		clauses = append(clauses, "dr.status = ?")
 		args = append(args, opts.Status)
+	}
+	if opts.OnlyApproved {
+		clauses = append(clauses, "dr.status = 'approved'",
+			"(dr.approval_expires_at IS NULL OR dr.approval_expires_at > NOW())")
 	}
 	if opts.TokenID > 0 {
 		clauses = append(clauses, "dr.target_api_token_id = ?")
@@ -132,7 +141,7 @@ func (d *Database) ListDeployApprovalRequests(opts DeployApprovalRequestListOpti
 	query := deployApprovalRequestSelect + " WHERE " + strings.Join(
 		clauses,
 		" AND ",
-	) + " ORDER BY dr.created_at DESC LIMIT ? OFFSET ?"
+	) + " ORDER BY dr.created_at DESC, dr.id DESC LIMIT ? OFFSET ?"
 	args = append(args, limit, opts.Offset)
 
 	rows, err := d.query(query, args...)

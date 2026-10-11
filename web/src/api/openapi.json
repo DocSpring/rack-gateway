@@ -677,6 +677,16 @@
                             }
                         }
                     },
+                    "409": {
+                        "description": "Conflict",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
+                                }
+                            }
+                        }
+                    },
                     "500": {
                         "description": "Internal Server Error",
                         "content": {
@@ -698,7 +708,7 @@
                         "CSRFToken": []
                     }
                 ],
-                "description": "Deletes multiple app settings from the database, reverting to env or default values",
+                "description": "Deletes app settings' database values; their environment variables or defaults apply",
                 "tags": [
                     "Settings"
                 ],
@@ -831,6 +841,16 @@
                     },
                     "400": {
                         "description": "Bad Request",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -977,6 +997,16 @@
                             }
                         }
                     },
+                    "409": {
+                        "description": "Conflict",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
+                                }
+                            }
+                        }
+                    },
                     "500": {
                         "description": "Internal Server Error",
                         "content": {
@@ -1115,6 +1145,16 @@
                             }
                         }
                     },
+                    "409": {
+                        "description": "Conflict",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
+                                }
+                            }
+                        }
+                    },
                     "500": {
                         "description": "Internal Server Error",
                         "content": {
@@ -1245,6 +1285,16 @@
                     },
                     "400": {
                         "description": "Bad Request",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -3890,6 +3940,16 @@
                             }
                         }
                     },
+                    "409": {
+                        "description": "Conflict",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
+                                }
+                            }
+                        }
+                    },
                     "500": {
                         "description": "Internal Server Error",
                         "content": {
@@ -3911,7 +3971,7 @@
                         "CSRFToken": []
                     }
                 ],
-                "description": "Deletes multiple global settings from the database, reverting to env or default values",
+                "description": "Deletes global settings' database values; their environment variables or defaults apply",
                 "tags": [
                     "Settings"
                 ],
@@ -6663,11 +6723,15 @@
                 "type": "object",
                 "properties": {
                     "env_var": {
-                        "description": "e.g., \"RGW_SETTING_REQUIRE_MFA_ALL_USERS\"",
+                        "description": "e.g., \"RGW_SETTING_MFA_REQUIRE_ALL_USERS\"",
                         "type": "string"
                     },
                     "source": {
                         "$ref": "#/components/schemas/settings.SettingSource"
+                    },
+                    "stored_value_ignored": {
+                        "description": "StoredValueIgnored reports a database value that the environment variable overrides. It has no effect, and\ncan be cleared.",
+                        "type": "boolean"
                     },
                     "value": {}
                 }

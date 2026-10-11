@@ -1,7 +1,12 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import type { SettingsSetting } from '@/api/schemas'
-import { getSettingValue, SourceIndicator } from '@/components/settings/source-indicator'
+import {
+  getSettingValue,
+  hasStoredValue,
+  isSetByEnv,
+  SourceIndicator,
+} from '@/components/settings/source-indicator'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
@@ -62,10 +67,10 @@ export function VcsCiCard({ settings, disabled }: VcsCiCardProps) {
   const clearMutation = useMutation({
     mutationFn: async () => {
       const keys: string[] = []
-      if (settings?.default_vcs_provider?.source === 'db') {
+      if (hasStoredValue(settings?.default_vcs_provider)) {
         keys.push('default_vcs_provider')
       }
-      if (settings?.default_ci_provider?.source === 'db') {
+      if (hasStoredValue(settings?.default_ci_provider)) {
         keys.push('default_ci_provider')
       }
       if (keys.length > 0) {
@@ -117,8 +122,7 @@ export function VcsCiCard({ settings, disabled }: VcsCiCardProps) {
   }
 
   const hasDbSettings =
-    settings?.default_vcs_provider?.source === 'db' ||
-    settings?.default_ci_provider?.source === 'db'
+    hasStoredValue(settings?.default_vcs_provider) || hasStoredValue(settings?.default_ci_provider)
 
   return (
     <Card>
@@ -137,7 +141,7 @@ export function VcsCiCard({ settings, disabled }: VcsCiCardProps) {
             <div className="flex items-center gap-2">
               <select
                 className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                disabled={disabled}
+                disabled={disabled || isSetByEnv(settings?.default_vcs_provider)}
                 id="vcs-provider"
                 onChange={(event) => setVcsProvider(event.target.value || null)}
                 value={displayVcsProvider}
@@ -153,7 +157,7 @@ export function VcsCiCard({ settings, disabled }: VcsCiCardProps) {
             <div className="flex items-center gap-2">
               <select
                 className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                disabled={disabled}
+                disabled={disabled || isSetByEnv(settings?.default_ci_provider)}
                 id="ci-provider"
                 onChange={(event) => setCiProvider(event.target.value || null)}
                 value={displayCiProvider}
