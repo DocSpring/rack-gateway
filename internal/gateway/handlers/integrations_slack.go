@@ -260,7 +260,8 @@ func (h *AdminHandler) TestSlackNotificationHandler(c *gin.Context) {
 	}
 
 	gtwlog.Infof("slack test notification: sending test message to channel %s", req.ChannelID)
-	err := client.PostMessage(req.ChannelID, "🧪 Test notification from Rack Gateway", nil)
+	text := slack.IdentifyText(h.config.GatewayIdentity(), "🧪 Test notification")
+	err := client.PostMessage(req.ChannelID, text, nil)
 	if err != nil {
 		gtwlog.Errorf("slack test notification: failed to send message: %v", err)
 

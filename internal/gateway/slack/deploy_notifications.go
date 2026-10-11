@@ -12,7 +12,7 @@ import (
 )
 
 // NotifyDeployApprovalCreated sends a rich notification for a new deploy approval request
-func (n *Notifier) NotifyDeployApprovalCreated(req *db.DeployApprovalRequest, gatewayDomain string) error {
+func (n *Notifier) NotifyDeployApprovalCreated(req *db.DeployApprovalRequest) error {
 	// Get Slack integration
 	integration, err := n.database.GetSlackIntegration()
 	if err != nil {
@@ -39,7 +39,7 @@ func (n *Notifier) NotifyDeployApprovalCreated(req *db.DeployApprovalRequest, ga
 	}
 
 	// Format rich message
-	text, blocks := n.formatDeployApprovalAlert(req, gatewayDomain)
+	text, blocks := n.formatDeployApprovalAlert(req)
 
 	// Send to configured channel
 	if err := client.PostMessage(channelID, text, blocks); err != nil {
@@ -51,11 +51,8 @@ func (n *Notifier) NotifyDeployApprovalCreated(req *db.DeployApprovalRequest, ga
 	return nil
 }
 
-// formatDeployApprovalAlert formats a deploy approval request into a rich Slack message
-func (_ *Notifier) formatDeployApprovalAlert(
-	req *db.DeployApprovalRequest,
-	gatewayDomain string,
-) (string, []map[string]interface{}) {
+// formatDeployApprovalAlert formats a deploy approval request into a rich Slack message that names the gateway
+func (n *Notifier) formatDeployApprovalAlert(req *db.DeployApprovalRequest) (string, []map[string]interface{}) {
 	branchText := deployApprovalBranch(req)
 	text := deployApprovalFallbackText(branchText, req.Message)
 
@@ -68,7 +65,7 @@ func (_ *Notifier) formatDeployApprovalAlert(
 		blocks = append(blocks, messageBlock)
 	}
 
-	blocks = append(blocks, deployApprovalLinksBlock(req, gatewayDomain))
+	blocks = append(blocks, deployApprovalLinksBlock(req, n.gateway.URL))
 
 	if contextBlock := deployApprovalContextBlock(req); contextBlock != nil {
 		blocks = append(blocks, contextBlock)
@@ -76,7 +73,7 @@ func (_ *Notifier) formatDeployApprovalAlert(
 
 	blocks = append(blocks, slackDividerBlock())
 
-	return text, blocks
+	return n.identify(text, blocks)
 }
 
 func deployApprovalBranch(req *db.DeployApprovalRequest) string {
@@ -131,13 +128,13 @@ func deployApprovalMessageBlock(req *db.DeployApprovalRequest) map[string]interf
 	}
 }
 
-func deployApprovalLinksBlock(req *db.DeployApprovalRequest, gatewayDomain string) map[string]interface{} {
+func deployApprovalLinksBlock(req *db.DeployApprovalRequest, gatewayURL string) map[string]interface{} {
 	elements := []map[string]interface{}{
 		{
 			"type": "mrkdwn",
 			"text": fmt.Sprintf(
-				"🔗 <https://%s/app/deploy-approval-requests/%s|View Approval Request>",
-				gatewayDomain,
+				"🔗 <%s/app/deploy-approval-requests/%s|View Approval Request>",
+				gatewayURL,
 				req.PublicID,
 			),
 		},
