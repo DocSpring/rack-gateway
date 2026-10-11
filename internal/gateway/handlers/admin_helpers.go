@@ -22,49 +22,11 @@ func (h *AdminHandler) rackDisplay() string {
 	return rackDisplay(h.config)
 }
 
-func (h *AdminHandler) publicBaseURL(c *gin.Context) string {
-	if h != nil && h.config != nil {
-		if url := normalizeConfigDomain(h.config.Domain); url != "" {
-			return url
-		}
-	}
-	if c != nil && c.Request != nil {
-		return buildURLFromRequest(c.Request)
-	}
-	return ""
-}
-
-func normalizeConfigDomain(domain string) string {
-	raw := strings.TrimSpace(domain)
-	if raw == "" {
+func (h *AdminHandler) publicBaseURL() string {
+	if h == nil || h.config == nil {
 		return ""
 	}
-	if strings.HasPrefix(raw, "http://") || strings.HasPrefix(raw, "https://") {
-		return raw
-	}
-	if strings.Contains(raw, "localhost") || strings.Contains(raw, ":") {
-		return "http://" + raw
-	}
-	return "https://" + raw
-}
-
-func buildURLFromRequest(req *http.Request) string {
-	scheme := detectRequestScheme(req)
-	host := strings.TrimSpace(req.Host)
-	if host == "" {
-		return ""
-	}
-	return fmt.Sprintf("%s://%s", scheme, host)
-}
-
-func detectRequestScheme(req *http.Request) string {
-	if proto := strings.TrimSpace(req.Header.Get("X-Forwarded-Proto")); proto != "" {
-		return proto
-	}
-	if req.TLS == nil {
-		return "http"
-	}
-	return "https"
+	return h.config.PublicURL()
 }
 
 // TriggerSentryTest manually sends a test event to Sentry for verification purposes.

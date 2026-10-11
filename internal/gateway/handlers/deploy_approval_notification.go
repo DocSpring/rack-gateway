@@ -89,13 +89,7 @@ func (h *APIHandler) postPRCommentAsync(c *gin.Context, app, prURL, publicID str
 }
 
 func (h *APIHandler) buildApprovalURL(publicID string) string {
-	gatewayURL := h.config.Domain
-	if gatewayURL == "" || gatewayURL == "localhost" {
-		gatewayURL = fmt.Sprintf("http://localhost:%s", h.config.Port)
-	} else {
-		gatewayURL = fmt.Sprintf("https://%s", gatewayURL)
-	}
-	return fmt.Sprintf("%s/app/deploy-approval-requests/%s", gatewayURL, publicID)
+	return fmt.Sprintf("%s/app/deploy-approval-requests/%s", h.config.PublicURL(), publicID)
 }
 
 func (h *APIHandler) enqueueGitHubComment(c *gin.Context, owner, repo string, prNumber int, comment string) {

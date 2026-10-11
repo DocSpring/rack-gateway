@@ -342,6 +342,28 @@ describe('UsersPage', () => {
       // Should not crash; placeholders should render
       expect(screen.getAllByText('\u2014').length).toBeGreaterThan(0)
     })
+
+    it('shows seeded users without a name as not signed in yet', async () => {
+      const users = [
+        {
+          email: 'seeded@example.com',
+          name: '',
+          roles: ['viewer'],
+          created_at: '2024-01-01T00:00:00Z',
+          updated_at: '2024-01-01T00:00:00Z',
+          suspended: false,
+        },
+      ]
+      vi.mocked(api.get).mockResolvedValue(users)
+
+      const Wrapper = createWrapper()
+      render(<UsersPage />, { wrapper: Wrapper })
+
+      await waitFor(() => {
+        expect(screen.getByText('Not signed in yet')).toBeInTheDocument()
+      })
+      expect(screen.getByText('seeded@example.com')).toBeInTheDocument()
+    })
   })
 
   describe('Non-Admin User', () => {

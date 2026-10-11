@@ -180,7 +180,7 @@ func (h *AdminHandler) notifyUserCreated(c *gin.Context, req CreateUserRequest) 
 		inviterEmail = strings.TrimSpace(c.GetString("user_email"))
 	}
 	rack := h.rackDisplay()
-	base := h.publicBaseURL(c)
+	base := h.publicBaseURL()
 	recipient := strings.TrimSpace(req.Email)
 
 	// Enqueue welcome email to new user

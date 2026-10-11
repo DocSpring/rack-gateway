@@ -73,3 +73,38 @@ func TestLoadProductionRequiresAllowedDomain(t *testing.T) {
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "GOOGLE_ALLOWED_DOMAIN is required in production")
 }
+
+func TestLoadProductionRequiresDomain(t *testing.T) {
+	t.Setenv("DEV_MODE", "false")
+	t.Setenv("APP_SECRET_KEY", "secret")
+	t.Setenv("GOOGLE_ALLOWED_DOMAIN", "example.com")
+	t.Setenv("DOMAIN", "")
+
+	cfg, err := Load()
+	assert.Nil(t, cfg)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "DOMAIN is required in production")
+}
+
+func TestPublicURL(t *testing.T) {
+	tests := []struct {
+		name    string
+		domain  string
+		devMode bool
+		want    string
+	}{
+		{name: "production domain", domain: "gateway.example.com", want: "https://gateway.example.com"},
+		{name: "dev localhost", domain: "localhost", devMode: true, want: "http://localhost:8447"},
+		{name: "dev localhost:port", domain: "localhost:9999", devMode: true, want: "http://localhost:8447"},
+		{name: "localhost:port outside dev mode", domain: "localhost:9447", want: "http://localhost:9447"},
+		{name: "bare localhost outside dev mode", domain: "localhost", want: "http://localhost:8447"},
+		{name: "no domain in dev mode", domain: "", devMode: true, want: "http://localhost:8447"},
+		{name: "no domain outside dev mode", domain: "", want: ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &Config{Domain: tt.domain, DevMode: tt.devMode, Port: "8447"}
+			assert.Equal(t, tt.want, cfg.PublicURL())
+		})
+	}
+}

@@ -102,13 +102,10 @@ func (h *Handler) updateObjectURLApprovalTracking(r *http.Request, objectURL str
 		return nil
 	}
 
-	val := r.Context().Value(deployApprovalContextKey)
-	tracker, ok := val.(*deployApprovalTracker)
-	if !ok || tracker == nil || tracker.request == nil {
-		gtwlog.Errorf(
-			"updateObjectURLApprovalTracking: NO TRACKER - object_url will not be saved! objectURL=%s",
-			objectURL,
-		)
+	tracker := getDeployApprovalTracker(r.Context())
+	if tracker == nil || tracker.request == nil {
+		// Not authorized through a deploy approval (e.g. a person's deploy): there's nothing to record.
+		gtwlog.Debugf("updateObjectURLApprovalTracking: no deploy approval for objectURL=%s", objectURL)
 		return nil
 	}
 
@@ -146,12 +143,8 @@ func (h *Handler) updateBuildApprovalTracking(r *http.Request, buildID, releaseI
 	// Use the permission-based tracker which is set by RBAC when permission is granted
 	tracker := getDeployApprovalTracker(r.Context())
 	if tracker == nil || tracker.request == nil {
-		gtwlog.Errorf(
-			"updateBuildApprovalTracking: NO TRACKER - BuildID will not be saved! "+
-				"buildID=%s releaseID=%s",
-			buildID,
-			releaseID,
-		)
+		// Not authorized through a deploy approval (e.g. a person's build): there's nothing to record.
+		gtwlog.Debugf("updateBuildApprovalTracking: no deploy approval for buildID=%s", buildID)
 		return
 	}
 

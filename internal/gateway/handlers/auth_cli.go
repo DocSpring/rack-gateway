@@ -250,6 +250,7 @@ func (h *AuthHandler) cliResolveUser(c *gin.Context, record *db.CLILoginState) (
 		h.failCLILogin(c, record, "unauthorized")
 		return nil, false
 	}
+	h.fillUserName(userRecord, record.LoginName.String)
 	return userRecord, true
 }
 

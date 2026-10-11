@@ -181,7 +181,7 @@ func (a *Service) authenticateFromHeader(r *http.Request) (*User, string, error)
 
 func (a *Service) authenticateBearer(credentials string, r *http.Request) (*User, error) {
 	if strings.HasPrefix(credentials, "rgw_") {
-		return a.validateAPIToken(credentials)
+		return a.validateAPIToken(credentials, r)
 	}
 
 	sessionToken, mfaType, mfaValue := parseInlineMFA(credentials)
@@ -227,7 +227,7 @@ func (_ *Service) applyHeaderMFA(r *http.Request, user *User) {
 	}
 }
 
-func (a *Service) validateAPIToken(tokenString string) (*User, error) {
+func (a *Service) validateAPIToken(tokenString string, r *http.Request) (*User, error) {
 	apiToken, err := a.tokenService.ValidateAPIToken(tokenString)
 	if err != nil {
 		// Audit failed token validation (do not log raw token)
@@ -240,8 +240,8 @@ func (a *Service) validateAPIToken(tokenString string) (*User, error) {
 				ResourceType:   "auth",
 				Resource:       "api_token",
 				Details:        "{\"result\":\"error\"}",
-				IPAddress:      "",
-				UserAgent:      "",
+				IPAddress:      netutil.ClientIP(r),
+				UserAgent:      r.UserAgent(),
 				Status:         "error",
 				ResponseTimeMs: 0,
 			})
@@ -306,7 +306,7 @@ func (a *Service) validateBasicAuth(credentials string, r *http.Request) (*User,
 
 	// authToken may be a session token or API token
 	if strings.HasPrefix(authToken, "rgw_") {
-		user, err = a.validateAPIToken(authToken)
+		user, err = a.validateAPIToken(authToken, r)
 	} else {
 		user, err = a.validateSessionToken(authToken, r)
 	}
