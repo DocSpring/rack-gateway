@@ -21,7 +21,7 @@ import { countProcessesByService, fetchAppProcesses, fetchAppServices } from '..
 import { QUERY_KEYS } from '../lib/query-keys'
 
 export function AppServicesPage() {
-  const { app } = useParams({ from: '/apps/$app/services' }) as {
+  const { app } = useParams({ from: '/_app/apps/$app/services' }) as {
     app: string
   }
   const { user } = useAuth()

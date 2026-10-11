@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { detectBasepath } from './app'
+import { createAppRouter, detectBasepath } from './app'
 
 describe('detectBasepath', () => {
   it('detects /web basepath from window location', () => {
@@ -25,3 +25,44 @@ describe('detectBasepath', () => {
     }
   })
 })
+
+describe('route tree', () => {
+  // Pages under the signed-in layout must match their own route, not fall through to "Not Found".
+  it('matches the layout pages and the home route', () => {
+    const router = createAppRouter('/app')
+    const expected: Record<string, string> = {
+      '/': '/',
+      '/rack': '/rack',
+      '/apps': '/apps',
+      '/apps/web/services': '/apps/$app/services',
+      '/users': '/users',
+      '/account/security': '/account/security',
+      '/login': '/login',
+    }
+    for (const [path, fullPath] of Object.entries(expected)) {
+      const [, , foundRoute] = router.getMatchedRoutes(path)
+      expect(foundRoute?.fullPath, path).toBe(fullPath)
+    }
+  })
+})
+
+describe('route ids', () => {
+  // useParams({ from }) throws "Invariant failed" when the id doesn't exist, e.g. after the route tree changes.
+  it('every useParams({ from }) in the pages names a real route', () => {
+    const router = createAppRouter('/app')
+    const sources = import.meta.glob('./pages/**/*.tsx', {
+      query: '?raw',
+      import: 'default',
+      eager: true,
+    })
+    const ids = Object.values(sources).flatMap((source) =>
+      [...String(source).matchAll(USE_PARAMS_FROM_RE)].map((match) => match[1])
+    )
+    expect(ids.length).toBeGreaterThan(0)
+    for (const id of ids) {
+      expect(router.routesById[id as keyof typeof router.routesById], id).toBeDefined()
+    }
+  })
+})
+
+const USE_PARAMS_FROM_RE = /useParams\(\{ from: '([^']+)' \}\)/g

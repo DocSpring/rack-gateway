@@ -22,7 +22,7 @@ import { useUserSessions } from '@/pages/user/use-user-sessions'
 import { useUserSessionsControl } from '@/pages/user/use-user-sessions-control'
 
 export function UserPage() {
-  const { email } = useParams({ from: '/users/$email' }) as { email: string }
+  const { email } = useParams({ from: '/_app/users/$email' }) as { email: string }
   const decodedEmail = useMemo(() => decodeURIComponent(email), [email])
   const queryClient = useQueryClient()
   const { user: currentUser } = useAuth()

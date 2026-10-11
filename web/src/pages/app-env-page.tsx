@@ -206,7 +206,7 @@ function EnvRow({
 }
 
 export function AppEnvPage() {
-  const { app } = useParams({ from: '/apps/$app/env' }) as { app: string }
+  const { app } = useParams({ from: '/_app/apps/$app/env' }) as { app: string }
   const { user } = useAuth()
   const queryClient = useQueryClient()
 
