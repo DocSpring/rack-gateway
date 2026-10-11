@@ -3,16 +3,14 @@ package settings
 import (
 	"encoding/json"
 	"fmt"
-	"os"
-	"strconv"
 	"strings"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
-	gtwlog "github.com/DocSpring/rack-gateway/internal/gateway/logging"
 )
 
-// Service provides settings resolution with environment variable fallback.
-// Resolution order: Database -> Environment Variable -> Default
+// Service provides settings resolution.
+// Resolution order: Environment Variable -> Database -> Default. A setting an environment variable defines can't
+// be changed through the gateway.
 type Service struct {
 	db *db.Database
 }
@@ -37,7 +35,10 @@ const (
 type Setting struct {
 	Value  interface{}   `json:"value"`
 	Source SettingSource `json:"source"`
-	EnvVar string        `json:"env_var,omitempty"` // e.g., "RGW_SETTING_REQUIRE_MFA_ALL_USERS"
+	EnvVar string        `json:"env_var,omitempty"` // e.g., "RGW_SETTING_MFA_REQUIRE_ALL_USERS"
+	// StoredValueIgnored reports a database value that the environment variable overrides. It has no effect, and
+	// can be cleared.
+	StoredValueIgnored bool `json:"stored_value_ignored,omitempty"`
 }
 
 // normalizeAppNameForEnv converts app name to environment variable format.
@@ -56,86 +57,41 @@ func getEnvVarName(appName *string, key string) string {
 	return fmt.Sprintf("RGW_APP_%s_SETTING_%s", normalizedApp, normalizedKey)
 }
 
-// parseEnvValue attempts to parse an environment variable value as JSON.
-// Falls back to treating it as a plain string if JSON parsing fails.
-func parseEnvValue(envValue string, targetType interface{}) (interface{}, error) {
-	// Try to unmarshal as JSON first
-	if err := json.Unmarshal([]byte(envValue), &targetType); err == nil {
-		return targetType, nil
-	}
-
-	// For booleans, try parsing
-	if _, ok := targetType.(bool); ok {
-		if val, err := strconv.ParseBool(envValue); err == nil {
-			return val, nil
-		}
-	}
-
-	// For strings, return as-is
-	if _, ok := targetType.(string); ok {
-		return envValue, nil
-	}
-
-	// For arrays, try splitting by comma
-	if _, ok := targetType.([]string); ok {
-		if envValue == "" {
-			return []string{}, nil
-		}
-		parts := strings.Split(envValue, ",")
-		result := make([]string, 0, len(parts))
-		for _, part := range parts {
-			trimmed := strings.TrimSpace(part)
-			if trimmed != "" {
-				result = append(result, trimmed)
-			}
-		}
-		return result, nil
-	}
-
-	return nil, fmt.Errorf("unsupported type for env value")
-}
-
-// getSetting retrieves a setting with environment fallback.
-// targetType is used to determine how to parse the value (e.g., bool, string, []string).
+// getSetting resolves a setting: its environment variable, then the database, then the default.
 func (s *Service) getSetting(appName *string, key string, defaultValue interface{}) (*Setting, error) {
 	return s.resolveSetting(appName, key, defaultValue, nil)
 }
 
-// resolveSetting retrieves a setting using either a preloaded map of DB values or
-// by querying the database directly, then falling back to env/default values.
+// resolveSetting resolves a setting: its environment variable, then the database value (from preloaded, or a
+// query), then the default.
 func (s *Service) resolveSetting(
 	appName *string,
 	key string,
 	defaultValue interface{},
 	preloaded map[string][]byte,
 ) (*Setting, error) {
-	envVarName := getEnvVarName(appName, key)
-
-	// 1. Check database (preloaded map avoids multiple round-trips)
 	raw, found, err := s.loadSettingValue(appName, key, preloaded)
 	if err != nil {
 		return nil, err
 	}
+
+	// 1. An environment variable (the deployment config) overrides the database
+	if setting, ok, err := envSetting(appName, key); ok {
+		if err != nil {
+			return nil, err
+		}
+		setting.StoredValueIgnored = found
+		return setting, nil
+	}
+	envVarName := getEnvVarName(appName, key)
+
+	// 2. The database value
 	if found {
 		var value interface{}
 		if err := json.Unmarshal(raw, &value); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal setting %s: %w", key, err)
 		}
 		return &Setting{Value: value, Source: SourceDB, EnvVar: envVarName}, nil
-	}
-
-	// 2. Check environment variable
-	if envValue := strings.TrimSpace(os.Getenv(envVarName)); envValue != "" {
-		parsedValue, err := parseEnvValue(envValue, defaultValue)
-		if err == nil {
-			return &Setting{
-				Value:  parsedValue,
-				Source: SourceEnv,
-				EnvVar: envVarName,
-			}, nil
-		}
-		// If parsing fails, log and fall through to default
-		gtwlog.Warnf("settings: failed to parse env var %s: %v", envVarName, err)
 	}
 
 	// 3. Return default

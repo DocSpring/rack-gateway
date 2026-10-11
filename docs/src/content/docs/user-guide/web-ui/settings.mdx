@@ -8,7 +8,7 @@ import { Aside, Steps } from '@astrojs/starlight/components';
 The Settings page controls **global** gateway behavior. Only admins can edit these values; other users can view them in read-only mode.
 
 <Aside type="note">
-Settings can come from the database, environment variables (`RGW_SETTING_*`), or defaults. The UI shows the source and lets admins clear database overrides.
+Settings can come from environment variables (`RGW_SETTING_*`), the database, or defaults. The UI shows the source and lets admins clear database values. A setting an environment variable defines is read-only: change it in the deployment config.
 </Aside>
 
 ## Session Timeout
@@ -19,7 +19,7 @@ Configure the sliding inactivity timeout for browser sessions.
 
 1. Enter the timeout in minutes
 2. Click **Save**
-3. (Optional) Click **Clear** to revert to env/default
+3. (Optional) Click **Clear** to revert to the default
 
 </Steps>
 

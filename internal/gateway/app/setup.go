@@ -47,7 +47,9 @@ func (a *App) initializeServices() error {
 		return err
 	}
 
-	a.initSettingsService()
+	if err := a.initSettingsService(); err != nil {
+		return err
+	}
 	a.initSessionManager()
 
 	mfaCfg, err := a.initMFAConfig()
@@ -115,8 +117,21 @@ func (a *App) seedInitialUsers() error {
 	})
 }
 
-func (a *App) initSettingsService() {
+// initSettingsService refuses to start on an invalid setting environment variable, and logs stored settings that
+// an environment variable now overrides.
+func (a *App) initSettingsService() error {
+	if err := settings.ValidateEnvironment(os.Environ()); err != nil {
+		return err
+	}
 	a.SettingsService = settings.NewService(a.Database)
+	shadowed, err := a.SettingsService.ShadowedSettings()
+	if err != nil {
+		return fmt.Errorf("failed to check stored settings: %w", err)
+	}
+	for _, entry := range shadowed {
+		log.Printf("settings: the stored value of %s has no effect; delete it", entry)
+	}
+	return nil
 }
 
 func (a *App) initSessionManager() {

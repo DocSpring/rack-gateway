@@ -1,7 +1,12 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import type { SettingsSetting } from '@/api/schemas'
-import { getSettingValue, SourceIndicator } from '@/components/settings/source-indicator'
+import {
+  getSettingValue,
+  hasStoredValue,
+  isSetByEnv,
+  SourceIndicator,
+} from '@/components/settings/source-indicator'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -62,10 +67,10 @@ export function DeployApprovalsCard({ settings, disabled }: DeployApprovalsCardP
   const clearMutation = useMutation({
     mutationFn: async () => {
       const keys: string[] = []
-      if (settings?.deploy_approvals_enabled?.source === 'db') {
+      if (hasStoredValue(settings?.deploy_approvals_enabled)) {
         keys.push('deploy_approvals_enabled')
       }
-      if (settings?.deploy_approval_window_minutes?.source === 'db') {
+      if (hasStoredValue(settings?.deploy_approval_window_minutes)) {
         keys.push('deploy_approval_window_minutes')
       }
       if (keys.length > 0) {
@@ -117,8 +122,8 @@ export function DeployApprovalsCard({ settings, disabled }: DeployApprovalsCardP
   }
 
   const hasDbSettings =
-    settings?.deploy_approvals_enabled?.source === 'db' ||
-    settings?.deploy_approval_window_minutes?.source === 'db'
+    hasStoredValue(settings?.deploy_approvals_enabled) ||
+    hasStoredValue(settings?.deploy_approval_window_minutes)
 
   return (
     <Card>
@@ -134,7 +139,7 @@ export function DeployApprovalsCard({ settings, disabled }: DeployApprovalsCardP
         <label className="flex items-center gap-3">
           <input
             checked={displayEnabled}
-            disabled={disabled}
+            disabled={disabled || isSetByEnv(settings?.deploy_approvals_enabled)}
             onChange={(event) => setEnabled(event.target.checked)}
             type="checkbox"
           />
@@ -147,7 +152,7 @@ export function DeployApprovalsCard({ settings, disabled }: DeployApprovalsCardP
           <div className="flex items-center gap-2">
             <Input
               className="w-24"
-              disabled={disabled}
+              disabled={disabled || isSetByEnv(settings?.deploy_approval_window_minutes)}
               id="approval-window"
               min={1}
               onChange={(event) => {
