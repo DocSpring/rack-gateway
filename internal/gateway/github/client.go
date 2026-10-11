@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	gtwlog "github.com/DocSpring/rack-gateway/internal/gateway/logging"
 	"github.com/DocSpring/rack-gateway/internal/gateway/settings"
 )
 
@@ -190,10 +191,12 @@ func (c *Client) VerifyCommitAndFindPR(
 	// Always look up the PR (for informational purposes)
 	pr, err := c.findPRForBranch(owner, repo, branch)
 	if err != nil {
-		// Don't fail on PR lookup errors if PR is not required
 		if opts.RequirePR {
 			return "", fmt.Errorf("failed to find PR for branch: %w", err)
 		}
+		// A PR isn't required, so verification passes without one. Say so, or this reads as "the branch has no PR".
+		gtwlog.Warnf("github: couldn't look up the open PR for %s/%s branch %s, which isn't required: %v",
+			owner, repo, branch, err)
 		return "", nil
 	}
 

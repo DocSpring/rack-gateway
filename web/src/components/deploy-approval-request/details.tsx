@@ -29,6 +29,21 @@ function renderTime(value?: string | null): ReactNode {
   return value ? <TimeAgo date={value} /> : PLACEHOLDER_VALUE
 }
 
+// The gateway stores the pull request's GitHub URL. Only an https URL becomes a link.
+function renderPullRequest(prUrl?: string | null): ReactNode {
+  if (!prUrl) {
+    return PLACEHOLDER_VALUE
+  }
+  if (!prUrl.startsWith('https://')) {
+    return prUrl
+  }
+  return (
+    <a className="text-primary" href={prUrl} rel="noreferrer" target="_blank">
+      {prUrl}
+    </a>
+  )
+}
+
 function formatUser(name?: string | null, email?: string | null): string {
   if (name && email) {
     return `${name} (${email})`
@@ -174,6 +189,7 @@ export function RequestDetailsCard({ request }: RequestDetailsCardProps) {
           valueClassName="text-sm"
         />
         <DetailRow label="Branch" value={request.git_branch ?? '—'} />
+        <DetailRow label="Pull Request" value={renderPullRequest(request.pr_url)} />
         <DetailRow label="Git Commit" value={request.git_commit_hash ?? '—'} />
         <DetailRow label="Release ID" value={request.release_id ?? '—'} />
         <DetailRow label="Build ID" value={request.build_id ?? '—'} />

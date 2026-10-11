@@ -385,8 +385,8 @@ func (w *deployApprovalWaiter) waitForSound() {
 	}
 }
 
-// writeRequestSummary shows a pending request (rack, app, full commit, message, branch, token) before anything
-// is done with it.
+// writeRequestSummary shows a pending request (rack, app, full commit, message, branch, PR, token) before
+// anything is done with it.
 func (w *deployApprovalWaiter) writeRequestSummary(rack string, request deployApprovalRequest) error {
 	out := w.cmd.OutOrStdout()
 	if err := writeLine(out, "\n📋 Deploy Approval Request Found:"); err != nil {
