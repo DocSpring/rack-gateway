@@ -23,9 +23,9 @@ func buildSentryOptions(cfg *config.Config) (sentry.ClientOptions, bool) {
 	}
 	opts.Dsn = dsn
 	opts.AttachStacktrace = true
-	// Requests carry session tokens, API tokens and inline MFA codes in headers and cookies.
-	// Never let the SDK attach them, and scrub anything that gets through.
-	opts.SendDefaultPII = false
+	// Requests carry session tokens, API tokens and inline MFA codes in headers, cookies and query strings,
+	// and secrets in bodies (e.g. env vars). Never let the SDK attach them, and scrub anything that gets through.
+	opts.DataCollection = noRequestDataCollection()
 	opts.BeforeSend = scrubSentryEvent
 
 	env := strings.TrimSpace(cfg.SentryEnvironment)
@@ -88,4 +88,18 @@ func scrubSentryEvent(event *sentry.Event, _ *sentry.EventHint) *sentry.Event {
 	req.Data = ""
 	req.Env = nil
 	return event
+}
+
+// noRequestDataCollection stops the SDK collecting any request data or user details by itself.
+func noRequestDataCollection() *sentry.DataCollection {
+	off := func() *sentry.KeyValueCollectionBehavior {
+		return &sentry.KeyValueCollectionBehavior{Mode: sentry.CollectionOff}
+	}
+	return &sentry.DataCollection{
+		UserInfo:    sentry.Set(false),
+		Cookies:     off(),
+		HTTPHeaders: &sentry.HeaderCollectionConfig{Request: off(), Response: off()},
+		HTTPBodies:  []sentry.BodyType{},
+		QueryParams: off(),
+	}
 }

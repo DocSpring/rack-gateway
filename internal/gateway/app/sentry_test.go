@@ -56,11 +56,24 @@ func TestBuildSentryOptionsDevelopmentEnvironment(t *testing.T) {
 	}
 }
 
+// The SDK must not attach headers, cookies, query strings, bodies or user details by itself.
+func TestSentryCollectsNoRequestData(t *testing.T) {
+	opts, _ := buildSentryOptions(&config.Config{SentryDSN: "https://key@o0.ingest.sentry.io/1"})
+	dc := opts.DataCollection
+	if dc == nil {
+		t.Fatalf("expected an explicit DataCollection")
+	}
+	off := sentry.CollectionOff
+	if dc.UserInfo.Value || len(dc.HTTPBodies) != 0 || dc.Cookies.Mode != off || dc.QueryParams.Mode != off ||
+		dc.HTTPHeaders.Request.Mode != off || dc.HTTPHeaders.Response.Mode != off {
+		t.Fatalf("expected the SDK to collect no request data, got %+v", dc)
+	}
+}
+
 func TestScrubSentryEventRemovesCredentials(t *testing.T) {
 	opts, enabled := buildSentryOptions(&config.Config{SentryDSN: "https://key@o0.ingest.sentry.io/1"})
-	if !enabled || opts.SendDefaultPII || opts.BeforeSend == nil {
-		t.Fatalf("expected PII disabled and a scrubber, got SendDefaultPII=%v BeforeSend=%v",
-			opts.SendDefaultPII, opts.BeforeSend != nil)
+	if !enabled || opts.BeforeSend == nil {
+		t.Fatalf("expected Sentry enabled with a scrubber, got enabled=%v", enabled)
 	}
 
 	event := &sentry.Event{Request: &sentry.Request{
