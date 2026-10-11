@@ -91,7 +91,19 @@ If verification fails, the request is rejected.
 
 ## Pull Request Detection
 
-When GitHub verification is enabled, the gateway attempts to find an open PR for the branch. If found, the PR URL is stored and shown in the approval UI.
+When GitHub verification is enabled, the gateway attempts to find an open PR for the branch. If found, the PR URL
+is stored with the request as `pr_url`. The request's page in the web UI links it, the Slack notification links it,
+and `rack-gateway deploy-approval show` (and `approve` and `wait`, before approving) prints it as `PR:`.
+`deploy-approval show -o json` and `deploy-approval list -o json` include `pr_url`.
+
+## Audit Trail
+
+The `deploy_approval_request.create` audit entry records the verification as change-management evidence:
+`github_verification` is `passed`, or `skipped` (with `github_verification_skip_reason`) when verification is off
+for the app. A passed check also records the `vcs_repo`, `verify_git_commit_mode` and `require_pr_for_branch` it
+used, and the `pr_url` it found. See [Audit Trail](/integrations/deploy-approvals/workflow/#audit-trail).
+
+The gateway also logs one info line per passed verification, with the app, repo, branch, commit, mode and PR.
 
 ## PR Comments
 
@@ -105,4 +117,5 @@ PR comments are only posted on request creation (not on approval/rejection).
 
 - Ensure `GITHUB_TOKEN` is set and has access to the repo
 - Verify `vcs_repo` matches `owner/repo`
-- Check Audit Logs for GitHub verification failures
+- A refused request's error says which check failed. A failed GitHub check is also logged as a gateway warning
+  with the app, repo, branch and commit.
