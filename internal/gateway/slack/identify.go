@@ -42,10 +42,13 @@ func mrkdwnSection(text string) map[string]interface{} {
 	}
 }
 
-// mrkdwnElement is a mrkdwn text object, as used in a section's text or fields and in a context block.
+// mrkdwnElement is a mrkdwn text object, as used in a section's text or fields and in a context block. It's
+// verbatim: without that, Slack turns a plain @here, @channel or @everyone in a value into a real mention, which
+// escaping can't stop. Links and dates written as <...> still work.
 func mrkdwnElement(text string) map[string]interface{} {
 	return map[string]interface{}{
-		"type": "mrkdwn",
-		"text": text,
+		"type":     "mrkdwn",
+		"text":     text,
+		"verbatim": true,
 	}
 }

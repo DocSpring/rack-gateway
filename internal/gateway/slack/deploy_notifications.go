@@ -109,7 +109,7 @@ func deployApprovalMessageBlock(req *db.DeployApprovalRequest) map[string]interf
 		return nil
 	}
 
-	return mrkdwnSection("*Message:*\n" + escapeMrkdwn(req.Message))
+	return mrkdwnSection("*Message:*\n" + truncateMrkdwn(escapeMrkdwn(req.Message), maxSectionValue))
 }
 
 // deployApprovalLinksBlock links to the request on this gateway, and to the pull request and CI build when their
@@ -151,7 +151,7 @@ func deployApprovalCIElement(metadata json.RawMessage) map[string]interface{} {
 		return nil
 	}
 
-	ciLink := externalLink(buildURL, "CI Pipeline")
+	ciLink := hostLabeledLink(buildURL, "CI Pipeline")
 	if ciLink == "" {
 		return nil
 	}

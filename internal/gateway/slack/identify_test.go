@@ -19,8 +19,9 @@ var testGateway = config.NewGatewayIdentity("Staging", "https://gateway.example.
 var testGatewayBlock = map[string]interface{}{
 	"type": "section",
 	"text": map[string]interface{}{
-		"type": "mrkdwn",
-		"text": "*<https://gateway.example.com|Rack Gateway (Staging)>*",
+		"type":     "mrkdwn",
+		"text":     "*<https://gateway.example.com|Rack Gateway (Staging)>*",
+		"verbatim": true,
 	},
 }
 

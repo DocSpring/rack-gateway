@@ -21,20 +21,25 @@ const hostileText = "a &amp; b &lt;!channel&gt; &lt;https://evil.example/login|G
 // hostileCode is hostile escaped for a code span or block: its backticks can't close the code.
 const hostileCode = "a &amp; b &lt;!channel&gt; &lt;https://evil.example/login|GitHub PR&gt; ˋˋˋ"
 
-// mrkdwnTexts returns a message's fallback text and the text of every mrkdwn object in its blocks.
+// mrkdwnTexts returns a message's fallback text and the text of every mrkdwn object in its blocks, and checks that
+// each object is verbatim, so Slack doesn't turn a plain @here in a value into a mention.
 func mrkdwnTexts(t *testing.T, text string, blocks []map[string]interface{}) []string {
 	t.Helper()
-	texts := []string{text}
+	objects := []map[string]interface{}{}
 	for _, block := range blocks {
 		if blockText, ok := block["text"].(map[string]interface{}); ok {
-			texts = append(texts, blockText["text"].(string))
+			objects = append(objects, blockText)
 		}
 		for _, key := range []string{"fields", "elements"} {
-			objects, _ := block[key].([]map[string]interface{})
-			for _, object := range objects {
-				texts = append(texts, object["text"].(string))
-			}
+			elements, _ := block[key].([]map[string]interface{})
+			objects = append(objects, elements...)
 		}
+	}
+	texts := make([]string, 0, 1+len(objects))
+	texts = append(texts, text)
+	for _, object := range objects {
+		require.Equal(t, true, object["verbatim"], object["text"])
+		texts = append(texts, object["text"].(string))
 	}
 	return texts
 }
@@ -77,10 +82,35 @@ func TestExternalLinkOnlyLinksSafeHTTPSURLs(t *testing.T) {
 		"javascript:alert(1)",
 		"slack://open",
 		"ci.example.com/build/1",
+		"https://:443/build/1",
+		"https://g\u0456thub.com/org/repo/pull/42", // a Cyrillic і
 	}
 	for _, rawURL := range refused {
 		require.Empty(t, externalLink(rawURL, "CI Pipeline"), rawURL)
+		require.Empty(t, hostLabeledLink(rawURL, "CI Pipeline"), rawURL)
 	}
+}
+
+func TestHostLabeledLinkNamesTheHost(t *testing.T) {
+	require.Equal(t, "<https://ci.example.com:8443/build/1|CI Pipeline (ci.example.com)>",
+		hostLabeledLink("https://ci.example.com:8443/build/1", "CI Pipeline"))
+}
+
+// Slack refuses a whole message whose section text is too long, so long values are cut short, without cutting an
+// escape in two.
+func TestLongValuesAreTruncated(t *testing.T) {
+	message := strings.Repeat("&", 3000)
+	section := sectionText(t, deployApprovalMessageBlock(&db.DeployApprovalRequest{Message: message}))
+	value := strings.TrimPrefix(section, "*Message:*\n")
+	require.LessOrEqual(t, len([]rune(value)), maxSectionValue)
+	require.True(t, strings.HasSuffix(value, "&amp;…"), value[len(value)-20:])
+
+	details := codeBlock(strings.Repeat("<", 3000))
+	require.LessOrEqual(t, len([]rune(details)), maxSectionValue+6)
+	require.True(t, strings.HasSuffix(details, "&lt;…```"))
+	require.Equal(t, 2, strings.Count(details, "```"))
+
+	require.Equal(t, "short", truncateMrkdwn("short", 10))
 }
 
 func TestDeployApprovalAlertEscapesRequestValues(t *testing.T) {
@@ -144,7 +174,7 @@ func TestDeployApprovalAlertLinksSafePRAndCIURLs(t *testing.T) {
 	require.True(t, ok)
 	require.Len(t, links, 3)
 	require.Equal(t, "🔗 <https://github.com/org/repo/pull/42|GitHub PR>", links[1]["text"])
-	require.Equal(t, "🔗 <https://ci.example.com/build/1?step=2&amp;x=3|CI Pipeline>", links[2]["text"])
+	require.Equal(t, "🔗 <https://ci.example.com/build/1?step=2&amp;x=3|CI Pipeline (ci.example.com)>", links[2]["text"])
 }
 
 func TestAuditLogMessageEscapesLogValues(t *testing.T) {
