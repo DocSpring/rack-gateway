@@ -1,6 +1,10 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
-import { getSettingValue, SourceIndicator } from '@/components/settings/source-indicator'
+import {
+  getSettingValue,
+  isSetByEnv,
+  SourceIndicator,
+} from '@/components/settings/source-indicator'
 import { StringArrayInput } from '@/components/settings/string-array-input'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -96,7 +100,7 @@ export function StringArrayCard({
 
         <div className="space-y-2">
           <StringArrayInput
-            disabled={disabled}
+            disabled={disabled || isSetByEnv(setting)}
             onChange={setItems}
             placeholder={placeholder ?? 'Enter value'}
             value={items}

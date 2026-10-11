@@ -1,4 +1,4 @@
-import { SourceIndicator } from '@/components/settings/source-indicator'
+import { isSetByEnv, SourceIndicator } from '@/components/settings/source-indicator'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import type { AppSettingsResponse } from '@/pages/app-settings/types'
@@ -44,7 +44,7 @@ export function VerificationSettingsFields({
         >
           <input
             checked={displayGithubVerification}
-            disabled={sectionDisabled}
+            disabled={sectionDisabled || isSetByEnv(settings?.github_verification)}
             onChange={(event) => onToggleGithubVerification(event.target.checked)}
             type="checkbox"
           />
@@ -60,7 +60,7 @@ export function VerificationSettingsFields({
         >
           <input
             checked={displayAllowDeployFromDefaultBranch}
-            disabled={sectionDisabled}
+            disabled={sectionDisabled || isSetByEnv(settings?.allow_deploy_from_default_branch)}
             onChange={(event) => onToggleAllowDeployFromDefaultBranch(event.target.checked)}
             type="checkbox"
           />
@@ -76,7 +76,7 @@ export function VerificationSettingsFields({
         >
           <input
             checked={displayRequirePRForBranch}
-            disabled={sectionDisabled}
+            disabled={sectionDisabled || isSetByEnv(settings?.require_pr_for_branch)}
             onChange={(event) => onToggleRequirePRForBranch(event.target.checked)}
             type="checkbox"
           />
@@ -92,7 +92,7 @@ export function VerificationSettingsFields({
         <Label htmlFor="default-branch">Default Branch</Label>
         <div className="flex items-center gap-2">
           <Input
-            disabled={sectionDisabled}
+            disabled={sectionDisabled || isSetByEnv(settings?.default_branch)}
             id="default-branch"
             onChange={(event) => onChangeDefaultBranch(event.target.value)}
             placeholder="main"
@@ -111,7 +111,7 @@ export function VerificationSettingsFields({
         <div className="flex items-center gap-2">
           <select
             className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-            disabled={sectionDisabled}
+            disabled={sectionDisabled || isSetByEnv(settings?.verify_git_commit_mode)}
             id="verify-git-commit-mode"
             onChange={(event) => onChangeVerifyGitCommitMode(event.target.value)}
             value={displayVerifyGitCommitMode}

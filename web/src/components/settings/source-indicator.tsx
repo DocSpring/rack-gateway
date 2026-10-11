@@ -3,6 +3,12 @@ import type { SettingsSetting } from '@/api/schemas'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { toast } from '@/components/ui/use-toast'
 
+// isSetByEnv reports a setting its environment variable defines. The deployment config pins it, so it can't be
+// changed here.
+export function isSetByEnv(setting: SettingsSetting | undefined): boolean {
+  return setting?.source === 'env'
+}
+
 export function SourceIndicator({ setting }: { setting: SettingsSetting | undefined }) {
   if (!setting) {
     return null
@@ -23,17 +29,17 @@ export function SourceIndicator({ setting }: { setting: SettingsSetting | undefi
     let tooltipText = ''
 
     if (setting.source === 'env') {
-      label = '(from env var)'
-      tooltipText = `Set via ${setting.env_var} - click to copy`
+      label = '(from env var, read-only)'
+      tooltipText = `Set by ${setting.env_var} in the deployment config; change it there - click to copy`
     } else if (setting.source === 'default') {
       label = '(default)'
-      tooltipText = `Set via ${setting.env_var} - click to copy`
+      tooltipText = `Set ${setting.env_var} in the deployment config to pin it - click to copy`
     } else if (setting.source === 'global_default') {
       label = '(global default)'
-      tooltipText = `Using global default - set via ${setting.env_var} to override`
+      tooltipText = `Using global default - set ${setting.env_var} to override`
     } else if (setting.source === 'db') {
       label = '(database)'
-      tooltipText = `Clear to use ${setting.env_var} - click to copy`
+      tooltipText = `Set ${setting.env_var} in the deployment config to pin it - click to copy`
     }
 
     return (

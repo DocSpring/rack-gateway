@@ -1,7 +1,11 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import type { SettingsSetting } from '@/api/schemas'
-import { getSettingValue, SourceIndicator } from '@/components/settings/source-indicator'
+import {
+  getSettingValue,
+  isSetByEnv,
+  SourceIndicator,
+} from '@/components/settings/source-indicator'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -121,7 +125,7 @@ export function SessionTimeoutCard({ settings, disabled }: SessionTimeoutCardPro
           <div className="flex items-center gap-2">
             <Input
               className="w-24"
-              disabled={disabled}
+              disabled={disabled || isSetByEnv(settings?.session_timeout_minutes)}
               id="session-timeout"
               min={1}
               onChange={(event) => {

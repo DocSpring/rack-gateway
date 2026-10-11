@@ -26,8 +26,12 @@ func (s *Service) GetAllGlobalSettings() (map[string]*Setting, error) {
 	return result, nil
 }
 
-// SetGlobalSetting saves a global setting to the database.
+// SetGlobalSetting saves a global setting to the database. A setting its environment variable defines can't be
+// changed (ErrSetByEnvironment).
 func (s *Service) SetGlobalSetting(key string, value interface{}, updatedByUserID *int64) error {
+	if store, err := checkEnvDefined(nil, key, value); !store {
+		return err
+	}
 	return s.db.UpsertSetting(nil, key, value, updatedByUserID)
 }
 
@@ -36,7 +40,21 @@ func (s *Service) DeleteGlobalSetting(key string) error {
 	return s.db.DeleteSetting(nil, key)
 }
 
-// SetGlobalSettingsInTx atomically updates multiple global settings in a single transaction.
+// SetGlobalSettingsInTx atomically updates multiple global settings in a single transaction. Settings their
+// environment variables define are skipped when unchanged and refused when changed (ErrSetByEnvironment).
 func (s *Service) SetGlobalSettingsInTx(updates []db.SettingUpdate, updatedByUserID *int64) error {
-	return s.db.UpsertSettingsInTx(nil, updates, updatedByUserID)
+	stored := make([]db.SettingUpdate, 0, len(updates))
+	for _, update := range updates {
+		store, err := checkEnvDefined(nil, update.Key, update.Value)
+		if err != nil {
+			return err
+		}
+		if store {
+			stored = append(stored, update)
+		}
+	}
+	if len(stored) == 0 {
+		return nil
+	}
+	return s.db.UpsertSettingsInTx(nil, stored, updatedByUserID)
 }

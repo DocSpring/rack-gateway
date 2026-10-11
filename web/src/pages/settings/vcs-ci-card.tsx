@@ -1,7 +1,11 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import type { SettingsSetting } from '@/api/schemas'
-import { getSettingValue, SourceIndicator } from '@/components/settings/source-indicator'
+import {
+  getSettingValue,
+  isSetByEnv,
+  SourceIndicator,
+} from '@/components/settings/source-indicator'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
@@ -137,7 +141,7 @@ export function VcsCiCard({ settings, disabled }: VcsCiCardProps) {
             <div className="flex items-center gap-2">
               <select
                 className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                disabled={disabled}
+                disabled={disabled || isSetByEnv(settings?.default_vcs_provider)}
                 id="vcs-provider"
                 onChange={(event) => setVcsProvider(event.target.value || null)}
                 value={displayVcsProvider}
@@ -153,7 +157,7 @@ export function VcsCiCard({ settings, disabled }: VcsCiCardProps) {
             <div className="flex items-center gap-2">
               <select
                 className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                disabled={disabled}
+                disabled={disabled || isSetByEnv(settings?.default_ci_provider)}
                 id="ci-provider"
                 onChange={(event) => setCiProvider(event.target.value || null)}
                 value={displayCiProvider}

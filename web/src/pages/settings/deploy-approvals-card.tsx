@@ -1,7 +1,11 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import type { SettingsSetting } from '@/api/schemas'
-import { getSettingValue, SourceIndicator } from '@/components/settings/source-indicator'
+import {
+  getSettingValue,
+  isSetByEnv,
+  SourceIndicator,
+} from '@/components/settings/source-indicator'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -134,7 +138,7 @@ export function DeployApprovalsCard({ settings, disabled }: DeployApprovalsCardP
         <label className="flex items-center gap-3">
           <input
             checked={displayEnabled}
-            disabled={disabled}
+            disabled={disabled || isSetByEnv(settings?.deploy_approvals_enabled)}
             onChange={(event) => setEnabled(event.target.checked)}
             type="checkbox"
           />
@@ -147,7 +151,7 @@ export function DeployApprovalsCard({ settings, disabled }: DeployApprovalsCardP
           <div className="flex items-center gap-2">
             <Input
               className="w-24"
-              disabled={disabled}
+              disabled={disabled || isSetByEnv(settings?.deploy_approval_window_minutes)}
               id="approval-window"
               min={1}
               onChange={(event) => {

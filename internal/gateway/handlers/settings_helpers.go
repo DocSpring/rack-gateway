@@ -143,8 +143,8 @@ func (h *SettingsHandler) updateSettings(c *gin.Context, ops settingsOperations,
 	}
 
 	// Check every value before saving any, so a bad value doesn't leave a partial update
-	if err := validateSettingValues(updates); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	if key, err := validateSettingValues(appName, updates); err != nil {
+		respondSettingSaveError(c, key, err)
 		return
 	}
 
@@ -219,20 +219,34 @@ func (_ *SettingsHandler) getSingleSettingResponse(c *gin.Context, ops settingsO
 	c.JSON(http.StatusOK, result)
 }
 
-// respondSettingSaveError answers 400 for a value with the wrong shape and 500 for anything else.
+// respondSettingSaveError answers 400 for a value with the wrong shape, 409 for a setting an environment variable
+// defines, and 500 for anything else.
 func respondSettingSaveError(c *gin.Context, key string, err error) {
 	if errors.Is(err, settings.ErrInvalidSettingValue) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	if errors.Is(err, settings.ErrSetByEnvironment) {
+		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+		return
+	}
 	c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to save setting: %s", key)})
 }
 
-func validateSettingValues(updates map[string]interface{}) error {
+// validateSettingValues checks each value's shape, and that no environment variable defines the setting. appName
+// is empty for global settings.
+func validateSettingValues(appName string, updates map[string]interface{}) (string, error) {
+	var scope *string
+	if appName != "" {
+		scope = &appName
+	}
 	for key, value := range updates {
 		if err := settings.ValidateAppSettingValue(key, value); err != nil {
-			return err
+			return key, err
+		}
+		if err := settings.CheckEnvironment(scope, key, value); err != nil {
+			return key, err
 		}
 	}
-	return nil
+	return "", nil
 }

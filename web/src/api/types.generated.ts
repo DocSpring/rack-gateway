@@ -597,6 +597,15 @@ export interface paths {
                         "application/json": components["schemas"]["handlers.ErrorResponse"];
                     };
                 };
+                /** @description Conflict */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
                 /** @description Internal Server Error */
                 500: {
                     headers: {
@@ -722,6 +731,15 @@ export interface paths {
                         "application/json": components["schemas"]["handlers.ErrorResponse"];
                     };
                 };
+                /** @description Conflict */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
                 /** @description Internal Server Error */
                 500: {
                     headers: {
@@ -828,6 +846,15 @@ export interface paths {
                 };
                 /** @description Bad Request */
                 400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+                /** @description Conflict */
+                409: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -948,6 +975,15 @@ export interface paths {
                         "application/json": components["schemas"]["handlers.ErrorResponse"];
                     };
                 };
+                /** @description Conflict */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
                 /** @description Internal Server Error */
                 500: {
                     headers: {
@@ -1056,6 +1092,15 @@ export interface paths {
                 };
                 /** @description Bad Request */
                 400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+                /** @description Conflict */
+                409: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -3741,6 +3786,15 @@ export interface paths {
                         "application/json": components["schemas"]["handlers.ErrorResponse"];
                     };
                 };
+                /** @description Conflict */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
                 /** @description Internal Server Error */
                 500: {
                     headers: {
@@ -5215,7 +5269,7 @@ export interface components {
             total_count?: number;
         };
         "settings.Setting": {
-            /** @description e.g., "RGW_SETTING_REQUIRE_MFA_ALL_USERS" */
+            /** @description e.g., "RGW_SETTING_MFA_REQUIRE_ALL_USERS" */
             env_var?: string;
             source?: components["schemas"]["settings.SettingSource"];
             value?: unknown;

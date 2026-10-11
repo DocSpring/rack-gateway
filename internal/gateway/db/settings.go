@@ -219,3 +219,34 @@ func (d *Database) UpsertRackTLSCert(cert *RackTLSCert, updatedByUserID *int64) 
 	}
 	return d.UpsertSetting(nil, "rack_tls_cert", cert, updatedByUserID)
 }
+
+// SettingKey identifies a stored setting: a global one (AppName nil) or an app's.
+type SettingKey struct {
+	AppName *string
+	Key     string
+}
+
+// ListSettingKeys returns every stored setting's app and key.
+func (d *Database) ListSettingKeys() ([]SettingKey, error) {
+	rows, err := d.query(`SELECT app_name, key FROM settings ORDER BY app_name NULLS FIRST, key`)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list settings: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var keys []SettingKey
+	for rows.Next() {
+		var appName sql.NullString
+		var key string
+		if err := rows.Scan(&appName, &key); err != nil {
+			return nil, fmt.Errorf("failed to read setting key: %w", err)
+		}
+		entry := SettingKey{Key: key}
+		if appName.Valid {
+			name := appName.String
+			entry.AppName = &name
+		}
+		keys = append(keys, entry)
+	}
+	return keys, rows.Err()
+}

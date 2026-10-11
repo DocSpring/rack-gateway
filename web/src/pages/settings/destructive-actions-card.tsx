@@ -1,7 +1,11 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import type { SettingsSetting } from '@/api/schemas'
-import { getSettingValue, SourceIndicator } from '@/components/settings/source-indicator'
+import {
+  getSettingValue,
+  isSetByEnv,
+  SourceIndicator,
+} from '@/components/settings/source-indicator'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { toast } from '@/components/ui/use-toast'
@@ -112,7 +116,7 @@ export function DestructiveActionsCard({ settings, disabled }: DestructiveAction
         <label className="flex items-center gap-3">
           <input
             checked={displayValue}
-            disabled={disabled}
+            disabled={disabled || isSetByEnv(settings?.allow_destructive_actions)}
             onChange={(event) => setAllowDestructive(event.target.checked)}
             type="checkbox"
           />

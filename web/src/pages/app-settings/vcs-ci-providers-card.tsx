@@ -1,7 +1,11 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useCallback, useMemo, useState } from 'react'
 
-import { getSettingValue, SourceIndicator } from '@/components/settings/source-indicator'
+import {
+  getSettingValue,
+  isSetByEnv,
+  SourceIndicator,
+} from '@/components/settings/source-indicator'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -390,7 +394,11 @@ export function VCSCIProvidersCard({
             <div className="flex items-center gap-2">
               <input
                 checked={displayCircleCIAutoApproveOnApproval}
-                disabled={disabled || !circleciAvailable}
+                disabled={
+                  disabled ||
+                  !circleciAvailable ||
+                  isSetByEnv(settings?.circleci_auto_approve_on_approval)
+                }
                 id="circleci-auto-approve"
                 onChange={(event) => setCircleCIAutoApproveOnApproval(event.target.checked)}
                 type="checkbox"
@@ -406,7 +414,9 @@ export function VCSCIProvidersCard({
             <Label htmlFor="circleci-approval-job-name">CircleCI Approval Job Name</Label>
             <div className="flex items-center gap-2">
               <Input
-                disabled={disabled || !circleciAvailable}
+                disabled={
+                  disabled || !circleciAvailable || isSetByEnv(settings?.circleci_approval_job_name)
+                }
                 id="circleci-approval-job-name"
                 onChange={(event) => setCircleCIApprovalJobName(event.target.value)}
                 placeholder="approve_deploy_staging"
