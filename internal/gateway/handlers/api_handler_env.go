@@ -118,7 +118,11 @@ func (h *APIHandler) GetEnvValues(c *gin.Context) {
 		return
 	}
 
-	extraSecrets, _ := h.secretAndProtectedKeys(app)
+	extraSecrets, _, err := h.secretAndProtectedKeys(app)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read the app's env var settings"})
+		return
+	}
 	h.maskSecretsIfNeeded(envMap, extraSecrets, allowedSecrets)
 
 	if key != "" {
@@ -343,7 +347,12 @@ func (h *APIHandler) prepareEnvUpdateContext(c *gin.Context) (*envUpdateContext,
 	}
 	ctx.baseEnv = baseEnv
 
-	ctx.extraSecrets, ctx.protectedKeys = h.secretAndProtectedKeys(ctx.app)
+	extraSecrets, protectedKeys, err := h.secretAndProtectedKeys(ctx.app)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read the app's env var settings"})
+		return nil, false
+	}
+	ctx.extraSecrets, ctx.protectedKeys = extraSecrets, protectedKeys
 	ctx.allowSecrets = callerCan(c, h.rbac, rbac.Convox(rbac.ResourceSecret, rbac.ActionSet))
 	ctx.canViewSecrets = callerCan(c, h.rbac, rbac.Convox(rbac.ResourceSecret, rbac.ActionRead))
 

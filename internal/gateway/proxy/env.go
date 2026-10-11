@@ -173,7 +173,7 @@ func (h *Handler) validateSecretsPermissions(
 	}
 	offending := make([]string, 0)
 	for _, k := range order {
-		if h.isSecretKey(k) && posted[k] != maskedSecret {
+		if h.isSecretKeyForApp(k, app) && posted[k] != maskedSecret {
 			offending = append(offending, k)
 		}
 	}
@@ -242,7 +242,7 @@ func (h *Handler) mergeEnvAndComputeDiffs(
 	for _, key := range order {
 		val := posted[key]
 		base := baseEnv[key]
-		isSecret := h.isSecretKey(key)
+		isSecret := h.isSecretKeyForApp(key, app)
 		if val == maskedSecret {
 			merged[key] = base
 			continue
@@ -290,7 +290,7 @@ func (h *Handler) removedKeyDiffs(
 			merged[key] = base
 			continue
 		}
-		isSecret := h.isSecretKey(key)
+		isSecret := h.isSecretKeyForApp(key, app)
 		if isSecret && !canSecretsSet {
 			return nil, secretsDenied([]string{key})
 		}

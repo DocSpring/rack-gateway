@@ -118,10 +118,11 @@ is still redacted when it is secret (its name contains `SECRET` or `TOKEN` or en
 in the app's `secret_env_vars` or `CONVOX_SECRET_ENV_VARS`) or protected (`protected_env_vars`).
 
 <Aside type="caution">
-Earlier gateway versions logged the values of env vars that weren't secret or protected. Those entries keep them:
-`details` is part of each entry's hash chain and the table is append-only, so they can't be rewritten. Slack
-messages already sent keep them too. If a credential was changed under a name that didn't look secret (such as
-`DATABASE_URL` or `SMTP_PASSWORD`), rotate it.
+Earlier gateway versions logged the values of env vars that weren't secret or protected, and every rack
+parameter value (also emailed to admins). Those entries keep them: `details` is part of each entry's hash chain
+and the table is append-only, so they can't be rewritten. Slack messages and emails already sent keep them too. If
+a credential was changed under a name that didn't look secret (such as `DATABASE_URL` or `SMTP_PASSWORD`), or set
+as a rack parameter, rotate it.
 </Aside>
 
 Refused protected changes are logged per key with `status: denied`: without `--allow-protected` as `env.set`,
@@ -266,7 +267,6 @@ ORDER BY day DESC;
 | **Environment Variables** | Values, unless listed in `audit_visible_env_vars` |
 | **Rack Parameters** | Values |
 | **API Tokens** | Token strings |
-| **Build Logs** | Secrets in output |
 
 ### Not Logged
 
