@@ -130,6 +130,7 @@ func (h *Handler) SetAllowDestructive(v bool) { h.allowDestructive = v }
 // ProxyToRack handles proxying requests to the Convox rack with RBAC, MFA, and audit logging.
 func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
+	extendDeadlines(w, r, rbac.NormalizeRackPath(r.URL.Path))
 
 	r, rackConfig, authUser, allowed, approvalTracker, envDiffs, err := h.prepareProxyRequest(w, r, start)
 	if err != nil {
