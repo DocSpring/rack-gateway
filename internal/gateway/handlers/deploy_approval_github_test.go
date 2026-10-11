@@ -21,13 +21,15 @@ const (
 	ghPRURL      = "https://github.com/acme/web/pull/7"
 )
 
-// fakeGitHub serves the branches, compare and pulls APIs for acme/web. withPR controls whether the branch has an
-// open pull request.
+// fakeGitHub serves the branches, compare and pulls APIs for acme/web, for the token "gh-token". withPR controls
+// whether the branch has an open pull request.
 func fakeGitHub(t *testing.T, withPR bool) *httptest.Server {
 	t.Helper()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.EscapedPath()
 		switch {
+		case r.Header.Get("Authorization") != "Bearer gh-token":
+			w.WriteHeader(http.StatusUnauthorized)
 		case strings.HasPrefix(path, "/repos/acme/web/branches/"):
 			_ = json.NewEncoder(w).Encode(map[string]interface{}{"commit": map[string]string{"sha": ghBranchHead}})
 		case strings.HasPrefix(path, "/repos/acme/web/compare/"):

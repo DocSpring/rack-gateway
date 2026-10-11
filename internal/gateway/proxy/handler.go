@@ -147,7 +147,7 @@ func (h *Handler) ReplaceProtectedEnv(keys []string) {
 func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 
-	r, rackConfig, authUser, allowed, _, envDiffs, err := h.prepareProxyRequest(w, r, start)
+	r, rackConfig, authUser, allowed, approvalTracker, envDiffs, err := h.prepareProxyRequest(w, r, start)
 	if err != nil {
 		return
 	}
@@ -174,6 +174,11 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 			fmt.Errorf("permission denied for %s %s", r.Method, path),
 		)
 		http.Error(w, forbiddenMessage(resource, action), http.StatusForbidden)
+		return
+	}
+
+	if err := h.claimPromote(r, rackPath, approvalTracker); err != nil {
+		_, _, _ = h.handlePermissionError(w, r, authUser, err, rackConfig.Name, start)
 		return
 	}
 

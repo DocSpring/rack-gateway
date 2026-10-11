@@ -103,6 +103,11 @@ Every approval is tied to a specific full (40-character) git commit SHA. An API 
 
 `service_image_patterns` is required for approval-bound builds: the commit tag alone does not pin the image repository.
 
+An archive upload doesn't say which commit it's for, so it binds to the token's newest open approval for the app.
+The gateway refuses it (409) when that approval already has its archive (an upload is most likely a retry, and
+uploads happen once per approval), or when several approvals for the app are waiting for an upload: reject the
+ones that aren't being deployed.
+
 ### MFA Step-Up
 
 Approvals require multi-factor authentication:
@@ -276,12 +281,16 @@ target token and app. Creating a request again for the same app returns the open
 app and commit, and otherwise fails, because nothing was created.
 
 An approval whose window has passed is marked `expired` (every few minutes, and before a new request is
-created), so it no longer counts as open. An admin can still extend it, which approves it again, unless another
-request for the same app and commit has opened since.
+created), so it no longer counts as open. So is a pending request older than `DEPLOY_APPROVAL_PENDING_MAX_AGE`
+(7 days by default). Each expiry is audit-logged as `deploy_approval_request.expire` by `system`. An admin can
+still extend a lapsed approval, which approves it again, unless another request for the same app and commit has
+opened since. A request that expired while pending was never approved, so it can't be extended.
 
 A successful promote marks the approval `deployed`, and the approval can't promote again: a second promote gets
-409 "this deploy approval request has already been deployed". A failed promote leaves it approved, so it can be
-retried.
+409 "this deploy approval request has already been deployed". Only one promote per approval runs at a time: a
+second promote while the first is in flight gets 409 "a promote with this deploy approval request is already in
+progress". A promote the rack refuses leaves the approval approved, so it can be retried. A promote that timed out
+or lost its connection may still be running on the rack, so a retry is refused for up to 15 minutes.
 
 ## RBAC Permissions
 

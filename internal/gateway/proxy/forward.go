@@ -113,24 +113,6 @@ func (h *Handler) handleProcessCreation(r *http.Request, body []byte) {
 	}
 }
 
-// releasePromoteClaimAfterFailure releases the approval's promote claim when the promote didn't succeed (an error
-// or a non-2xx response), so it can be retried. A successful promote already marked the approval deployed.
-func (h *Handler) releasePromoteClaimAfterFailure(r *http.Request, pth string, statusCode int, forwardErr error) {
-	if r.Method != http.MethodPost || !rbac.KeyMatch3(pth, "/apps/{app}/releases/{id}/promote") {
-		return
-	}
-	if forwardErr == nil && statusCode >= 200 && statusCode < 300 {
-		return
-	}
-	tracker := getDeployApprovalTracker(r.Context())
-	if tracker == nil || tracker.request == nil || h.database == nil {
-		return
-	}
-	if err := h.database.ReleaseDeployApprovalPromote(tracker.request.ID); err != nil {
-		log.Printf("Failed to release deploy approval promote claim: %v", err)
-	}
-}
-
 // markDeployApprovalDeployedAfterPromote marks the approval behind a successful release promote as deployed,
 // so the approval can't promote again. It runs for every proxied response: promote responses aren't buffered.
 func (h *Handler) markDeployApprovalDeployedAfterPromote(r *http.Request, pth string, statusCode int) {
@@ -328,7 +310,7 @@ func (h *Handler) forwardRequest(
 		if fpErr, ok := rackcert.AsFingerprintMismatch(err); ok {
 			return 0, fpErr
 		}
-		return 0, fmt.Errorf("failed to forward request: %w", err)
+		return 0, fmt.Errorf("%w: %w", errRackRequestFailed, err)
 	}
 	defer resp.Body.Close() //nolint:errcheck,gosec // G104: cleanup
 

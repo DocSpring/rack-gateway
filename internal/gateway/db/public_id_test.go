@@ -14,7 +14,13 @@ import (
 func TestMalformedPublicIDsAreNotFound(t *testing.T) {
 	database := dbtest.NewDatabase(t)
 
-	for _, id := range []string{"4", "not-a-uuid", "406e7893-a0d8-4b80-8ff7"} {
+	const valid = "406e7893-a0d8-4b80-8ff7-2d6b8e1c5a70"
+	malformed := []string{
+		"4", "not-a-uuid", "406e7893-a0d8-4b80-8ff7",
+		// uuid.Parse accepts these, but Postgres doesn't.
+		"urn:uuid:" + valid, "x" + valid + "x",
+	}
+	for _, id := range malformed {
 		token, err := database.GetAPITokenByPublicID(id)
 		require.NoError(t, err, id)
 		require.Nil(t, token, id)

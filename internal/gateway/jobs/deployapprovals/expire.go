@@ -47,7 +47,13 @@ func NewExpireWorker(store Expirer, pendingMaxAge time.Duration, auditFn AuditFu
 
 // Work runs one sweep.
 func (w *ExpireWorker) Work(_ context.Context, _ *river.Job[ExpireArgs]) error {
-	expired, err := w.store.ExpireDeployApprovalRequests(w.pendingMaxAge)
+	return Expire(w.store, w.pendingMaxAge, w.audit)
+}
+
+// Expire runs one expiry sweep and audits each request it expires. It also runs before a deploy approval request
+// is created, so a lapsed request can't block it.
+func Expire(store Expirer, pendingMaxAge time.Duration, auditFn AuditFunc) error {
+	expired, err := store.ExpireDeployApprovalRequests(pendingMaxAge)
 	if err != nil {
 		return fmt.Errorf("expire deploy approvals: %w", err)
 	}
@@ -57,7 +63,7 @@ func (w *ExpireWorker) Work(_ context.Context, _ *river.Job[ExpireArgs]) error {
 	// The requests are already expired, so a retry wouldn't audit them: write every event, then report failures.
 	var auditErrs []error
 	for _, e := range expired {
-		if err := w.audit(audit.DeployApprovalExpiredEntry(e)); err != nil {
+		if err := auditFn(audit.DeployApprovalExpiredEntry(e)); err != nil {
 			auditErrs = append(auditErrs, fmt.Errorf("audit expired deploy approval %d: %w", e.ID, err))
 		}
 	}

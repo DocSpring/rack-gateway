@@ -162,10 +162,11 @@ func describeSummary(lines []string) string {
 }
 
 // describeCommand renders the command line for display with secret values masked: KEY=value arguments
-// (e.g. env set) and the values of flags that can carry credentials.
+// (e.g. env set, --env KEY=value) and the values of flags that can carry credentials. After "--" (a command run
+// on the rack) arguments aren't rack-gateway flags, so any argument with a value is masked.
 func describeCommand(args []string) string {
 	shown := make([]string, 0, len(args))
-	maskNext := false
+	maskNext, remoteCommand := false, false
 	for i, arg := range args {
 		switch {
 		case i == 0:
@@ -173,31 +174,40 @@ func describeCommand(args []string) string {
 		case maskNext:
 			shown = append(shown, "***")
 			maskNext = false
-		case strings.HasPrefix(arg, "-"):
+		case remoteCommand || !strings.HasPrefix(arg, "-"):
+			shown = append(shown, maskAssignment(arg))
+		case arg == "--":
+			remoteCommand = true
+			shown = append(shown, arg)
+		default:
 			var flag string
 			flag, maskNext = describeFlag(arg)
 			shown = append(shown, flag)
-		case strings.Contains(arg, "="):
-			name, _, _ := strings.Cut(arg, "=")
-			shown = append(shown, name+"=***")
-		default:
-			shown = append(shown, arg)
 		}
 	}
 	return dialogText(strings.Join(shown, " "), maxCommandLength)
 }
 
-// describeFlag renders a flag argument, masking the inline value (--api-token=...) of a secret flag. maskNext
-// reports that the flag is secret and its value is the next argument (--api-token ...).
+// maskAssignment masks the value of a KEY=value argument.
+func maskAssignment(arg string) string {
+	if name, _, found := strings.Cut(arg, "="); found {
+		return name + "=***"
+	}
+	return arg
+}
+
+// describeFlag renders a flag argument, masking an inline value that can be secret: a secret flag's
+// (--api-token=...) or a KEY=value one (--env=KEY=value). maskNext reports that the flag is secret and its value
+// is the next argument (--api-token ...).
 func describeFlag(arg string) (shown string, maskNext bool) {
-	name, _, hasValue := strings.Cut(arg, "=")
+	name, value, hasValue := strings.Cut(arg, "=")
 	switch {
-	case !isSecretFlag(name):
-		return arg, false
-	case hasValue:
+	case !hasValue:
+		return arg, isSecretFlag(name)
+	case isSecretFlag(name):
 		return name + "=***", false
 	default:
-		return arg, true
+		return name + "=" + maskAssignment(value), false
 	}
 }
 

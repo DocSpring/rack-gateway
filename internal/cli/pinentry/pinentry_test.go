@@ -129,6 +129,31 @@ func TestDescribeCommandMasksValuesOfSecretFlags(t *testing.T) {
 	}
 }
 
+func TestDescribeCommandMasksAssignments(t *testing.T) {
+	tests := []struct {
+		args []string
+		want string
+	}{
+		{[]string{"env", "set", "DB_PASSWORD=hunter2", "PORT=80"}, "env set DB_PASSWORD=*** PORT=***"},
+		{[]string{"run", "web", "--env", "DB_PASSWORD=hunter2"}, "run web --env DB_PASSWORD=***"},
+		{[]string{"run", "web", "--env=DB_PASSWORD=hunter2"}, "run web --env=DB_PASSWORD=***"},
+		{[]string{"env", "set", "--replace=DB_PASSWORD=hunter2"}, "env set --replace=DB_PASSWORD=***"},
+		{
+			[]string{"run", "web", "--", "curl", "--url=https://u:hunter2@example.com", "-H", "X"},
+			"run web -- curl --url=*** -H X",
+		},
+	}
+	for _, tt := range tests {
+		got := describeCommand(append([]string{"rack-gateway"}, tt.args...))
+		if got != "rack-gateway "+tt.want {
+			t.Errorf("describeCommand(%q) = %q, want %q", tt.args, got, "rack-gateway "+tt.want)
+		}
+		if strings.Contains(got, "hunter2") {
+			t.Errorf("describeCommand(%q) shows a secret value: %q", tt.args, got)
+		}
+	}
+}
+
 func TestDescribeCommandEscapesControlCharacters(t *testing.T) {
 	args := []string{
 		"rack-gateway", "deploy-approval", "approve", "--notes", "ok\nGateway: evil.example.com",

@@ -64,6 +64,10 @@ These settings live under **Apps → `{app}` → Settings**:
 | `allow_deploy_from_default_branch` | Allow deploys from default branch | `false` |
 | `github_post_pr_comment` | Post PR comment on request creation | `true` |
 
+`github_verification` is on by default, and it fails closed: while it's on, the gateway refuses to create deploy
+approval requests for the app unless `GITHUB_TOKEN` and the app's `vcs_repo` are both set. Set them, or turn
+`github_verification` off for apps that don't deploy from GitHub.
+
 ```bash
 # Environment variable configuration
 RGW_APP_MYAPP_SETTING_VCS_PROVIDER=github

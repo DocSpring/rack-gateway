@@ -96,8 +96,8 @@ type DeployApprovalRequestListOptions struct {
 	GitBranch     string
 	GitCommitHash string
 	App           string
-	// AwaitingUpload limits the list to approved, unexpired requests that have no uploaded archive yet.
-	AwaitingUpload bool
+	// OnlyApproved limits the list to approved, unexpired requests.
+	OnlyApproved bool
 }
 
 // ListDeployApprovalRequests returns a paginated list of deploy approval requests matching the given options
@@ -113,8 +113,8 @@ func (d *Database) ListDeployApprovalRequests(opts DeployApprovalRequestListOpti
 		clauses = append(clauses, "dr.status = ?")
 		args = append(args, opts.Status)
 	}
-	if opts.AwaitingUpload {
-		clauses = append(clauses, "dr.status = 'approved'", "dr.object_url IS NULL",
+	if opts.OnlyApproved {
+		clauses = append(clauses, "dr.status = 'approved'",
 			"(dr.approval_expires_at IS NULL OR dr.approval_expires_at > NOW())")
 	}
 	if opts.TokenID > 0 {
@@ -141,7 +141,7 @@ func (d *Database) ListDeployApprovalRequests(opts DeployApprovalRequestListOpti
 	query := deployApprovalRequestSelect + " WHERE " + strings.Join(
 		clauses,
 		" AND ",
-	) + " ORDER BY dr.created_at DESC LIMIT ? OFFSET ?"
+	) + " ORDER BY dr.created_at DESC, dr.id DESC LIMIT ? OFFSET ?"
 	args = append(args, limit, opts.Offset)
 
 	rows, err := d.query(query, args...)

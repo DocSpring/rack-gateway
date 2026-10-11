@@ -37,4 +37,12 @@ func TestDeployApprovalPromoteClaim(t *testing.T) {
 	claimed, err = database.ClaimDeployApprovalPromote(approval.ID)
 	require.NoError(t, err)
 	require.True(t, claimed, "a stale claim can be taken over")
+
+	lapsed, err := createApproval(t, database, userID, tokenID, "other-app")
+	require.NoError(t, err)
+	_, err = database.ApproveDeployApprovalRequest(lapsed.ID, userID, time.Now().Add(-time.Minute), "")
+	require.NoError(t, err)
+	claimed, err = database.ClaimDeployApprovalPromote(lapsed.ID)
+	require.NoError(t, err)
+	require.False(t, claimed, "an approval whose window has passed can't be claimed, even before the expiry sweep")
 }
