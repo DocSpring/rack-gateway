@@ -105,14 +105,17 @@ func isStepUpFresh(expiresAt *time.Time, now time.Time) bool {
 }
 
 func promptMFAForCommand(cmd *cobra.Command, baseURL, bearer, rack string) (string, error) {
-	result, _, err := GetMFAAuthWithPIN(cmd, baseURL, bearer, rack, "")
+	result, _, err := GetMFAAuthWithPIN(cmd, baseURL, bearer, rack, "", nil)
 	return result, err
 }
 
 // GetMFAAuthWithPIN gets MFA authentication, checking the --mfa-code flag first.
-// Optionally uses a cached PIN for WebAuthn.
+// Optionally uses a cached PIN for WebAuthn. pinSummary (optional) describes what the step-up approves, one item
+// per line; the PIN dialog lists it.
 // Returns the auth string, the PIN used (for caching), and any error.
-func GetMFAAuthWithPIN(cmd *cobra.Command, baseURL, bearer, rack, cachedPIN string) (string, string, error) {
+func GetMFAAuthWithPIN(
+	cmd *cobra.Command, baseURL, bearer, rack, cachedPIN string, pinSummary []string,
+) (string, string, error) {
 	// Check for --mfa-code flag first (for TOTP)
 	if code, ok := inlineTotpFromFlag(); ok {
 		return code, "", nil
@@ -128,7 +131,7 @@ func GetMFAAuthWithPIN(cmd *cobra.Command, baseURL, bearer, rack, cachedPIN stri
 		return "", "", err
 	}
 
-	return CollectMFAAuthWithPIN(cmd, baseURL, bearer, method, cachedPIN)
+	return CollectMFAAuthWithPIN(cmd, baseURL, bearer, method, cachedPIN, pinSummary)
 }
 
 func inlineTotpFromFlag() (string, bool) {
@@ -210,14 +213,15 @@ func collectMFAAuth(
 	method MFAMethodResponse,
 	_ []MFAMethodResponse,
 ) (string, error) {
-	result, _, err := CollectMFAAuthWithPIN(cmd, baseURL, bearer, method, "")
+	result, _, err := CollectMFAAuthWithPIN(cmd, baseURL, bearer, method, "", nil)
 	return result, err
 }
 
-// CollectMFAAuthWithPIN collects MFA authentication, optionally using a cached PIN for WebAuthn.
+// CollectMFAAuthWithPIN collects MFA authentication, optionally using a cached PIN for WebAuthn. pinSummary
+// (optional) describes what the step-up approves; the PIN dialog lists it.
 // Returns the auth string, the PIN used (for caching), and any error.
 func CollectMFAAuthWithPIN(
-	cmd *cobra.Command, baseURL, bearer string, method MFAMethodResponse, cachedPIN string,
+	cmd *cobra.Command, baseURL, bearer string, method MFAMethodResponse, cachedPIN string, pinSummary []string,
 ) (string, string, error) {
 	out := cmd.ErrOrStderr()
 
@@ -230,7 +234,7 @@ func CollectMFAAuthWithPIN(
 			}
 		}
 
-		assertionData, pinUsed, err := collectWebAuthnAssertionWithPIN(baseURL, bearer, cachedPIN)
+		assertionData, pinUsed, err := collectWebAuthnAssertionWithPIN(baseURL, bearer, cachedPIN, pinSummary)
 		if err != nil {
 			return "", "", fmt.Errorf("WebAuthn verification failed: %w", err)
 		}
@@ -259,7 +263,7 @@ func CollectMFAAuthWithPIN(
 
 // collectWebAuthnAssertionWithPIN collects a WebAuthn assertion, optionally using a cached PIN.
 // Returns the assertion data, the PIN used (for caching), and any error.
-func collectWebAuthnAssertionWithPIN(baseURL, bearer, cachedPIN string) (string, string, error) {
+func collectWebAuthnAssertionWithPIN(baseURL, bearer, cachedPIN string, pinSummary []string) (string, string, error) {
 	start, err := startWebAuthnAssertion(baseURL, bearer)
 	if err != nil {
 		return "", "", err
@@ -269,6 +273,7 @@ func collectWebAuthnAssertionWithPIN(baseURL, bearer, cachedPIN string) (string,
 	if err != nil {
 		return "", "", err
 	}
+	options.PINSummary = pinSummary
 
 	assertion, pinUsed, err := webauthn.GetAssertionWithCachedPIN(options, cachedPIN)
 	if err != nil {

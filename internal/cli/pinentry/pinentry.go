@@ -2,8 +2,8 @@
 //
 // When stdin is a terminal the PIN is read there, as before. Without a terminal (for example when an
 // AI agent runs the CLI on the user's behalf) the PIN is requested in a native macOS dialog that shows
-// which gateway and command the user is approving, so the user still enters the PIN and touches the key
-// for every step-up.
+// which gateway and command the user is approving, and a summary of what the command approves, so the
+// user still enters the PIN and touches the key for every step-up.
 package pinentry
 
 import (
@@ -17,6 +17,7 @@ import (
 	"runtime"
 	"strings"
 	"time"
+	"unicode"
 
 	"golang.org/x/term"
 )
@@ -26,6 +27,10 @@ const (
 	dialogTimeout = 3 * time.Minute
 	// maxCommandLength keeps a long command line from overflowing the dialog.
 	maxCommandLength = 400
+	// maxLineLength keeps each summary line (and the gateway) to about one line of the dialog.
+	maxLineLength = 160
+	// maxSummaryLines keeps a long summary readable; the lines past it are counted instead of shown.
+	maxSummaryLines = 12
 	// appleScriptUserCanceled is the AppleScript error number for a canceled dialog.
 	appleScriptUserCanceled = "(-128)"
 )
@@ -45,6 +50,10 @@ end run`
 // ErrCanceled is returned when the user cancels the PIN dialog or lets it time out.
 var ErrCanceled = errors.New("PIN entry canceled")
 
+// secretFlagWords mark flags whose values can be credentials (e.g. --api-token, --mfa-code, --password).
+// The values of other flags (--app, --rack, --commit, ...) are shown, so the user can see what they approve.
+var secretFlagWords = []string{"token", "secret", "password", "passwd", "passphrase", "key", "credential", "code"}
+
 // dialogRunner runs the AppleScript with the message as its only argument.
 type dialogRunner func(ctx context.Context, script, message string) (stdout, stderr string, err error)
 
@@ -54,6 +63,9 @@ type Request struct {
 	Gateway string
 	// Args is the command line being authorized (normally os.Args).
 	Args []string
+	// Summary optionally describes what the command approves, one item per line (for example each deploy
+	// approval it makes). The dialog lists it above the command line.
+	Summary []string
 }
 
 // ReadPIN asks for the security key PIN on the terminal, or in a macOS dialog when stdin is not a terminal.
@@ -116,15 +128,41 @@ func runOsascript(ctx context.Context, script, message string) (string, string, 
 	return stdout.String(), stderr.String(), err
 }
 
+// dialogMessage renders the dialog text. Everything that comes from outside the dialog (the summary, the
+// gateway, the command line) goes through dialogText, so it can't add lines or reorder what the dialog shows.
 func dialogMessage(req Request) string {
 	gateway := strings.TrimPrefix(strings.TrimPrefix(req.Gateway, "https://"), "http://")
-	return "Enter your security key PIN to approve this rack-gateway command, then touch the key.\n\n" +
-		"Gateway: " + gateway + "\n" +
-		"Command: " + describeCommand(req.Args)
+
+	var message strings.Builder
+	message.WriteString("Enter your security key PIN to approve this rack-gateway command, then touch the key.\n\n")
+	if len(req.Summary) > 0 {
+		message.WriteString("Approving:\n" + describeSummary(req.Summary) + "\n\n")
+	}
+	message.WriteString("Gateway: " + dialogText(gateway, maxLineLength) + "\n")
+	message.WriteString("Command: " + describeCommand(req.Args))
+	return message.String()
 }
 
-// describeCommand renders the command line for display with secret values masked:
-// KEY=value arguments (e.g. env set) and the values of credential flags.
+// describeSummary renders the summary as one bullet per line, each cut to maxLineLength. Past
+// maxSummaryLines, the remaining lines are counted instead of shown.
+func describeSummary(lines []string) string {
+	shown := lines
+	if len(lines) > maxSummaryLines {
+		shown = lines[:maxSummaryLines-1]
+	}
+
+	bullets := make([]string, 0, len(shown)+1)
+	for _, line := range shown {
+		bullets = append(bullets, "• "+dialogText(line, maxLineLength))
+	}
+	if hidden := len(lines) - len(shown); hidden > 0 {
+		bullets = append(bullets, fmt.Sprintf("• ...and %d more", hidden))
+	}
+	return strings.Join(bullets, "\n")
+}
+
+// describeCommand renders the command line for display with secret values masked: KEY=value arguments
+// (e.g. env set) and the values of flags that can carry credentials.
 func describeCommand(args []string) string {
 	shown := make([]string, 0, len(args))
 	maskNext := false
@@ -135,9 +173,10 @@ func describeCommand(args []string) string {
 		case maskNext:
 			shown = append(shown, "***")
 			maskNext = false
-		case isCredentialFlag(arg):
-			shown = append(shown, arg)
-			maskNext = true
+		case strings.HasPrefix(arg, "-"):
+			var flag string
+			flag, maskNext = describeFlag(arg)
+			shown = append(shown, flag)
 		case strings.Contains(arg, "="):
 			name, _, _ := strings.Cut(arg, "=")
 			shown = append(shown, name+"=***")
@@ -145,14 +184,49 @@ func describeCommand(args []string) string {
 			shown = append(shown, arg)
 		}
 	}
-
-	command := strings.Join(shown, " ")
-	if len(command) > maxCommandLength {
-		command = command[:maxCommandLength] + "..."
-	}
-	return command
+	return dialogText(strings.Join(shown, " "), maxCommandLength)
 }
 
-func isCredentialFlag(arg string) bool {
-	return arg == "--api-token" || arg == "--mfa-code"
+// describeFlag renders a flag argument, masking the inline value (--api-token=...) of a secret flag. maskNext
+// reports that the flag is secret and its value is the next argument (--api-token ...).
+func describeFlag(arg string) (shown string, maskNext bool) {
+	name, _, hasValue := strings.Cut(arg, "=")
+	switch {
+	case !isSecretFlag(name):
+		return arg, false
+	case hasValue:
+		return name + "=***", false
+	default:
+		return arg, true
+	}
+}
+
+func isSecretFlag(name string) bool {
+	name = strings.ToLower(strings.TrimLeft(name, "-"))
+	for _, word := range secretFlagWords {
+		if strings.Contains(name, word) {
+			return true
+		}
+	}
+	return false
+}
+
+// dialogText makes text safe for one line of the dialog: control characters (newlines, escape sequences),
+// Unicode line and paragraph separators and bidirectional overrides become '?', so the text can't add lines
+// or reorder what the dialog shows. Text longer than maxRunes is cut and ends in "...".
+func dialogText(s string, maxRunes int) string {
+	runes := []rune(s)
+	truncated := len(runes) > maxRunes
+	if truncated {
+		runes = runes[:maxRunes]
+	}
+	for i, r := range runes {
+		if unicode.IsControl(r) || unicode.In(r, unicode.Zl, unicode.Zp, unicode.Bidi_Control) {
+			runes[i] = '?'
+		}
+	}
+	if truncated {
+		return string(runes) + "..."
+	}
+	return string(runes)
 }

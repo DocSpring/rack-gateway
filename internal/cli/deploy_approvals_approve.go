@@ -4,7 +4,7 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
-	"net/http"
+	"io"
 	"os"
 	"strings"
 	"time"
@@ -35,17 +35,19 @@ func newDeployApprovalApproveCommand() *cobra.Command {
 		Short: "Approve a deploy approval request",
 		Long: `Approve a deploy approval request.
 
+With an ID, shows that request (rack, app, commit, message, branch and requesting token), then approves it.
+
 If no ID is provided, finds the requests for the commit (the current git commit by default) of every listed
 app on every listed rack, shows them, and approves the pending ones: one PIN, then one key touch per approval.
 Requests that are already approved or deployed count as done. If a listed app has no request on a listed rack,
 nothing is approved and the command fails.
 
 From a terminal it asks for Enter first. Without a terminal (scripts, AI agents) it doesn't, and it needs an
-explicit --app list and a full 40-character --commit (no --branch or --all-apps): the PIN dialog shows only the
-command line, so it must say exactly what is approved.
+explicit --app list and a full 40-character --commit (no --branch or --all-apps). The macOS PIN dialog then lists
+every approval the command makes (app, rack, commit and message) above the command line.
 
 Examples:
-  # Approve by ID
+  # Show a request and approve it
   cx deploy-approval approve abc123-def456-...
 
   # Approve latest for current git commit (prompts for MFA)
@@ -61,7 +63,7 @@ Examples:
   cx deploy-approval approve --rack staging,us,eu
 
   # Approve two apps' requests for a commit on US and EU (one PIN, one touch per approval)
-  cx deploy-approval approve --app docspring,api-proxy --commit <sha> --rack us,eu
+  cx deploy-approval approve --app web,worker --commit <sha> --rack us,eu
 
   # Approve every app's request for a commit
   cx deploy-approval approve --all-apps --commit <sha> --rack staging`,
@@ -114,25 +116,24 @@ func executeDeployApprovalApprove(cmd *cobra.Command, args []string, opts deploy
 	return approveBySearch(cmd, racks, apps, branch, commit, opts.notes)
 }
 
+// approveByID shows the request with this ID (looked up on each rack in turn), then approves it like a request
+// found by search: after Enter from a terminal, and listed in the PIN dialog.
 func approveByID(cmd *cobra.Command, racks []string, publicID, notes string) error {
-	// Try each rack until we find and approve the request
-	for _, rack := range racks {
-		approved, err := approveDeployRequest(cmd, rack, publicID, notes)
-		if err != nil {
-			if isGatewayStatus(err, http.StatusNotFound) {
-				continue
-			}
-			return rackScopedError(rack, err, len(racks))
-		}
-
-		if approved == nil {
-			continue
-		}
-
-		return printApprovalSuccess(cmd, approved, rack, len(racks) > 1)
+	found, err := findRequestByID(cmd, racks, publicID)
+	if err != nil {
+		return err
 	}
 
-	return fmt.Errorf("deploy approval request %s not found", publicID)
+	requests := []rackApproval{found}
+	if err := displayAllRequests(cmd.OutOrStdout(), requests); err != nil {
+		return err
+	}
+	if status := found.req.Status; status != "pending" && status != "approved" && status != "deployed" {
+		return fmt.Errorf(
+			"deploy approval request %s is %s; only a pending request can be approved", publicID, displayText(status),
+		)
+	}
+	return approvePendingRequests(cmd, requests, notes, len(racks) > 1)
 }
 
 type rackApproval struct {
@@ -150,25 +151,28 @@ func approveBySearch(cmd *cobra.Command, racks []string, apps approvalApps, bran
 		return noRequestFoundError(missing, apps, branch, commit)
 	}
 
-	if err := displayAllRequests(allRequests, len(racks) > 1); err != nil {
+	if err := displayAllRequests(cmd.OutOrStdout(), allRequests); err != nil {
 		return err
 	}
+	return approvePendingRequests(cmd, allRequests, notes, len(racks) > 1)
+}
 
-	pending := filterPendingRequests(allRequests)
+// approvePendingRequests approves the pending requests among those just shown. From a terminal it asks for Enter
+// first. Agents and scripts can't press Enter; the PIN dialog (which lists every approval) and the key touch per
+// approval are the confirmation.
+func approvePendingRequests(cmd *cobra.Command, requests []rackApproval, notes string, showRack bool) error {
+	pending := filterPendingRequests(requests)
 	if len(pending) == 0 {
-		fmt.Println("\nNothing to approve: every request is already approved or deployed.")
-		return nil
+		return writeLine(cmd.OutOrStdout(), "\nNothing to approve: every request is already approved or deployed.")
 	}
 
-	// From a terminal, confirm first. Agents and scripts can't press Enter; the PIN dialog (which shows this
-	// command) and the key touch per approval are the confirmation.
 	if IsInteractive() {
-		if err := promptForApproval(pending); err != nil {
+		if err := promptForApproval(cmd, pending); err != nil {
 			return err
 		}
 	}
 
-	return approveAllRequests(cmd, pending, notes, len(racks) > 1)
+	return approveAllRequests(cmd, pending, notes, showRack)
 }
 
 // noRequestFoundError explains which expected requests are missing. Nothing is approved in that case, so a
@@ -186,13 +190,13 @@ func noRequestFoundError(missing []string, apps approvalApps, branch, commit str
 	)
 }
 
-func displayAllRequests(requests []rackApproval, showRack bool) error {
-	fmt.Println()
-	for i, r := range requests {
-		if i > 0 {
-			fmt.Println()
+// displayAllRequests prints every request, with its rack, before anything is approved.
+func displayAllRequests(out io.Writer, requests []rackApproval) error {
+	for _, r := range requests {
+		if err := writeLine(out); err != nil {
+			return err
 		}
-		if err := printDeployApprovalDetails(r.req, r.rack, showRack); err != nil {
+		if err := printDeployApprovalDetails(out, r.req, r.rack, true); err != nil {
 			return err
 		}
 	}
@@ -209,13 +213,12 @@ func filterPendingRequests(requests []rackApproval) []rackApproval {
 	return pending
 }
 
-func promptForApproval(pending []rackApproval) error {
-	promptText := buildApprovalPrompt(pending)
-	fmt.Print(promptText + " (or Ctrl+C to abort): ")
-
-	reader := bufio.NewReader(os.Stdin)
-	if _, err := reader.ReadString('\n'); err != nil {
-		return fmt.Errorf("aborted")
+func promptForApproval(cmd *cobra.Command, pending []rackApproval) error {
+	if err := writef(cmd.OutOrStdout(), "%s (or Ctrl+C to abort): ", buildApprovalPrompt(pending)); err != nil {
+		return err
+	}
+	if _, err := bufio.NewReader(cmd.InOrStdin()).ReadString('\n'); err != nil {
+		return errors.New("aborted")
 	}
 	return nil
 }
@@ -290,14 +293,16 @@ func missingApps(rack string, apps approvalApps, found []rackApproval) []string 
 	return missing
 }
 
+// approveAllRequests approves the pending requests in turn: one PIN (cached after the first approval), then one
+// key touch per approval. The PIN dialog lists every one of them.
 func approveAllRequests(cmd *cobra.Command, pending []rackApproval, notes string, showRack bool) error {
+	summary := approvalSummary(pending)
 	var cachedPIN string
-	var successCount int
 
 	for i, p := range pending {
 		printApprovalContext(cmd, p, i+1, len(pending))
 
-		approved, pin, err := approveDeployRequestWithPIN(cmd, p.rack, p.req.PublicID, notes, cachedPIN)
+		approved, pin, err := approveDeployRequestWithPIN(cmd, p.rack, p.req.PublicID, notes, cachedPIN, summary)
 		if err != nil {
 			return fmt.Errorf("failed to approve request on rack %s: %w", p.rack, err)
 		}
@@ -307,16 +312,14 @@ func approveAllRequests(cmd *cobra.Command, pending []rackApproval, notes string
 			cachedPIN = pin
 		}
 
-		if err := printApprovalSuccess(cmd, approved, p.rack, showRack); err != nil {
+		if err := printApprovalSuccess(cmd.OutOrStdout(), approved, p.rack, showRack); err != nil {
 			return err
 		}
-		successCount++
 	}
 
-	if successCount > 1 {
-		fmt.Printf("\n✅ Successfully approved %d requests\n", successCount)
+	if len(pending) > 1 {
+		return writef(cmd.OutOrStdout(), "\n✅ Successfully approved %d requests\n", len(pending))
 	}
-
 	return nil
 }
 
@@ -337,20 +340,20 @@ func printApprovalContext(cmd *cobra.Command, p rackApproval, current, total int
 		_, _ = fmt.Fprintf(out, "  %s %s\n", dim("App:    "), displayText(p.req.App))
 	}
 	if p.req.GitCommitHash != "" {
-		_, _ = fmt.Fprintf(out, "  %s %s\n", dim("Commit: "), p.req.GitCommitHash)
+		_, _ = fmt.Fprintf(out, "  %s %s\n", dim("Commit: "), displayText(p.req.GitCommitHash))
 	}
 	if p.req.GitBranch != "" {
 		_, _ = fmt.Fprintf(out, "  %s %s\n", dim("Branch: "), displayText(p.req.GitBranch))
 	}
+	if p.req.TargetAPITokenName != "" {
+		_, _ = fmt.Fprintf(out, "  %s %s\n", dim("Token:  "), displayText(p.req.TargetAPITokenName))
+	}
 }
 
-func approveDeployRequest(cmd *cobra.Command, rack, requestID, notes string) (*deployApprovalRequest, error) {
-	result, _, err := approveDeployRequestWithPIN(cmd, rack, requestID, notes, "")
-	return result, err
-}
-
+// approveDeployRequestWithPIN approves one request. pinSummary lists every approval the command makes, for the
+// PIN dialog (only shown when no PIN is cached yet).
 func approveDeployRequestWithPIN(
-	cmd *cobra.Command, rack, requestID, notes, cachedPIN string,
+	cmd *cobra.Command, rack, requestID, notes, cachedPIN string, pinSummary []string,
 ) (*deployApprovalRequest, string, error) {
 	payload := map[string]interface{}{}
 	if notes != "" {
@@ -360,7 +363,7 @@ func approveDeployRequestWithPIN(
 	endpoint := fmt.Sprintf("/deploy-approval-requests/%s/approve", requestID)
 
 	// Get MFA auth with PIN caching
-	mfaAuth, pinUsed, err := getDeployApprovalMFAAuth(cmd, rack, cachedPIN)
+	mfaAuth, pinUsed, err := getDeployApprovalMFAAuth(cmd, rack, cachedPIN, pinSummary)
 	if err != nil {
 		return nil, "", err
 	}
@@ -373,7 +376,9 @@ func approveDeployRequestWithPIN(
 	return result, pinUsed, nil
 }
 
-func getDeployApprovalMFAAuth(cmd *cobra.Command, rack, cachedPIN string) (string, string, error) {
+func getDeployApprovalMFAAuth(
+	cmd *cobra.Command, rack, cachedPIN string, pinSummary []string,
+) (string, string, error) {
 	if os.Getenv("RACK_GATEWAY_API_TOKEN") != "" {
 		return "", "", errAPITokenCannotApprove
 	}
@@ -383,7 +388,7 @@ func getDeployApprovalMFAAuth(cmd *cobra.Command, rack, cachedPIN string) (strin
 		return "", "", err
 	}
 
-	return GetMFAAuthWithPIN(cmd, gatewayURL, bearer, rack, cachedPIN)
+	return GetMFAAuthWithPIN(cmd, gatewayURL, bearer, rack, cachedPIN, pinSummary)
 }
 
 func postDeployApprovalRequestWithMFA(
@@ -396,19 +401,16 @@ func postDeployApprovalRequestWithMFA(
 	return &result, nil
 }
 
-func printApprovalSuccess(cmd *cobra.Command, approved *deployApprovalRequest, rack string, showRack bool) error {
-	var statusLine string
+// printApprovalSuccess reports an approval, naming the app and commit the gateway approved.
+func printApprovalSuccess(out io.Writer, approved *deployApprovalRequest, rack string, showRack bool) error {
+	statusLine := fmt.Sprintf(
+		"\n✅ Deploy approval request %s (%s) approved", approved.PublicID, approvalTarget(approved),
+	)
 	if showRack {
-		statusLine = fmt.Sprintf("\n✅ Deploy approval request %s approved on rack %s", approved.PublicID, rack)
-	} else {
-		statusLine = fmt.Sprintf("\n✅ Deploy approval request %s approved", approved.PublicID)
+		statusLine += " on rack " + rack
 	}
 	if approved.ApprovalExpiresAt != nil {
-		statusLine = fmt.Sprintf(
-			"%s (expires at %s)",
-			statusLine,
-			approved.ApprovalExpiresAt.UTC().Format(time.RFC3339),
-		)
+		statusLine += fmt.Sprintf(" (expires at %s)", approved.ApprovalExpiresAt.UTC().Format(time.RFC3339))
 	}
-	return writeLine(cmd.OutOrStdout(), statusLine)
+	return writeLine(out, statusLine)
 }
