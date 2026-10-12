@@ -79,7 +79,6 @@ func TestParsePostedEnvRefusesOversizedEnvs(t *testing.T) {
 	for name, env := range map[string]string{
 		"2 MB of newlines":   strings.Repeat("\n", 2<<20),
 		"20,000 short lines": shortLines.String(),
-		"over 1 MiB":         "BIG=" + strings.Repeat("x", maxPostedEnvBytes),
 	} {
 		_, _, err := parsePostedEnv(env)
 		require.ErrorIsf(t, err, errBodyTooLarge, "%s", name)
@@ -152,10 +151,10 @@ func TestReleaseCreateLeavesExistingEntriesAlone(t *testing.T) {
 
 func TestReleaseCreateRefusesOversizedEnv(t *testing.T) {
 	f := newProtectedEnvFixture(t)
-	req, _ := f.request(t, f.deployer, strings.Repeat("\n", 2<<20), "", "", stepUpAgeFresh)
+	req, _ := f.request(t, f.deployer, strings.Repeat("\n", 2*maxPostedEnvLines), "", "", stepUpAgeFresh)
 	rr := f.proxy(req)
 	require.Equal(t, http.StatusRequestEntityTooLarge, rr.Code, rr.Body.String())
-	require.Contains(t, rr.Body.String(), "the release env is over the gateway's limit")
+	require.Contains(t, rr.Body.String(), "the release env is over the gateway's limit of 10000 lines")
 	require.Empty(t, f.rack.releases())
 }
 

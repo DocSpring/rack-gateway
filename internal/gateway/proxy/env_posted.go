@@ -7,15 +7,13 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/envutil"
 )
 
-// Limits on the env a release create posts. It is parsed before any env permission check, so parsing it must stay
-// cheap whatever the caller sends: the body may be up to 10 MB, and an env of millions of blank lines would cost
-// far more memory than its bytes. A real app's env is a few hundred lines and tens of KB, well inside both.
-const (
-	maxPostedEnvBytes = 1 << 20 // 1 MiB
-	maxPostedEnvLines = 10000
-)
+// maxPostedEnvLines limits the env a release create posts. It is parsed before any env permission check, so parsing
+// it must stay cheap whatever the caller sends: the request body cap (maxBufferedBodyBytes) bounds its bytes, but
+// an env of hundreds of thousands of blank lines would cost far more memory than its bytes. A real app's env is a
+// few hundred lines.
+const maxPostedEnvLines = 10000
 
-// postedEnvTooLargeError refuses an env over the limits. It counts as errBodyTooLarge, so the client gets a 413.
+// postedEnvTooLargeError refuses an env over the line limit. It counts as errBodyTooLarge, so the client gets a 413.
 type postedEnvTooLargeError struct {
 	message string
 }
@@ -90,13 +88,8 @@ func eachPostedEntry(envStr string, fn func(line int, key, value string) error) 
 	return nil
 }
 
-// checkPostedEnvSize refuses an env over maxPostedEnvBytes or maxPostedEnvLines, counting blank lines too.
+// checkPostedEnvSize refuses an env over maxPostedEnvLines, counting blank lines too.
 func checkPostedEnvSize(envStr string) error {
-	if len(envStr) > maxPostedEnvBytes {
-		return &postedEnvTooLargeError{
-			message: fmt.Sprintf("the release env is over the gateway's limit of %d bytes", maxPostedEnvBytes),
-		}
-	}
 	if postedEnvLines(envStr) > maxPostedEnvLines {
 		return &postedEnvTooLargeError{
 			message: fmt.Sprintf("the release env is over the gateway's limit of %d lines", maxPostedEnvLines),
