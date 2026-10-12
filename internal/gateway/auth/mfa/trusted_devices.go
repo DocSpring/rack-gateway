@@ -31,7 +31,11 @@ func (s *Service) MintTrustedDevice(userID int64, ip, userAgent string) (*Truste
 	token := base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(tokenBytes)
 	tokenHash := hashToken(token)
 
-	expiresAt := time.Now().Add(s.trustedDeviceTTL)
+	ttl, err := s.trustedDeviceTTL()
+	if err != nil {
+		return nil, err
+	}
+	expiresAt := time.Now().Add(ttl)
 	uaHash := hashUserAgent(userAgent)
 	deviceMeta := map[string]interface{}{
 		"user_agent": strings.TrimSpace(userAgent),
@@ -43,6 +47,19 @@ func (s *Service) MintTrustedDevice(userID int64, ip, userAgent string) (*Truste
 	_ = s.db.TouchTrustedDevice(device.ID, ip)
 	payload := &TrustedDeviceCookiePayload{Token: token, DeviceID: deviceID, RecordID: device.ID}
 	return payload, nil
+}
+
+// trustedDeviceTTL is how long a device minted now stays trusted, from the current MFA settings. Without a settings
+// source it's the default.
+func (s *Service) trustedDeviceTTL() (time.Duration, error) {
+	if s.settings == nil {
+		return db.DefaultTrustedDeviceTTL, nil
+	}
+	current, err := s.settings.GetMFASettings()
+	if err != nil {
+		return 0, fmt.Errorf("failed to load MFA settings: %w", err)
+	}
+	return current.TrustedDeviceTTL(), nil
 }
 
 // ConsumeTrustedDevice validates a trusted-device cookie token and updates its metadata.

@@ -10,18 +10,23 @@ import (
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
+	gtwlog "github.com/DocSpring/rack-gateway/internal/gateway/logging"
+	"github.com/DocSpring/rack-gateway/internal/gateway/settings"
 )
 
-// shouldEnforceMFA is a local wrapper for db.ShouldEnforceMFA to maintain backward compatibility
-// within the handlers package.
-func shouldEnforceMFA(settings *db.MFASettings, user *db.User) bool {
-	return db.ShouldEnforceMFA(settings, user)
-}
-
-// isMFAChallengeRequired is a local wrapper for db.IsMFAChallengeRequired to maintain backward compatibility
-// within the handlers package.
-func isMFAChallengeRequired(settings *db.MFASettings, user *db.User) bool {
-	return db.IsMFAChallengeRequired(settings, user)
+// mfaSettingsNow loads the MFA settings as they are now: they're read when needed, not at startup, so an admin's
+// change applies at once. If they can't be loaded it logs why and returns nil, which enforces MFA with the default
+// windows (db.ShouldEnforceMFA). Without a settings service the settings are nil too.
+func mfaSettingsNow(service *settings.Service) *db.MFASettings {
+	if service == nil {
+		return nil
+	}
+	current, err := service.GetMFASettings()
+	if err != nil {
+		gtwlog.Errorf("mfa: failed to load MFA settings, so MFA is enforced with the default windows: %v", err)
+		return nil
+	}
+	return current
 }
 
 // mfaUserContext holds the authenticated user and user record for MFA operations

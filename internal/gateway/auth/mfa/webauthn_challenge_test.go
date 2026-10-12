@@ -38,7 +38,7 @@ func newWebAuthnFixture(t *testing.T) *webAuthnFixture {
 	t.Helper()
 	database := dbtest.NewDatabase(t)
 	service, err := NewService(
-		database, "Test Gateway", 24*time.Hour, 10*time.Minute, []byte("pepper"),
+		database, "Test Gateway", nil, []byte("pepper"),
 		"", "", "localhost", "http://localhost", nil,
 	)
 	require.NoError(t, err)

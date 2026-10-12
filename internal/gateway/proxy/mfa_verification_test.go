@@ -202,16 +202,11 @@ func TestParseWebAuthnAssertion_PreservesAssertionFormat(t *testing.T) {
 	assert.Equal(t, "dGVzdC1jbGllbnQtZGF0YS1qc29u", response["clientDataJSON"])
 }
 
-// TestVerifyMFAIfRequired_StepUpWindowCheckedFirst verifies that the step-up window
-// is checked BEFORE attempting inline MFA verification. This is critical for multi-step
-// CLI operations (like "env set --promote") where the same MFA code is sent for all requests.
-// The first request verifies the MFA code and sets the step-up window. Subsequent requests
-// should skip MFA verification and reuse the step-up window, avoiding TOTP replay errors.
-func TestVerifyMFAIfRequired_StepUpWindowCheckedFirst(t *testing.T) {
+// TestIsStepUpValid checks the step-up window a step-up permission reuses. Multi-request CLI operations (like
+// "env set --promote") send the same MFA code with every request: the first verifies it and starts the window, and
+// the rest are covered by the window instead of failing TOTP replay protection.
+func TestIsStepUpValid(t *testing.T) {
 	t.Parallel()
-
-	// Create a minimal handler with no MFA service to test the logic flow
-	h := &Handler{}
 
 	// Create a test session with a recent step-up timestamp
 	recentStepUp := time.Now().Add(-5 * time.Minute) // 5 minutes ago, within 10-minute window
@@ -229,16 +224,16 @@ func TestVerifyMFAIfRequired_StepUpWindowCheckedFirst(t *testing.T) {
 	}
 
 	// Test that isStepUpValid returns true for recent step-up
-	require.True(t, h.isStepUpValid(authUser), "step-up should be valid when within window")
+	require.True(t, isStepUpValid(authUser, nil), "step-up should be valid when within window")
 
 	// Test that isStepUpValid returns false for expired step-up
 	expiredStepUp := time.Now().Add(-15 * time.Minute) // 15 minutes ago, outside 10-minute window
 	authUser.Session.RecentStepUpAt = &expiredStepUp
-	require.False(t, h.isStepUpValid(authUser), "step-up should be invalid when outside window")
+	require.False(t, isStepUpValid(authUser, nil), "step-up should be invalid when outside window")
 
 	// Test that isStepUpValid returns false when RecentStepUpAt is nil
 	authUser.Session.RecentStepUpAt = nil
-	require.False(t, h.isStepUpValid(authUser), "step-up should be invalid when RecentStepUpAt is nil")
+	require.False(t, isStepUpValid(authUser, nil), "step-up should be invalid when RecentStepUpAt is nil")
 }
 
 // TestVerifyMFAIfRequired_SkipsInlineMFAWhenStepUpValid tests that verifyMFAIfRequired

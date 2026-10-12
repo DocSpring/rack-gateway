@@ -6,7 +6,6 @@ import (
 	"log"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -29,13 +28,11 @@ import (
 )
 
 type mfaRuntimeConfig struct {
-	issuer           string
-	trustedDeviceTTL time.Duration
-	stepUpWindow     time.Duration
-	yubiClientID     string
-	yubiSecretKey    string
-	webAuthnRPID     string
-	webAuthnOrigin   string
+	issuer         string
+	yubiClientID   string
+	yubiSecretKey  string
+	webAuthnRPID   string
+	webAuthnOrigin string
 }
 
 // initializeServices sets up all application services (matching original main.go exactly)
@@ -139,18 +136,16 @@ func (a *App) initSessionManager() {
 }
 
 func (a *App) initMFAConfig() (*mfaRuntimeConfig, error) {
-	mfaSettings, err := a.SettingsService.GetMFASettings()
-	if err != nil {
+	// The MFA settings are read for each request that needs them; loading them now refuses to start with a setting
+	// (e.g. an environment variable) that can't be parsed.
+	if _, err := a.SettingsService.GetMFASettings(); err != nil {
 		return nil, fmt.Errorf("failed to load MFA settings: %w", err)
 	}
-	a.MFASettings = mfaSettings
 
 	cfg := &mfaRuntimeConfig{
-		issuer:           deriveMFAIssuer(),
-		trustedDeviceTTL: time.Duration(mfaSettings.TrustedDeviceTTLDays) * 24 * time.Hour,
-		stepUpWindow:     time.Duration(mfaSettings.StepUpWindowMinutes) * time.Minute,
-		yubiClientID:     strings.TrimSpace(os.Getenv("YUBICO_CLIENT_ID")),
-		yubiSecretKey:    strings.TrimSpace(os.Getenv("YUBICO_SECRET_KEY")),
+		issuer:        deriveMFAIssuer(),
+		yubiClientID:  strings.TrimSpace(os.Getenv("YUBICO_CLIENT_ID")),
+		yubiSecretKey: strings.TrimSpace(os.Getenv("YUBICO_SECRET_KEY")),
 	}
 
 	cfg.webAuthnRPID, cfg.webAuthnOrigin = a.resolveWebAuthnConfig()
@@ -305,8 +300,7 @@ func (a *App) initMFAService(cfg *mfaRuntimeConfig) error {
 	service, err := mfa.NewService(
 		a.Database,
 		cfg.issuer,
-		cfg.trustedDeviceTTL,
-		cfg.stepUpWindow,
+		a.SettingsService,
 		[]byte(a.Config.SessionSecret),
 		cfg.yubiClientID,
 		cfg.yubiSecretKey,

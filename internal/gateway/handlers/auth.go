@@ -7,6 +7,7 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/config"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	"github.com/DocSpring/rack-gateway/internal/gateway/security"
+	"github.com/DocSpring/rack-gateway/internal/gateway/settings"
 )
 
 // OAuthProvider captures the behavior needed from the OAuth handler.
@@ -23,7 +24,7 @@ type AuthHandler struct {
 	config           *config.Config
 	sessions         *auth.SessionManager
 	mfaService       *mfa.Service
-	mfaSettings      *db.MFASettings
+	settingsService  *settings.Service
 	securityNotifier *security.Notifier
 	auditLogger      *audit.Logger
 }
@@ -35,7 +36,7 @@ func NewAuthHandler(
 	cfg *config.Config,
 	sessions *auth.SessionManager,
 	mfaService *mfa.Service,
-	mfaSettings *db.MFASettings,
+	settingsService *settings.Service,
 	securityNotifier *security.Notifier,
 	auditLogger *audit.Logger,
 ) *AuthHandler {
@@ -45,7 +46,7 @@ func NewAuthHandler(
 		config:           cfg,
 		sessions:         sessions,
 		mfaService:       mfaService,
-		mfaSettings:      mfaSettings,
+		settingsService:  settingsService,
 		securityNotifier: securityNotifier,
 		auditLogger:      auditLogger,
 	}

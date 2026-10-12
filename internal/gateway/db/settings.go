@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"time"
 )
 
 // Settings CRUD operations for unified settings table
@@ -192,11 +193,39 @@ func (d *Database) DeleteSetting(appName *string, key string) error {
 	return nil
 }
 
-// MFASettings capture system-wide MFA configuration values.
+// MFASettings capture system-wide MFA configuration values. They're read for each request that needs them
+// (settings.Service.GetMFASettings), so a change applies at once. Nil settings enforce MFA with the default windows.
 type MFASettings struct {
 	RequireAllUsers      bool `json:"require_all_users"`
 	TrustedDeviceTTLDays int  `json:"trusted_device_ttl_days"`
 	StepUpWindowMinutes  int  `json:"step_up_window_minutes"`
+}
+
+// MFASettingsSource loads the current MFA settings (settings.Service).
+type MFASettingsSource interface {
+	GetMFASettings() (*MFASettings, error)
+}
+
+// Default MFA windows, used when none is set.
+const (
+	DefaultStepUpWindow     = 10 * time.Minute
+	DefaultTrustedDeviceTTL = 30 * 24 * time.Hour
+)
+
+// StepUpWindow is how long a step-up MFA verification lasts.
+func (s *MFASettings) StepUpWindow() time.Duration {
+	if s == nil || s.StepUpWindowMinutes <= 0 {
+		return DefaultStepUpWindow
+	}
+	return time.Duration(s.StepUpWindowMinutes) * time.Minute
+}
+
+// TrustedDeviceTTL is how long a trusted device skips the MFA challenge at login.
+func (s *MFASettings) TrustedDeviceTTL() time.Duration {
+	if s == nil || s.TrustedDeviceTTLDays <= 0 {
+		return DefaultTrustedDeviceTTL
+	}
+	return time.Duration(s.TrustedDeviceTTLDays) * 24 * time.Hour
 }
 
 // GetRackTLSCert returns the pinned rack TLS certificate if it exists.

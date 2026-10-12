@@ -16,7 +16,7 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth/mfa"
 	"github.com/DocSpring/rack-gateway/internal/gateway/config"
-	"github.com/DocSpring/rack-gateway/internal/gateway/db"
+	"github.com/DocSpring/rack-gateway/internal/gateway/settings"
 	"github.com/DocSpring/rack-gateway/internal/gateway/testutil/dbtest"
 )
 
@@ -42,8 +42,7 @@ func TestVerifyMFAUsesSharedHelper(t *testing.T) {
 	mfaService, err := mfa.NewService(
 		database,
 		"Rack Gateway",
-		30*time.Minute,
-		10*time.Minute,
+		nil,
 		pepper,
 		"",
 		"",
@@ -80,10 +79,10 @@ func TestVerifyMFAUsesSharedHelper(t *testing.T) {
 		t.Fatalf("failed to generate TOTP code: %v", err)
 	}
 
-	settings := &db.MFASettings{RequireAllUsers: true}
 	cfg := &config.Config{DevMode: true}
 	auditLogger := audit.NewLogger(database)
-	handler := NewAuthHandler(nil, database, cfg, sessionManager, mfaService, settings, nil, auditLogger)
+	handler := NewAuthHandler(nil, database, cfg, sessionManager, mfaService,
+		settings.NewService(database), nil, auditLogger)
 
 	// Create test request with auth user in context
 	authUser := &auth.User{
@@ -146,8 +145,7 @@ func TestVerifyMFAHandlesFailure(t *testing.T) {
 	mfaService, err := mfa.NewService(
 		database,
 		"Rack Gateway",
-		30*time.Minute,
-		10*time.Minute,
+		nil,
 		pepper,
 		"",
 		"",
@@ -178,10 +176,10 @@ func TestVerifyMFAHandlesFailure(t *testing.T) {
 		t.Fatalf("failed to confirm MFA method: %v", err)
 	}
 
-	settings := &db.MFASettings{RequireAllUsers: true}
 	cfg := &config.Config{DevMode: true}
 	auditLogger := audit.NewLogger(database)
-	handler := NewAuthHandler(nil, database, cfg, sessionManager, mfaService, settings, nil, auditLogger)
+	handler := NewAuthHandler(nil, database, cfg, sessionManager, mfaService,
+		settings.NewService(database), nil, auditLogger)
 
 	// Create test request with invalid code
 	authUser := &auth.User{

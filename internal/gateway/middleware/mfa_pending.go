@@ -40,7 +40,7 @@ var mfaFactorEnrollmentRoutes = map[string]struct{}{
 func RequireVerifiedMFASession(
 	mfaService MFAVerifier,
 	database *db.Database,
-	settings *db.MFASettings,
+	settings db.MFASettingsSource,
 ) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authUser, ok := auth.GetAuthUser(c.Request.Context())
@@ -51,8 +51,12 @@ func RequireVerifiedMFASession(
 
 		route := c.Request.Method + " " + c.FullPath()
 		user := getUserRecord(c, database, authUser.Email)
+		current, ok := currentMFASettings(c, settings)
+		if !ok {
+			return
+		}
 
-		if db.SessionAwaitingMFA(settings, user, authUser.Session) &&
+		if db.SessionAwaitingMFA(current, user, authUser.Session) &&
 			!allowPendingMFARequest(c, route, mfaService, database, user, authUser) {
 			return
 		}

@@ -8,11 +8,11 @@ import (
 	"log"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/gin-gonic/gin"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/config"
+	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 )
 
 var (
@@ -33,11 +33,8 @@ func (h *APIHandler) primaryRack() (config.RackConfig, bool) {
 	return config.RackConfig{}, false
 }
 
-func (h *APIHandler) stepUpWindow() time.Duration {
-	if h.mfaSettings != nil && h.mfaSettings.StepUpWindowMinutes > 0 {
-		return time.Duration(h.mfaSettings.StepUpWindowMinutes) * time.Minute
-	}
-	return 10 * time.Minute
+func (h *APIHandler) mfaSettings() *db.MFASettings {
+	return mfaSettingsNow(h.settingsService)
 }
 
 func (h *APIHandler) rackContext(ctx context.Context) (config.RackConfig, *tls.Config, error) {

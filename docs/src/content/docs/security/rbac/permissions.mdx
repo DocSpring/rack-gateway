@@ -167,6 +167,10 @@ Environment variables often contain secrets (API keys, database passwords). Only
 </Aside>
 
 <Aside type="note">
+Secret values come back masked unless the caller also holds `convox:secret:read` and asks for them (the web UI's reveal button). Revealing them needs a recent MFA step-up.
+</Aside>
+
+<Aside type="note">
 `set_protected` is checked in addition to `release:create` when an `env set` or `env unset` names a protected key with `--allow-protected`. The request must also carry MFA, which the gateway verifies even within the step-up window. API tokens can never change protected env vars, whatever their permissions. See [Protected env vars](/user-guide/cli/commands/#protected-env-vars).
 </Aside>
 

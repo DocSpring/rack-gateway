@@ -26,8 +26,7 @@ type yubiAuthVerifier interface {
 type Service struct {
 	db               *db.Database
 	issuer           string
-	trustedDeviceTTL time.Duration
-	stepUpWindow     time.Duration
+	settings         db.MFASettingsSource
 	backupCodePepper []byte
 	yubiAuth         yubiAuthVerifier
 	webAuthn         *webauthn.WebAuthn
@@ -86,7 +85,7 @@ type VerificationResult struct {
 func NewService(
 	database *db.Database,
 	issuer string,
-	trustedDeviceTTL, stepUpWindow time.Duration,
+	settings db.MFASettingsSource,
 	backupCodePepper []byte,
 	yubiClientID string,
 	yubiSecretKey string,
@@ -97,15 +96,6 @@ func NewService(
 	if len(backupCodePepper) == 0 {
 		return nil, fmt.Errorf("backup code pepper is required")
 	}
-	ttl := trustedDeviceTTL
-	if ttl <= 0 {
-		ttl = 30 * 24 * time.Hour
-	}
-	window := stepUpWindow
-	if window <= 0 {
-		window = 10 * time.Minute
-	}
-
 	var yubiAuth yubiAuthVerifier
 	if yubiClientID != "" && yubiSecretKey != "" {
 		auth, _ := yubigo.NewYubiAuth(yubiClientID, yubiSecretKey)
@@ -125,8 +115,7 @@ func NewService(
 	return &Service{
 		db:               database,
 		issuer:           issuer,
-		trustedDeviceTTL: ttl,
-		stepUpWindow:     window,
+		settings:         settings,
 		backupCodePepper: backupCodePepper,
 		yubiAuth:         yubiAuth,
 		webAuthn:         webAuthnClient,

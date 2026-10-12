@@ -64,7 +64,8 @@ func registerAPIRoutes(authenticated *gin.RouterGroup, cfg *Config, h *handlerSe
 	authenticated.GET("/rack", h.api.GetRackInfo)
 
 	apps := authenticated.Group("/apps/:app")
-	apps.GET("/env", h.api.GetEnvValues)
+	apps.GET("/env",
+		middleware.RequireMFAToRevealSecrets(cfg.MFAService, cfg.Database, cfg.SettingsService), h.api.GetEnvValues)
 
 	envMutations := apps.Group("")
 	if cfg.SessionManager != nil {
@@ -223,7 +224,7 @@ func registerAdminRoutes(authenticated *gin.RouterGroup, cfg *Config, h *handler
 func registerCLIProxyRoutes(api *gin.RouterGroup, cfg *Config, h *handlerSet) {
 	convoxCLI := api.Group("/rack-proxy")
 	convoxCLI.Use(middleware.CLIOnly(cfg.AuthService))
-	convoxCLI.Use(middleware.RequireMFAEnrollment(cfg.Database, cfg.MFASettings))
+	convoxCLI.Use(middleware.RequireMFAEnrollment(cfg.Database, cfg.SettingsService))
 	convoxCLI.GET("/*path", h.proxy.ProxyStripPrefix)
 	convoxCLI.POST("/*path", h.proxy.ProxyStripPrefix)
 	convoxCLI.PUT("/*path", h.proxy.ProxyStripPrefix)

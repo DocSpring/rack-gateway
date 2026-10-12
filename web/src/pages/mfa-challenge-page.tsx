@@ -153,8 +153,8 @@ async function handleWebAuthnWeb(
   return resolveWebRedirect(redirectTarget)
 }
 
-// CLIInitiator shows where the CLI login was started so the user can spot a login they did not start.
-// Shows where the CLI login was started, as the gateway recorded it, so the user can spot a login they didn't start.
+// CLIInitiator shows where the CLI login was started, as the gateway recorded it, so the user can spot a login they
+// didn't start.
 function CLIInitiator({ state }: { state: string }) {
   const { data } = useQuery({
     queryKey: ['cli-login-initiator', state],

@@ -9,7 +9,6 @@ import (
 	"sort"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
@@ -60,12 +59,10 @@ func newAuthzEnvWithRouter(t *testing.T, router *gin.Engine) *authzEnv {
 
 	settingsSvc := settings.NewService(database)
 	sessions := auth.NewSessionManager(database, "secret", settingsSvc)
-	mfaSettings, err := settingsSvc.GetMFASettings()
-	require.NoError(t, err)
 	rbacMgr, err := rbac.NewDBManager(database, "example.com")
 	require.NoError(t, err)
 	tokenSvc := token.NewService(database)
-	mfaSvc, err := mfa.NewService(database, "Test", 24*time.Hour, 10*time.Minute, []byte("pepper"), "", "", "", "", nil)
+	mfaSvc, err := mfa.NewService(database, "Test", nil, []byte("pepper"), "", "", "", "", nil)
 	require.NoError(t, err)
 
 	authService := auth.NewAuthService(tokenSvc, database, sessions)
@@ -83,7 +80,6 @@ func newAuthzEnvWithRouter(t *testing.T, router *gin.Engine) *authzEnv {
 		AuthService:     authService,
 		TokenService:    tokenSvc,
 		MFAService:      mfaSvc,
-		MFASettings:     mfaSettings,
 		SettingsService: settingsSvc,
 		AuditLogger:     audit.NewLogger(database),
 		EmailSender:     email.NoopSender{},

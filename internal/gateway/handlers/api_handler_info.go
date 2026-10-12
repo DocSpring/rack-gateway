@@ -103,13 +103,14 @@ func (h *APIHandler) buildUserInfo(
 		userInfo.PreferredMFAMethod = dbUser.PreferredMFAMethod
 	}
 
-	if shouldEnforceMFA(h.mfaSettings, dbUser) {
+	current := h.mfaSettings()
+	if db.ShouldEnforceMFA(current, dbUser) {
 		userInfo.MFARequired = true
 	}
 
-	h.enrichUserInfoWithSession(email, authUser, &userInfo)
+	h.enrichUserInfoWithSession(email, authUser, current, &userInfo)
 	if authUser != nil {
-		userInfo.MFAPending = db.SessionAwaitingMFA(h.mfaSettings, dbUser, authUser.Session)
+		userInfo.MFAPending = db.SessionAwaitingMFA(current, dbUser, authUser.Session)
 	}
 	return userInfo
 }
@@ -138,7 +139,12 @@ func effectivePermissions(roles []string, dbUser *db.User, authUser *auth.User) 
 	return perms
 }
 
-func (h *APIHandler) enrichUserInfoWithSession(email string, authUser *auth.User, userInfo *UserInfo) {
+func (_ *APIHandler) enrichUserInfoWithSession(
+	email string,
+	authUser *auth.User,
+	settings *db.MFASettings,
+	userInfo *UserInfo,
+) {
 	gtwlog.DebugTopicf(
 		gtwlog.TopicMFAStepUp,
 		"auth_info_step_up_check user_email=%q has_auth_user=%t has_session=%t",
@@ -152,7 +158,7 @@ func (h *APIHandler) enrichUserInfoWithSession(email string, authUser *auth.User
 	}
 
 	if authUser.Session.RecentStepUpAt != nil {
-		expires := authUser.Session.RecentStepUpAt.Add(h.stepUpWindow())
+		expires := authUser.Session.RecentStepUpAt.Add(settings.StepUpWindow())
 		userInfo.RecentStepUpExpiresAt = &expires
 		gtwlog.DebugTopicf(
 			gtwlog.TopicMFAStepUp,

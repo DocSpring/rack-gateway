@@ -87,6 +87,12 @@ Request forwarding with WebSocket support:
   most once per request (`markInlineMFAVerified`): TOTP codes are single-use. Audit entries for protected
   changes (`env.set_protected`, `env.unset_protected`) never contain values. The web env editor
   (`handlers/api_handler_env.go`) still refuses protected keys
+- Proxy MFA (`proxy/mfa_verification.go`): a step-up permission is covered by the session's step-up window, so a
+  CLI command needs one proof; an MFAAlways permission needs a proof verified on that request
+  (`verifyRequestMFA`, shared with protected env changes). The CLI proxy also requires MFA enrollment from every
+  session, whatever its channel (`middleware.RequireMFAEnrollment`)
+- MFA settings are read when needed (`settings.Service.GetMFASettings`, one query; the middleware reads them once
+  per request), never kept from startup, so a change applies at once on every instance
 - Client IPs: use `c.ClientIP()` in gin handlers and `netutil.ClientIP(r)` elsewhere. Both trust
   `X-Forwarded-For` only from `TRUSTED_PROXY_CIDRS`. Never parse forwarding headers yourself
 - Forwards all methods: GET, POST, PUT, PATCH, DELETE. Request bodies are capped at 1 MiB as they're read

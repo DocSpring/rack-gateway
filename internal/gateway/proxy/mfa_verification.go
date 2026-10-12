@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -16,11 +17,11 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 )
 
-// verifyMFAIfRequired checks if MFA is required for the route and verifies inline MFA if provided.
-// IMPORTANT: Step-up window is checked FIRST to support multi-step CLI operations.
-// When CLI runs commands like "env set --promote", it embeds the same MFA code in ALL requests.
-// TOTP replay protection would reject the same code on subsequent requests.
-// By checking step-up window first, subsequent requests reuse the step-up from the first verification.
+// verifyMFAIfRequired checks the MFA the route's permission needs. A step-up permission is covered by a step-up
+// verified in the last few minutes (the step-up window), so a CLI command that makes several requests (env set
+// --promote, a deploy) needs one MFA proof: the first request verifies it and the rest reuse the step-up. An
+// MFAAlways permission needs a proof verified on the request itself, whatever the step-up window says; the CLI sends
+// one with every MFAAlways command. The MFA settings are read for each request, so a change applies at once.
 func (h *Handler) verifyMFAIfRequired(
 	r *http.Request,
 	w http.ResponseWriter,
@@ -30,7 +31,14 @@ func (h *Handler) verifyMFAIfRequired(
 	rackConfig *config.RackConfig,
 	start time.Time,
 ) error {
-	if h.sessionAwaitingMFA(authUser) {
+	settings, err := h.mfaSettings()
+	if err != nil {
+		h.logMFADenial(
+			r, w, authUser, rackConfig, start, "failed to load MFA settings", http.StatusInternalServerError, err,
+		)
+		return err
+	}
+	if sessionAwaitingMFA(authUser, settings) {
 		w.Header().Set("X-MFA-Required", "true")
 		h.logMFADenial(
 			r, w, authUser, rackConfig, start,
@@ -49,34 +57,35 @@ func (h *Handler) verifyMFAIfRequired(
 	if mfaLevel == rbac.MFANone {
 		return nil
 	}
-
-	// Check step-up window FIRST - if already valid, skip inline MFA verification.
-	// This prevents TOTP replay errors when CLI sends the same MFA code for multiple
-	// API calls in a single operation (e.g., env set + release promote).
-	if authUser.Session != nil && h.isStepUpValid(authUser) {
+	if authUser.Session == nil {
+		err := fmt.Errorf("session required for MFA verification")
+		h.logMFADenial(r, w, authUser, rackConfig, start, err.Error(), http.StatusUnauthorized, err)
+		return err
+	}
+	if mfaLevel == rbac.MFAStepUp && isStepUpValid(authUser, settings) {
 		return nil
 	}
+	return h.requireRequestMFA(r, w, authUser, rackConfig, mfaLevel, start)
+}
 
-	// Only verify inline MFA if step-up window is expired or not set
-	if authUser.MFAType != "" && authUser.MFAValue != "" {
-		return h.verifyInlineMFA(r, w, authUser, rackConfig, start)
+// mfaSettings loads the MFA settings as they are now. Without a settings service they're nil, which enforces MFA
+// with the default windows.
+func (h *Handler) mfaSettings() (*db.MFASettings, error) {
+	if h.settingsService == nil {
+		return nil, nil
 	}
-
-	return h.checkSessionStepUp(r, w, authUser, rackConfig, mfaLevel, start)
+	settings, err := h.settingsService.GetMFASettings()
+	if err != nil {
+		return nil, fmt.Errorf("failed to load MFA settings: %w", err)
+	}
+	return settings, nil
 }
 
 // sessionAwaitingMFA reports whether a session token is being used before its MFA challenge
 // was completed (e.g. a web session cookie value replayed as a Bearer token on the CLI proxy).
-// Missing MFA settings are treated as enforced, so this fails closed.
-func (h *Handler) sessionAwaitingMFA(authUser *auth.User) bool {
+func sessionAwaitingMFA(authUser *auth.User, settings *db.MFASettings) bool {
 	if authUser == nil || authUser.IsAPIToken || authUser.Session == nil {
 		return false
-	}
-	var settings *db.MFASettings
-	if h.settingsService != nil {
-		if loaded, err := h.settingsService.GetMFASettings(); err == nil {
-			settings = loaded
-		}
 	}
 	return db.SessionAwaitingMFA(settings, authUser.DBUser, authUser.Session)
 }
@@ -87,30 +96,68 @@ func determineMFALevel(resource rbac.Resource, action rbac.Action) rbac.MFALevel
 	return rbac.MFALevelForPermission(rbac.Convox(resource, action))
 }
 
-func (h *Handler) verifyInlineMFA(
+// requireRequestMFA verifies the MFA proof the request carries, and refuses the request without one.
+func (h *Handler) requireRequestMFA(
 	r *http.Request,
 	w http.ResponseWriter,
 	authUser *auth.User,
 	rackConfig *config.RackConfig,
+	mfaLevel rbac.MFALevel,
 	start time.Time,
 ) error {
-	userRecord, err := h.database.GetUser(authUser.Email)
-	if err != nil {
+	err := h.verifyRequestMFA(r, authUser)
+	switch {
+	case err == nil:
+		return nil
+	case errors.Is(err, errNoMFAProof):
+		w.Header().Set("X-MFA-Required", "true")
+		w.Header().Set("X-MFA-Level", mfaLevel.String())
+		h.logMFADenial(
+			r, w, authUser, rackConfig, start,
+			"Multi-factor authentication is required for this action",
+			http.StatusUnauthorized,
+			fmt.Errorf("MFA required for this action"),
+		)
+	case errors.Is(err, errMFAUnavailable):
 		h.logMFADenial(r, w, authUser, rackConfig, start, "failed to verify MFA", http.StatusInternalServerError, err)
-		return fmt.Errorf("failed to get user")
-	}
-
-	verifyErr := h.verifyMFAByType(r, authUser, userRecord)
-	if verifyErr != nil {
+	default:
 		h.logMFADenial(
 			r, w, authUser, rackConfig, start,
 			"MFA verification failed",
 			http.StatusUnauthorized,
-			fmt.Errorf("MFA verification failed: %w", verifyErr),
+			fmt.Errorf("MFA verification failed: %w", err),
 		)
-		return verifyErr
 	}
+	return err
+}
 
+var (
+	// errNoMFAProof is a request that must prove MFA itself but carries no MFA proof.
+	errNoMFAProof = errors.New("no MFA proof on the request")
+	// errMFAUnavailable is an MFA proof the gateway can't check (no MFA service, or the user can't be loaded).
+	errMFAUnavailable = errors.New("MFA verification is unavailable")
+)
+
+// verifyRequestMFA verifies the MFA proof the request carries, at most once per request: TOTP codes and WebAuthn
+// challenges are single-use, so a second check of the same proof would fail. Verifying it starts a new step-up
+// window, which covers the rest of the command.
+func (h *Handler) verifyRequestMFA(r *http.Request, authUser *auth.User) error {
+	if inlineMFAVerified(r) {
+		return nil
+	}
+	if authUser.MFAType == "" || authUser.MFAValue == "" {
+		return errNoMFAProof
+	}
+	if h.mfaService == nil || h.database == nil {
+		return errMFAUnavailable
+	}
+	userRecord, err := h.database.GetUser(authUser.Email)
+	if err != nil {
+		return fmt.Errorf("%w: %w", errMFAUnavailable, err)
+	}
+	if err := h.verifyMFAByType(r, authUser, userRecord); err != nil {
+		return err
+	}
 	h.updateSessionStepUp(authUser)
 	markInlineMFAVerified(r)
 	return nil
@@ -229,55 +276,8 @@ func (h *Handler) logMFADenial(
 	http.Error(w, message, status)
 }
 
-func (h *Handler) checkSessionStepUp(
-	r *http.Request,
-	w http.ResponseWriter,
-	authUser *auth.User,
-	rackConfig *config.RackConfig,
-	mfaLevel rbac.MFALevel,
-	start time.Time,
-) error {
-	if authUser.Session == nil {
-		h.logMFADenial(
-			r, w, authUser, rackConfig, start,
-			"session required for MFA verification",
-			http.StatusUnauthorized,
-			fmt.Errorf("session required for MFA verification"),
-		)
-		return fmt.Errorf("session required")
-	}
-
-	if h.isStepUpValid(authUser) {
-		return nil
-	}
-
-	h.auditLogger.LogRequest(
-		r, authUser.Email, rackConfig.Name, "deny",
-		http.StatusUnauthorized, time.Since(start),
-		fmt.Errorf("MFA required for this action"),
-	)
-	w.Header().Set("X-MFA-Required", "true")
-	w.Header().Set("X-MFA-Level", mfaLevel.String())
-	http.Error(w, "Multi-factor authentication is required for this action", http.StatusUnauthorized)
-	return fmt.Errorf("MFA required")
-}
-
-func (h *Handler) isStepUpValid(authUser *auth.User) bool {
-	if authUser.Session.RecentStepUpAt == nil {
-		return false
-	}
-	stepUpWindow := h.getStepUpWindow()
-	return time.Since(*authUser.Session.RecentStepUpAt) < stepUpWindow
-}
-
-func (h *Handler) getStepUpWindow() time.Duration {
-	defaultWindow := 10 * time.Minute
-	if h.settingsService == nil {
-		return defaultWindow
-	}
-	settings, err := h.settingsService.GetMFASettings()
-	if err != nil || settings == nil || settings.StepUpWindowMinutes <= 0 {
-		return defaultWindow
-	}
-	return time.Duration(settings.StepUpWindowMinutes) * time.Minute
+// isStepUpValid reports whether the session verified MFA within the step-up window.
+func isStepUpValid(authUser *auth.User, settings *db.MFASettings) bool {
+	recent := authUser.Session.RecentStepUpAt
+	return recent != nil && time.Since(*recent) < settings.StepUpWindow()
 }

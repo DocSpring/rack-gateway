@@ -52,6 +52,7 @@ Some sensitive actions require MFA verification even with an active session. Exa
 - Approving deploy requests
 - Updating user roles
 - Changing security-related settings
+- Revealing a secret env value in the web UI
 
 The step-up window defaults to 10 minutes and is configurable by admins.
 
@@ -81,4 +82,6 @@ Admins configure global MFA settings in **Settings**:
 - Require MFA for all users
 - Step-up window (minutes)
 - Trusted device TTL (days)
+
+A change applies from the next request; the gateway doesn't need a restart.
 

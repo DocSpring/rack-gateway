@@ -180,8 +180,9 @@ func (h *AuthHandler) buildCLILoginResponse(
 	token string,
 	session *db.UserSession,
 ) CLILoginResponse {
-	enforceMFA := shouldEnforceMFA(h.mfaSettings, user)
-	mfaRequired := h.isMFARequired(user) && session.MFAVerifiedAt == nil
+	current := h.mfaSettings()
+	enforceMFA := db.ShouldEnforceMFA(current, user)
+	mfaRequired := db.IsMFAChallengeRequired(current, user) && session.MFAVerifiedAt == nil
 	enrollmentRequired := enforceMFA && !user.MFAEnrolled
 
 	name := user.Name

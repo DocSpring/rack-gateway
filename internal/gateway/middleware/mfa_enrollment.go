@@ -35,10 +35,12 @@ func loadUserForEnrollmentCheck(ctx context.Context, database *db.Database, auth
 	return loaded, nil
 }
 
+// enforceMFAEnrollment runs handler for a user signed in with a session, with the current MFA settings. handler
+// reports whether it refused the request.
 func enforceMFAEnrollment(
 	database *db.Database,
-	_ *db.MFASettings,
-	handler func(*gin.Context, *auth.User, *db.User) bool,
+	source db.MFASettingsSource,
+	handler func(*gin.Context, *db.MFASettings, *db.User) bool,
 ) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authUser, ok := auth.GetAuthUser(c.Request.Context())
@@ -63,7 +65,11 @@ func enforceMFAEnrollment(
 			return
 		}
 
-		if handler != nil && handler(c, authUser, user) {
+		settings, ok := currentMFASettings(c, source)
+		if !ok {
+			return
+		}
+		if handler(c, settings, user) {
 			c.Abort()
 			return
 		}
@@ -72,16 +78,12 @@ func enforceMFAEnrollment(
 	}
 }
 
-// RequireMFAEnrollment blocks CLI sessions when MFA enforcement is active but the
-// user has not yet completed enrollment. It returns a clear error so the CLI can
-// instruct the user to finish setup.
-func RequireMFAEnrollment(database *db.Database, settings *db.MFASettings) gin.HandlerFunc {
-	return enforceMFAEnrollment(database, settings, func(c *gin.Context, authUser *auth.User, user *db.User) bool {
-		session := authUser.Session
-		if session == nil || !strings.EqualFold(session.Channel, "cli") {
-			return false
-		}
-		if !db.ShouldEnforceMFA(settings, user) || user.MFAEnrolled {
+// RequireMFAEnrollment blocks the CLI proxy for a user who must use MFA but hasn't enrolled. It applies to every
+// session, whatever channel it was created on: a web session's token sent as a Bearer token reaches the proxy too.
+// It returns a clear error so the CLI can instruct the user to finish setup.
+func RequireMFAEnrollment(database *db.Database, settings db.MFASettingsSource) gin.HandlerFunc {
+	return enforceMFAEnrollment(database, settings, func(c *gin.Context, current *db.MFASettings, user *db.User) bool {
+		if !db.ShouldEnforceMFA(current, user) || user.MFAEnrolled {
 			return false
 		}
 		message := "You must set up multi-factor authentication before you can continue using the CLI. " +
@@ -98,12 +100,12 @@ func RequireMFAEnrollment(database *db.Database, settings *db.MFASettings) gin.H
 // (primarily the web UI) from hitting API routes unrelated to MFA setup while enrollment is
 // enforced but incomplete. This keeps every channel other than the dedicated CLI proxy locked
 // down to the Account Security flows until enrollment succeeds.
-func RequireMFAEnrollmentWeb(database *db.Database, settings *db.MFASettings) gin.HandlerFunc {
-	return enforceMFAEnrollment(database, settings, func(c *gin.Context, _ *auth.User, user *db.User) bool {
+func RequireMFAEnrollmentWeb(database *db.Database, settings db.MFASettingsSource) gin.HandlerFunc {
+	return enforceMFAEnrollment(database, settings, func(c *gin.Context, current *db.MFASettings, user *db.User) bool {
 		if c.Request.Method == http.MethodOptions {
 			return false
 		}
-		if !db.ShouldEnforceMFA(settings, user) || user.MFAEnrolled {
+		if !db.ShouldEnforceMFA(current, user) || user.MFAEnrolled {
 			return false
 		}
 		if isMFAEnrollmentAllowedPath(c.Request.URL.Path) {

@@ -32,7 +32,7 @@ type deployApprovalMFATestFixture struct {
 	handler        *AdminHandler
 	sessionManager *auth.SessionManager
 	mfaService     *mfa.Service
-	mfaSettings    *db.MFASettings
+	mfaSettings    *settings.Service
 }
 
 func setupDeployApprovalMFATest(t *testing.T, database *db.Database) *deployApprovalMFATestFixture {
@@ -73,12 +73,7 @@ func setupDeployApprovalMFATest(t *testing.T, database *db.Database) *deployAppr
 	// Create session manager and MFA service
 	sessionManager := auth.NewSessionManager(database, "test-secret", &auth.StaticTTLProvider{TTL: time.Hour})
 	pepper := []byte("test-pepper")
-	mfaService, err := mfa.NewService(database, "Test", 24*time.Hour, 10*time.Minute, pepper, "", "", "", "", nil)
-	require.NoError(t, err)
-
-	// Get MFA settings
-	settingsService := settings.NewService(database)
-	mfaSettings, err := settingsService.GetMFASettings()
+	mfaService, err := mfa.NewService(database, "Test", nil, pepper, "", "", "", "", nil)
 	require.NoError(t, err)
 
 	return &deployApprovalMFATestFixture{
@@ -88,7 +83,7 @@ func setupDeployApprovalMFATest(t *testing.T, database *db.Database) *deployAppr
 		handler:        handler,
 		sessionManager: sessionManager,
 		mfaService:     mfaService,
-		mfaSettings:    mfaSettings,
+		mfaSettings:    settings.NewService(database),
 	}
 }
 

@@ -16,6 +16,7 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/config"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	"github.com/DocSpring/rack-gateway/internal/gateway/envutil"
+	"github.com/DocSpring/rack-gateway/internal/gateway/middleware"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 )
 
@@ -92,7 +93,7 @@ func (h *APIHandler) GetEnvValues(c *gin.Context) {
 	}
 
 	key := c.Query("key")
-	wantSecrets := strings.EqualFold(c.Query("secrets"), "true")
+	wantSecrets := middleware.RevealsSecrets(c)
 	start := time.Now()
 
 	email := c.GetString("user_email")
