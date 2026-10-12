@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/gin-gonic/gin"
 
@@ -203,6 +204,44 @@ func auditDetails(values map[string]string) string {
 		return "{}"
 	}
 	return string(data)
+}
+
+// auditDetailsWithMessage is auditDetails(fields) with a request's message added, cut short if needed so the
+// details fit in an audit entry. Longer details are cut at the end, and their keys sort, so an overlong message
+// would push out the fields after it (pr_url, token_uuid, vcs_repo, ...). JSON escaping can make one character six.
+func auditDetailsWithMessage(fields map[string]string, message string) string {
+	delete(fields, "message")
+	budget := db.AuditDetailsMaxChars - utf8.RuneCountInString(auditDetails(fields)) - len(`,"message":""`)
+	fields["message"] = cutToEscapedLength(strings.TrimSpace(message), budget)
+	return auditDetails(fields)
+}
+
+const cutMarker = "…(truncated)"
+
+// cutToEscapedLength returns s, or its longest prefix (marked as cut) whose JSON string encoding fits in limit
+// characters.
+func cutToEscapedLength(s string, limit int) string {
+	if escapedLength(s) <= limit {
+		return s
+	}
+	limit -= utf8.RuneCountInString(cutMarker)
+	used := 0
+	for i, r := range s {
+		used += escapedLength(string(r))
+		if used > limit {
+			return s[:i] + cutMarker
+		}
+	}
+	return s
+}
+
+// escapedLength is how many characters s takes inside a JSON string.
+func escapedLength(s string) int {
+	data, err := json.Marshal(s)
+	if err != nil {
+		return 6 * utf8.RuneCountInString(s) // the longest an escape can make a character
+	}
+	return utf8.RuneCount(data) - len(`""`)
 }
 
 func getAppSettingBool(svc *settings.Service, appName, key string, defaultValue bool) (bool, error) {

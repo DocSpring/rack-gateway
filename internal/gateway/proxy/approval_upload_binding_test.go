@@ -50,7 +50,7 @@ func TestObjectUploadBindsOnlyWhenOneApprovalIsWaiting(t *testing.T) {
 	require.Contains(t, approvalErr.message, "bbbbbbb")
 
 	// Once the older one has its archive, the newer one is the only one waiting.
-	require.NoError(t, database.UpdateDeployApprovalRequestObjectURL(first.ID, "object://test-app/a.tgz"))
+	bindApprovalArchive(t, database, first.ID, "object://test-app/tmp/a.tgz")
 	bound, err = h.findApprovalForObjectCreate(token.ID, "test-app")
 	require.NoError(t, err)
 	require.NotEqual(t, first.ID, bound.ID)
@@ -65,7 +65,7 @@ func TestObjectUploadRefusedWhenTheNewestApprovalHasItsArchive(t *testing.T) {
 
 	approveForUploadTest(t, database, user.ID, token.ID, "aaaaaaa1111111111111111111111111111111aa")
 	newer := approveForUploadTest(t, database, user.ID, token.ID, "bbbbbbb2222222222222222222222222222222bb")
-	require.NoError(t, database.UpdateDeployApprovalRequestObjectURL(newer.ID, "object://test-app/b.tgz"))
+	bindApprovalArchive(t, database, newer.ID, "object://test-app/tmp/b.tgz")
 
 	_, err = h.findApprovalForObjectCreate(token.ID, "test-app")
 	var approvalErr *deployApprovalError

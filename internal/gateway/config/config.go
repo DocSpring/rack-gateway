@@ -137,6 +137,11 @@ func loadBaseConfig() *Config {
 
 func (c *Config) loadSessionSecret() error {
 	sessionSecret := getEnv("APP_SECRET_KEY", "")
+	// A value of only whitespace is a mistake (an empty line in a secrets file, say), not a secret: refuse it in
+	// every mode rather than sign sessions with it.
+	if sessionSecret != "" && strings.TrimSpace(sessionSecret) == "" {
+		return fmt.Errorf("APP_SECRET_KEY is blank: it holds only whitespace")
+	}
 	if sessionSecret == "" {
 		if !c.DevMode {
 			return fmt.Errorf("APP_SECRET_KEY is required in production")

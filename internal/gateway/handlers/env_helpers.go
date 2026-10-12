@@ -12,6 +12,7 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/config"
 	"github.com/DocSpring/rack-gateway/internal/gateway/envutil"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rackcert"
+	"github.com/DocSpring/rack-gateway/internal/gateway/settings"
 )
 
 // secretAndProtectedKeys returns the app's secret env vars (its secret_env_vars and CONVOX_SECRET_ENV_VARS) and
@@ -25,7 +26,11 @@ func (h *APIHandler) secretAndProtectedKeys(app string) ([]string, map[string]st
 		return nil, nil, err
 	}
 	appendUniqueKeys(&extra, seen, secrets)
-	appendUniqueKeys(&extra, seen, parseEnvList(os.Getenv("CONVOX_SECRET_ENV_VARS")))
+	convoxSecrets, err := settings.SecretEnvVarNames(os.Getenv)
+	if err != nil {
+		return nil, nil, err
+	}
+	appendUniqueKeys(&extra, seen, convoxSecrets)
 
 	protected, err := h.protectedEnvVarMap(app, seen, &extra)
 	if err != nil {
@@ -34,15 +39,25 @@ func (h *APIHandler) secretAndProtectedKeys(app string) ([]string, map[string]st
 	return extra, protected, nil
 }
 
+// respondEnvSettingsError answers 500 when the app's env var settings (or CONVOX_SECRET_ENV_VARS) can't be read,
+// and logs why: guessing would unmask or unprotect keys, and the cause, such as an invalid name in a stored list,
+// is something an admin has to fix.
+func respondEnvSettingsError(c *gin.Context, app string, err error) {
+	log.Printf(`{"level":"error","event":"env_settings_failed","app":%q,"error":%q}`, app, err.Error())
+	c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read the app's env var settings"})
+}
+
 // auditVisibleKeys returns the env vars whose values the app's env change audit entries may show. When the
 // app's settings can't be read, none are shown.
 func (h *APIHandler) auditVisibleKeys(app string) envutil.AuditVisibleKeys {
 	if h.settingsService == nil {
 		return envutil.AuditVisibleKeys{}
 	}
-	keys, err := envutil.LoadAuditVisibleKeys(
-		h.settingsService, app, parseEnvList(os.Getenv("CONVOX_SECRET_ENV_VARS")),
-	)
+	keys := envutil.AuditVisibleKeys{}
+	secretNames, err := settings.SecretEnvVarNames(os.Getenv)
+	if err == nil {
+		keys, err = envutil.LoadAuditVisibleKeys(h.settingsService, app, secretNames)
+	}
 	if err != nil {
 		log.Printf(`{"level":"error","event":"audit_env_settings_failed","app":%q,"error":%q}`, app, err.Error())
 	}
@@ -97,16 +112,6 @@ func appendUniqueNormalized(extra *[]string, seen map[string]struct{}, trim, upp
 	}
 	seen[upper] = struct{}{}
 	*extra = append(*extra, trim)
-}
-
-func parseEnvList(raw string) []string {
-	if raw == "" {
-		return nil
-	}
-	parts := strings.Split(raw, ",")
-	results := make([]string, 0, len(parts))
-	results = append(results, parts...)
-	return results
 }
 
 func normalizeEnvKey(value string) (string, string, bool) {

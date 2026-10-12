@@ -59,7 +59,9 @@ run_admin_tests() {
     clear_mfa_replay_protection
     local protected_mfa_code
     protected_mfa_code=$(generate_totp_code "$(get_totp_secret 'admin@example.com')")
-    verify_rgw_command "env set DATABASE_URL=postgres://rotated --allow-protected --mfa-code $protected_mfa_code" \
+    # Without a terminal --allow-protected needs an explicit --app, so the PIN dialog's command line names it
+    verify_rgw_command \
+        "env set DATABASE_URL=postgres://rotated --app rack-gateway --allow-protected --mfa-code $protected_mfa_code" \
         "Setting DATABASE_URL..." "Release:"
 
     # Clean up the protected_env_vars setting
@@ -235,7 +237,7 @@ run_api_token_tests() {
     assert_deploy_approval_fields "$git_commit_hash" "NOT_EMPTY" "" ""
 
     echo -e "${YELLOW}Clearing object_url for next test...${NC}"
-    psql_exec "UPDATE deploy_approval_requests SET object_url = NULL WHERE git_commit_hash = '$git_commit_hash';"
+    psql_exec "UPDATE deploy_approval_requests SET object_url = NULL, object_uploaded_at = NULL WHERE git_commit_hash = '$git_commit_hash';"
 
     echo -e "${BLUE}Test 3/5: Build-based manifest (should fail)...${NC}"
     set +e
@@ -255,7 +257,7 @@ run_api_token_tests() {
     echo -e "${GREEN}✓ Build-based manifest correctly rejected${NC}"
 
     echo -e "${YELLOW}Clearing object_url for successful build...${NC}"
-    psql_exec "UPDATE deploy_approval_requests SET object_url = NULL WHERE git_commit_hash = '$git_commit_hash';"
+    psql_exec "UPDATE deploy_approval_requests SET object_url = NULL, object_uploaded_at = NULL WHERE git_commit_hash = '$git_commit_hash';"
 
     echo -e "${BLUE}Test 4/6: First successful build with valid manifest (commit $git_commit_hash)...${NC}"
     cat > "$testdata_dir/convox.valid-image-tag.yml" <<EOF
@@ -282,7 +284,7 @@ EOF
 
     echo -e "${BLUE}Test 5/6: Duplicate build creation (should fail)...${NC}"
     echo -e "${YELLOW}Clearing object_url to allow re-upload, keeping build_id...${NC}"
-    psql_exec "UPDATE deploy_approval_requests SET object_url = NULL WHERE git_commit_hash = '$git_commit_hash';"
+    psql_exec "UPDATE deploy_approval_requests SET object_url = NULL, object_uploaded_at = NULL WHERE git_commit_hash = '$git_commit_hash';"
 
     set +e
     local duplicate_build_output
@@ -305,7 +307,7 @@ EOF
 
     echo -e "${BLUE}Test 6/6: Default convox.yml with build (should fail)...${NC}"
     echo -e "${YELLOW}Clearing all fields for manifest validation test...${NC}"
-    psql_exec "UPDATE deploy_approval_requests SET object_url = NULL, build_id = NULL, release_id = NULL WHERE git_commit_hash = '$git_commit_hash';"
+    psql_exec "UPDATE deploy_approval_requests SET object_url = NULL, object_uploaded_at = NULL, build_id = NULL, build_started_at = NULL, release_id = NULL WHERE git_commit_hash = '$git_commit_hash';"
 
     set +e
     local root_deploy_output
@@ -324,7 +326,7 @@ EOF
     echo -e "${GREEN}✓ Build-based manifest correctly rejected${NC}"
 
     echo -e "${YELLOW}Clearing all fields for final successful test...${NC}"
-    psql_exec "UPDATE deploy_approval_requests SET object_url = NULL, build_id = NULL, release_id = NULL WHERE git_commit_hash = '$git_commit_hash';"
+    psql_exec "UPDATE deploy_approval_requests SET object_url = NULL, object_uploaded_at = NULL, build_id = NULL, build_started_at = NULL, release_id = NULL WHERE git_commit_hash = '$git_commit_hash';"
 
     set +e
     local final_build_output

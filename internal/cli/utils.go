@@ -25,7 +25,8 @@ func SilenceOnError(fn func(cmd *cobra.Command, args []string) error) func(*cobr
 	}
 }
 
-// RenderGatewayError formats a gateway API error response
+// RenderGatewayError formats a gateway API error response for the terminal: the "error" field of a JSON body,
+// or the whole body, made safe to print with displayText.
 func RenderGatewayError(body []byte) string {
 	msg := strings.TrimSpace(string(body))
 	if msg == "" {
@@ -36,10 +37,10 @@ func RenderGatewayError(body []byte) string {
 	}
 	if err := json.Unmarshal(body, &parsed); err == nil {
 		if trimmed := strings.TrimSpace(parsed.Error); trimmed != "" {
-			return trimmed
+			return displayText(trimmed)
 		}
 	}
-	return msg
+	return displayText(msg)
 }
 
 // OpenBrowser opens a URL in the user's default browser

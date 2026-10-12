@@ -52,9 +52,11 @@ func LoadConfig() (*Config, bool, error) {
 	return cfg, exists, nil
 }
 
-// SaveConfig saves the CLI configuration to disk
+// SaveConfig saves the CLI configuration to disk. The file holds session tokens, so it is only ever readable by
+// its owner: the directory is kept at 0700 and the file at 0600 (tightened if an earlier version or the user made
+// them looser), and the file is replaced atomically, so a crash or a concurrent command never leaves it truncated.
 func SaveConfig(cfg *Config) error {
-	if err := os.MkdirAll(ConfigPath, 0o700); err != nil {
+	if err := ensurePrivateDir(ConfigPath); err != nil {
 		return err
 	}
 	if cfg.Gateways == nil {
@@ -64,12 +66,58 @@ func SaveConfig(cfg *Config) error {
 	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(configFile(), data, 0o600); err != nil {
+	if err := writePrivateFileAtomically(configFile(), data); err != nil {
 		return err
 	}
 	// Remove standalone current file if it exists so config.json remains the source of truth.
 	_ = os.Remove(filepath.Join(ConfigPath, "current"))
 	return nil
+}
+
+// ensurePrivateDir creates dir with mode 0700, or takes the group and other permissions away from an existing one.
+func ensurePrivateDir(dir string) error {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return err
+	}
+	info, err := os.Stat(dir)
+	if err != nil {
+		return err
+	}
+	if perm := info.Mode().Perm(); perm&0o077 != 0 {
+		return os.Chmod(dir, perm&^0o077)
+	}
+	return nil
+}
+
+// writePrivateFileAtomically replaces path with data. It writes a temporary file in the same directory (which
+// os.CreateTemp creates with mode 0600), syncs it to disk and renames it over path: readers see the old file or
+// the new one, never part of one, and the new file replaces any looser permissions the old one had.
+func writePrivateFileAtomically(path string, data []byte) error {
+	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".*.tmp")
+	if err != nil {
+		return err
+	}
+	if err := writeAndClose(tmp, data); err != nil {
+		_ = os.Remove(tmp.Name())
+		return err
+	}
+	if err := os.Rename(tmp.Name(), path); err != nil {
+		_ = os.Remove(tmp.Name())
+		return err
+	}
+	return nil
+}
+
+// writeAndClose writes data to file, syncs it to disk and closes it.
+func writeAndClose(file *os.File, data []byte) error {
+	_, err := file.Write(data)
+	if err == nil {
+		err = file.Sync()
+	}
+	if closeErr := file.Close(); err == nil {
+		err = closeErr
+	}
+	return err
 }
 
 // SaveToken saves authentication token for a rack
@@ -145,24 +193,33 @@ func LoadGatewayURL(rack string) (string, error) {
 	return gateway.URL, nil
 }
 
-// LoadRackAuth loads the gateway URL and token for a rack
+// LoadRackAuth loads the gateway URL and token for a rack. With an API token (RACK_GATEWAY_API_TOKEN, for CI/CD),
+// RACK_GATEWAY_URL replaces the rack's configured URL. A stored session token is only ever sent to the gateway that
+// issued it, so without an API token RACK_GATEWAY_URL must match the rack's configured URL.
 func LoadRackAuth(rack string) (string, string, error) {
-	gatewayURL := os.Getenv("RACK_GATEWAY_URL")
-	if gatewayURL == "" {
-		var err error
-		gatewayURL, err = LoadGatewayURL(rack)
+	envURL := strings.TrimSpace(os.Getenv("RACK_GATEWAY_URL"))
+	apiToken := os.Getenv("RACK_GATEWAY_API_TOKEN")
+	if envURL != "" && apiToken != "" {
+		normalized, err := NormalizeGatewayURL(envURL)
 		if err != nil {
 			return "", "", err
 		}
+		return normalized, apiToken, nil
 	}
 
-	normalized, err := NormalizeGatewayURL(gatewayURL)
+	configuredURL, err := LoadGatewayURL(rack)
 	if err != nil {
 		return "", "", err
 	}
+	normalized, err := NormalizeGatewayURL(configuredURL)
+	if err != nil {
+		return "", "", err
+	}
+	if err := checkGatewayURLOverride(envURL, rack, normalized); err != nil {
+		return "", "", err
+	}
 
-	// Check for API token from environment (for CI/CD)
-	if apiToken := os.Getenv("RACK_GATEWAY_API_TOKEN"); apiToken != "" {
+	if apiToken != "" {
 		return normalized, apiToken, nil
 	}
 
@@ -172,6 +229,26 @@ func LoadRackAuth(rack string) (string, string, error) {
 	}
 
 	return normalized, tokenData.Token, nil
+}
+
+// checkGatewayURLOverride refuses a RACK_GATEWAY_URL (envURL, empty when unset) that isn't the rack's configured
+// gateway, so the rack's session token is never sent to another host.
+func checkGatewayURLOverride(envURL, rack, configuredURL string) error {
+	if envURL == "" {
+		return nil
+	}
+	override, err := NormalizeGatewayURL(envURL)
+	if err != nil {
+		return err
+	}
+	if override != configuredURL {
+		return fmt.Errorf(
+			"RACK_GATEWAY_URL (%s) is not the gateway of rack %s (%s), so its session token can't be sent there; "+
+				"unset RACK_GATEWAY_URL, or set RACK_GATEWAY_API_TOKEN to use it with an API token",
+			override, rack, configuredURL,
+		)
+	}
+	return nil
 }
 
 // GetCurrentRack returns the currently selected rack

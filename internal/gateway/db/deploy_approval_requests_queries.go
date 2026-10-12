@@ -126,7 +126,7 @@ func (d *Database) ListDeployApprovalRequests(opts DeployApprovalRequestListOpti
 		args = append(args, opts.GitBranch)
 	}
 	if opts.GitCommitHash != "" {
-		// Listing accepts short hashes (e.g. `deploy-approval approve` on the current commit)
+		// Listing accepts a short hash typed with --commit; the CLI sends the full SHA by default
 		clauses = append(clauses, `dr.git_commit_hash LIKE ? ESCAPE '\'`)
 		args = append(args, likePrefixPattern(strings.ToLower(strings.TrimSpace(opts.GitCommitHash))))
 	}

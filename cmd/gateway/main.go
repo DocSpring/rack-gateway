@@ -159,6 +159,11 @@ func firstDatabaseURL(names ...string) (string, error) {
 }
 
 func runMigrations() error {
+	// A deploy migrates before it promotes the new release, so refusing weak secrets here stops the deploy before
+	// the release could start and refuse them itself.
+	if err := app.CheckReleaseSecrets(os.Getenv); err != nil {
+		return err
+	}
 	dsn, err := getAdminDatabaseURL()
 	if err != nil {
 		return err
