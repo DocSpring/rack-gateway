@@ -27,6 +27,7 @@ import {
   type StepUpRequest,
 } from '@/contexts/step-up-queue'
 import { getMFAStatus } from '@/lib/api'
+import type { MFALevel } from '@/lib/generated/mfa-requirements'
 import { getMfaRequirementForRequest } from '@/lib/mfa-preflight'
 
 const STEP_UP_BUFFER_MS = 10_000
@@ -215,9 +216,13 @@ export function StepUpProvider({ children }: { children: ReactNode }): React.Rea
   )
 
   useEffect(() => {
-    const shouldPromptForStepUp = async () => {
-      debugLog('mfaLevel=step_up - fetching status to check if prompt needed')
+    // step_up_once_enrolled is step_up for a user who has a factor, and nothing for one enrolling their first.
+    const shouldPromptForStepUp = async (mfaLevel: MFALevel) => {
+      debugLog(`mfaLevel=${mfaLevel} - fetching status to check if prompt needed`)
       const status = await getMFAStatus()
+      if (mfaLevel === 'step_up_once_enrolled' && !status.enrolled) {
+        return false
+      }
       const expiresAt = status.recent_step_up_expires_at
         ? new Date(status.recent_step_up_expires_at)
         : null
@@ -260,11 +265,11 @@ export function StepUpProvider({ children }: { children: ReactNode }): React.Rea
         return abortForMfa(config)
       }
 
-      if (requirement.mfaLevel !== 'step_up') {
+      if (!isStepUpLevel(requirement.mfaLevel)) {
         return config
       }
 
-      if (await shouldPromptForStepUp()) {
+      if (await shouldPromptForStepUp(requirement.mfaLevel)) {
         debugLog('step_up expired - aborting request to prompt for MFA')
         return abortForMfa(config)
       }
@@ -358,6 +363,11 @@ export function useStepUp(): StepUpContextValue {
 
 type AxiosStepUpError = AxiosError<unknown, InternalRequestConfig> & {
   suppressToast?: boolean
+}
+
+// isStepUpLevel reports whether a request at this level may need a step-up prompt before it's sent.
+function isStepUpLevel(mfaLevel: MFALevel): boolean {
+  return mfaLevel === 'step_up' || mfaLevel === 'step_up_once_enrolled'
 }
 
 function resolveRequirement(client: AxiosInstance, config: InternalRequestConfig) {

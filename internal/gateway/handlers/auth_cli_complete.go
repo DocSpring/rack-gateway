@@ -80,7 +80,7 @@ func (h *AuthHandler) CLILoginComplete(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create session"})
 		return
 	}
-	h.cliStampMFAVerification(session, record.MFAVerifiedAt.Time)
+	h.cliStampMFAVerification(session, record)
 
 	h.notifyCLILoginComplete(c, userRecord, session)
 	c.JSON(http.StatusOK, h.buildCLILoginResponse(userRecord, record, sessionToken, session))
@@ -99,14 +99,22 @@ func (h *AuthHandler) cliGetUserRecord(c *gin.Context, loginEmail string) (*db.U
 	return userRecord, true
 }
 
-// cliStampMFAVerification carries the browser-side MFA verification over to the new CLI session.
-func (h *AuthHandler) cliStampMFAVerification(session *db.UserSession, verifiedAt time.Time) {
-	if err := h.sessions.UpdateSessionMFAVerified(session.ID, verifiedAt, nil); err != nil {
+// cliStampMFAVerification carries the login's MFA state over to the new CLI session. A login that verified a factor
+// opens the session's step-up window; an exempt one (no MFA enforced for the user) doesn't.
+func (h *AuthHandler) cliStampMFAVerification(session *db.UserSession, record *db.CLILoginState) {
+	verifiedAt := record.MFAVerifiedAt.Time
+	stamp := h.sessions.UpdateSessionMFAVerified
+	if record.MFAExempt {
+		stamp = h.sessions.ExemptSessionFromMFAChallenge
+	}
+	if err := stamp(session.ID, verifiedAt, nil); err != nil {
 		log.Printf("failed to update session mfa timestamp: %v", err)
 		return
 	}
 	session.MFAVerifiedAt = &verifiedAt
-	session.RecentStepUpAt = &verifiedAt
+	if !record.MFAExempt {
+		session.RecentStepUpAt = &verifiedAt
+	}
 }
 
 func (h *AuthHandler) notifyCLILoginComplete(c *gin.Context, userRecord *db.User, session *db.UserSession) {

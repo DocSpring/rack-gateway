@@ -149,6 +149,9 @@ func (h *AuthHandler) createLoginSession(
 	return session, nil
 }
 
+// handlePostLoginMFA exempts a new session from the MFA challenge when its user needs none, or when the browser
+// presents a trusted-device cookie. Neither verifies a factor, so neither opens a step-up window: the session's
+// first step-up action asks for one.
 func (h *AuthHandler) handlePostLoginMFA(c *gin.Context, user *db.User, session *db.UserSession) error {
 	if h.sessions == nil || user == nil || session == nil {
 		return nil
@@ -156,7 +159,7 @@ func (h *AuthHandler) handlePostLoginMFA(c *gin.Context, user *db.User, session 
 
 	if !h.isMFARequired(user) {
 		now := time.Now()
-		if err := h.sessions.UpdateSessionMFAVerified(session.ID, now, nil); err != nil {
+		if err := h.sessions.ExemptSessionFromMFAChallenge(session.ID, now, nil); err != nil {
 			return fmt.Errorf("mark session verified: %w", err)
 		}
 		session.MFAVerifiedAt = &now
@@ -174,7 +177,7 @@ func (h *AuthHandler) handlePostLoginMFA(c *gin.Context, user *db.User, session 
 	}
 
 	now := time.Now()
-	if err := h.sessions.UpdateSessionMFAVerified(session.ID, now, &trustedDevice.ID); err != nil {
+	if err := h.sessions.ExemptSessionFromMFAChallenge(session.ID, now, &trustedDevice.ID); err != nil {
 		return fmt.Errorf("update session with trusted device: %w", err)
 	}
 	session.MFAVerifiedAt = &now

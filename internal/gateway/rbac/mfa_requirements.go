@@ -12,6 +12,8 @@ type MFALevel int
 const (
 	// MFANone - No MFA required beyond enrollment
 	MFANone MFALevel = iota
+	// MFAStepUpOnceEnrolled - MFAStepUp for a user who has a factor, none for a user who has yet to enroll one
+	MFAStepUpOnceEnrolled
 	// MFAStepUp - MFA required within time window (default 10 minutes)
 	MFAStepUp
 	// MFAAlways - MFA required immediately before action, no time window
@@ -116,9 +118,10 @@ var MFARequirements = map[string]MFALevel{
 	// AUTH RESOURCES - Authentication and MFA management
 	// ========================================================================
 
-	// MFA Methods - Deleting removes security, creating adds security
-	Auth(ResourceMFAMethod, ActionDelete):        MFAAlways, // Removing MFA is privileged
-	Auth(ResourceMFAMethod, ActionCreate):        MFANone,   // Enrolling in MFA is encouraged
+	// MFA Methods - Deleting removes security. A first factor needs no MFA (there's nothing to verify with); another
+	// one needs an existing factor, or a session without one could add its own and gain step-up with it.
+	Auth(ResourceMFAMethod, ActionDelete):        MFAAlways,
+	Auth(ResourceMFAMethod, ActionCreate):        MFAStepUpOnceEnrolled,
 	Auth(ResourceMFAMethod, ActionUpdate):        MFAStepUp, // Updating MFA method settings
 	Auth(ResourceMFABackupCodes, ActionGenerate): MFAStepUp, // Regenerating backup codes
 	Auth(ResourceTrustedDevice, ActionDelete):    MFAStepUp, // Removing trusted devices
@@ -220,6 +223,8 @@ func (m MFALevel) String() string {
 	switch m {
 	case MFANone:
 		return "none"
+	case MFAStepUpOnceEnrolled:
+		return "step_up_once_enrolled"
 	case MFAStepUp:
 		return "step_up"
 	case MFAAlways:
