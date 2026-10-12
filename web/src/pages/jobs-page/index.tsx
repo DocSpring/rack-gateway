@@ -22,6 +22,7 @@ import {
   TableRow,
 } from '../../components/ui/table'
 import { api } from '../../lib/api'
+import { apiPath } from '../../lib/api-path'
 
 type JobListResponse = components['schemas']['handlers.JobListResponse']
 type JobResponse = components['schemas']['handlers.JobResponse']
@@ -66,7 +67,7 @@ function JobsPageInner() {
 
   const deleteMutation = useMutation({
     mutationFn: async (jobId: number) => {
-      await api.delete(`/api/v1/jobs/${jobId}`)
+      await api.delete(apiPath`/api/v1/jobs/${jobId}`)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['jobs'] })
@@ -79,7 +80,7 @@ function JobsPageInner() {
 
   const retryMutation = useMutation({
     mutationFn: async (jobId: number) => {
-      await api.post(`/api/v1/jobs/${jobId}/retry`)
+      await api.post(apiPath`/api/v1/jobs/${jobId}/retry`)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['jobs'] })

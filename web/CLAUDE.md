@@ -146,18 +146,45 @@ bun run typecheck
 
 ## Content Security Policy (CSP)
 
-This project has strict CSP requirements. All inline styles must use nonces:
+The gateway sends a strict CSP (`internal/gateway/middleware/security_headers.go`). It isn't sent in dev mode
+(`task dev`) unless `FORCE_CSP_IN_DEV=true`, which the Docker E2E and preview stacks set, so CSP problems show up
+in E2E runs rather than in local development.
+
+All inline scripts and styles must use nonces:
 
 - `window.__nonce__` is set in the HTML template
 - `window.__webpack_nonce__` is also set for libraries that detect it
 - React components that generate inline styles (like some third-party components) may violate CSP
 - Always use native HTML elements when possible (e.g., `<select>` instead of custom select components)
 
+The policy also limits what the SPA itself can do:
+
+- `connect-src 'self'` (plus the Sentry origin when Sentry is configured): call only the gateway's own API, with
+  no other hosts and no WebSockets. A new external service needs a deliberate change to the policy.
+- `form-action 'self'`: submit every form from a handler (`event.preventDefault()`, then the API client). A form
+  must never post natively to another site; to send the browser elsewhere (OAuth, the CLI's loopback), navigate
+  with `window.location`.
+- `frame-ancestors 'none'`: the gateway can't be framed, by other sites or by itself.
+- `base-uri 'self'`: don't add a `<base>` tag pointing anywhere else.
+
 **CSP-related issues:**
 
 - If you see CSP errors in the console, check if third-party components are generating inline styles
 - Use native HTML form elements to avoid CSP violations
 - react-hot-toast is configured with CSS variables to avoid inline styles
+
+## API Paths
+
+Build every API path that contains a value with `apiPath` from `@/lib/api-path`, never a plain template
+literal:
+
+```typescript
+api.get(apiPath`/api/v1/apps/${app}/settings`)
+```
+
+It encodes each value as exactly one path segment (and refuses `.` and `..`), so an app name, email or ID taken
+from the page's URL can't add segments or a query and send the request to another endpoint. Pass a query string
+as the request's `params`. When calling the generated client directly, wrap string path params in `pathSegment`.
 
 ## Toast Notifications
 

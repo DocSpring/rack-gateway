@@ -130,11 +130,14 @@ func (c *Client) ListChannels() ([]Channel, error) {
 	return allChannels, nil
 }
 
-// PostMessage sends a message to a Slack channel
+// PostMessage sends a message to a Slack channel. Links aren't unfurled: a message can link to a URL from CI (such
+// as a build URL), and its preview would show whatever that page chooses inside the gateway's message.
 func (c *Client) PostMessage(channelID, text string, blocks []map[string]interface{}) error {
 	payload := map[string]interface{}{
-		"channel": channelID,
-		"text":    text,
+		"channel":      channelID,
+		"text":         text,
+		"unfurl_links": false,
+		"unfurl_media": false,
 	}
 
 	if len(blocks) > 0 {

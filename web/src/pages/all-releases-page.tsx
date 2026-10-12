@@ -14,6 +14,7 @@ import {
   TableRow,
 } from '../components/ui/table'
 import { api } from '../lib/api'
+import { apiPath } from '../lib/api-path'
 import { DEFAULT_PER_PAGE } from '../lib/constants'
 
 type App = { name: string }
@@ -37,7 +38,7 @@ export function AllReleasesPage() {
       const apps = await api.get<App[]>('/api/v1/convox/apps')
       const lists = await Promise.all(
         apps.map(async (a) => {
-          const rs = await api.get<Release[]>(`/api/v1/convox/apps/${a.name}/releases`)
+          const rs = await api.get<Release[]>(apiPath`/api/v1/convox/apps/${a.name}/releases`)
           return rs.map((r) => ({ ...r, app: a.name }))
         })
       )

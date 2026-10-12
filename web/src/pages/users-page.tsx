@@ -13,6 +13,7 @@ import { useAuth } from '@/contexts/auth-context'
 import { useCan } from '@/hooks/use-can'
 import { useMutation } from '@/hooks/use-mutation'
 import { api, type RoleName, type UpdateUserRequest } from '@/lib/api'
+import { apiPath } from '@/lib/api-path'
 import { DEFAULT_PER_PAGE } from '@/lib/constants'
 import { PERMISSIONS } from '@/lib/permissions'
 import { QUERY_KEYS } from '@/lib/query-keys'
@@ -123,7 +124,7 @@ export function UsersPage() {
   // Delete user mutation
   const deleteUserMutation = useMutation({
     mutationFn: async (email: string) => {
-      await api.delete(`/api/v1/users/${email}`)
+      await api.delete(apiPath`/api/v1/users/${email}`)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({

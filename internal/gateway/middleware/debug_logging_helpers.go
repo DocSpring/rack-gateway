@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"io"
 	"net/http"
-	"strings"
 
 	"github.com/gin-gonic/gin"
 
@@ -42,27 +41,17 @@ func logRequestInfo(req *http.Request, path string, logInfo, logReqHeaders bool)
 	}
 }
 
+// logHeadersToTopic logs headers with the values of credentials (session and API tokens, cookies, CSRF tokens, MFA
+// codes) redacted, so turning on debug logging doesn't put them in the logs.
 func logHeadersToTopic(topic string, headers http.Header) {
-	if len(headers) == 0 {
-		return
-	}
-	var builder strings.Builder
-	for key, values := range headers {
-		for _, value := range values {
-			builder.WriteString(key)
-			builder.WriteString(": ")
-			builder.WriteString(value)
-			builder.WriteByte('\n')
-		}
-	}
-	out := strings.TrimSuffix(builder.String(), "\n")
-	if out != "" {
+	if out := formatHeadersForLog(headers); out != "" {
 		gtwlog.DebugTopicf(topic, "\n%s", out)
 	}
 }
 
-// logRequestBody logs the start of a JSON request body. It reads only as much as it logs and puts that back in front
-// of the rest, so a large body still streams to the handler instead of being held in memory here.
+// logRequestBody logs a JSON request body with sensitive values (passwords, tokens, MFA codes, env values) redacted.
+// It reads only as much as it logs and puts that back in front of the rest, so a large body still streams to the
+// handler instead of being held in memory here.
 func logRequestBody(req *http.Request, logBody bool) {
 	if !logBody || req.Body == nil {
 		return
@@ -77,13 +66,21 @@ func logRequestBody(req *http.Request, logBody bool) {
 		return
 	}
 	if len(head) > 0 && !httputil.IsBinaryContent(req.Header.Get("Content-Type")) {
-		gtwlog.DebugTopicf(
-			gtwlog.TopicHTTPRequestBody,
-			"len=%d body=%s",
-			req.ContentLength,
-			httputil.TruncateString(head, httputil.BodyTruncationLimit),
-		)
+		gtwlog.DebugTopicf(gtwlog.TopicHTTPRequestBody, "len=%d body=%s", req.ContentLength, requestBodyForLog(head))
 	}
+}
+
+// requestBodyForLog is the start of a JSON request body as it's logged. Only a whole body of valid JSON can be
+// redacted, so the start of a longer body, or one that isn't JSON, isn't logged at all.
+func requestBodyForLog(head []byte) string {
+	if len(head) > httputil.BodyTruncationLimit {
+		return "[not logged: too long to redact]"
+	}
+	redacted, ok := redactJSONForLog(head)
+	if !ok {
+		return "[not logged: not valid JSON, so it can't be redacted]"
+	}
+	return httputil.TruncateString([]byte(redacted), httputil.BodyTruncationLimit)
 }
 
 // replayedBody is a request body whose first bytes were already read, and are read again before the rest.

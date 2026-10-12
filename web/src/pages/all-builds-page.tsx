@@ -14,6 +14,7 @@ import {
   TableRow,
 } from '../components/ui/table'
 import { api } from '../lib/api'
+import { apiPath } from '../lib/api-path'
 import { DEFAULT_PER_PAGE } from '../lib/constants'
 import { formatElapsed } from '../lib/time'
 
@@ -40,7 +41,7 @@ export function AllBuildsPage() {
       const apps = await api.get<App[]>('/api/v1/convox/apps')
       const lists = await Promise.all(
         apps.map(async (a) => {
-          const bs = await api.get<Build[]>(`/api/v1/convox/apps/${a.name}/builds`)
+          const bs = await api.get<Build[]>(apiPath`/api/v1/convox/apps/${a.name}/builds`)
           return bs.map((b) => ({ ...b, app: a.name }))
         })
       )

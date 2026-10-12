@@ -17,6 +17,7 @@ import { toast } from '../components/ui/use-toast'
 import { useAuth } from '../contexts/auth-context'
 import { useMutation } from '../hooks/use-mutation'
 import { api } from '../lib/api'
+import { apiPath } from '../lib/api-path'
 import { fetchAppProcesses } from '../lib/app-runtime'
 import { DEFAULT_PER_PAGE } from '../lib/constants'
 import { QUERY_KEYS } from '../lib/query-keys'
@@ -43,7 +44,7 @@ export function AppProcessesPage() {
   })
   const stopMutation = useMutation({
     mutationFn: async (processId: string) =>
-      api.delete(`/api/v1/convox/apps/${app}/processes/${encodeURIComponent(processId)}`),
+      api.delete(apiPath`/api/v1/convox/apps/${app}/processes/${processId}`),
     onSuccess: async (_data, processId) => {
       toast.success(`Stopped process ${processId}`)
       await queryClient.invalidateQueries({ queryKey: [...QUERY_KEYS.APP_PROCESSES, app] })

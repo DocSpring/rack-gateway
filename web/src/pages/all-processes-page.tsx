@@ -14,6 +14,7 @@ import {
   TableRow,
 } from '../components/ui/table'
 import { api } from '../lib/api'
+import { apiPath } from '../lib/api-path'
 import { DEFAULT_PER_PAGE } from '../lib/constants'
 
 type App = { name: string }
@@ -47,7 +48,7 @@ export function AllProcessesPage() {
               release: string
               started?: string
             }[]
-          >(`/api/v1/convox/apps/${a.name}/processes`)
+          >(apiPath`/api/v1/convox/apps/${a.name}/processes`)
           return ps.map((p) => ({
             ...p,
             app: a.name,
