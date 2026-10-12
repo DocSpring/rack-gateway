@@ -1559,6 +1559,41 @@
                 }
             }
         },
+        "/auth/cli/initiator": {
+            "get": {
+                "description": "Returns the device name and IP address that started the CLI login bound to this browser, so the\nMFA challenge page can show the user a login they didn't start. The page reads them from the\ngateway, not from its own URL, which a crafted link could fill with a reassuring device or address.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Show where a CLI login was started",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Login state",
+                        "name": "state",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.CLILoginInitiatorResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/auth/cli/mfa": {
             "get": {
                 "description": "Sends the bound browser to MFA (or MFA enrollment), or back to the CLI when MFA is satisfied.",
@@ -4673,6 +4708,17 @@
                     "type": "string"
                 },
                 "login_code": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.CLILoginInitiatorResponse": {
+            "type": "object",
+            "properties": {
+                "device": {
+                    "type": "string"
+                },
+                "ip": {
                     "type": "string"
                 }
             }

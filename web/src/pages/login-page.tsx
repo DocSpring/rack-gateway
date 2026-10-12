@@ -30,7 +30,7 @@ export function LoginPage() {
       // Check for returnTo parameter in the URL
       const params = new URLSearchParams(window.location.search)
       const returnTo = params.get('returnTo') ?? undefined
-      await login(undefined, returnTo)
+      await login(returnTo)
     } catch (_error) {
       setIsLoading(false)
     }

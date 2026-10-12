@@ -4,6 +4,7 @@ import { useCallback, useEffect } from 'react'
 import { type AuditLogRecord, AuditLogsPane } from '@/components/audit-logs-pane'
 import { useCan } from '@/hooks/use-can'
 import { api } from '@/lib/api'
+import { apiPath } from '@/lib/api-path'
 import { downloadAuditLogsCsv } from '@/lib/audit-export'
 import { PERMISSIONS } from '@/lib/permissions'
 import { AuditFilterPanel } from '@/pages/audit/filter-panel'
@@ -15,9 +16,7 @@ import { createAuditQueryParams } from '@/pages/audit/utils'
 // A user's own activity is read through /users/:email/audit-logs, which every user may call for
 // themselves; the full log (and CSV export) needs gateway:audit_log:read.
 function auditLogsPath(userEmail: string): string {
-  return userEmail
-    ? `/api/v1/users/${encodeURIComponent(userEmail)}/audit-logs`
-    : '/api/v1/audit-logs'
+  return userEmail ? apiPath`/api/v1/users/${userEmail}/audit-logs` : '/api/v1/audit-logs'
 }
 
 export function AuditPage({ userId, userEmail }: { userId?: string; userEmail?: string } = {}) {

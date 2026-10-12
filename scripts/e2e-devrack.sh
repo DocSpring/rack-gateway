@@ -34,11 +34,12 @@ convox rack || true
 echo "Deploying app: $APP_NAME"
 convox apps | grep -q "^$APP_NAME\b" || convox apps create "$APP_NAME"
 
-# Pass common env; adjust as needed. The rack's database is marked production, which refuses the published
-# development column key, so a fresh key is generated unless you pass one (pass the same key on later runs
-# to keep existing TOTP enrollments readable).
+# Pass common env; adjust as needed. The rack runs the release image against a database marked production, which
+# refuses the published development secrets and secrets shorter than 32 bytes, so fresh ones are generated unless
+# you pass them (pass the same column key on later runs to keep existing TOTP enrollments readable).
 convox env set \
-  APP_SECRET_KEY="${APP_SECRET_KEY:-dev-e2e-key}" \
+  APP_SECRET_KEY="${APP_SECRET_KEY:-$(openssl rand -base64 32)}" \
+  AUDIT_HMAC_SECRET="${AUDIT_HMAC_SECRET:-$(openssl rand -base64 32)}" \
   COLUMN_ENCRYPTION_KEY="${COLUMN_ENCRYPTION_KEY:-$(openssl rand -base64 32)}" \
   GOOGLE_CLIENT_ID="${GOOGLE_CLIENT_ID:-mock-client-id}" \
   GOOGLE_CLIENT_SECRET="${GOOGLE_CLIENT_SECRET:-mock-client-secret}" \

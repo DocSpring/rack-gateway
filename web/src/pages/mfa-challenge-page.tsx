@@ -1,3 +1,4 @@
+import { useQuery } from '@tanstack/react-query'
 import { isAxiosError } from 'axios'
 import { AlertCircle } from 'lucide-react'
 import { useMemo, useState } from 'react'
@@ -6,7 +7,13 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { useMutation } from '@/hooks/use-mutation'
-import { cancelCliLogin, verifyCliMfa, verifyMFA, verifyWebAuthnAssertion } from '@/lib/api'
+import {
+  cancelCliLogin,
+  getCliLoginInitiator,
+  verifyCliMfa,
+  verifyMFA,
+  verifyWebAuthnAssertion,
+} from '@/lib/api'
 import { authService } from '@/lib/auth'
 import { normalizeRedirectPath } from '@/lib/navigation'
 import { resolveWebRedirect, WebRoute } from '@/lib/routes'
@@ -147,7 +154,16 @@ async function handleWebAuthnWeb(
 }
 
 // CLIInitiator shows where the CLI login was started so the user can spot a login they did not start.
-function CLIInitiator({ device, ipAddress }: { device: string | null; ipAddress: string | null }) {
+// Shows where the CLI login was started, as the gateway recorded it, so the user can spot a login they didn't start.
+function CLIInitiator({ state }: { state: string }) {
+  const { data } = useQuery({
+    queryKey: ['cli-login-initiator', state],
+    queryFn: () => getCliLoginInitiator(state),
+    retry: false,
+    staleTime: Number.POSITIVE_INFINITY,
+  })
+  const device = data?.device?.trim()
+  const ipAddress = data?.ip?.trim()
   if (!(device || ipAddress)) {
     return null
   }
@@ -166,8 +182,6 @@ export function MFAChallengePage() {
   const channel = extractParam(search, 'channel') ?? extractParam(search, 'flow')
   const redirectParam = extractParam(search, 'redirect')
   const presetError = mapQueryError(extractParam(search, 'error'))
-  const initiatorDevice = extractParam(search, 'device')
-  const initiatorIP = extractParam(search, 'ip')
 
   const mode = resolveMode(channel, state)
   const redirectTarget = useMemo(() => normalizeRedirectPath(redirectParam), [redirectParam])
@@ -242,9 +256,7 @@ export function MFAChallengePage() {
       <Card className="w-full max-w-xl">
         <CardHeader className="space-y-3 text-center">
           <CardTitle className="text-center">{title}</CardTitle>
-          {mode === 'cli' ? (
-            <CLIInitiator device={initiatorDevice} ipAddress={initiatorIP} />
-          ) : null}
+          {mode === 'cli' && state ? <CLIInitiator state={state} /> : null}
         </CardHeader>
         <CardContent className="space-y-6">
           {error ? (

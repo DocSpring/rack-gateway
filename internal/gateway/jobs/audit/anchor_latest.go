@@ -1,11 +1,11 @@
 package audit
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"strings"
 	"time"
 
@@ -48,22 +48,29 @@ func (w *AnchorWriterWorker) getLatestAnchor(ctx context.Context, now time.Time)
 		return "", nil // No previous anchors
 	}
 
-	getOutput, err := w.s3Client.GetObject(ctx, &s3.GetObjectInput{
-		Bucket: aws.String(w.bucket),
-		Key:    aws.String(latest.key),
-	})
+	body, err := w.readAnchor(ctx, latest.key)
 	if err != nil {
 		return "", fmt.Errorf("failed to get previous anchor: %w", err)
 	}
-	defer func() { _ = getOutput.Body.Close() }()
-
-	var buf bytes.Buffer
-	if _, err := buf.ReadFrom(getOutput.Body); err != nil {
-		return "", fmt.Errorf("failed to read previous anchor: %w", err)
-	}
-
-	hash := sha256.Sum256(buf.Bytes())
+	hash := sha256.Sum256(body)
 	return hex.EncodeToString(hash[:]), nil
+}
+
+// readAnchor returns the body of the anchor at key.
+func (w *AnchorWriterWorker) readAnchor(ctx context.Context, key string) ([]byte, error) {
+	output, err := w.s3Client.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(w.bucket),
+		Key:    aws.String(key),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get anchor %s: %w", key, err)
+	}
+	defer func() { _ = output.Body.Close() }()
+	body, err := io.ReadAll(output.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read anchor %s: %w", key, err)
+	}
+	return body, nil
 }
 
 // findLatestAnchor lists the chain's anchors with keys after startAfter ("" for all of them), page by page,

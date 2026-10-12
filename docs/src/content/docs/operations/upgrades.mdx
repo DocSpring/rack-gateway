@@ -333,9 +333,10 @@ adds `rack-gateway-api verify-audit`, which checks the chain and the S3 anchors.
    Their `prev_anchor_hash` stopped naming the previous anchor once the bucket held 1000 anchors; those are
    counted, not failures. Earlier releases didn't serialise anchor writes, so concurrent runs could write an hour's
    key twice, which `verify-audit` reports as an overwritten anchor; check the versions' timestamps and contents
-   to confirm they're from the same hour's job. Builds from before v0.0.1 wrote per-second keys
-   (`anchor-YYYYMMDDTHHMMSSZ.json`, reported as not matching `ts_utc`) and `.sha256` files (ignored, with a
-   warning). Locked anchors can't be changed, so these findings repeat on every run until the anchors' retention
+   to confirm they're from the same hour's job. Earlier releases also retried a failing anchor job for weeks;
+   an anchor without a `format` stored more than 6 hours after its `ts_utc` gets a warning. Builds from before
+   v0.0.1 wrote per-second keys (`anchor-YYYYMMDDTHHMMSSZ.json`, reported as not matching `ts_utc`) and
+   `.sha256` files (ignored, with a warning). Locked anchors can't be changed, so these findings repeat on every run until the anchors' retention
    ends and they're deleted.
 
 ### Column encryption key required
@@ -347,9 +348,11 @@ TOTP seeds, YubiKey public IDs and the Slack bot token are now stored encrypted 
    that opens the database, including `migrate`, refuses to run without it, so a deploy without the key
    fails before the new release is promoted.
 2. **Existing secrets are encrypted when the new release starts**, before it serves requests. The log shows
-   a `Column encryption:` line with counts. This happens at startup rather than in `migrate` because the
-   previous release keeps serving while `migrate` runs. It runs again 10 minutes after startup, for anything
-   the previous release stored during the rollout (a TOTP enrollment or a Slack reconnect).
+   a `Column encryption:` line with counts and a warning for each row encrypted. This happens at startup rather
+   than in `migrate` because the previous release keeps serving while `migrate` runs. It runs again 10 minutes
+   after startup, for anything the previous release stored during the rollout (a TOTP enrollment or a Slack
+   reconnect); if it encrypts anything then, it reports it to Sentry. During this upgrade that can be a real
+   enrollment from the rollout; after it, it means a secret was written straight into the database.
 3. **Expect a short gap for TOTP and YubiKey OTP.** Once the new release has upgraded the data, any process
    still running the previous release can't read the encrypted values, so its TOTP and YubiKey OTP checks
    and Slack notifications fail until it is replaced. WebAuthn and backup codes keep working.
@@ -372,6 +375,22 @@ has the bypasses compiled in.
 A database the gateway first started with `DEV_MODE` on is marked `development`, and stays marked that way. Check
 `SELECT environment FROM rgw_internal_metadata` on production databases; a production
 gateway should report `production`.
+
+### Secrets and env var lists checked at startup (v0.1.7)
+
+Check these before upgrading:
+
+- **Secrets:** `APP_SECRET_KEY` and `AUDIT_HMAC_SECRET` must each be at least 32 bytes, and neither can be the
+  development value from this repository. `migrate` refuses weak ones too, so a deploy stops before it promotes.
+  Generate new ones with `openssl rand -base64 32`. Changing `AUDIT_HMAC_SECRET` breaks verification of earlier
+  audit events, so only replace it if it's actually weak.
+- **Env var list variables:** `CONVOX_SECRET_ENV_VARS` and the `protected_env_vars`, `secret_env_vars` and
+  `audit_visible_env_vars` setting variables must be a JSON array of names or a comma-separated list of names. A
+  quoted value (`'"A,B"'`, as `jsonencode` of a string writes) or an invalid name stops the gateway from starting.
+- **Stored lists and image patterns:** a stored env var list with an invalid name (for example `STRIPE_*`, which
+  never matched anything) makes that app's env count as all secret and protected. Its env pages return 500 until
+  you fix the list under **Apps → `{app}` → Settings**. A stored `service_image_patterns` value that isn't an object
+  of valid patterns refuses the app's builds.
 
 ### Deploy approvals bound to commits (v0.1.3)
 

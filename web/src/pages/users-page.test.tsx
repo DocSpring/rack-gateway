@@ -284,7 +284,7 @@ describe('UsersPage', () => {
       fireEvent.click(confirmDeleteButton)
 
       await waitFor(() => {
-        expect(api.delete).toHaveBeenCalledWith('/api/v1/users/viewer@example.com')
+        expect(api.delete).toHaveBeenCalledWith('/api/v1/users/viewer%40example.com')
       })
     })
 

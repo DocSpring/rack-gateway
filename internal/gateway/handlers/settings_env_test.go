@@ -58,3 +58,25 @@ func TestEnvDefinedSettingsAreRefused(t *testing.T) {
 		`{"protected_env_vars": ["DATABASE_URL"], "default_branch": "develop"}`)
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 }
+
+// The env var lists must hold env var names: a quoted or otherwise invalid name would protect, mask or show nothing,
+// so it is refused with a 400 and nothing is saved.
+func TestEnvVarListSettingsRefuseInvalidNames(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	handler, _, _ := setupSettingsHandler(t)
+
+	w := putSettings(t, handler.UpdateAppProtectedEnvVars, "/api/v1/apps/web/settings/protected-env-vars", "web",
+		`["\"DATABASE_URL", "SECRET_KEY_BASE\""]`)
+	require.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
+	require.Contains(t, w.Body.String(), "protected_env_vars must list env var names")
+
+	w = putSettings(t, handler.UpdateAppSettings, "/api/v1/apps/web/settings", "web",
+		`{"secret_env_vars": ["BILLING ID"], "default_branch": "develop"}`)
+	require.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
+
+	all, err := handler.settingsService.GetAllAppSettings("web")
+	require.NoError(t, err)
+	for _, key := range []string{settings.KeyProtectedEnvVars, settings.KeySecretEnvVars, settings.KeyDefaultBranch} {
+		require.Equalf(t, settings.SourceDefault, all[key].Source, "%s: a refused update saves nothing", key)
+	}
+}

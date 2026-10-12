@@ -89,8 +89,14 @@ Request forwarding with WebSocket support:
   (`handlers/api_handler_env.go`) still refuses protected keys
 - Client IPs: use `c.ClientIP()` in gin handlers and `netutil.ClientIP(r)` elsewhere. Both trust
   `X-Forwarded-For` only from `TRUSTED_PROXY_CIDRS`. Never parse forwarding headers yourself
-- Forwards all methods: GET, POST, PUT, PATCH, DELETE
-- Full WebSocket proxy support for `convox exec` and logs
+- Forwards all methods: GET, POST, PUT, PATCH, DELETE. Request bodies are capped at 1 MiB as they're read
+  (archive uploads stream through), and a body on GET, HEAD or DELETE is refused (`proxy/forward_helpers.go`).
+  Release and build list `limit` must be 1-100 (`proxy/forward_query.go`)
+- Full WebSocket proxy support for `convox exec` and logs. Messages stream through (1 MiB cap from the client,
+  16 MiB from the rack); the gateway pings the client and ends a session whose client stops answering; each
+  user or API token may hold 10 sessions at once (`proxy/websocket_stream.go`, `proxy/websocket_sessions.go`)
+- Rack HTTP clients share one connection pool per TLS config (`httpclient`); rackcert keeps the same
+  `*tls.Config` until the pinned certificate changes, and must not hand out copies
 
 Key files:
 
@@ -118,9 +124,15 @@ Key files:
 - `db/audit_append.go`, `db/audit_hash.go`, `db/audit_normalize.go` - Hash-chained append (hash v2). The row is
   normalized to its stored form, hashed, then stored, so the stored row always re-hashes to `event_hash`. Never
   change the v2 encoding (existing rows would stop verifying); a new audit column needs a new hash version
-- `jobs/audit/anchor_writer.go` - Hourly S3 Object Lock anchors. Every write (job or `write-anchor`) goes through
-  `WriteAnchor`, which holds the audit anchor advisory lock (`db.WithAuditAnchorLock`) from the existence check
-  through the Put: anchors are permanent, so an overlapping write would be a permanent verification failure
+- `jobs/audit/anchor_writer.go` - Hourly S3 Object Lock anchors. Every write (job or `write-anchor`) holds the
+  audit anchor advisory lock (`db.WithAuditAnchorLock`) from the existence check through the Put: anchors are
+  permanent, so an overlapping write would be a permanent verification failure. `write-anchor` uses
+  `WriteCurrentAnchor` (the database's clock, never the host's). The Put is sent once (`putAnchorOnce`: an SDK
+  retry after a lost response adds a second version); the job's retry re-checks first. An attempt starting past
+  `AnchorWriteWindow`, or before the job was created, is refused (`anchor_window.go`). An existing key must be an
+  anchor the writer could have written (`anchor_existing.go`: stored no earlier than its hour, this chain and
+  hour, covering every event written before it), or it's `ErrUnexpectedAnchor`. `auditverify` checks
+  `LastModified` against `ts_utc` with the same constants, so keep them in step
 - `auditverify/` - `rack-gateway-api verify-audit` (chain + anchor verification). Never trust the database's own
   hash v2 start: it comes from `hash_version`, which anyone with database write access can change
 
@@ -128,7 +140,7 @@ Key files:
 
 Common middleware:
 
-- `security.go` - CSP headers, CORS, security headers
+- `security_headers.go` - CSP and other security headers
 - `csrf.go` - CSRF protection for web requests
 - `session.go` - Session management
 
@@ -196,7 +208,9 @@ All configuration via environment variables. See `docs/CONFIGURATION.md` for com
 
 - `RACK_HOST` - Convox rack API URL
 - `RACK_TOKEN` - Convox rack API token
-- `APP_SECRET_KEY` - Secret for session tokens and CSRF protection
+- `APP_SECRET_KEY` - Secret for session tokens and CSRF protection. The server refuses the published dev value
+  (`mise.toml`) and anything under 32 bytes, for it and `AUDIT_HMAC_SECRET`, in a release build or against a
+  production database (`app/production_guard.go`)
 - `COLUMN_ENCRYPTION_KEY` - Key for encrypted columns (`mfa_methods.secret`, the Slack bot token); base64 of
   32 bytes, required in every mode (dev/test use the published key in `mise.toml`, refused against a
   production database). See `colcrypt/`. Read and write these columns only through the `db` package
@@ -216,8 +230,10 @@ The gateway enforces strict CSP:
 - No inline scripts (except with nonce)
 - No inline styles (except with nonce)
 - Nonce is generated per request and passed to React via meta tag
+- `connect-src 'self'` (plus Sentry when configured), `base-uri 'self'`, `form-action 'self'` and
+  `frame-ancestors 'none'`
 
-See `middleware/security.go` for CSP configuration.
+See `middleware/security_headers.go` for CSP configuration, and `web/CLAUDE.md` for what it means for the SPA.
 
 ### CSRF Protection
 

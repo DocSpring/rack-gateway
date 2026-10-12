@@ -5,14 +5,15 @@ import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { MFAChallengePage } from './mfa-challenge-page'
 
-const { cancelCliLogin, verifyCliMfa } = vi.hoisted(() => ({
+const { cancelCliLogin, getCliLoginInitiator, verifyCliMfa } = vi.hoisted(() => ({
   cancelCliLogin: vi.fn(),
+  getCliLoginInitiator: vi.fn(),
   verifyCliMfa: vi.fn(),
 }))
 
 vi.mock('../lib/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../lib/api')>()
-  return { ...actual, cancelCliLogin, verifyCliMfa }
+  return { ...actual, cancelCliLogin, getCliLoginInitiator, verifyCliMfa }
 })
 
 vi.mock('../components/mfa-verification-form', () => ({
@@ -51,6 +52,7 @@ function renderPage(search: string, children?: ReactNode) {
 describe('MFAChallengePage CLI login', () => {
   beforeEach(() => {
     assign.mockReset()
+    getCliLoginInitiator.mockResolvedValue({})
   })
 
   afterEach(() => {
@@ -58,11 +60,15 @@ describe('MFAChallengePage CLI login', () => {
     vi.clearAllMocks()
   })
 
-  it('shows where the CLI login was started', () => {
-    renderPage('?state=gateway-state&device=laptop.local&ip=203.0.113.7')
-    expect(screen.getByTestId('cli-login-initiator')).toHaveTextContent(
+  it('shows where the gateway says the CLI login was started', async () => {
+    getCliLoginInitiator.mockResolvedValue({ device: 'laptop.local', ip: '203.0.113.7' })
+    // A crafted link can't choose what the page shows.
+    renderPage('?state=gateway-state&device=trusted-laptop&ip=10.0.0.1')
+
+    expect(await screen.findByTestId('cli-login-initiator')).toHaveTextContent(
       'Login started from laptop.local, IP 203.0.113.7'
     )
+    expect(getCliLoginInitiator).toHaveBeenCalledWith('gateway-state')
   })
 
   it('hands the browser back to the CLI after MFA', async () => {

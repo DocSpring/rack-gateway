@@ -16,14 +16,15 @@ func TestMessage(gateway config.GatewayIdentity) (string, []map[string]interface
 // identify names the gateway in a message, since one Slack workspace can get messages from several gateways:
 // the fallback text, which Slack shows in notifications, starts with the gateway's label as email subjects do
 // ("Rack Gateway (Staging): ..."), and the first block is that label, linked to the gateway. text is already
-// mrkdwn; only the label is escaped here.
+// mrkdwn; only the label is escaped here. The fallback text is shortened at the end, so the label always shows.
 func identify(
 	gateway config.GatewayIdentity,
 	text string,
 	blocks []map[string]interface{},
 ) (string, []map[string]interface{}) {
 	label := escapeMrkdwn(gateway.Label())
-	return label + ": " + text, append([]map[string]interface{}{gatewayBlock(gateway, label)}, blocks...)
+	fallback := truncateMrkdwn(label+": "+text, maxFallbackText)
+	return fallback, append([]map[string]interface{}{gatewayBlock(gateway, label)}, blocks...)
 }
 
 // gatewayBlock is a section naming the gateway in bold, linked to the gateway when it has a URL.

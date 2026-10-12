@@ -13,6 +13,7 @@ import {
   TableRow,
 } from '../components/ui/table'
 import { api } from '../lib/api'
+import { apiPath } from '../lib/api-path'
 import { DEFAULT_PER_PAGE } from '../lib/constants'
 import { formatElapsed } from '../lib/time'
 
@@ -35,7 +36,7 @@ export function AppBuildsPage() {
   } = useQuery({
     queryKey: ['app-builds', app],
     queryFn: async () => {
-      const items = await api.get<Build[]>(`/api/v1/convox/apps/${app}/builds`)
+      const items = await api.get<Build[]>(apiPath`/api/v1/convox/apps/${app}/builds`)
       try {
         const ids = Array.from(new Set(items.map((b) => b.id))).join(',')
         if (ids) {

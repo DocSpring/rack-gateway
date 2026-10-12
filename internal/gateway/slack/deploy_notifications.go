@@ -98,8 +98,8 @@ func deployApprovalDetailsBlock(req *db.DeployApprovalRequest) map[string]interf
 	return map[string]interface{}{
 		"type": "section",
 		"fields": []map[string]interface{}{
-			mrkdwnElement("*App:*\n" + escapeMrkdwn(req.App)),
-			mrkdwnElement("*Commit:*\n" + inlineCode(shortCommitHash(req.GitCommitHash))),
+			mrkdwnField("App", escapeMrkdwn(req.App)),
+			mrkdwnField("Commit", inlineCode(shortCommitHash(req.GitCommitHash))),
 		},
 	}
 }
@@ -113,50 +113,39 @@ func deployApprovalMessageBlock(req *db.DeployApprovalRequest) map[string]interf
 }
 
 // deployApprovalLinksBlock links to the request on this gateway, and to the pull request and CI build when their
-// URLs are safe to link (see externalLink).
+// URLs are safe to link (see externalLink) and short enough for a field (see appendLinkField).
 func deployApprovalLinksBlock(req *db.DeployApprovalRequest, gatewayURL string) map[string]interface{} {
-	elements := []map[string]interface{}{
-		mrkdwnElement("🔗 " + mrkdwnLink(
-			gatewayURL+"/app/deploy-approval-requests/"+req.PublicID,
-			"View Approval Request",
-		)),
-	}
-
-	if prLink := externalLink(req.PrURL, "GitHub PR"); prLink != "" {
-		elements = append(elements, mrkdwnElement("🔗 "+prLink))
-	}
-
-	if ciElement := deployApprovalCIElement(req.CIMetadata); ciElement != nil {
-		elements = append(elements, ciElement)
-	}
+	fields := appendLinkField(nil, mrkdwnLink(
+		gatewayURL+"/app/deploy-approval-requests/"+req.PublicID,
+		"View Approval Request",
+	))
+	fields = appendLinkField(fields, externalLink(req.PrURL, "GitHub PR"))
+	fields = appendLinkField(fields, deployApprovalCILink(req.CIMetadata))
 
 	return map[string]interface{}{
 		"type":   "section",
-		"fields": elements,
+		"fields": fields,
 	}
 }
 
-func deployApprovalCIElement(metadata json.RawMessage) map[string]interface{} {
+// deployApprovalCILink links to the CI build named in the request's CI metadata, or returns "" when there's no
+// build URL or it isn't safe to link.
+func deployApprovalCILink(metadata json.RawMessage) string {
 	if len(metadata) == 0 {
-		return nil
+		return ""
 	}
 
 	var ciMeta map[string]interface{}
 	if err := json.Unmarshal(metadata, &ciMeta); err != nil {
-		return nil
+		return ""
 	}
 
 	buildURL, ok := ciMeta["build_url"].(string)
 	if !ok {
-		return nil
+		return ""
 	}
 
-	ciLink := hostLabeledLink(buildURL, "CI Pipeline")
-	if ciLink == "" {
-		return nil
-	}
-
-	return mrkdwnElement("🔗 " + ciLink)
+	return hostLabeledLink(buildURL, "CI Pipeline")
 }
 
 func deployApprovalContextBlock(req *db.DeployApprovalRequest) map[string]interface{} {
@@ -168,7 +157,7 @@ func deployApprovalContextBlock(req *db.DeployApprovalRequest) map[string]interf
 	return map[string]interface{}{
 		"type": "context",
 		"elements": []map[string]interface{}{
-			mrkdwnElement(contextText),
+			mrkdwnElement(truncateMrkdwn(contextText, maxSectionValue)),
 			mrkdwnElement(fmt.Sprintf(
 				"<!date^%d^{date_short_pretty} at {time}|%s>",
 				req.CreatedAt.Unix(),

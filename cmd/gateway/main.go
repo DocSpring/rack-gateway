@@ -159,6 +159,11 @@ func firstDatabaseURL(names ...string) (string, error) {
 }
 
 func runMigrations() error {
+	// A deploy migrates before it promotes the new release, so refusing weak secrets here stops the deploy before
+	// the release could start and refuse them itself.
+	if err := app.CheckReleaseSecrets(os.Getenv); err != nil {
+		return err
+	}
 	dsn, err := getAdminDatabaseURL()
 	if err != nil {
 		return err
@@ -233,10 +238,10 @@ func writeAuditAnchor() error {
 		anchorConfig.RetentionDays,
 	)
 
-	// Write this hour's anchor directly (synchronously). It takes the same lock as the periodic job, and fails
-	// rather than waits while another anchor write holds it.
+	// Write this hour's anchor directly (synchronously), for the hour by the database's clock. It takes the same
+	// lock as the periodic job, and fails rather than waits while another anchor write holds it.
 	fmt.Println("Writing audit anchor to S3...")
-	if err := worker.WriteAnchor(context.Background(), time.Now()); err != nil {
+	if err := worker.WriteCurrentAnchor(context.Background()); err != nil {
 		return fmt.Errorf("failed to write anchor: %w", err)
 	}
 

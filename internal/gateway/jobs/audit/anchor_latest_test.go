@@ -116,6 +116,7 @@ func TestAnchorWriterChainsToThePreviousAnchor(t *testing.T) {
 
 	require.NoError(t, worker.Work(context.Background(), anchorJob(firstAnchorHour)))
 	nextHour := firstAnchorHour.Add(time.Hour)
+	bucket.AdvanceTo(nextHour)
 	require.NoError(t, worker.Work(context.Background(), anchorJob(nextHour)))
 	// A retry of the same hour leaves the anchor alone.
 	require.NoError(t, worker.Work(context.Background(), anchorJob(nextHour.Add(10*time.Minute))))

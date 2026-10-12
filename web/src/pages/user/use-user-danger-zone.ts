@@ -4,6 +4,7 @@ import { useUnlockUser } from '@/components/user-lock-dialog'
 import { useMutation } from '@/hooks/use-mutation'
 import type { GatewayUser } from '@/lib/api'
 import { api } from '@/lib/api'
+import { apiPath } from '@/lib/api-path'
 import { QUERY_KEYS } from '@/lib/query-keys'
 import {
   requestDeleteUser,
@@ -40,7 +41,7 @@ export function useUserDangerZone({
   const unlockUserMutation = useUnlockUser()
 
   const deleteUserMutation = useMutation({
-    mutationFn: () => api.delete(`/api/v1/users/${encodeURIComponent(decodedEmail)}`),
+    mutationFn: () => api.delete(apiPath`/api/v1/users/${decodedEmail}`),
     onSuccess: () => {
       toastApi.success('User deleted successfully')
       setIsDeleteOpen(false)

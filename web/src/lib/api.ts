@@ -44,6 +44,7 @@ import type {
   HandlersWebAuthnEnrollmentResponse,
 } from '@/api/schemas'
 import { getHttpClientInstance } from '@/contexts/http-client-context'
+import { apiPath, pathSegment } from '@/lib/api-path'
 
 const API_PREFIX = '/api/v1'
 
@@ -134,7 +135,8 @@ export type RoleName = keyof typeof AVAILABLE_ROLES
 
 export const listUsers = (): Promise<GatewayUser[]> => unwrap(gateway.getUsers())
 
-export const getUser = (email: string): Promise<GatewayUser> => unwrap(gateway.getUsersEmail(email))
+export const getUser = (email: string): Promise<GatewayUser> =>
+  unwrap(gateway.getUsersEmail(pathSegment(email)))
 
 export const createUser = (payload: CreateUserRequest): Promise<UserSummary> =>
   unwrap(gateway.postUsers(payload))
@@ -142,34 +144,34 @@ export const createUser = (payload: CreateUserRequest): Promise<UserSummary> =>
 export const updateUser = (
   currentEmail: string,
   payload: UpdateUserRequest
-): Promise<UserSummary> => unwrap(gateway.putUsersEmail(encodeURIComponent(currentEmail), payload))
+): Promise<UserSummary> => unwrap(gateway.putUsersEmail(pathSegment(currentEmail), payload))
 
 export const updateUserName = (
   email: string,
   payload: UpdateUserNameRequest
-): Promise<UserSummary> => unwrap(gateway.putUsersEmailName(encodeURIComponent(email), payload))
+): Promise<UserSummary> => unwrap(gateway.putUsersEmailName(pathSegment(email), payload))
 
 export const deleteUser = async (email: string): Promise<void> => {
-  await unwrap(gateway.deleteUsersEmail(email))
+  await unwrap(gateway.deleteUsersEmail(pathSegment(email)))
 }
 
 export const listUserSessions = (email: string): Promise<UserSessionSummary[]> =>
-  unwrap(gateway.getUsersEmailSessions(email))
+  unwrap(gateway.getUsersEmailSessions(pathSegment(email)))
 
 export const revokeUserSession = (
   email: string,
   sessionId: number
 ): Promise<RevokeSessionResponse> =>
-  unwrap(gateway.postUsersEmailSessionsSessionIDRevoke(email, sessionId))
+  unwrap(gateway.postUsersEmailSessionsSessionIDRevoke(pathSegment(email), sessionId))
 
 export const revokeAllUserSessions = (email: string): Promise<RevokeAllSessionsResponse> =>
-  unwrap(gateway.postUsersEmailSessionsRevokeAll(email))
+  unwrap(gateway.postUsersEmailSessionsRevokeAll(pathSegment(email)))
 
 export const lockUser = (email: string, reason: string): Promise<StatusResponse> =>
-  unwrap(gateway.postUsersEmailLock(email, { reason })) as Promise<StatusResponse>
+  unwrap(gateway.postUsersEmailLock(pathSegment(email), { reason })) as Promise<StatusResponse>
 
 export const unlockUser = (email: string): Promise<StatusResponse> =>
-  unwrap(gateway.postUsersEmailUnlock(email)) as Promise<StatusResponse>
+  unwrap(gateway.postUsersEmailUnlock(pathSegment(email))) as Promise<StatusResponse>
 
 export const listDeployApprovalRequests = (
   params?: GetDeployApprovalRequestsParams
@@ -179,16 +181,16 @@ export const approveDeployApprovalRequest = (
   id: string,
   payload?: UpdateDeployApprovalRequestStatusRequest
 ): Promise<DeployApprovalRequest> =>
-  unwrap(gateway.postDeployApprovalRequestsIdApprove(id, payload ?? {}))
+  unwrap(gateway.postDeployApprovalRequestsIdApprove(pathSegment(id), payload ?? {}))
 
 export const rejectDeployApprovalRequest = (
   id: string,
   payload?: UpdateDeployApprovalRequestStatusRequest
 ): Promise<DeployApprovalRequest> =>
-  unwrap(gateway.postDeployApprovalRequestsIdReject(id, payload ?? {}))
+  unwrap(gateway.postDeployApprovalRequestsIdReject(pathSegment(id), payload ?? {}))
 
 export const extendDeployApprovalRequest = (id: string): Promise<DeployApprovalRequest> =>
-  unwrap(gateway.postDeployApprovalRequestsIdExtend(id, {}))
+  unwrap(gateway.postDeployApprovalRequestsIdExtend(pathSegment(id), {}))
 
 export type AuditLogQuery = Partial<{
   search: string
@@ -211,8 +213,7 @@ export const listAuditLogs = (params: AuditLogQuery): Promise<AuditLogsResponse>
 export const listUserAuditLogs = (
   email: string,
   params: Omit<AuditLogQuery, 'user' | 'user_id'>
-): Promise<AuditLogsResponse> =>
-  unwrap(gateway.getUsersEmailAuditLogs(encodeURIComponent(email), params))
+): Promise<AuditLogsResponse> => unwrap(gateway.getUsersEmailAuditLogs(pathSegment(email), params))
 
 export const exportAuditLogs = (
   params: Parameters<typeof gateway.getAuditLogsExport>[0]
@@ -228,7 +229,7 @@ export const getTokenPermissionMetadata = (): Promise<TokenPermissionMetadata> =
 export const listAPITokens = (): Promise<APIToken[]> => unwrap(gateway.getApiTokens())
 
 export const getAPIToken = (tokenPublicId: string): Promise<APIToken> =>
-  unwrap(gateway.getApiTokensTokenID(tokenPublicId))
+  unwrap(gateway.getApiTokensTokenID(pathSegment(tokenPublicId)))
 
 export const createAPIToken = (payload: CreateAPITokenRequest): Promise<CreateAPITokenResponse> =>
   unwrap(gateway.postApiTokens(payload))
@@ -236,10 +237,10 @@ export const createAPIToken = (payload: CreateAPITokenRequest): Promise<CreateAP
 export const updateAPIToken = (
   tokenPublicId: string,
   payload: UpdateAPITokenRequest
-): Promise<APIToken> => unwrap(gateway.putApiTokensTokenID(tokenPublicId, payload))
+): Promise<APIToken> => unwrap(gateway.putApiTokensTokenID(pathSegment(tokenPublicId), payload))
 
 export const deleteAPIToken = async (tokenPublicId: string): Promise<void> => {
-  await unwrap(gateway.deleteApiTokensTokenID(tokenPublicId))
+  await unwrap(gateway.deleteApiTokensTokenID(pathSegment(tokenPublicId)))
 }
 
 export const getInfo = (): Promise<InfoResponse> => unwrap(gateway.getInfo())
@@ -247,8 +248,6 @@ export const getInfo = (): Promise<InfoResponse> => unwrap(gateway.getInfo())
 export const getHealth = (): Promise<HealthResponse> => unwrap(gateway.getHealth())
 
 export const getRackInfo = (): Promise<RackInfo> => unwrap(gateway.getRack())
-// Deprecated alias maintained for backward compatibility
-export const getUserSessions = listUserSessions
 
 export const getConvoxInstances = async <T = unknown>(): Promise<T> => {
   const client = getHttpClientInstance()
@@ -314,6 +313,13 @@ export const cancelCliLogin = (payload: { state: string }): Promise<{ redirect: 
     .post<{ redirect: string }>('/auth/cli/cancel', payload, {
       headers: { 'Content-Type': 'application/json' },
     })
+    .then((res) => res.data)
+
+// Where the CLI login bound to this browser was started. The MFA page shows it from here, never from its own URL,
+// which a crafted link could fill with a reassuring device or address.
+export const getCliLoginInitiator = (state: string): Promise<{ device?: string; ip?: string }> =>
+  getHttpClientInstance()
+    .get<{ device?: string; ip?: string }>('/auth/cli/initiator', { params: { state } })
     .then((res) => res.data)
 
 export const verifyCliMfa = (payload: {
@@ -405,7 +411,7 @@ export const destroy = async <T = unknown>(
 
 export async function fetchAppEnv(app: string): Promise<EnvValuesMap> {
   const client = getHttpClientInstance()
-  const response = await client.get<EnvValuesResponseShape>(`apps/${encodeURIComponent(app)}/env`)
+  const response = await client.get<EnvValuesResponseShape>(apiPath`apps/${app}/env`)
   return response.data.env ?? {}
 }
 
@@ -415,7 +421,7 @@ export async function fetchAppEnvValue(
   includeSecret = false
 ): Promise<string | null> {
   const client = getHttpClientInstance()
-  const response = await client.get<EnvValuesResponseShape>(`apps/${encodeURIComponent(app)}/env`, {
+  const response = await client.get<EnvValuesResponseShape>(apiPath`apps/${app}/env`, {
     params: {
       key,
       secrets: includeSecret ? 'true' : undefined,
@@ -434,7 +440,7 @@ export async function updateAppEnv(
   remove: string[]
 ): Promise<UpdateEnvResponseShape> {
   const client = getHttpClientInstance()
-  const response = await client.put<UpdateEnvResponseShape>(`apps/${encodeURIComponent(app)}/env`, {
+  const response = await client.put<UpdateEnvResponseShape>(apiPath`apps/${app}/env`, {
     set,
     remove,
   })
@@ -453,7 +459,6 @@ export const api = {
   revokeAllUserSessions,
   lockUser,
   unlockUser,
-  getUserSessions: listUserSessions,
   listAuditLogs,
   listUserAuditLogs,
   exportAuditLogs,

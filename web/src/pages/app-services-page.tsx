@@ -17,6 +17,7 @@ import { toast } from '../components/ui/use-toast'
 import { useAuth } from '../contexts/auth-context'
 import { useMutation } from '../hooks/use-mutation'
 import { api } from '../lib/api'
+import { apiPath } from '../lib/api-path'
 import { countProcessesByService, fetchAppProcesses, fetchAppServices } from '../lib/app-runtime'
 import { QUERY_KEYS } from '../lib/query-keys'
 
@@ -52,7 +53,7 @@ export function AppServicesPage() {
   const scaleMutation = useMutation({
     mutationFn: ({ serviceName, count }: { serviceName: string; count: number }) =>
       api.put(
-        `/api/v1/convox/apps/${app}/services/${encodeURIComponent(serviceName)}`,
+        apiPath`/api/v1/convox/apps/${app}/services/${serviceName}`,
         // Sent as a form body like the Convox SDK; the gateway refuses unknown query parameters.
         new URLSearchParams({ count: String(count) })
       ),

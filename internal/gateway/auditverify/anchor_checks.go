@@ -52,8 +52,7 @@ func verifyAnchors(
 		checkLatestAnchorAge(records[len(records)-1], opts.MaxAge, now, report)
 	}
 	reportMissingHours(walker.anchoredHour, now, report)
-	reportUnanchoredTail(head, walker.maxSeq, report)
-	return nil
+	return checkUnanchoredTail(ctx, source, head, walker.maxSeq, anchorMaxAge(opts.MaxAge), now, report)
 }
 
 // anchorWalker checks each anchor against the anchor written before it.
@@ -70,18 +69,44 @@ type anchorWalker struct {
 	verifiedSeq  int64
 	verifiedHash string
 	anchoredHour map[time.Time]bool
+	// formatSince is when S3 stored the first anchor with the current format (zero before one is found).
+	formatSince time.Time
 }
+
+// legacyAnchorGrace is how long after the first anchor in the current format an anchor without a format can still
+// be stored: during the rolling deploy that brings in the format, an instance of the earlier version can write
+// the next hour's anchor.
+const legacyAnchorGrace = 24 * time.Hour
 
 func (w *anchorWalker) check(ctx context.Context, record *anchorRecord) error {
 	defer func() { w.prev = record }()
 	if record.invalid {
 		return nil
 	}
+	w.checkFormat(record)
 	w.checkLinkToPrevious(record)
 	w.checkIdentity(record)
 	w.checkSequence(record)
 	w.checkHashV2Start(record)
 	return w.checkAnchoredEvent(ctx, record)
+}
+
+// checkFormat fails an anchor without a format that S3 stored more than legacyAnchorGrace after the first anchor
+// in the current format: the anchor writer no longer writes one, so someone with write access to the bucket did,
+// and the checks that make allowances for earlier versions' anchors mustn't excuse it. Anchors are checked in the
+// order S3 stored them, so the first anchor in the current format has been seen by then.
+func (w *anchorWalker) checkFormat(record *anchorRecord) {
+	if record.payload.Format >= jobaudit.AnchorFormat {
+		if w.formatSince.IsZero() {
+			w.formatSince = record.lastModified
+		}
+		return
+	}
+	if !w.formatSince.IsZero() && record.lastModified.After(w.formatSince.Add(legacyAnchorGrace)) {
+		w.report.fail("anchor %s has no format but was stored at %s, after anchors in format %d began (%s): the "+
+			"anchor writer didn't write it", record.key, record.lastModified.UTC().Format(time.RFC3339),
+			jobaudit.AnchorFormat, w.formatSince.UTC().Format(time.RFC3339))
+	}
 }
 
 // checkLinkToPrevious checks prev_anchor_hash names the anchor written just before.
@@ -106,7 +131,8 @@ func (w *anchorWalker) checkLinkToPrevious(record *anchorRecord) {
 	}
 }
 
-// checkIdentity checks the anchor belongs to this chain and sits under the key for its own timestamp.
+// checkIdentity checks the anchor belongs to this chain, sits under the key for its own timestamp and was stored
+// when the anchor writer could have written it.
 func (w *anchorWalker) checkIdentity(record *anchorRecord) {
 	if record.payload.ChainID != w.chainID {
 		w.report.fail("anchor %s: chain_id is %q, expected %q", record.key, record.payload.ChainID, w.chainID)
@@ -119,7 +145,35 @@ func (w *anchorWalker) checkIdentity(record *anchorRecord) {
 	if expected := jobaudit.AnchorKey(w.chainID, ts); expected != record.key {
 		w.report.fail("anchor %s: its ts_utc (%s) belongs under %s", record.key, record.payload.TimestampUTC, expected)
 	}
+	w.checkWriteTime(record, ts)
 	w.anchoredHour[ts.UTC().Truncate(time.Hour)] = true
+}
+
+// checkWriteTime compares when S3 stored the anchor with its ts_utc, when its job was created. The writer only
+// writes after that, and gives up jobaudit.AnchorWriteWindow later (give or take jobaudit.AnchorClockSkew). An
+// anchor stored before its ts_utc was created ahead of time by someone with write access to the bucket, which
+// also stops the writer from anchoring that hour; one stored long after it was backfilled. Earlier versions
+// retried a failing job for weeks, so a late anchor without a format is only a warning.
+func (w *anchorWalker) checkWriteTime(record *anchorRecord, ts time.Time) {
+	written := record.lastModified
+	if written.Before(ts.Add(-jobaudit.AnchorClockSkew)) {
+		w.report.fail("anchor %s was stored at %s, before its ts_utc (%s): it was created ahead of time, not by the "+
+			"anchor writer (check who can write to the bucket, and to the database's job table)", record.key,
+			written.UTC().Format(time.RFC3339), record.payload.TimestampUTC)
+		return
+	}
+	late := written.Sub(ts)
+	if late <= jobaudit.AnchorWriteWindow+jobaudit.AnchorClockSkew {
+		return
+	}
+	message := fmt.Sprintf("anchor %s was stored %s after its ts_utc (%s), later than the anchor writer writes "+
+		"(%s)", record.key, late.Truncate(time.Minute), record.payload.TimestampUTC, jobaudit.AnchorWriteWindow)
+	if record.payload.Format >= jobaudit.AnchorFormat {
+		w.report.fail("%s: it was backfilled", message)
+		return
+	}
+	w.report.warn("%s; versions before anchor format %d retried a failing anchor job for weeks",
+		message, jobaudit.AnchorFormat)
 }
 
 // checkSequence checks the chain only grows: an anchor never records fewer events than an earlier one.
@@ -252,20 +306,47 @@ func reportNoAnchors(opts AnchorOptions, head db.AuditChainHead, report *Report)
 func checkLatestAnchorAge(latest *anchorRecord, maxAge time.Duration, now time.Time, report *Report) {
 	report.LatestAnchor = latest.key
 	report.LatestAnchorWritten = latest.lastModified
-	if maxAge == 0 {
-		maxAge = DefaultMaxAnchorAge
-	}
+	maxAge = anchorMaxAge(maxAge)
 	if age := now.Sub(latest.lastModified); age > maxAge {
 		report.fail("the latest anchor (%s) was written %s ago, more than the maximum anchor age (%s): anchors "+
 			"have stopped being written", latest.key, age.Truncate(time.Minute), maxAge)
 	}
 }
 
-// reportUnanchoredTail warns about events no anchor covers yet: nothing outside the database pins them.
-func reportUnanchoredTail(head db.AuditChainHead, maxSeq int64, report *Report) {
+// anchorMaxAge is the maximum anchor age verification uses: maxAge, or DefaultMaxAnchorAge when it's 0.
+func anchorMaxAge(maxAge time.Duration) time.Duration {
+	if maxAge == 0 {
+		return DefaultMaxAnchorAge
+	}
+	return maxAge
+}
+
+// checkUnanchoredTail reports events no anchor covers yet: nothing outside the database pins them. That's expected
+// for the last hour's events, so it's a warning, unless the oldest of them was written more than maxAge ago:
+// anchors are being written but don't cover new events (each hour's key taken first by a stale anchor, say).
+func checkUnanchoredTail(
+	ctx context.Context,
+	source ChainSource,
+	head db.AuditChainHead,
+	maxSeq int64,
+	maxAge time.Duration,
+	now time.Time,
+	report *Report,
+) error {
 	if head.Empty || head.LastIndex <= maxSeq {
-		return
+		return nil
+	}
+	oldest, err := source.AuditChainRowAt(ctx, maxSeq+1)
+	if err != nil {
+		return fmt.Errorf("failed to read audit event %d: %w", maxSeq+1, err)
+	}
+	if oldest != nil && now.Sub(oldest.Timestamp) > maxAge {
+		report.fail("events %d..%d (%d) aren't anchored, and the oldest was written at %s, more than the maximum "+
+			"anchor age (%s) ago: anchors are being written but don't cover new events", maxSeq+1, head.LastIndex,
+			head.LastIndex-maxSeq, oldest.Timestamp.UTC().Format(time.RFC3339), maxAge)
+		return nil
 	}
 	report.warn("events %d..%d (%d) were written after the latest anchor and aren't anchored yet",
 		maxSeq+1, head.LastIndex, head.LastIndex-maxSeq)
+	return nil
 }

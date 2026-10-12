@@ -25,6 +25,7 @@ const autoApproveFor: Record<string, boolean> = { web: false, api: false }
 
 describe('AppSettingsPage', () => {
   beforeEach(() => {
+    params.app = 'web'
     mockGet.mockImplementation((url: string) => {
       const app = url.split('/')[4]
       return Promise.resolve({
@@ -46,6 +47,24 @@ describe('AppSettingsPage', () => {
     expect(await screen.findByText('Environment Variables Shown in Audit Logs')).toBeInTheDocument()
     expect(screen.getByText('RAILS_ENV')).toBeInTheDocument()
     expect(screen.getByText(/Secret and protected values are always redacted/)).toBeInTheDocument()
+  })
+
+  // The app name comes from the page's URL, so it's encoded as one path segment: a crafted link
+  // can't point the request at another endpoint.
+  it('encodes the app name in the settings request path', async () => {
+    params.app = 'web/../../users?role=admin'
+    mockGet.mockResolvedValue({})
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(
+      <QueryClientProvider client={client}>
+        <AppSettingsPage />
+      </QueryClientProvider>
+    )
+    await waitFor(() =>
+      expect(mockGet).toHaveBeenCalledWith(
+        '/api/v1/apps/web%2F..%2F..%2Fusers%3Frole%3Dadmin/settings'
+      )
+    )
   })
 
   // An unsaved edit on one app's settings must not show up on another app's (cached) settings page.

@@ -1,4 +1,5 @@
 import { api } from './api'
+import { apiPath } from './api-path'
 
 type RawProcess = {
   id: string
@@ -32,7 +33,7 @@ type AppService = {
 }
 
 export async function fetchAppProcesses(app: string): Promise<AppProcess[]> {
-  const processes = await api.get<RawProcess[]>(`/api/v1/convox/apps/${app}/processes`)
+  const processes = await api.get<RawProcess[]>(apiPath`/api/v1/convox/apps/${app}/processes`)
   return processes.map((process) => ({
     id: process.id,
     service: process.service ?? process.name ?? '',
@@ -43,7 +44,7 @@ export async function fetchAppProcesses(app: string): Promise<AppProcess[]> {
 }
 
 export async function fetchAppServices(app: string): Promise<AppService[]> {
-  const services = await api.get<RawService[]>(`/api/v1/convox/apps/${app}/services`)
+  const services = await api.get<RawService[]>(apiPath`/api/v1/convox/apps/${app}/services`)
   return services
     .map((service) => ({
       name: service.name,

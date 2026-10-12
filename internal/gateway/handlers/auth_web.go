@@ -95,7 +95,7 @@ func (h *AuthHandler) WebLoginStart(c *gin.Context) {
 func (h *AuthHandler) WebLoginCallback(c *gin.Context) {
 	// Check for OAuth error response
 	if oauthError := c.Query("error"); oauthError != "" {
-		h.redirectToWebLoginError(c, h.getOAuthErrorMessage(c))
+		redirectToWebLoginError(c, webLoginProviderError(oauthError))
 		return
 	}
 
@@ -103,13 +103,13 @@ func (h *AuthHandler) WebLoginCallback(c *gin.Context) {
 	code := c.Query("code")
 	state := c.Query("state")
 	if code == "" || state == "" {
-		h.redirectToWebLoginError(c, "Missing authorization code or state")
+		redirectToWebLoginError(c, webLoginMissingCode)
 		return
 	}
 
 	// Validate OAuth state cookie
 	if !h.validateWebOAuthState(c, state) {
-		h.redirectToWebLoginError(c, "Invalid OAuth state")
+		redirectToWebLoginError(c, webLoginStateMismatch)
 		return
 	}
 
@@ -122,7 +122,7 @@ func (h *AuthHandler) WebLoginCallback(c *gin.Context) {
 
 	// Validate session manager is available
 	if h.sessions == nil {
-		h.redirectToWebLoginError(c, "Session manager not available")
+		redirectToWebLoginError(c, webLoginSessionFailed)
 		return
 	}
 
@@ -136,12 +136,7 @@ func (h *AuthHandler) WebLoginCallback(c *gin.Context) {
 
 	session, err := h.createLoginSession(c, userRecord, "web")
 	if err != nil {
-		errorURL := fmt.Sprintf(
-			"%s?message=%s",
-			WebLoginErrorRoute,
-			url.QueryEscape("Failed to create session. Please try again."),
-		)
-		c.Redirect(http.StatusFound, errorURL)
+		redirectToWebLoginError(c, webLoginSessionFailed)
 		return
 	}
 
@@ -217,19 +212,6 @@ func (h *AuthHandler) WebLogout(c *gin.Context) {
 	c.Redirect(http.StatusFound, "/app/login")
 }
 
-func (_ *AuthHandler) getOAuthErrorMessage(c *gin.Context) string {
-	errorDesc := c.Query("error_description")
-	if errorDesc == "" {
-		return "Authentication was canceled or failed"
-	}
-	return errorDesc
-}
-
-func (_ *AuthHandler) redirectToWebLoginError(c *gin.Context, message string) {
-	errorURL := fmt.Sprintf("%s?message=%s", WebLoginErrorRoute, url.QueryEscape(message))
-	c.Redirect(http.StatusFound, errorURL)
-}
-
 func (h *AuthHandler) validateWebOAuthState(c *gin.Context, state string) bool {
 	cookie, err := c.Request.Cookie(webOAuthStateCookie)
 	if err != nil || cookie == nil || cookie.Value == "" {
@@ -243,12 +225,12 @@ func (h *AuthHandler) handleWebLoginOAuthError(c *gin.Context, err error) {
 	var domainErr *auth.DomainNotAllowedError
 	email := ""
 	name := ""
-	errorMsg := "Authentication failed. Please try again."
+	reason := webLoginExchangeFailed
 
 	if errors.As(err, &domainErr) {
 		email = domainErr.Email
 		name = domainErr.Name
-		errorMsg = "You are not authorized to access this application. Please contact your administrator."
+		reason = webLoginUnauthorized
 	}
 
 	if h.securityNotifier != nil {
@@ -262,7 +244,7 @@ func (h *AuthHandler) handleWebLoginOAuthError(c *gin.Context, err error) {
 			false,
 		)
 	}
-	h.redirectToWebLoginError(c, errorMsg)
+	redirectToWebLoginError(c, reason)
 }
 
 func (h *AuthHandler) handleWebLoginUnauthorized(c *gin.Context, email, name string) {
@@ -277,6 +259,5 @@ func (h *AuthHandler) handleWebLoginUnauthorized(c *gin.Context, email, name str
 			false,
 		)
 	}
-	errorMsg := "You are not authorized to access this application. Please contact your administrator."
-	h.redirectToWebLoginError(c, errorMsg)
+	redirectToWebLoginError(c, webLoginUnauthorized)
 }

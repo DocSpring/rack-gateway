@@ -22,6 +22,7 @@ and in the end-to-end tests:
 | `POSTMARK_API_BASE` | Sends email and the Postmark token to another server |
 | `GOOGLE_OAUTH_BASE_URL` without `https://` | Accepts identity tokens over plain HTTP |
 | `COLUMN_ENCRYPTION_KEY` set to the development key | The key is published in the repository (`mise.toml`), so anyone could decrypt stored secrets |
+| `APP_SECRET_KEY` or `AUDIT_HMAC_SECRET` set to a development value, or shorter than 32 bytes | The development values are published in the repository, so anyone could forge sessions or recompute audit hashes, and a short secret can be guessed. The server refuses them when it starts |
 
 They only work in a build compiled with the `testbypass` Go build tag, which the development and E2E stacks use. The
 published Docker image and the published image is built without it, so they can't honour these settings: a release
@@ -41,7 +42,7 @@ against a database, it marks the database as `production`, or `development` in a
 | `PORT` | `8080` | TCP port the API listens on |
 | `DOMAIN` | (required) | Gateway domain for OAuth redirect URLs |
 | `DEV_MODE` | `false` | Development mode (`testbypass` builds only, see [Test Bypasses](#test-bypasses)) |
-| `APP_SECRET_KEY` | (required) | Secret for sessions and CSRF |
+| `APP_SECRET_KEY` | (required) | Secret for sessions and CSRF: at least 32 bytes (`openssl rand -base64 32`) |
 | `COLUMN_ENCRYPTION_KEY` | (required) | Key that encrypts stored secrets: standard base64 of exactly 32 random bytes (`openssl rand -base64 32`). See [Column Encryption](#column-encryption) |
 | `COOKIE_SECURE` | `true` | `false` leaves the `Secure` attribute off cookies, for plain-HTTP stacks (`testbypass` builds only). Release builds always set it |
 | `TRUSTED_PROXY_CIDRS` | | Comma-separated CIDRs of the reverse proxies in front of the gateway (e.g. an ingress). `X-Forwarded-For` is only believed from these, and the client IP is the right-most address that isn't one of them. Leave empty when clients connect directly; set it whenever there is a proxy, or audit logs, rate limits and security emails all see the proxy's address |
@@ -53,8 +54,8 @@ against a database, it marks the database as `production`, or `development` in a
 `COLUMN_ENCRYPTION_KEY` encrypts the secrets the gateway stores in its database: TOTP seeds and YubiKey
 public IDs (`mfa_methods.secret`) and the Slack bot token. Values are encrypted with AES-256-GCM and bound
 to where they belong (the user and MFA method type, or the Slack workspace), so a value copied to another
-user's row, or to a method of another type, can't be decrypted there, and a plaintext value written straight
-into the database is never accepted.
+user's row, or to a method of another type, can't be decrypted there. A plaintext value is never used as it is,
+but the upgrade sweep encrypts any it finds (see **Existing data is upgraded at startup** below).
 
 - **Generate it once** with `openssl rand -base64 32` and store it with your other secrets. Use a
   different key per environment. It is separate from `APP_SECRET_KEY`, so rotating the session secret
@@ -71,10 +72,14 @@ into the database is never accepted.
   automatic account lock.
   Slack must be reconnected. The gateway logs (and reports to Sentry, if configured) every value it fails
   to decrypt when it tries to use it.
-- **Existing data is upgraded at startup.** Secrets stored by releases before column encryption (plaintext
-  TOTP seeds, base64 Slack tokens) are encrypted the first time the new release starts, before it serves
+- **Existing data is upgraded at startup.** Secrets stored by releases before column encryption (before
+  v0.1.7: plaintext TOTP seeds, base64 Slack tokens) are encrypted when the server starts, before it serves
   requests, and once more 10 minutes later, in case the previous release stored more during the rollout. The
-  upgrade is safe to repeat and logs only counts.
+  sweep runs on every start and is safe to repeat. It logs a warning naming each row it encrypts (the user
+  and MFA method type, or the Slack workspace, never the value). It will be removed in a later release; until then it encrypts any
+  plaintext value it finds, so someone who can write to the database could plant a TOTP seed they know and
+  have it encrypted. After the upgrade nothing else stores plaintext, so the sweep 10 minutes after startup
+  encrypting anything is reported to Sentry, if configured, and logged as an error.
 - **Rotation isn't supported yet.** Every encrypted value records which key encrypted it, so rotation can
   be added later without changing the stored format.
 
@@ -123,10 +128,12 @@ into the database is never accepted.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `DB_MAX_OPEN_CONNS` | `25` | Max open connections |
-| `DB_MAX_IDLE_CONNS` | `5` | Max idle connections |
+| `DB_MAX_OPEN_CONNS` | `10` | Max open connections per pool. Each process has two pools, so it can open twice this many |
+| `DB_MAX_IDLE_CONNS` | `3` | Max idle connections per pool (the job queue's pool keeps this many open) |
 | `DB_CONN_MAX_LIFETIME` | `30m` | Connection lifetime |
 | `DB_CONN_MAX_IDLE_TIME` | `10m` | Idle timeout |
+
+See [Connection Pool](/deployment/database-setup/#connection-pool) for sizing.
 
 ### Testing
 
@@ -159,7 +166,9 @@ An environment variable pins its setting: the web UI shows it read-only, and the
 - Booleans: `true` or `false`
 - Numbers: whole numbers of at least 1
 - Lists: a JSON array of strings, or a comma-separated list (use the JSON form when a value contains a comma,
-  e.g. an approved deploy command)
+  e.g. an approved deploy command). A quoted value such as `"A,B"` (what `jsonencode` writes for a string) is
+  refused: use `jsonencode` on a list. The env var lists (`protected_env_vars`, `secret_env_vars`,
+  `audit_visible_env_vars`) must hold valid env var names, here and when saved through the API.
 - Maps (`service_image_patterns`): a JSON object of strings
 - Strings: the plain value, or a JSON string (`"main"`, as Terraform's `jsonencode` writes it). Other quoting is
   refused. `verify_git_commit_mode` must be `latest` or `branch`.
@@ -206,7 +215,7 @@ See [Deploy Approvals](/integrations/deploy-approvals/) for common keys.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `AUDIT_HMAC_SECRET` | (required in prod) | HMAC chain secret |
+| `AUDIT_HMAC_SECRET` | (required in prod) | HMAC chain secret: at least 32 bytes (`openssl rand -base64 32`) |
 | `AUDIT_ANCHOR_BUCKET` | | S3 bucket for anchors |
 | `AUDIT_ANCHOR_CHAIN_ID` | | Chain identifier |
 | `AUDIT_ANCHOR_RETENTION_DAYS` | `400` | Object Lock retention |

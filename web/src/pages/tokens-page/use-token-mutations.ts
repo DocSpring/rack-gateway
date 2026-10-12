@@ -3,6 +3,7 @@ import { toast } from '@/components/ui/use-toast'
 import { useMutation } from '@/hooks/use-mutation'
 import { QUERY_KEYS } from '@/lib/query-keys'
 import { api } from '../../lib/api'
+import { apiPath } from '../../lib/api-path'
 import type { APITokenResponse } from '../../lib/generated/gateway-types'
 
 export function useTokenMutations() {
@@ -33,7 +34,7 @@ export function useTokenMutations() {
       name: string
       permissions: string[]
     }) => {
-      const response = await api.put(`/api/v1/api-tokens/${publicId}`, {
+      const response = await api.put(apiPath`/api/v1/api-tokens/${publicId}`, {
         name,
         permissions,
       })
@@ -47,7 +48,7 @@ export function useTokenMutations() {
 
   const deleteToken = useMutation({
     mutationFn: async (tokenPublicId: string) => {
-      await api.delete(`/api/v1/api-tokens/${tokenPublicId}`)
+      await api.delete(apiPath`/api/v1/api-tokens/${tokenPublicId}`)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TOKENS })

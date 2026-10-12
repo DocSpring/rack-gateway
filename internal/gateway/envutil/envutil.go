@@ -13,6 +13,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/config"
 	"github.com/DocSpring/rack-gateway/internal/gateway/httpclient"
@@ -34,20 +36,56 @@ var (
 	// ErrMaskedSecretWithoutBase is returned when a masked secret value is provided without an existing
 	// value to preserve.
 	ErrMaskedSecretWithoutBase = errors.New("masked secret provided without existing value")
-	// ErrInvalidEnvEntry is returned for keys that aren't valid env var names, or values containing line
-	// breaks or NUL. The rack API takes env as newline-separated KEY=VALUE lines, so a line break in a
-	// value would inject extra variables.
+	// ErrInvalidEnvEntry is returned for keys that aren't valid env var names, or values that aren't UTF-8 or
+	// contain control characters other than tab. The rack API takes env as newline-separated KEY=VALUE lines, so
+	// a line break in a value would inject extra variables, and `convox env` prints values to other users'
+	// terminals, where an escape sequence would run.
 	ErrInvalidEnvEntry = errors.New("invalid environment variable name or value")
 )
 
 var envKeyPattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
-// ValidateEnvEntry checks that key is a valid env var name and value cannot break the KEY=VALUE line format.
+// ValidName reports whether name is a valid env var name: letters, digits and underscores, not starting with a
+// digit.
+func ValidName(name string) bool {
+	return envKeyPattern.MatchString(name)
+}
+
+// maxShownKeyBytes is how much of a key an error message shows: the message goes back to the client and into the
+// logs, and a key can be most of a posted env.
+const maxShownKeyBytes = 40
+
+// ValidateEnvEntry checks that key is a valid env var name and value is UTF-8 without control characters other
+// than tab. An invalid name isn't shown in the error (it may be a line of a multi-line secret value); a value error
+// names its key, cut to 40 bytes.
 func ValidateEnvEntry(key, value string) error {
-	if !envKeyPattern.MatchString(key) || strings.ContainsAny(value, "\r\n\x00") {
-		return ErrInvalidEnvEntry
+	if !ValidName(key) {
+		return fmt.Errorf("%w: names must be letters, digits and underscores, not starting with a digit",
+			ErrInvalidEnvEntry)
+	}
+	if HasControlCharacter(value) {
+		return fmt.Errorf("%w: the value of %s contains a control character or isn't UTF-8",
+			ErrInvalidEnvEntry, shownKey(key))
 	}
 	return nil
+}
+
+// HasControlCharacter reports whether s isn't UTF-8 or contains a control character (C0, DEL or C1) other than tab.
+func HasControlCharacter(s string) bool {
+	return !utf8.ValidString(s) || strings.IndexFunc(s, isControlRune) >= 0
+}
+
+// isControlRune reports a control character (C0, DEL or C1) other than tab.
+func isControlRune(r rune) bool {
+	return r != '\t' && unicode.IsControl(r)
+}
+
+// shownKey is a valid env var name as an error message shows it, cut to maxShownKeyBytes.
+func shownKey(key string) string {
+	if len(key) <= maxShownKeyBytes {
+		return key
+	}
+	return key[:maxShownKeyBytes] + "…"
 }
 
 // EnvDiff describes a change applied to an environment variable.
@@ -180,8 +218,10 @@ func processSetOperation(
 	if err := ValidateEnvEntry(key, value); err != nil {
 		return nil, err
 	}
-	if err := validateProtectedKey(key, value, merged, removedOld, opts); err != nil {
-		return nil, err
+	// The web editor has no opt-in for protected keys, so any value is refused, the current one included: accepting
+	// an unchanged value would tell a caller who can't read it whether a guess was right.
+	if opts.IsProtectedKey != nil && opts.IsProtectedKey(key) {
+		return nil, ErrProtectedEnvModification
 	}
 
 	secret := opts.IsSecretKey != nil && opts.IsSecretKey(key)
@@ -195,10 +235,10 @@ func processSetOperation(
 		return nil, nil
 	}
 
+	// Without secrets:set, the mask (keep the current value) is the only value a secret takes, for the same
+	// reason: accepting the current value would confirm a guess.
 	if secret && !opts.AllowSecretUpdates {
-		if !hadOld || value != oldVal {
-			return nil, ErrSecretPermission
-		}
+		return nil, ErrSecretPermission
 	}
 
 	merged[key] = value
@@ -216,35 +256,6 @@ func getSortedKeys(m map[string]string) []string {
 	}
 	sort.Strings(keys)
 	return keys
-}
-
-func validateProtectedKey(
-	key string,
-	value string,
-	merged map[string]string,
-	removedOld map[string]string,
-	opts MergeOptions,
-) error {
-	if opts.IsProtectedKey == nil || !opts.IsProtectedKey(key) {
-		return nil
-	}
-
-	if existingVal, exists := merged[key]; exists {
-		if value != existingVal {
-			return ErrProtectedEnvModification
-		}
-		return nil
-	}
-
-	if oldVal, existed := removedOld[key]; existed {
-		if value != oldVal {
-			return ErrProtectedEnvModification
-		}
-		merged[key] = value
-		return nil
-	}
-
-	return ErrProtectedEnvModification
 }
 
 func getOldValue(key string, base map[string]string, removedOld map[string]string) (string, bool) {

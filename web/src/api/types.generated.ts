@@ -1607,6 +1607,59 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/cli/initiator": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Show where a CLI login was started
+         * @description Returns the device name and IP address that started the CLI login bound to this browser, so the
+         *     MFA challenge page can show the user a login they didn't start. The page reads them from the
+         *     gateway, not from its own URL, which a crafted link could fill with a reassuring device or address.
+         */
+        get: {
+            parameters: {
+                query: {
+                    /** @description Login state */
+                    state: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.CLILoginInitiatorResponse"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/cli/mfa": {
         parameters: {
             query?: never;
@@ -5046,6 +5099,10 @@ export interface components {
             device_name?: string;
             device_os?: string;
             login_code: string;
+        };
+        "handlers.CLILoginInitiatorResponse": {
+            device?: string;
+            ip?: string;
         };
         "handlers.CLILoginRedirectResponse": {
             redirect: string;
