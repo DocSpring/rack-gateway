@@ -25,10 +25,13 @@ type CLILoginState struct {
 	LoginEmail         sql.NullString
 	LoginName          sql.NullString
 	MFAVerifiedAt      sql.NullTime
-	MFAMethodID        sql.NullInt64
-	LoginError         sql.NullString
-	CreatedAt          time.Time
-	UpdatedAt          time.Time
+	// MFAExempt is set when the login was marked verified because its user needs no MFA challenge, not because a
+	// factor was verified.
+	MFAExempt   bool
+	MFAMethodID sql.NullInt64
+	LoginError  sql.NullString
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
 }
 
 // NewCLILogin holds the values recorded when a CLI starts a login.
@@ -44,7 +47,7 @@ type NewCLILogin struct {
 
 const cliLoginColumns = `state, oauth_code_verifier, cli_code_challenge, cli_redirect_uri, cli_state,
                initiator_ip, initiator_device, browser_binding_hash, enrollment_required, login_email, login_name,
-               mfa_verified_at, mfa_method_id, login_error, created_at, updated_at`
+               mfa_verified_at, mfa_exempt, mfa_method_id, login_error, created_at, updated_at`
 
 // CreateCLILoginState records a new CLI login and removes expired ones.
 func (d *Database) CreateCLILoginState(login NewCLILogin) error {
@@ -95,16 +98,26 @@ func (d *Database) BindCLILoginBrowser(state, bindingHash, email, name string) (
 	return rows == 1, nil
 }
 
-// MarkCLILoginVerified records that the CLI login has satisfied MFA requirements.
+// MarkCLILoginVerified records that the CLI login verified a factor (methodID, when known).
 func (d *Database) MarkCLILoginVerified(state string, methodID *int64) error {
+	return d.markCLILoginMFA(state, methodID, false)
+}
+
+// MarkCLILoginExempt records that the CLI login needs no MFA challenge: its user has none enforced.
+func (d *Database) MarkCLILoginExempt(state string) error {
+	return d.markCLILoginMFA(state, nil, true)
+}
+
+func (d *Database) markCLILoginMFA(state string, methodID *int64, exempt bool) error {
 	_, err := d.exec(`
         UPDATE cli_login_states
         SET mfa_verified_at = NOW(),
+            mfa_exempt = ?,
             mfa_method_id = ?,
             login_error = NULL,
             updated_at = NOW()
         WHERE state = ?
-    `, nullableInt64(methodID), state)
+    `, exempt, nullableInt64(methodID), state)
 	if err != nil {
 		return fmt.Errorf("failed to mark CLI login verified: %w", err)
 	}
@@ -207,6 +220,7 @@ func scanCLILoginState(row *sql.Row) (*CLILoginState, error) {
 		&record.LoginEmail,
 		&record.LoginName,
 		&record.MFAVerifiedAt,
+		&record.MFAExempt,
 		&record.MFAMethodID,
 		&record.LoginError,
 		&record.CreatedAt,

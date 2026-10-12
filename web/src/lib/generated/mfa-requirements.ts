@@ -2,7 +2,7 @@
 /* biome-ignore lint -- generated file */
 /* biome-ignore format -- generated file */
 
-export const MFALevels = ['none', 'step_up', 'always'] as const;
+export const MFALevels = ['none', 'step_up_once_enrolled', 'step_up', 'always'] as const;
 export type MFALevel = (typeof MFALevels)[number];
 export interface HttpRouteMfaRequirement {
   method: string;
@@ -316,31 +316,31 @@ export const HTTP_ROUTE_MFA_REQUIREMENTS: HttpRouteMfaRequirement[] = [
     method: "POST",
     pattern: "/api/v1/auth/mfa/enroll/totp/confirm",
     permissions: ["auth:mfa_method:create"],
-    mfaLevel: "none",
+    mfaLevel: "step_up_once_enrolled",
   },
   {
     method: "POST",
     pattern: "/api/v1/auth/mfa/enroll/totp/start",
     permissions: ["auth:mfa_method:create"],
-    mfaLevel: "none",
+    mfaLevel: "step_up_once_enrolled",
   },
   {
     method: "POST",
     pattern: "/api/v1/auth/mfa/enroll/webauthn/confirm",
     permissions: ["auth:mfa_method:create"],
-    mfaLevel: "none",
+    mfaLevel: "step_up_once_enrolled",
   },
   {
     method: "POST",
     pattern: "/api/v1/auth/mfa/enroll/webauthn/start",
     permissions: ["auth:mfa_method:create"],
-    mfaLevel: "none",
+    mfaLevel: "step_up_once_enrolled",
   },
   {
     method: "POST",
     pattern: "/api/v1/auth/mfa/enroll/yubiotp/start",
     permissions: ["auth:mfa_method:create"],
-    mfaLevel: "none",
+    mfaLevel: "step_up_once_enrolled",
   },
   {
     method: "POST",

@@ -212,7 +212,7 @@ func (h *AuthHandler) CLILoginMFAForm(c *gin.Context) {
 	}
 
 	if !db.ShouldEnforceMFA(h.mfaSettings(), userRecord) {
-		if err := h.database.MarkCLILoginVerified(state, nil); err != nil {
+		if err := h.database.MarkCLILoginExempt(state); err != nil {
 			h.failCLILogin(c, record, "persist_failure")
 			return
 		}

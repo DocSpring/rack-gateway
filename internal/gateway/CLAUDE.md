@@ -23,6 +23,10 @@ OAuth 2.0 and session management:
 - **Session tokens**: Opaque tokens stored in database, revocable at any time
 - **Domain validation**: Only allows configured Google Workspace domain
 - **Sessions**: Cookie-based sessions for web UI, session tokens for CLI
+- **Step-up window**: only a verified factor opens one (`UpdateSessionMFAVerified`). A login that needs no MFA
+  challenge, or skips it with a trusted device, is marked verified with `ExemptSessionFromMFAChallenge`, which
+  opens none; so is an exempt CLI login (`cli_login_states.mfa_exempt`). Trusting a device doesn't restart the window.
+  Adding an MFA method is `MFAStepUpOnceEnrolled`: free for a first factor, step-up once the user has one
 
 Key files:
 

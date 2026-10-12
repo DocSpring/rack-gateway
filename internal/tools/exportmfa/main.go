@@ -72,7 +72,7 @@ func writeTypeScript(path string, routes []mfaRoute) error {
 	builder.WriteString("/* biome-ignore lint -- generated file */\n")
 	builder.WriteString("/* biome-ignore format -- generated file */\n\n")
 
-	builder.WriteString("export const MFALevels = ['none', 'step_up', 'always'] as const;\n")
+	builder.WriteString("export const MFALevels = ['none', 'step_up_once_enrolled', 'step_up', 'always'] as const;\n")
 	builder.WriteString("export type MFALevel = (typeof MFALevels)[number];\n")
 	builder.WriteString("export interface HttpRouteMfaRequirement {\n")
 	builder.WriteString("  method: string;\n")

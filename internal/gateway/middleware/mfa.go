@@ -62,6 +62,8 @@ func enforceMFALevel(
 	switch level {
 	case rbac.MFANone:
 		c.Next()
+	case rbac.MFAStepUpOnceEnrolled:
+		enforceStepUpOnceEnrolled(c, mfaService, database, settings)
 	case rbac.MFAStepUp:
 		enforceStepUpMFA(c, mfaService, database, settings)
 	case rbac.MFAAlways:
@@ -75,6 +77,23 @@ func enforceStepUpMFA(c *gin.Context, mfaService MFAVerifier, database *db.Datab
 	if checkStepUpMFA(c, mfaService, database, settings) {
 		c.Next()
 	}
+}
+
+// enforceStepUpOnceEnrolled requires step-up from a user who has a factor. A user enrolling their first factor has
+// nothing to verify with. A user record that can't be loaded gets step-up.
+func enforceStepUpOnceEnrolled(
+	c *gin.Context,
+	mfaService MFAVerifier,
+	database *db.Database,
+	settings db.MFASettingsSource,
+) {
+	if authUser, ok := auth.GetAuthUser(c.Request.Context()); ok && authUser != nil && !authUser.IsAPIToken {
+		if user := getUserRecord(c, database, authUser.Email); user != nil && !user.MFAEnrolled {
+			c.Next()
+			return
+		}
+	}
+	enforceStepUpMFA(c, mfaService, database, settings)
 }
 
 func enforceAlwaysMFA(c *gin.Context, mfaService MFAVerifier, database *db.Database) {

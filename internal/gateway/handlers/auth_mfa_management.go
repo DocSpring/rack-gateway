@@ -253,6 +253,12 @@ func (h *AuthHandler) TrustCurrentDevice(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "session missing"})
 		return
 	}
+	// The route requires a recent step-up, so the session verified a factor within the window.
+	stepUpExpiresAt := calculateStepUpExpiration(authUser.Session, h.stepUpWindow())
+	if authUser.Session.MFAVerifiedAt == nil || stepUpExpiresAt == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "mfa_step_up_required"})
+		return
+	}
 
 	userRecord, err := h.database.GetUser(authUser.Email)
 	if err != nil || userRecord == nil {
@@ -271,34 +277,19 @@ func (h *AuthHandler) TrustCurrentDevice(c *gin.Context) {
 	}
 
 	h.setTrustedDeviceCookie(c, payload.Token)
-	now := time.Now()
-	trustedDeviceID := &payload.RecordID
-
-	if err := h.sessions.UpdateSessionMFAVerified(authUser.Session.ID, now, trustedDeviceID); err != nil {
-		log.Printf("failed updating session after trusting device: %v", err)
+	// Trusting a device verifies no factor, so the session's MFA and step-up times stay as they are.
+	if err := h.sessions.AttachTrustedDeviceToSession(authUser.Session.ID, payload.RecordID); err != nil {
+		log.Printf("failed attaching trusted device to session: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update session"})
 		return
 	}
-	authUser.Session.MFAVerifiedAt = &now
-	authUser.Session.TrustedDeviceID = trustedDeviceID
+	authUser.Session.TrustedDeviceID = &payload.RecordID
 
-	if err := h.sessions.UpdateSessionRecentStepUp(authUser.Session.ID, now); err != nil {
-		log.Printf("failed updating step-up timestamp after trusting device: %v", err)
-	} else {
-		authUser.Session.RecentStepUpAt = &now
-	}
-
-	if err := h.sessions.AttachTrustedDeviceToSession(authUser.Session.ID, *trustedDeviceID); err != nil {
-		log.Printf("failed attaching trusted device to session: %v", err)
-	}
-
-	response := VerifyMFAResponse{
-		MFAVerifiedAt:         now,
-		RecentStepUpExpiresAt: now.Add(h.stepUpWindow()),
+	c.JSON(http.StatusOK, VerifyMFAResponse{
+		MFAVerifiedAt:         *authUser.Session.MFAVerifiedAt,
+		RecentStepUpExpiresAt: *stepUpExpiresAt,
 		TrustedDeviceCookie:   true,
-	}
-
-	c.JSON(http.StatusOK, response)
+	})
 }
 
 // RevokeTrustedDevice godoc
