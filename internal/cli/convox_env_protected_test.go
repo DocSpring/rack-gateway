@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bytes"
 	"encoding/base64"
 	"encoding/json"
 	"io"
@@ -169,5 +170,88 @@ func TestAllowProtectedRefusesAPITokens(t *testing.T) {
 
 	err := runEnvChange(cmd, args, "env unset", args, listApps)
 	require.ErrorIs(t, err, errAPITokenCannotChangeProtected)
+	require.Empty(t, gateway.requests())
+}
+
+// withoutTerminal makes stdin a pipe, as when an agent runs the CLI.
+func withoutTerminal(t *testing.T) {
+	t.Helper()
+	reader, writer, err := os.Pipe()
+	require.NoError(t, err)
+	require.NoError(t, writer.Close())
+	previous := os.Stdin
+	os.Stdin = reader
+	t.Cleanup(func() {
+		os.Stdin = previous
+		_ = reader.Close()
+	})
+}
+
+// The PIN dialog, the touch prompt and the notification name the keys, the app and the rack, never the values.
+func TestProtectedEnvPromptNamesKeysAppAndRack(t *testing.T) {
+	prompt := protectedEnvPrompt("env unset", []string{"DATABASE_URL", "REDIS_URL\x1b[2J"}, "prod-web", "us")
+	require.Equal(t, []string{
+		"On app prod-web (rack us): unset env var DATABASE_URL",
+		"On app prod-web (rack us): unset env var REDIS_URL?[2J",
+	}, prompt.Summary)
+	require.Equal(t, "unset env vars, protected ones included, on app prod-web (rack us)", prompt.Touch)
+
+	set := protectedEnvPrompt("env set", []string{"DATABASE_URL"}, "web\u202eevil", "eu")
+	require.Equal(t, []string{"On app web?evil (rack eu): set env var DATABASE_URL"}, set.Summary)
+	require.Equal(t, "set env vars, protected ones included, on app web?evil (rack eu)", set.Touch)
+}
+
+// The change is described on the terminal before MFA, with the app the command resolved and the selected rack.
+func TestAllowProtectedShowsWhatItChangesBeforeMFA(t *testing.T) {
+	newEnvChangeGateway(t)
+	t.Setenv("RACK_GATEWAY_RACK", "")
+	MFACodeFlag = "123456"
+	cmd := envChangeCommand(t, envSetCommand(), true)
+	var stderr bytes.Buffer
+	cmd.SetErr(&stderr)
+	args := []string{"DATABASE_URL=postgres://new-host/db", "PORT=3000"}
+
+	require.NoError(t, runEnvChange(cmd, args, "env set", envSetKeys(args), listApps))
+	require.Contains(t, stderr.String(), "On app myapp (rack us): set env var DATABASE_URL\n")
+	require.Contains(t, stderr.String(), "On app myapp (rack us): set env var PORT\n")
+	require.NotContains(t, stderr.String(), "new-host", "values are never shown")
+}
+
+// Keys are shown to the person approving the change, so one that isn't an env var name is refused before MFA:
+// "DATABASE_URL on app staging-web (rack staging)" would make the PIN dialog name another app. convox env unset
+// accepts any string as a key.
+func TestAllowProtectedRefusesKeysThatArentEnvVarNames(t *testing.T) {
+	gateway := newEnvChangeGateway(t)
+	MFACodeFlag = "123456"
+	cmd := envChangeCommand(t, envUnsetCommand(), true)
+	cmd.SetErr(io.Discard)
+	args := []string{"DATABASE_URL on app staging-web (rack staging)", "DATABASE_URL"}
+
+	err := runEnvChange(cmd, args, "env unset", args, listApps)
+	require.ErrorContains(t, err, `invalid env var name "DATABASE_URL on app staging-web (rack staging)"`)
+	require.Empty(t, gateway.requests())
+}
+
+func TestAllowProtectedWithoutTerminalNeedsExplicitApp(t *testing.T) {
+	require.NoError(t, requireExplicitProtectedEnvApp(true, ""), "in a terminal the resolved app is shown first")
+	require.NoError(t, requireExplicitProtectedEnvApp(false, "prod-web"))
+	require.ErrorIs(t, requireExplicitProtectedEnvApp(false, ""), errProtectedEnvAppNotExplicit)
+	require.ErrorIs(t, requireExplicitProtectedEnvApp(false, "  "), errProtectedEnvAppNotExplicit)
+}
+
+// Without a terminal the person at the PIN dialog sees the command line, so the app must be on it: one from
+// CONVOX_APP (or .convox/app, or the directory name) isn't shown there.
+func TestAllowProtectedWithoutTerminalRefusesAnImplicitApp(t *testing.T) {
+	gateway := newEnvChangeGateway(t)
+	withoutTerminal(t)
+	t.Setenv("CONVOX_APP", "prod-web")
+	MFACodeFlag = "123456"
+	cmd := envSetCommand()
+	cmd.SetErr(io.Discard)
+	require.NoError(t, cmd.Flags().Set(allowProtectedFlag, "true"))
+	args := []string{"DATABASE_URL=postgres://new"}
+
+	err := runEnvChange(cmd, args, "env set", envSetKeys(args), listApps)
+	require.ErrorIs(t, err, errProtectedEnvAppNotExplicit)
 	require.Empty(t, gateway.requests())
 }

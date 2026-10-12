@@ -185,14 +185,14 @@ func outputResultsAsText(out io.Writer, results []rackApproval, showRack bool) e
 	return nil
 }
 
-// printDeployApprovalDetails prints every field of a request, one per line. Text that CI supplies (message, app,
-// branch, commit, token name, notes) and the PR URL go through displayText.
+// printDeployApprovalDetails prints every field of a request, one per line. Every field comes from the gateway
+// (and much of it from CI: message, app, branch, commit, token name, notes), so each goes through displayText.
 func printDeployApprovalDetails(out io.Writer, req *deployApprovalRequest, rack string, showRack bool) error {
 	var details strings.Builder
 	if showRack {
 		writeDetail(&details, "Rack:    ", rack)
 	}
-	writeDetail(&details, "ID:      ", req.PublicID)
+	writeDetail(&details, "ID:      ", displayText(req.PublicID))
 	writeDetail(&details, "Status:  ", statusColor(req.Status))
 	writeDetail(&details, "Message: ", displayText(req.Message))
 	if req.App != "" {
@@ -202,10 +202,10 @@ func printDeployApprovalDetails(out io.Writer, req *deployApprovalRequest, rack 
 	writeDetail(&details, "Updated: ", req.UpdatedAt.Format(time.RFC3339))
 
 	if req.TargetAPITokenName != "" {
-		tokenID := dim("(" + req.TargetAPITokenID + ")")
+		tokenID := dim("(" + displayText(req.TargetAPITokenID) + ")")
 		writeDetail(&details, "Token:   ", displayText(req.TargetAPITokenName)+" "+tokenID)
 	} else {
-		writeDetail(&details, "Token ID:", req.TargetAPITokenID)
+		writeDetail(&details, "Token ID:", displayText(req.TargetAPITokenID))
 	}
 
 	if req.GitCommitHash != "" {

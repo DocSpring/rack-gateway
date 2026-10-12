@@ -152,13 +152,6 @@ func TestApprovalWithoutTerminalMustNameAppsAndFullCommit(t *testing.T) {
 	}
 }
 
-func TestDisplayTextNeutralizesControlAndBidiCharacters(t *testing.T) {
-	require.Equal(t, "Deploy 36a302d to staging", displayText("Deploy 36a302d to staging"))
-	require.Equal(t, "?[2J?[31mevil", displayText("\x1b[2J\x1b[31mevil"))
-	require.Equal(t, "line?break", displayText("line\nbreak"))
-	require.Equal(t, "?gnp.exe", displayText("\u202egnp.exe"))
-}
-
 // The gateway answers a duplicate request with the open request; the CLI must read it from the 409 body.
 func TestRequestConflictIsDecodedFromThe409Body(t *testing.T) {
 	existingApp := "api-proxy"
