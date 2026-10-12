@@ -310,7 +310,8 @@ func (_ *Handler) handleDialError(
 	}
 
 	if resp != nil {
-		body, _ := io.ReadAll(resp.Body)
+		// The rack refused the upgrade; pass its answer on, as much of it as the gateway reads of any response.
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, maxBufferedResponseBytes))
 		httputil.CopyHeaders(w.Header(), resp.Header)
 		w.WriteHeader(resp.StatusCode)
 		_, _ = w.Write(body)
