@@ -1,7 +1,9 @@
 package cli
 
 import (
+	"encoding/json"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -68,17 +70,18 @@ func TestSaveConfigTightensLoosePermissions(t *testing.T) {
 }
 
 // Saving replaces the file (a new file renamed over it) rather than rewriting it in place, so a reader never sees a
-// partial file, and no temporary file is left behind.
+// partial file, and no temporary file is left behind. A reader that opened the old file still reads all of it.
 func TestSaveConfigReplacesTheFileAtomically(t *testing.T) {
 	withLoggedInRack(t)
-	before, err := os.Stat(configFile())
+	reader, err := os.Open(filepath.Clean(configFile()))
 	require.NoError(t, err)
+	t.Cleanup(func() { _ = reader.Close() })
 
 	require.NoError(t, SetCurrentRack("eu"))
 
-	after, err := os.Stat(configFile())
-	require.NoError(t, err)
-	require.False(t, os.SameFile(before, after), "the file was rewritten in place")
+	var old Config
+	require.NoError(t, json.NewDecoder(reader).Decode(&old), "the old file was rewritten in place")
+	require.Equal(t, "us", old.Current)
 	cfg, _, err := LoadConfig()
 	require.NoError(t, err)
 	require.Equal(t, "eu", cfg.Current)
