@@ -13,22 +13,32 @@ import (
 
 // maxBufferedBodyBytes caps a request body the gateway reads into memory, which it does for every rack API request
 // except archive uploads (those stream to the rack). The largest real body is a release create carrying the app's
-// whole env: even hundreds of variables come to well under 1 MB, so 10 MB leaves plenty of room while keeping a
-// large or malicious body from exhausting the gateway's memory.
-const maxBufferedBodyBytes = 10 << 20
+// whole env, which even with hundreds of variables comes to tens of KB. The gateway runs in a small container and
+// reads several bodies at once, so the cap stays close to that: a few slow, oversized bodies must not exhaust it.
+const maxBufferedBodyBytes = 1 << 20
 
 // errBodyTooLarge refuses a request body over maxBufferedBodyBytes. The client gets a 413.
 var errBodyTooLarge = fmt.Errorf(
 	"request body too large: the gateway accepts at most %d MB", maxBufferedBodyBytes>>20,
 )
 
+// errBodyNotAllowed refuses a body on a GET, HEAD or DELETE request. The Convox SDK never sends one, so the gateway
+// has nothing to forward and no reason to hold one in memory. Refusing it also keeps the rack from reading form
+// values out of a multipart body (net/http parses one for any method) that the gateway never checked. The client
+// gets a 400.
+var errBodyNotAllowed = errors.New("request body not allowed: GET, HEAD and DELETE requests to the rack take no body")
+
 // bodyErrorStatus is the HTTP status for a request the gateway couldn't handle: 413 for a body over
-// maxBufferedBodyBytes, otherwise fallback.
+// maxBufferedBodyBytes, 400 for a body on a method that takes none, otherwise fallback.
 func bodyErrorStatus(err error, fallback int) int {
-	if errors.Is(err, errBodyTooLarge) {
+	switch {
+	case errors.Is(err, errBodyTooLarge):
 		return http.StatusRequestEntityTooLarge
+	case errors.Is(err, errBodyNotAllowed):
+		return http.StatusBadRequest
+	default:
+		return fallback
 	}
-	return fallback
 }
 
 // rackRequestBody is the body the gateway sends to the rack, and its length (-1 when unknown).
@@ -65,19 +75,23 @@ func prepareProxyRequest(
 }
 
 // readBufferedBody reads and closes the request body, returning the bytes. A body over maxBufferedBodyBytes is
-// refused with errBodyTooLarge.
+// refused with errBodyTooLarge, and any body on a GET, HEAD or DELETE request with errBodyNotAllowed.
 func readBufferedBody(r *http.Request) ([]byte, error) {
 	if r.Body == nil {
 		return nil, nil
 	}
-	if r.ContentLength > maxBufferedBodyBytes {
-		return nil, errBodyTooLarge
+	limit, refusal := int64(maxBufferedBodyBytes), errBodyTooLarge
+	if !methodTakesBody(r.Method) {
+		limit, refusal = 0, errBodyNotAllowed
+	}
+	if r.ContentLength > limit {
+		return nil, refusal
 	}
 
-	bodyBytes, err := io.ReadAll(http.MaxBytesReader(nil, r.Body, maxBufferedBodyBytes))
+	bodyBytes, err := io.ReadAll(http.MaxBytesReader(nil, r.Body, limit))
 	var tooLarge *http.MaxBytesError
 	if errors.As(err, &tooLarge) {
-		return nil, errBodyTooLarge
+		return nil, refusal
 	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to read request body: %w", err)
@@ -88,4 +102,14 @@ func readBufferedBody(r *http.Request) ([]byte, error) {
 	}
 
 	return bodyBytes, nil
+}
+
+// methodTakesBody reports whether requests with this method may carry a body to the rack.
+func methodTakesBody(method string) bool {
+	switch method {
+	case http.MethodGet, http.MethodHead, http.MethodDelete:
+		return false
+	default:
+		return true
+	}
 }
