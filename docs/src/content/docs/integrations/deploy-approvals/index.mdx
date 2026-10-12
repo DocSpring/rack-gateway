@@ -253,8 +253,11 @@ flags that can carry secrets (tokens, passwords, keys, MFA codes); other flag va
 
 `wait --approve --app a,b --commit <sha>` waits until every listed app has an approved (or deployed) request on
 every rack, approving pending ones as they appear (each is shown first, with its commit), then prints what it
-approved. In a terminal, `wait --approve --branch <branch>` without `--commit` asks you to confirm each request
-(y/N), because the newest request for a branch can be for any commit.
+approved. In a terminal, `wait --approve` asks you to confirm (y/N) each request whose commit isn't exactly the full
+`--commit`: with `--branch` and no `--commit` the newest request for a branch can be for any commit, and a short
+`--commit` matches every commit that starts with it.
+
+Without `--commit` (and `--branch`), the commands use the full SHA of the current git commit.
 
 ### List Pending
 

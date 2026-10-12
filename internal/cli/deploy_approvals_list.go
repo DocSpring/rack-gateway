@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -69,11 +70,10 @@ func executeDeployApprovalList(cmd *cobra.Command, opts deployApprovalListOption
 	}
 
 	if len(allRequests) == 0 {
-		fmt.Println("No deploy approval requests found.")
-		return nil
+		return writeLine(cmd.OutOrStdout(), "No deploy approval requests found.")
 	}
 
-	return printDeployApprovalTableWithRack(allRequests, rackMap, showRack)
+	return printDeployApprovalTableWithRack(cmd.OutOrStdout(), allRequests, rackMap, showRack)
 }
 
 func buildDeployApprovalListEndpoint(opts deployApprovalListOptions) string {
@@ -104,15 +104,15 @@ func buildDeployApprovalListEndpoint(opts deployApprovalListOptions) string {
 }
 
 // printDeployApprovalTableWithRack prints one request per line. The message comes last and is never cut, so
-// "Deploy <app> <sha7> to <env>" stays readable for people and agents.
+// "Deploy <app> <sha7> to <env>" stays readable for people and agents. Every column but the rack and the time
+// comes from the gateway, so each goes through displayText.
 func printDeployApprovalTableWithRack(
-	requests []deployApprovalRequest, rackMap map[string]string, showRack bool,
+	out io.Writer, requests []deployApprovalRequest, rackMap map[string]string, showRack bool,
 ) error {
 	const format = "%-36s  %-9s  %-12s  %-7s  %-20s  %-18s  %s\n"
-	if showRack {
-		fmt.Printf("%-12s  "+format, "RACK", "ID", "STATUS", "APP", "COMMIT", "CREATED", "TOKEN", "MESSAGE")
-	} else {
-		fmt.Printf(format, "ID", "STATUS", "APP", "COMMIT", "CREATED", "TOKEN", "MESSAGE")
+	header := []interface{}{"ID", "STATUS", "APP", "COMMIT", "CREATED", "TOKEN", "MESSAGE"}
+	if err := writeTableRow(out, format, header, "RACK", showRack); err != nil {
+		return err
 	}
 
 	for _, req := range requests {
@@ -128,15 +128,21 @@ func printDeployApprovalTableWithRack(
 			commit = commit[:7]
 		}
 		columns := []interface{}{
-			req.PublicID, req.Status, displayText(req.App), commit, req.CreatedAt.Format(time.RFC3339),
-			displayText(tokenName), displayText(req.Message),
+			displayText(req.PublicID), displayText(req.Status), displayText(req.App), displayText(commit),
+			req.CreatedAt.Format(time.RFC3339), displayText(tokenName), displayText(req.Message),
 		}
-		if showRack {
-			fmt.Printf("%-12s  "+format, append([]interface{}{rackMap[req.PublicID]}, columns...)...)
-		} else {
-			fmt.Printf(format, columns...)
+		if err := writeTableRow(out, format, columns, rackMap[req.PublicID], showRack); err != nil {
+			return err
 		}
 	}
 
 	return nil
+}
+
+// writeTableRow writes one row of the table, starting with the rack column when showRack is set.
+func writeTableRow(out io.Writer, format string, columns []interface{}, rack string, showRack bool) error {
+	if showRack {
+		return writef(out, "%-12s  "+format, append([]interface{}{rack}, columns...)...)
+	}
+	return writef(out, format, columns...)
 }

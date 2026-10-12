@@ -173,8 +173,8 @@ func executeDeployApprovalRequest(cmd *cobra.Command, cfg deployApprovalRequestC
 	err = writef(
 		cmd.OutOrStdout(),
 		"Deploy approval request %s created (status: %s)\n",
-		created.PublicID,
-		created.Status,
+		displayText(created.PublicID),
+		displayText(created.Status),
 	)
 	if err != nil {
 		return err
@@ -213,7 +213,7 @@ func handleDeployApprovalCreationError(cmd *cobra.Command, cfg deployApprovalReq
 		)
 	}
 	return writef(cmd.OutOrStdout(), "Deploy approval request %s already exists for %s (status: %s)\n",
-		existing.PublicID, existing.App, existing.Status)
+		displayText(existing.PublicID), displayText(existing.App), displayText(existing.Status))
 }
 
 func waitForExistingDeployApproval(
@@ -229,7 +229,7 @@ func waitForExistingDeployApproval(
 func reportFinalApprovalStatus(cmd *cobra.Command, final *deployApprovalRequest) error {
 	switch strings.ToLower(final.Status) {
 	case "approved", "expired":
-		return writef(cmd.OutOrStdout(), "Deploy approval request %s approved.\n", final.PublicID)
+		return writef(cmd.OutOrStdout(), "Deploy approval request %s approved.\n", displayText(final.PublicID))
 	case "rejected":
 		note := strings.TrimSpace(final.ApprovalNotes)
 		if note != "" {
@@ -291,7 +291,8 @@ func waitForDeployApproval(
 		}
 
 		if statusLower != lastStatus {
-			if err := writef(cmd.OutOrStdout(), "Waiting for approval (status: %s)\n", result.Status); err != nil {
+			err := writef(cmd.OutOrStdout(), "Waiting for approval (status: %s)\n", displayText(result.Status))
+			if err != nil {
 				return nil, err
 			}
 			lastStatus = statusLower

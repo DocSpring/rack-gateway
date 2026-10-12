@@ -337,7 +337,7 @@ func printApprovalContext(cmd *cobra.Command, p rackApproval, current, total int
 	}
 
 	_, _ = fmt.Fprintf(out, "  %s %s\n", dim("Rack:   "), p.rack)
-	_, _ = fmt.Fprintf(out, "  %s %s\n", dim("ID:     "), p.req.PublicID)
+	_, _ = fmt.Fprintf(out, "  %s %s\n", dim("ID:     "), displayText(p.req.PublicID))
 	_, _ = fmt.Fprintf(out, "  %s %s\n", dim("Message:"), displayText(p.req.Message))
 	if p.req.App != "" {
 		_, _ = fmt.Fprintf(out, "  %s %s\n", dim("App:    "), displayText(p.req.App))
@@ -407,7 +407,7 @@ func postDeployApprovalRequestWithMFA(
 // printApprovalSuccess reports an approval, naming the app and commit the gateway approved.
 func printApprovalSuccess(out io.Writer, approved *deployApprovalRequest, rack string, showRack bool) error {
 	statusLine := fmt.Sprintf(
-		"\n✅ Deploy approval request %s (%s) approved", approved.PublicID, approvalTarget(approved),
+		"\n✅ Deploy approval request %s (%s) approved", displayText(approved.PublicID), approvalTarget(approved),
 	)
 	if showRack {
 		statusLine += " on rack " + rack

@@ -52,8 +52,10 @@ func dim(s string) string {
 	return colorGray + s + colorReset
 }
 
-// statusColor returns the status with appropriate color
+// statusColor returns the status, made safe to print, with the color of a known status. The gateway supplies it,
+// so an unknown value is shown through displayText like any other gateway text.
 func statusColor(status string) string {
+	status = displayText(status)
 	if !colorsEnabled() {
 		return status
 	}
@@ -136,8 +138,14 @@ func parseDurationFlag(raw, flag string, allowZero bool, defaultValue time.Durat
 	return dur, nil
 }
 
+// errGatewayURLWithManyRacks explains why RACK_GATEWAY_URL can't be combined with several racks.
+var errGatewayURLWithManyRacks = errors.New(
+	"RACK_GATEWAY_URL names a single gateway; unset it to use --rack all or a list of racks",
+)
+
 // resolveRacks parses the selected rack. Deploy approval commands accept comma-separated rack names
-// through the global --rack flag. Special value "all" expands to all configured racks.
+// through the global --rack flag. Special value "all" expands to all configured racks. RACK_GATEWAY_URL names one
+// gateway, so it is refused with several racks: each rack's request would go to that one host.
 func resolveRacks() ([]string, error) {
 	rack, err := SelectedRack()
 	if err != nil {
@@ -145,13 +153,24 @@ func resolveRacks() ([]string, error) {
 	}
 
 	trimmed := strings.TrimSpace(rack)
+	envURL := strings.TrimSpace(os.Getenv("RACK_GATEWAY_URL"))
 	if trimmed == "all" {
+		if envURL != "" {
+			return nil, errGatewayURLWithManyRacks
+		}
 		return expandAllRacks()
 	}
 
 	racks, err := parseRackList(trimmed)
 	if err != nil {
 		return nil, err
+	}
+	if envURL != "" {
+		// The rack name is a label for that gateway, and LoadRackAuth checks it against a stored session.
+		if len(racks) > 1 {
+			return nil, errGatewayURLWithManyRacks
+		}
+		return racks, nil
 	}
 	if err := validateConfiguredRacks(racks); err != nil {
 		return nil, err
@@ -223,10 +242,6 @@ func (e *missingRackError) Error() string {
 }
 
 func validateConfiguredRacks(racks []string) error {
-	if strings.TrimSpace(os.Getenv("RACK_GATEWAY_URL")) != "" {
-		return nil
-	}
-
 	cfg, exists, err := LoadConfig()
 	if err != nil {
 		return err
@@ -242,9 +257,10 @@ func validateConfiguredRacks(racks []string) error {
 	return nil
 }
 
-// getCurrentGitCommit returns the current git commit hash (short form), or an error if not in a git repo.
+// getCurrentGitCommit returns the full SHA of the current git commit, or an error if not in a git repo. The
+// gateway matches --commit as a prefix, so a short SHA could also match another commit's request.
 func getCurrentGitCommit() (string, error) {
-	cmd := exec.Command("git", "rev-parse", "--short", "HEAD")
+	cmd := exec.Command("git", "rev-parse", "HEAD")
 	output, err := cmd.Output()
 	if err != nil {
 		return "", fmt.Errorf("failed to get current git commit: %w", err)
@@ -253,7 +269,7 @@ func getCurrentGitCommit() (string, error) {
 }
 
 // resolveBranchOrCommit resolves the branch and commit values from the provided options.
-// If neither is specified, it falls back to the current git commit.
+// If neither is specified, it falls back to the full SHA of the current git commit.
 func resolveBranchOrCommit(branchOpt, commitOpt string) (branch, commit string, err error) {
 	branch = strings.TrimSpace(branchOpt)
 	commit = strings.TrimSpace(commitOpt)
