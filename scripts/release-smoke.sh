@@ -4,6 +4,7 @@
 #   - the binary reports its test bypasses compiled out
 #   - it refuses to start (or run a command) while a test bypass is set, naming each one, or with the published
 #     development column encryption key
+#   - the server refuses the published development APP_SECRET_KEY and secrets shorter than 32 bytes
 #   - it migrates, starts, marks its database production and serves the health check
 #   - production behaviour is on: HSTS and a strict CSP, no dev-mode localhost origins, Secure cookies, OAuth against
 #     Google over https, and no E2E flag in the web UI
@@ -17,10 +18,14 @@ SERVICE="gateway-api-release"
 DATABASE="gateway_release"
 BASE_URL="http://127.0.0.1:${RELEASE_GATEWAY_PORT:-9460}"
 MAX_WAIT_SECONDS="${MAX_WAIT_SECONDS:-60}"
-# A fresh column encryption key: release builds refuse the development key published in this repository.
+# Fresh secrets: release builds refuse the development values published in this repository, and secrets shorter
+# than 32 bytes.
 RELEASE_COLUMN_ENCRYPTION_KEY="$(openssl rand -base64 32)"
-export RELEASE_COLUMN_ENCRYPTION_KEY
+RELEASE_APP_SECRET_KEY="$(openssl rand -base64 32)"
+RELEASE_AUDIT_HMAC_SECRET="$(openssl rand -base64 32)"
+export RELEASE_COLUMN_ENCRYPTION_KEY RELEASE_APP_SECRET_KEY RELEASE_AUDIT_HMAC_SECRET
 DEV_COLUMN_KEY="cmFjay1nYXRld2F5LWRldi1vbmx5LWNvbHVtbi1rZXk="
+DEV_APP_SECRET_KEY="dev-secret-key-change-in-production"
 
 compose() {
   docker compose --profile release "$@"
@@ -94,6 +99,15 @@ compose exec -T postgres psql -U postgres -d postgres -v ON_ERROR_STOP=1 -q <"$S
 compose exec -T postgres psql -U postgres -d postgres -v ON_ERROR_STOP=1 -q \
   -c "DROP DATABASE IF EXISTS ${DATABASE} WITH (FORCE)" -c "CREATE DATABASE ${DATABASE}"
 run_gateway "$SERVICE" ./rack-gateway-api migrate
+
+echo "== Refuses weak secrets"
+weak_secrets=(-e APP_SECRET_KEY="$DEV_APP_SECRET_KEY" -e AUDIT_HMAC_SECRET=too-short)
+if output="$(run_gateway "${weak_secrets[@]}" "$SERVICE")"; then
+  fail "the release image started with weak secrets:"$'\n'"${output}"
+fi
+expect "weak secret refusal" "$output" "APP_SECRET_KEY (the development value published in this repository)"
+expect "weak secret refusal" "$output" "AUDIT_HMAC_SECRET (shorter than 32 bytes)"
+echo "Refused"
 
 echo "== Start"
 compose up -d --no-build "$SERVICE"

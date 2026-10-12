@@ -146,8 +146,13 @@ func parseEnvString(key, raw string) (string, error) {
 	return raw, nil
 }
 
-// parseEnvList reads a JSON array of strings, or a comma-separated list.
+// parseEnvList reads a JSON array of strings, or a comma-separated list. A quoted value is refused: a JSON string
+// ("A,B", as jsonencode writes a string) or a single-quoted one would split into names with quotes in them, which
+// match nothing. So is null (unset the variable instead).
 func parseEnvList(raw string) ([]string, error) {
+	if strings.HasPrefix(raw, `"`) || strings.HasPrefix(raw, "'") || raw == "null" {
+		return nil, fmt.Errorf("must be a JSON array of strings or a comma-separated list, got %s", raw)
+	}
 	if strings.HasPrefix(raw, "[") {
 		var list []string
 		if err := json.Unmarshal([]byte(raw), &list); err != nil {
@@ -177,16 +182,14 @@ func toJSONShape(value interface{}) (interface{}, error) {
 }
 
 // ValidateEnvironment checks every setting environment variable (RGW_SETTING_*, RGW_APP_*_SETTING_*) in environ:
-// the name must be one the gateway reads, the setting must exist and the value must fit its type. The gateway
-// refuses to start otherwise, instead of quietly using another value.
+// the name must be one the gateway reads, the setting must exist and the value must fit its type. It checks
+// CONVOX_SECRET_ENV_VARS like an env var list setting. The gateway refuses to start otherwise, instead of quietly
+// using another value.
 func ValidateEnvironment(environ []string) error {
 	var problems []string
 	for _, entry := range environ {
 		name, raw, _ := strings.Cut(entry, "=")
-		if !looksLikeSettingEnv(name) || strings.TrimSpace(raw) == "" {
-			continue
-		}
-		if err := validateSettingEnv(name, strings.TrimSpace(raw)); err != nil {
+		if err := validateEnvironmentEntry(name, strings.TrimSpace(raw)); err != nil {
 			problems = append(problems, fmt.Sprintf("%s: %v", name, err))
 		}
 	}
@@ -195,6 +198,21 @@ func ValidateEnvironment(environ []string) error {
 	}
 	sort.Strings(problems)
 	return fmt.Errorf("invalid setting environment variables:\n  %s", strings.Join(problems, "\n  "))
+}
+
+// validateEnvironmentEntry checks one environment variable that ValidateEnvironment covers. Blank values aren't set.
+func validateEnvironmentEntry(name, raw string) error {
+	switch {
+	case raw == "":
+		return nil
+	case name == MaskedNamesEnvVar:
+		_, err := parseSecretEnvVarNames(raw)
+		return err
+	case looksLikeSettingEnv(name):
+		return validateSettingEnv(name, raw)
+	default:
+		return nil
+	}
 }
 
 // looksLikeSettingEnv reports a name meant as a setting variable, in any case.

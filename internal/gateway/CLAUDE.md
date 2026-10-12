@@ -196,7 +196,9 @@ All configuration via environment variables. See `docs/CONFIGURATION.md` for com
 
 - `RACK_HOST` - Convox rack API URL
 - `RACK_TOKEN` - Convox rack API token
-- `APP_SECRET_KEY` - Secret for session tokens and CSRF protection
+- `APP_SECRET_KEY` - Secret for session tokens and CSRF protection. The server refuses the published dev value
+  (`mise.toml`) and anything under 32 bytes, for it and `AUDIT_HMAC_SECRET`, in a release build or against a
+  production database (`app/production_guard.go`)
 - `COLUMN_ENCRYPTION_KEY` - Key for encrypted columns (`mfa_methods.secret`, the Slack bot token); base64 of
   32 bytes, required in every mode (dev/test use the published key in `mise.toml`, refused against a
   production database). See `colcrypt/`. Read and write these columns only through the `db` package

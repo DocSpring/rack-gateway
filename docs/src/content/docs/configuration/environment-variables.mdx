@@ -22,6 +22,7 @@ and in the end-to-end tests:
 | `POSTMARK_API_BASE` | Sends email and the Postmark token to another server |
 | `GOOGLE_OAUTH_BASE_URL` without `https://` | Accepts identity tokens over plain HTTP |
 | `COLUMN_ENCRYPTION_KEY` set to the development key | The key is published in the repository (`mise.toml`), so anyone could decrypt stored secrets |
+| `APP_SECRET_KEY` or `AUDIT_HMAC_SECRET` set to a development value, or shorter than 32 bytes | The development values are published in the repository, so anyone could forge sessions or recompute audit hashes, and a short secret can be guessed. The server refuses them when it starts |
 
 They only work in a build compiled with the `testbypass` Go build tag, which the development and E2E stacks use. The
 published Docker image and the published image is built without it, so they can't honour these settings: a release
@@ -41,7 +42,7 @@ against a database, it marks the database as `production`, or `development` in a
 | `PORT` | `8080` | TCP port the API listens on |
 | `DOMAIN` | (required) | Gateway domain for OAuth redirect URLs |
 | `DEV_MODE` | `false` | Development mode (`testbypass` builds only, see [Test Bypasses](#test-bypasses)) |
-| `APP_SECRET_KEY` | (required) | Secret for sessions and CSRF |
+| `APP_SECRET_KEY` | (required) | Secret for sessions and CSRF: at least 32 bytes (`openssl rand -base64 32`) |
 | `COLUMN_ENCRYPTION_KEY` | (required) | Key that encrypts stored secrets: standard base64 of exactly 32 random bytes (`openssl rand -base64 32`). See [Column Encryption](#column-encryption) |
 | `COOKIE_SECURE` | `true` | `false` leaves the `Secure` attribute off cookies, for plain-HTTP stacks (`testbypass` builds only). Release builds always set it |
 | `TRUSTED_PROXY_CIDRS` | | Comma-separated CIDRs of the reverse proxies in front of the gateway (e.g. an ingress). `X-Forwarded-For` is only believed from these, and the client IP is the right-most address that isn't one of them. Leave empty when clients connect directly; set it whenever there is a proxy, or audit logs, rate limits and security emails all see the proxy's address |
@@ -159,7 +160,9 @@ An environment variable pins its setting: the web UI shows it read-only, and the
 - Booleans: `true` or `false`
 - Numbers: whole numbers of at least 1
 - Lists: a JSON array of strings, or a comma-separated list (use the JSON form when a value contains a comma,
-  e.g. an approved deploy command)
+  e.g. an approved deploy command). A quoted value such as `"A,B"` (what `jsonencode` writes for a string) is
+  refused: use `jsonencode` on a list. The env var lists (`protected_env_vars`, `secret_env_vars`,
+  `audit_visible_env_vars`) must hold valid env var names, here and when saved through the API.
 - Maps (`service_image_patterns`): a JSON object of strings
 - Strings: the plain value, or a JSON string (`"main"`, as Terraform's `jsonencode` writes it). Other quoting is
   refused. `verify_git_commit_mode` must be `latest` or `branch`.
@@ -206,7 +209,7 @@ See [Deploy Approvals](/integrations/deploy-approvals/) for common keys.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `AUDIT_HMAC_SECRET` | (required in prod) | HMAC chain secret |
+| `AUDIT_HMAC_SECRET` | (required in prod) | HMAC chain secret: at least 32 bytes (`openssl rand -base64 32`) |
 | `AUDIT_ANCHOR_BUCKET` | | S3 bucket for anchors |
 | `AUDIT_ANCHOR_CHAIN_ID` | | Chain identifier |
 | `AUDIT_ANCHOR_RETENTION_DAYS` | `400` | Object Lock retention |

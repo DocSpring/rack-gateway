@@ -63,6 +63,19 @@ func TestLoadProductionRequiresSecret(t *testing.T) {
 	assert.Contains(t, err.Error(), "APP_SECRET_KEY is required in production")
 }
 
+// A whitespace-only APP_SECRET_KEY isn't a secret, in any mode.
+func TestLoadRefusesBlankSecret(t *testing.T) {
+	for _, devMode := range []string{"false", "true"} {
+		t.Setenv("DEV_MODE", devMode)
+		t.Setenv("APP_SECRET_KEY", " \n")
+
+		cfg, err := Load()
+		assert.Nil(t, cfg)
+		require.Errorf(t, err, "DEV_MODE=%s", devMode)
+		assert.Contains(t, err.Error(), "APP_SECRET_KEY is blank")
+	}
+}
+
 func TestLoadProductionRequiresAllowedDomain(t *testing.T) {
 	t.Setenv("DEV_MODE", "false")
 	t.Setenv("APP_SECRET_KEY", "secret")

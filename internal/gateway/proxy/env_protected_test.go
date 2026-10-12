@@ -39,9 +39,11 @@ const (
 	stepUpAgeExpired    = 30 * time.Minute // outside it
 )
 
-// protectedEnvRack is a fake rack with one release. It records every release created through it.
+// protectedEnvRack is a fake rack with one release, whose env is env (protectedEnvRackEnv by default). It records
+// every release created through it.
 type protectedEnvRack struct {
 	mu      sync.Mutex
+	env     string
 	created []createdRelease
 }
 
@@ -56,7 +58,9 @@ func (rk *protectedEnvRack) handler(w http.ResponseWriter, r *http.Request) {
 	case r.Method == http.MethodGet && r.URL.Path == protectedEnvReleasesPath:
 		_, _ = w.Write([]byte(`[{"id":"R1"}]`))
 	case r.Method == http.MethodGet && r.URL.Path == protectedEnvReleasesPath+"/R1":
-		body, _ := json.Marshal(map[string]string{"id": "R1", "env": protectedEnvRackEnv})
+		rk.mu.Lock()
+		body, _ := json.Marshal(map[string]string{"id": "R1", "env": rk.env})
+		rk.mu.Unlock()
 		_, _ = w.Write(body)
 	case r.Method == http.MethodPost && r.URL.Path == protectedEnvReleasesPath:
 		r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
@@ -68,6 +72,13 @@ func (rk *protectedEnvRack) handler(w http.ResponseWriter, r *http.Request) {
 	default:
 		http.NotFound(w, r)
 	}
+}
+
+// setEnv replaces the env of the rack's release.
+func (rk *protectedEnvRack) setEnv(env string) {
+	rk.mu.Lock()
+	defer rk.mu.Unlock()
+	rk.env = env
 }
 
 func (rk *protectedEnvRack) releases() []createdRelease {
@@ -91,7 +102,7 @@ type protectedEnvFixture struct {
 func newProtectedEnvFixture(t *testing.T) *protectedEnvFixture {
 	t.Helper()
 	t.Setenv("CONVOX_SECRET_ENV_VARS", "") // mise.toml names DATABASE_URL a secret; here only protection applies
-	rack := &protectedEnvRack{}
+	rack := &protectedEnvRack{env: protectedEnvRackEnv}
 	server := httptest.NewServer(http.HandlerFunc(rack.handler))
 	t.Cleanup(server.Close)
 

@@ -1,10 +1,12 @@
 package proxy
 
 import (
+	"os"
 	"strings"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/envutil"
 	gtwlog "github.com/DocSpring/rack-gateway/internal/gateway/logging"
+	"github.com/DocSpring/rack-gateway/internal/gateway/settings"
 )
 
 // appEnvKeys says which of an app's env vars are secret and which are protected. It reads the app's settings once,
@@ -14,16 +16,33 @@ type appEnvKeys struct {
 	// secretNames are CONVOX_SECRET_ENV_VARS and the app's secret_env_vars. Secret-looking names are secret too.
 	secretNames []string
 	protected   protectedKeySet
-	// allSecret and allProtected are set when the app's setting can't be read: every key then counts as secret (or
-	// protected), so it's masked, and changed only with the matching permission.
+	// allSecret and allProtected are set when the app's setting (or CONVOX_SECRET_ENV_VARS) can't be read: every key
+	// then counts as secret (or protected), so it's masked, and changed only with the matching permission.
 	allSecret    bool
 	allProtected bool
+}
+
+// loadSecretNames adds the names CONVOX_SECRET_ENV_VARS lists to h.secretNames. The gateway refuses to start with
+// an invalid value (settings.ValidateEnvironment); a handler built without that check logs and returns the error,
+// and every env var then counts as secret.
+func (h *Handler) loadSecretNames() error {
+	names, err := settings.SecretEnvVarNames(os.Getenv)
+	if err != nil {
+		gtwlog.Errorf("proxy: %v, so every env var counts as secret", err)
+		return err
+	}
+	for _, name := range names {
+		h.secretNames[name] = struct{}{}
+	}
+	return nil
 }
 
 // loadAppEnvKeys reads the app's secret_env_vars and protected_env_vars. Without an app, only the secret-looking
 // names and CONVOX_SECRET_ENV_VARS count.
 func (h *Handler) loadAppEnvKeys(app string) appEnvKeys {
-	keys := appEnvKeys{app: app, secretNames: h.secretNameList(), protected: protectedKeySet{}}
+	keys := appEnvKeys{
+		app: app, secretNames: h.secretNameList(), protected: protectedKeySet{}, allSecret: h.secretNamesErr != nil,
+	}
 	if h.settingsService == nil || app == "" {
 		return keys
 	}

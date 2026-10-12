@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
@@ -33,6 +32,7 @@ type Handler struct {
 	rbacManager      rbac.Manager
 	auditLogger      *audit.Logger
 	secretNames      map[string]struct{}
+	secretNamesErr   error // CONVOX_SECRET_ENV_VARS can't be read: every env var counts as secret
 	database         *db.Database
 	settingsService  *settings.Service
 	allowDestructive bool
@@ -76,15 +76,7 @@ func NewHandler(
 		mfaService:       mfaService,
 		sessionManager:   sessionManager,
 	}
-	// Load additional secret env var names from env (comma-separated)
-	if list := strings.TrimSpace(os.Getenv("CONVOX_SECRET_ENV_VARS")); list != "" {
-		for _, k := range strings.Split(list, ",") {
-			k = strings.TrimSpace(k)
-			if k != "" {
-				h.secretNames[k] = struct{}{}
-			}
-		}
-	}
+	h.secretNamesErr = h.loadSecretNames()
 	// Settings are loaded on-demand from the settings service (no initialization needed)
 	return h
 }
