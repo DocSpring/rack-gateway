@@ -3,6 +3,7 @@ package db
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -138,31 +139,44 @@ func (d *Database) CreateSlackIntegration(
 	return &si, nil
 }
 
-// UpdateSlackIntegrationChannels updates the channel_actions configuration
-func (d *Database) UpdateSlackIntegrationChannels(channelActions map[string]interface{}) error {
+// ErrNoSlackIntegration is returned when there is no Slack integration to update.
+var ErrNoSlackIntegration = errors.New("no Slack integration found to update")
+
+// ErrSlackChannelsChanged is returned when the channel configuration changed after the caller read it.
+var ErrSlackChannelsChanged = errors.New("the Slack channel configuration has changed")
+
+// UpdateSlackIntegrationChannels replaces the channel configuration with channelActions while it is still previous,
+// the configuration the change was made to. An edit made to an older configuration (another tab or admin saved
+// since) gets ErrSlackChannelsChanged instead of silently undoing that save.
+func (d *Database) UpdateSlackIntegrationChannels(previous, channelActions map[string]interface{}) error {
+	previousJSON, err := json.Marshal(previous)
+	if err != nil {
+		return fmt.Errorf("failed to marshal previous channel_actions: %w", err)
+	}
 	channelActionsJSON, err := json.Marshal(channelActions)
 	if err != nil {
 		return fmt.Errorf("failed to marshal channel_actions: %w", err)
 	}
 
-	query := `
-		UPDATE slack_integration
-		SET channel_actions = $1, updated_at = NOW()
-	`
-
-	result, err := d.db.Exec(query, channelActionsJSON)
+	var changed, missing bool
+	err = d.db.QueryRow(`
+		WITH updated AS (
+			UPDATE slack_integration
+			SET channel_actions = $1, updated_at = NOW()
+			WHERE channel_actions = $2::jsonb
+			RETURNING id
+		)
+		SELECT NOT EXISTS (SELECT 1 FROM updated), NOT EXISTS (SELECT 1 FROM slack_integration)
+	`, channelActionsJSON, previousJSON).Scan(&changed, &missing)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to update channel_actions: %w", err)
 	}
-
-	rows, err := result.RowsAffected()
-	if err != nil {
-		return err
+	switch {
+	case missing:
+		return ErrNoSlackIntegration
+	case changed:
+		return ErrSlackChannelsChanged
 	}
-	if rows == 0 {
-		return fmt.Errorf("no Slack integration found to update")
-	}
-
 	return nil
 }
 
