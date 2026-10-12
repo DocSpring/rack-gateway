@@ -200,6 +200,13 @@ Events written after the latest anchor aren't pinned yet. Anyone with write acce
 them without the secret (and with the secret, rewrite them) until the next anchor records them. Anchors are
 written hourly, and verification fails when the latest one is too old, which keeps that window to about an hour.
 
+### Failing Closed
+
+A tamper-evident log only helps if actions can't happen without an entry. Rack Gateway records every request
+before it acts, reads, sign-ins and MFA checks included, and refuses it with 503 when the audit log can't take that
+entry. There are no exceptions: during an audit outage the gateway refuses everything and reports itself unhealthy.
+See [When the Audit Log Can't Be Written](/security/compliance/audit-trail/#when-the-audit-log-cant-be-written).
+
 ### Verifying Integrity
 
 ```bash

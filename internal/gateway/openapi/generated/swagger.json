@@ -2979,7 +2979,7 @@
         },
         "/health": {
             "get": {
-                "description": "Returns service health information.",
+                "description": "Returns service health information. The gateway is unhealthy for a minute after an audit write\nfails: it refuses every request it can't record.",
                 "produces": [
                     "application/json"
                 ],
@@ -2990,6 +2990,12 @@
                 "responses": {
                     "200": {
                         "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.HealthResponse"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
                         "schema": {
                             "$ref": "#/definitions/handlers.HealthResponse"
                         }
@@ -5168,6 +5174,9 @@
                 "status"
             ],
             "properties": {
+                "error": {
+                    "type": "string"
+                },
                 "service": {
                     "type": "string"
                 },

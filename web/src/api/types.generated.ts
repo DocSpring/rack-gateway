@@ -3457,7 +3457,8 @@ export interface paths {
         };
         /**
          * Health check
-         * @description Returns service health information.
+         * @description Returns service health information. The gateway is unhealthy for a minute after an audit write
+         *     fails: it refuses every request it can't record.
          */
         get: {
             parameters: {
@@ -3470,6 +3471,15 @@ export interface paths {
             responses: {
                 /** @description OK */
                 200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.HealthResponse"];
+                    };
+                };
+                /** @description Service Unavailable */
+                503: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -5280,6 +5290,7 @@ export interface components {
             error: string;
         };
         "handlers.HealthResponse": {
+            error?: string;
             service: string;
             status: string;
         };

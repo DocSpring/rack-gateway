@@ -11,6 +11,10 @@ import (
 // auditWriteTimeout bounds one audit append, including the wait for the chain lock.
 const auditWriteTimeout = 10 * time.Second
 
+// ErrAuditAppend marks an operation that failed because its audit event couldn't be appended: the operation
+// appends its event in its own transaction, so it didn't happen either.
+var ErrAuditAppend = errors.New("failed to append audit event")
+
 // appendAuditEventSQL calls the only function allowed to insert audit events (see migrations).
 const appendAuditEventSQL = `SELECT audit.append_audit_event(
 	$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
@@ -24,27 +28,51 @@ func (d *Database) CreateAuditLog(log *AuditLog) error {
 	if log == nil {
 		return errors.New("audit log cannot be nil")
 	}
-	extractRequestIDFromDetails(log)
-	row := newAuditChainRow(log)
-
 	ctx, cancel := context.WithTimeout(context.Background(), auditWriteTimeout)
 	defer cancel()
-	if err := d.appendAuditChainRow(ctx, row, auditWriterSecret()); err != nil {
+	tx, err := d.beginAuditTx(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	if err := appendAuditLogTx(ctx, tx, log); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit audit log tx: %w", err)
+	}
+	return nil
+}
+
+// beginAuditTx begins a transaction that appends to the audit chain. It's read committed, whatever the server
+// default: the latest event is read after the chain lock is taken, so each statement needs its own snapshot to see
+// the event the previous lock holder committed.
+func (d *Database) beginAuditTx(ctx context.Context) (*sql.Tx, error) {
+	tx, err := d.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin audit log tx: %w", err)
+	}
+	return tx, nil
+}
+
+// appendAuditLogTx appends log to the audit chain in tx (begun by beginAuditTx), so it commits or rolls back with
+// whatever else tx does. On success, log holds the values its row will be stored with.
+func appendAuditLogTx(ctx context.Context, tx *sql.Tx, log *AuditLog) error {
+	if log.Timestamp.IsZero() {
+		log.Timestamp = time.Now().UTC()
+	}
+	extractRequestIDFromDetails(log)
+	row := newAuditChainRow(log)
+	if err := appendAuditChainRowTx(ctx, tx, row, auditWriterSecret()); err != nil {
 		return err
 	}
 	applyStoredAuditRow(log, row)
 	return nil
 }
 
-func (d *Database) appendAuditChainRow(ctx context.Context, row *AuditChainRow, secret []byte) error {
-	// Read committed, whatever the server default: the latest event is read after the chain lock is taken, so
-	// each statement needs its own snapshot to see the event the previous lock holder committed.
-	tx, err := d.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
-	if err != nil {
-		return fmt.Errorf("failed to begin audit log tx: %w", err)
-	}
-	defer func() { _ = tx.Rollback() }()
-
+// appendAuditChainRowTx links row to the chain, hashes it and inserts it, in tx.
+func appendAuditChainRowTx(ctx context.Context, tx *sql.Tx, row *AuditChainRow, secret []byte) error {
 	if err := linkAuditChainRow(ctx, tx, row); err != nil {
 		return err
 	}
@@ -53,13 +81,7 @@ func (d *Database) appendAuditChainRow(ctx context.Context, row *AuditChainRow, 
 		return fmt.Errorf("failed to hash audit event: %w", err)
 	}
 	row.EventHash = hash
-	if err := insertAuditChainRow(ctx, tx, row); err != nil {
-		return err
-	}
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("failed to commit audit log tx: %w", err)
-	}
-	return nil
+	return insertAuditChainRow(ctx, tx, row)
 }
 
 // linkAuditChainRow takes the chain lock (held until the transaction ends), then sets the row's chain index,

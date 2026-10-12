@@ -29,6 +29,9 @@ var (
 	ActionScopeTrustedDevice         = rbac.ResourceTrustedDevice.String()
 )
 
+// ActionSessionCreate names the audit entries of a login creating a session (web or CLI).
+const ActionSessionCreate = "session.create"
+
 // Action verb constants (second part of action, e.g., "start" in "login.start")
 const (
 	ActionVerbBackupCodeRevealed = "backup_code_revealed"

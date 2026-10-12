@@ -67,17 +67,10 @@ func (h *Handler) auditReleaseCreations(
 			continue
 		}
 
-		var tokenIDPtr *int64
-		if tokenIDHeader := strings.TrimSpace(r.Header.Get("X-API-Token-ID")); tokenIDHeader != "" {
-			if parsed, parseErr := strconv.ParseInt(tokenIDHeader, 10, 64); parseErr == nil {
-				tokenIDPtr = &parsed
-			}
-		}
-
 		_ = h.logAudit(r, &db.AuditLog{
 			UserEmail:      authUser.Email,
 			UserName:       r.Header.Get("X-User-Name"),
-			APITokenID:     tokenIDPtr,
+			APITokenID:     headerTokenID(r),
 			APITokenName:   strings.TrimSpace(r.Header.Get("X-API-Token-Name")),
 			ActionType:     "convox",
 			Action:         audit.BuildAction(rbac.ResourceRelease.String(), rbac.ActionCreate.String()),
@@ -168,35 +161,45 @@ func (h *Handler) createAuditLogIfNeeded(
 		return
 	}
 
-	action, resource := h.auditLogger.ParseConvoxAction(path, r.Method, r.Header.Get("X-Audit-Resource"))
-	resourceType := h.auditLogger.InferResourceType(r.URL.Path, action)
-
-	var tokenIDPtr *int64
-	if tokenIDHeader := strings.TrimSpace(r.Header.Get("X-API-Token-ID")); tokenIDHeader != "" {
-		if parsed, parseErr := strconv.ParseInt(tokenIDHeader, 10, 64); parseErr == nil {
-			tokenIDPtr = &parsed
-		}
-	}
-
-	auditLog := &db.AuditLog{
-		UserEmail:      authUser.Email,
-		UserName:       r.Header.Get("X-User-Name"),
-		APITokenID:     tokenIDPtr,
-		APITokenName:   strings.TrimSpace(r.Header.Get("X-API-Token-Name")),
-		ActionType:     "convox",
-		Action:         action,
-		Resource:       resource,
-		ResourceType:   resourceType,
-		Details:        h.auditLogger.BuildDetailsJSON(r),
-		IPAddress:      netutil.ClientIP(r),
-		UserAgent:      r.UserAgent(),
-		Status:         h.auditLogger.MapHttpStatusToStatus(status),
-		RBACDecision:   "allow",
-		HTTPStatus:     status,
-		ResponseTimeMs: int(time.Since(start).Milliseconds()),
-		EventCount:     1,
-	}
+	auditLog := h.requestAuditEntry(r, authUser, path)
+	auditLog.Status = h.auditLogger.MapHttpStatusToStatus(status)
+	auditLog.HTTPStatus = status
+	auditLog.ResponseTimeMs = int(time.Since(start).Milliseconds())
 	if dbErr := h.logAudit(r, auditLog); dbErr != nil {
 		log.Printf("Failed to store audit log in database: %v", dbErr)
 	}
+}
+
+// requestAuditEntry is the audit entry for a proxied request as a whole, before its outcome is known. Its
+// attempt, its result and its denial all start from it.
+func (h *Handler) requestAuditEntry(r *http.Request, authUser *auth.User, path string) *db.AuditLog {
+	action, resource := h.auditLogger.ParseConvoxAction(path, r.Method, r.Header.Get("X-Audit-Resource"))
+	return &db.AuditLog{
+		UserEmail:    authUser.Email,
+		UserName:     r.Header.Get("X-User-Name"),
+		APITokenID:   headerTokenID(r),
+		APITokenName: strings.TrimSpace(r.Header.Get("X-API-Token-Name")),
+		ActionType:   "convox",
+		Action:       action,
+		Resource:     resource,
+		ResourceType: h.auditLogger.InferResourceType(r.URL.Path, action),
+		Details:      h.auditLogger.BuildDetailsJSON(r),
+		IPAddress:    netutil.ClientIP(r),
+		UserAgent:    r.UserAgent(),
+		RBACDecision: "allow",
+		EventCount:   1,
+	}
+}
+
+// headerTokenID is the ID of the API token that made r, from the header the auth middleware sets.
+func headerTokenID(r *http.Request) *int64 {
+	tokenIDHeader := strings.TrimSpace(r.Header.Get("X-API-Token-ID"))
+	if tokenIDHeader == "" {
+		return nil
+	}
+	parsed, err := strconv.ParseInt(tokenIDHeader, 10, 64)
+	if err != nil {
+		return nil
+	}
+	return &parsed
 }

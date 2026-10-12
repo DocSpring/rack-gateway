@@ -4,9 +4,12 @@ import "github.com/gin-gonic/gin"
 
 // gatewayInternalHeaders are request headers the gateway sets itself to pass identity and audit details
 // between middleware, handlers and the audit logger. Clients must never be able to supply them: they
-// would spoof the user, token, resource, RBAC decision or path recorded in the audit log.
+// would spoof the user, token, resource, RBAC decision, path or request ID recorded in the audit log.
+// The request ID pairs a request's audit entries (its attempt and its results), so the gateway generates
+// a unique one for every request.
 var gatewayInternalHeaders = []string{
 	"X-Audit-Resource",
+	"X-Request-ID",
 	"X-Release-Created",
 	"X-Original-Path",
 	"X-User-Email",

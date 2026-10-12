@@ -41,6 +41,11 @@ export function getStatusBadgeAppearance(status?: string): AuditLogBadgeAppearan
     case 'blocked':
     case 'denied':
       return { variant: 'destructive' }
+    case 'attempted':
+      return {
+        variant: 'outline',
+        className: 'border border-amber-500 text-amber-600 dark:text-amber-400',
+      }
     default:
       return { variant: 'outline' }
   }

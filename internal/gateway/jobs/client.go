@@ -110,10 +110,7 @@ func setupPeriodicJobs(
 	auditAnchorConfig *AuditAnchorConfig,
 ) ([]*river.PeriodicJob, error) {
 	// Approvals past their window are marked expired, so they stop counting as open requests.
-	river.AddWorker(workers, jobdeployapprovals.NewExpireWorker(
-		deps.Database, deps.DeployApprovalPendingMaxAge,
-		func(al *db.AuditLog) error { return audit.LogDB(deps.Database, al) },
-	))
+	river.AddWorker(workers, jobdeployapprovals.NewExpireWorker(deps.Database, deps.DeployApprovalPendingMaxAge))
 	periodicJobs := []*river.PeriodicJob{river.NewPeriodicJob(
 		river.PeriodicInterval(jobdeployapprovals.ExpireInterval),
 		func() (river.JobArgs, *river.InsertOpts) { return jobdeployapprovals.ExpireArgs{}, nil },

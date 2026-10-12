@@ -23,12 +23,15 @@ test.describe('Audit aggregation', () => {
     await page.goto(WebRoute('rack'))
     await expect(page.getByRole('heading', { name: 'Rack', exact: true })).toBeVisible()
 
-    // Navigate to audit logs and confirm aggregation badge
+    // Navigate to the Convox app events in the audit log and confirm the aggregation badge. Every
+    // request is recorded, so logging in and loading the Rack page alone fill the first page of the
+    // unfiltered log.
     const auditLogsResponsePromise = page.waitForResponse(
       (response) =>
-        response.url().includes('/api/v1/audit-logs') && response.request().method() === 'GET'
+        new URL(response.url()).pathname === '/api/v1/audit-logs' &&
+        response.request().method() === 'GET'
     )
-    await page.goto(WebRoute('audit-logs'))
+    await page.goto(`${WebRoute('audit-logs')}?action_type=convox&resource_type=app`)
     const auditLogsResponse = await auditLogsResponsePromise
     expect(auditLogsResponse.ok()).toBeTruthy()
     await expect(page.getByRole('heading', { name: /Audit Logs/i })).toBeVisible()
