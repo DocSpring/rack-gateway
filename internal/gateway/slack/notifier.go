@@ -189,7 +189,7 @@ func isMFAAction(action string) bool {
 	mfaScopes := []string{
 		audit.ActionScopeMFAMethod,
 		audit.ActionScopeMFAPreferences,
-		audit.ActionScopeMFAVerification,
+		audit.ActionScopeMFA,
 		audit.ActionScopeMFABackupCodes,
 		audit.ActionScopeTrustedDevice,
 	}

@@ -14,9 +14,17 @@ import (
 // maxAlertedFailures is how many failure messages an alert lists. The summary on the Audit Logs page has them all.
 const maxAlertedFailures = 10
 
-// AlertAction is the audit action of verification alerts. A Slack channel gets them when one of its action
-// patterns matches it; new Slack integrations route it to their #security channel.
-var AlertAction = audit.BuildAction(audit.ActionScopeAuditLog, audit.ActionVerbVerify)
+// The audit actions of verification alerts. A passing run records neither. A Slack channel gets them when one of
+// its action patterns matches; AlertActionPattern matches both, and new Slack integrations route it to their
+// #security channel.
+var (
+	// FailureAction alerts that verification is failing: status failed, or error when the run couldn't verify.
+	FailureAction = audit.BuildAction(audit.ActionScopeAuditLog, audit.ActionVerbVerificationFailed)
+	// RecoveryAction says verification passes again after failing (status success).
+	RecoveryAction = audit.BuildAction(audit.ActionScopeAuditLog, audit.ActionVerbVerificationRecovered)
+	// AlertActionPattern matches FailureAction and RecoveryAction.
+	AlertActionPattern = audit.BuildAction(audit.ActionScopeAuditLog, "verification_*")
+)
 
 // sentryFingerprint groups failing runs into one Sentry issue per result, so runs that keep failing add events
 // to it instead of opening an issue every hour.
@@ -53,8 +61,8 @@ func (s *runState) decideAlert(previous *db.AuditVerificationStatus, o *outcome,
 	}
 }
 
-// sendAlert records the alert as an audit event, which reaches the Slack channels whose patterns match
-// AlertAction. It reports whether it was recorded; a failure alert that wasn't is sent again by the next run.
+// sendAlert records the alert as an audit event, which reaches the Slack channels whose patterns match it. It
+// reports whether it was recorded; a failure alert that wasn't is sent again by the next run.
 func (w *Worker) sendAlert(kind alertKind, o *outcome, since time.Time) bool {
 	if kind == noAlert {
 		return false
@@ -69,12 +77,14 @@ func (w *Worker) sendAlert(kind alertKind, o *outcome, since time.Time) bool {
 // alertEntry is the audit event for an alert: a failure (status failed, or error when the run couldn't verify)
 // with the first failures, or a recovery (status success).
 func alertEntry(kind alertKind, o *outcome, since time.Time) *db.AuditLog {
+	action := RecoveryAction
 	status := audit.StatusSuccess
 	details := map[string]interface{}{
 		"result":        o.result(),
 		"failing_since": since.UTC().Format(time.RFC3339),
 	}
 	if kind == failureAlert {
+		action = FailureAction
 		status = audit.StatusFailed
 		details["failure_count"] = o.failureCount()
 		if o.err != nil {
@@ -92,7 +102,7 @@ func alertEntry(kind alertKind, o *outcome, since time.Time) *db.AuditLog {
 		UserEmail:  audit.SystemActor,
 		UserName:   audit.SystemActor,
 		ActionType: audit.ActionTypeSecurity,
-		Action:     AlertAction,
+		Action:     action,
 		Details:    string(encoded),
 		Status:     status,
 	}

@@ -332,8 +332,10 @@ itself every hour and alerts when they fail.
    From then on the gateway runs the same checks every hour, sends failures to Sentry and Slack, and shows the
    latest result on the **Audit Logs** page
    ([Hourly verification in the gateway](/deployment/terraform/s3-worm-storage/#hourly-verification-in-the-gateway)).
-   Slack integrations connected from this release on send the alerts (action `audit_log.verify`) to `#security`;
-   for an existing integration, add `audit_log.verify` to a channel's action patterns on the **Integrations** page.
+   Slack integrations connected from this release on send the alerts (actions `audit_log.verification_failed` and
+   `audit_log.verification_recovered`) to `#security`; for an existing integration, add `audit_log.verification_*`
+   to a channel's action patterns on the **Integrations** page. The same goes for failed MFA verifications
+   (`mfa.verify_failed`).
    Verification also fails when no anchor has been written for 3 hours.
 6. **Expect findings in anchors from earlier versions.** Anchors written before this release have no `format`.
    Their `prev_anchor_hash` stopped naming the previous anchor once the bucket held 1000 anchors; those are

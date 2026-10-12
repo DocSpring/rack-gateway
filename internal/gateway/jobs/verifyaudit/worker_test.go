@@ -66,7 +66,7 @@ func TestRunAlertsOnFailureAndRecovery(t *testing.T) {
 	assert.Contains(t, h.sentryEvents[0].Message, "1 integrity failures")
 	alerts := h.slackAlerts()
 	require.Len(t, alerts, 1)
-	assert.Equal(t, "audit_log.verify", alerts[0].Action)
+	assert.Equal(t, "audit_log.verification_failed", alerts[0].Action)
 	assert.Equal(t, audit.StatusFailed, alerts[0].Status)
 	assert.Equal(t, audit.SystemActor, alerts[0].UserEmail)
 	assert.Contains(t, alerts[0].Details, fmt.Sprintf("event %d (id", tampered))
@@ -103,6 +103,8 @@ func TestRunAlertsOnFailureAndRecovery(t *testing.T) {
 	assert.Nil(t, status.FailingSince)
 	alerts = h.slackAlerts()
 	require.Len(t, alerts, 4)
+	assert.Equal(t, "audit_log.verification_failed", alerts[2].Action, "the daily reminder")
+	assert.Equal(t, "audit_log.verification_recovered", alerts[3].Action)
 	assert.Equal(t, audit.StatusSuccess, alerts[3].Status)
 	assert.Contains(t, alerts[3].Details, `"result":"passed"`)
 	assert.Len(t, h.sentryEvents, 4, "a passing run isn't sent to Sentry")
@@ -180,6 +182,7 @@ func TestRunAfterARestart(t *testing.T) {
 	alerts := h.slackAlerts()
 	require.Len(t, alerts, 3)
 	assert.Equal(t, audit.StatusSuccess, alerts[2].Status, "passing after a restart is alerted")
+	assert.Equal(t, "audit_log.verification_recovered", alerts[2].Action)
 }
 
 // Removing events from the end leaves a valid chain, but not one that holds the last event a run checked, even
@@ -214,6 +217,7 @@ func TestRunRecordsWhyItCouldNotVerify(t *testing.T) {
 	assert.Equal(t, []string{"audit-log-verification", db.AuditVerificationError}, h.sentryEvents[0].Fingerprint)
 	alerts := h.slackAlerts()
 	require.Len(t, alerts, 1)
+	assert.Equal(t, "audit_log.verification_failed", alerts[0].Action)
 	assert.Equal(t, audit.StatusError, alerts[0].Status)
 	assert.Contains(t, alerts[0].Details, "AccessDenied")
 	assert.Equal(t, 1, h.heartbeats, "a run that couldn't verify still ran")

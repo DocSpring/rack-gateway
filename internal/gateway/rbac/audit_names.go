@@ -33,6 +33,10 @@ var auditActions = map[string]string{
 	"POST /api/v1/diagnostics/sentry":                      "integration.sentry_test",
 	"POST /api/v1/settings/rack-tls-cert/refresh":          "rack_tls_cert.refresh",
 	"POST /api/v1/jobs/:id/retry":                          "job.retry",
+	// MFA verification shares auth:mfa_verification:create (audit.ActionMFAVerify and ActionMFAChallenge)
+	"POST /api/v1/auth/mfa/verify":                    "mfa.verify",
+	"POST /api/v1/auth/mfa/webauthn/assertion/verify": "mfa.verify",
+	"POST /api/v1/auth/mfa/webauthn/assertion/start":  "mfa.challenge",
 }
 
 // AuditName is how a route's audit entries name its requests.

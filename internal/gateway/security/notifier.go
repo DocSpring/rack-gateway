@@ -171,14 +171,15 @@ func (n *Notifier) FailedMFAAttempt(userEmail, userName, ipAddress, userAgent st
 			UserEmail:    userEmail,
 			UserName:     userName,
 			ActionType:   "auth",
-			Action:       "mfa.verify.failed",
+			Action:       audit.ActionMFAVerifyFailed,
 			ResourceType: "auth",
 			Resource:     "mfa",
 			Status:       "failed",
 			IPAddress:    ipAddress,
 			UserAgent:    userAgent,
 		}); err != nil {
-			log.Printf(`{"level":"error","event":"audit_log_failed","action":"mfa.verify.failed","error":%q}`, err)
+			log.Printf(`{"level":"error","event":"audit_log_failed","action":%q,"error":%q}`,
+				audit.ActionMFAVerifyFailed, err)
 		}
 	}
 

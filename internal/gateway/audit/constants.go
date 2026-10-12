@@ -19,10 +19,10 @@ var (
 	ActionScopeDeployApprovalRequest = rbac.ResourceDeployApprovalRequest.String()
 	ActionScopeLogin                 = "login"
 	ActionScopeLogout                = "logout"
+	ActionScopeMFA                   = "mfa"
 	ActionScopeMFABackupCodes        = rbac.ResourceMFABackupCodes.String()
 	ActionScopeMFAMethod             = rbac.ResourceMFAMethod.String()
 	ActionScopeMFAPreferences        = rbac.ResourceMFAPreferences.String()
-	ActionScopeMFAVerification       = rbac.ResourceMFAVerification.String()
 	ActionScopeRateLimit             = "rate_limit"
 	ActionScopeRelease               = rbac.ResourceRelease.String()
 	ActionScopeSuspiciousActivity    = "suspicious_activity"
@@ -31,6 +31,18 @@ var (
 
 // ActionSessionCreate names the audit entries of a login creating a session (web or CLI).
 const ActionSessionCreate = "session.create"
+
+// MFA verification (rbac's auditActions names its routes with the same strings).
+const (
+	// ActionMFAVerify names every MFA verification, in the web UI or for a CLI login: its attempt, and its result
+	// with status success or failed.
+	ActionMFAVerify = "mfa.verify"
+	// ActionMFAVerifyFailed is the alert for a failed MFA verification (or a wrong code while enrolling), recorded
+	// besides the result: it emails the user and goes to the Slack channels whose patterns match it.
+	ActionMFAVerifyFailed = "mfa.verify_failed"
+	// ActionMFAChallenge names starting a WebAuthn verification, which issues its challenge.
+	ActionMFAChallenge = "mfa.challenge"
+)
 
 // Action verb constants (second part of action, e.g., "start" in "login.start")
 const (
@@ -52,7 +64,9 @@ const (
 	ActionVerbUpdateRoles        = "update_roles"
 	ActionVerbUserNotAuthorized  = "user_not_authorized"
 	ActionVerbValidate           = "validate"
-	ActionVerbVerify             = "verify"
+	// The scheduled audit log verification failing, and passing again after failing
+	ActionVerbVerificationFailed    = "verification_failed"
+	ActionVerbVerificationRecovered = "verification_recovered"
 )
 
 // Status constants

@@ -63,7 +63,7 @@ func newHarness(t *testing.T, store auditverify.AnchorStore) *harness {
 	h := &harness{t: t, database: dbtest.NewDatabase(t), slack: &queuedSlackEvents{}, now: firstRun}
 	_, err := h.database.CreateSlackIntegration("T123", "Test", "xoxb-test-token", "U123", "chat:write",
 		map[string]interface{}{"security": map[string]interface{}{
-			"id": "C123", "name": "#security", "actions": []string{AlertAction},
+			"id": "C123", "name": "#security", "actions": []string{AlertActionPattern},
 		}}, nil)
 	require.NoError(t, err)
 
