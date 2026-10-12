@@ -28,6 +28,8 @@ const (
 	webLoginUnauthorized webLoginError = "unauthorized"
 	// webLoginSessionFailed is a login the gateway couldn't start a session for.
 	webLoginSessionFailed webLoginError = "session_failed"
+	// webLoginAuditUnavailable is a login refused because the audit log couldn't record it.
+	webLoginAuditUnavailable webLoginError = "audit_unavailable"
 )
 
 // webLoginProviderError is the reason for an error the identity provider sent back.

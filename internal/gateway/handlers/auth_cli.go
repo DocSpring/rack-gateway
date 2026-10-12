@@ -11,6 +11,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth/mfa"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
@@ -71,7 +72,11 @@ func (h *AuthHandler) CLILoginStart(c *gin.Context) {
 		return
 	}
 
-	h.auditLogin(c, "cli", "success")
+	// The login can't go on without its URL, so a login the audit log can't record isn't handed one.
+	if !h.auditLogin(c, "cli", "success") {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": audit.RefusalMessage("login.start")})
+		return
+	}
 	c.JSON(http.StatusOK, CLILoginStartResponse{AuthURL: resp.AuthURL})
 }
 
@@ -308,24 +313,43 @@ func (h *AuthHandler) CLILoginMFASubmit(c *gin.Context) {
 		return
 	}
 
+	if !h.recordAuthAttempt(c, cliLoginMFAAction, "cli", userRecord.Email, userRecord.Name) {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": audit.RefusalMessage(cliLoginMFAAction)})
+		return
+	}
+	verified := h.verifyCLILoginMFA(c, userRecord, parsed)
+	status := audit.StatusSuccess
+	if !verified {
+		status = audit.StatusFailed
+	}
+	h.recordAuthResult(c, cliLoginMFAAction, "cli", userRecord.Email, userRecord.Name, status)
+	if verified {
+		c.JSON(http.StatusOK, gin.H{"redirect": cliReturnRoute(parsed.state)})
+	}
+}
+
+// cliLoginMFAAction names the audit entries of a CLI login's MFA verification.
+const cliLoginMFAAction = "mfa.verify"
+
+// verifyCLILoginMFA verifies the MFA proof a CLI login submitted and marks the login (and the browser session it
+// came from) verified. It answers the request itself when verification fails, and reports whether it succeeded.
+func (h *AuthHandler) verifyCLILoginMFA(c *gin.Context, user *db.User, parsed cliMFASubmit) bool {
 	verification, err := h.performMFAVerification(
 		c,
-		userRecord,
+		user,
 		parsed.method,
 		parsed.code,
 		parsed.sessionData,
 		parsed.assertionResponse,
 	)
 	if err != nil {
-		return
+		return false
 	}
-
 	if !h.markCLILoginVerified(c, parsed.state, verification) {
-		return
+		return false
 	}
-	h.completeBrowserSessionMFA(c, userRecord)
-
-	c.JSON(http.StatusOK, gin.H{"redirect": cliReturnRoute(parsed.state)})
+	h.completeBrowserSessionMFA(c, user)
+	return true
 }
 
 // parseMFASubmitRequest parses and validates the MFA submit request payload.

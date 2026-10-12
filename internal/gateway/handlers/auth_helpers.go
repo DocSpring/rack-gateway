@@ -93,13 +93,13 @@ func (h *AuthHandler) cookieSecure() bool {
 	return !testbypass.InsecureCookies(devMode)
 }
 
-// Helper to audit login attempts
-func (h *AuthHandler) auditLogin(c *gin.Context, resource, status string) {
+// auditLogin records the start of a login. It returns false when the entry can't be written: the login must not
+// start (the failure has been logged and sent to Sentry).
+func (h *AuthHandler) auditLogin(c *gin.Context, resource, status string) bool {
 	if h.database == nil {
-		return
+		return true
 	}
-
-	if err := h.auditLogger.LogDBEntry(&db.AuditLog{
+	err := h.auditLogger.LogDBEntry(&db.AuditLog{
 		ActionType:   "auth",
 		Action:       audit.BuildAction(audit.ActionScopeLogin, rbac.ActionStart.String()),
 		ResourceType: "auth",
@@ -107,11 +107,8 @@ func (h *AuthHandler) auditLogin(c *gin.Context, resource, status string) {
 		Status:       status,
 		IPAddress:    c.ClientIP(),
 		UserAgent:    c.GetHeader("User-Agent"),
-	}); err != nil {
-		action := audit.BuildAction(audit.ActionScopeLogin, rbac.ActionStart.String())
-		logFmt := `{"level":"error","event":"audit_log_failed","action":%q,"error":%q}`
-		log.Printf(logFmt, action, err)
-	}
+	})
+	return err == nil
 }
 
 // createLoginSession creates a session after OAuth completion and handles post-login MFA checks

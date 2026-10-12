@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -84,7 +85,7 @@ func (h *APIHandler) CreateDeployApprovalRequest(c *gin.Context) {
 		return
 	}
 
-	h.logApprovalCreation(userEmail, dbUser.Name, token.PublicID, record, verification)
+	h.logApprovalCreation(c.Request.Context(), userEmail, dbUser.Name, token.PublicID, record, verification)
 	h.sendSlackNotification(c, record.ID)
 
 	if !h.shouldPostPRComment(verification.prURL) {
@@ -297,8 +298,10 @@ func (_ *APIHandler) handleCreateError(c *gin.Context, err error, tokenID int64,
 	}
 }
 
-// logApprovalCreation audit-logs a new request, with what GitHub verification did for it.
+// logApprovalCreation audit-logs a new request, with what GitHub verification did for it. ctx is the HTTP
+// request's context, so the entry is linked to its attempt.
 func (h *APIHandler) logApprovalCreation(
+	ctx context.Context,
 	userEmail, userName, tokenUUID string,
 	record *db.DeployApprovalRequest,
 	verification githubVerification,
@@ -309,7 +312,7 @@ func (h *APIHandler) logApprovalCreation(
 	fields["git_branch"] = record.GitBranch
 	details := auditDetailsWithMessage(fields, record.Message)
 
-	_ = h.auditLogger.LogDBEntry(&db.AuditLog{
+	_ = h.auditLogger.LogRequestEntry(ctx, &db.AuditLog{
 		UserEmail:    userEmail,
 		UserName:     userName,
 		ActionType:   audit.ActionTypeGateway,
@@ -329,7 +332,5 @@ func (h *APIHandler) expireDeployApprovals() error {
 	if h.config != nil {
 		pendingMaxAge = h.config.DeployApprovalPendingMaxAge
 	}
-	return deployapprovals.Expire(h.database, pendingMaxAge, func(al *db.AuditLog) error {
-		return audit.LogDB(h.database, al)
-	})
+	return deployapprovals.Expire(h.database, pendingMaxAge)
 }

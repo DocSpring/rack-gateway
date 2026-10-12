@@ -40,7 +40,13 @@ Filter by user, resource, or action text.
 ### Status
 - Success
 - Failed
+- Denied
+- Attempted (no outcome): requests recorded before they acted, with no recorded result
 - Blocked
+
+Every request is recorded as attempted before it acts, and its row shows the result once it's in (see
+[Attempt and Result Entries](/security/compliance/audit-trail/#attempt-and-result-entries)). A count such as `×4`
+next to an action means the row stands for that many events, e.g. repeated denials within a minute.
 
 ### Resource Type
 - App

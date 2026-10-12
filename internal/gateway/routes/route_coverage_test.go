@@ -84,7 +84,7 @@ func TestUnmappedRouteIsDenied(t *testing.T) {
 	e := newAuthzEnv(t)
 	router := gin.New()
 	authenticated := router.Group("/api/v1")
-	authenticated.Use(middleware.Authenticated(e.authService), middleware.Authorize(e.rbac))
+	authenticated.Use(middleware.Authenticated(e.authService), middleware.Authorize(e.rbac, nil))
 	authenticated.GET("/unmapped-test", func(c *gin.Context) { c.Status(http.StatusOK) })
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/unmapped-test", nil)

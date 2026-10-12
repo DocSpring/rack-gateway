@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -310,8 +311,10 @@ func loadApprover(c *gin.Context, database *db.Database, email string) (*db.User
 	return approver, true
 }
 
-// logDeployApprovalAudit wraps audit logging for deploy approval operations.
+// logDeployApprovalAudit wraps audit logging for deploy approval operations. ctx is the request's context, so
+// the entry is linked to the request's attempt.
 func logDeployApprovalAudit(
+	ctx context.Context,
 	logger *audit.Logger,
 	userEmail, userName, action, resourceID, details, status string,
 	httpStatus int,
@@ -320,7 +323,7 @@ func logDeployApprovalAudit(
 		return
 	}
 
-	_ = logger.LogDBEntry(&db.AuditLog{
+	_ = logger.LogRequestEntry(ctx, &db.AuditLog{
 		UserEmail:    userEmail,
 		UserName:     userName,
 		ActionType:   "gateway",

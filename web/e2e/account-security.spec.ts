@@ -526,10 +526,10 @@ test.describe('Account security', () => {
     await expect(userCard).toBeVisible()
     await userCard.click()
 
-    // WebAuthn starts automatically and succeeds (mocked in E2E)
-    // Wait for navigation to complete, indicating successful WebAuthn verification
-    // After logout from account/security, returnTo preserves the page, so we land back on account/security
-    await page.waitForURL(/\/app\/account\/security/, { timeout: 10_000 })
+    // WebAuthn starts automatically and succeeds (mocked in E2E); a TOTP prompt would stop here.
+    // Logging out goes to the login page without returnTo, unless a request still in flight fails
+    // with 401 first and adds it, so the login lands on the Rack page or back on Account Security.
+    await page.waitForURL(/\/app\/(rack|account\/security)(\?|$)/, { timeout: 10_000 })
   })
 
   test('invalid MFA code shows inline error and keeps dialog open for retry', async ({ page }) => {

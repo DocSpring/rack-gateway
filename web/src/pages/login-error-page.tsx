@@ -59,6 +59,14 @@ const LOGIN_ERRORS = new Map<string, LoginError>([
       description: "The gateway couldn't start your session. Please try again.",
     },
   ],
+  [
+    'audit_unavailable',
+    {
+      title: 'Sign-in unavailable',
+      description:
+        "The gateway can't write to its audit log, so it refuses every action, including sign-ins. Please contact your administrator.",
+    },
+  ],
 ])
 
 const UNKNOWN_ERROR: LoginError = {

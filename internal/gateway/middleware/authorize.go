@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
 	gtwlog "github.com/DocSpring/rack-gateway/internal/gateway/logging"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
@@ -13,10 +14,12 @@ import (
 
 // Authorize enforces the access policy declared for each authenticated gateway route in
 // rbac's route table. It must run after Authenticated. Routes without a declared policy are denied.
-func Authorize(manager rbac.Manager) gin.HandlerFunc {
+// Denials are recorded in the audit log (throttled, see audit.Logger.RecordDenial) when logger is set.
+func Authorize(manager rbac.Manager, logger *audit.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		spec, ok := rbac.LookupHTTPRoute(c.Request.Method, c.FullPath())
 		if !ok {
+			// A route without a policy is a gateway bug (route_coverage_test catches it), not a caller's denial.
 			gtwlog.Errorf("authz: no policy for method=%s path=%s", c.Request.Method, c.FullPath())
 			abortForbidden(c, "no authorization policy for this endpoint")
 			return
@@ -29,7 +32,7 @@ func Authorize(manager rbac.Manager) gin.HandlerFunc {
 		}
 
 		if authUser.IsAPIToken && !spec.AllowAPIToken {
-			abortForbidden(c, "API tokens cannot use this endpoint")
+			deny(c, logger, spec, authUser, "API tokens cannot use this endpoint")
 			return
 		}
 
@@ -45,7 +48,7 @@ func Authorize(manager rbac.Manager) gin.HandlerFunc {
 			return
 		}
 		if !allowed {
-			abortForbidden(c, insufficientPermissionsMessage(missing))
+			deny(c, logger, spec, authUser, insufficientPermissionsMessage(missing))
 			return
 		}
 
@@ -105,4 +108,18 @@ func insufficientPermissionsMessage(missing string) string {
 
 func abortForbidden(c *gin.Context, message string) {
 	c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": message})
+}
+
+// deny refuses an authenticated caller the route with 403, and records the denial. A denied request never acts,
+// so the caller gets the same 403 whether or not the audit log could take the entry (a failed write is reported).
+func deny(c *gin.Context, logger *audit.Logger, spec rbac.RouteSpec, authUser *auth.User, message string) {
+	// The request log line reads this (clients can't send it: see StripInternalHeaders).
+	c.Request.Header.Set("X-RBAC-Decision", "deny")
+	if logger != nil {
+		entry := routeAuditEntry(c, spec, authUser)
+		entry.HTTPStatus = http.StatusForbidden
+		entry.Details = audit.WithDetails(entry.Details, map[string]interface{}{"reason": message})
+		logger.RecordDenial(entry)
+	}
+	abortForbidden(c, message)
 }

@@ -54,10 +54,11 @@ func Setup(router *gin.Engine, cfg *Config) {
 	authenticated := api.Group("")
 	authenticated.Use(middleware.LimitRequestBody(maxAPIBodyBytes))
 	authenticated.Use(middleware.Authenticated(cfg.AuthService))
-	authenticated.Use(middleware.Authorize(cfg.RBACManager))
+	authenticated.Use(middleware.Authorize(cfg.RBACManager, cfg.AuditLogger))
 	authenticated.Use(middleware.RequireMFAEnrollmentWeb(cfg.Database, cfg.SettingsService))
 	authenticated.Use(middleware.RequireVerifiedMFASession(cfg.MFAService, cfg.Database, cfg.SettingsService))
 	authenticated.Use(middleware.EnforceMFARequirements(cfg.MFAService, cfg.Database, cfg.SettingsService))
+	authenticated.Use(middleware.AuditBeforeActing(cfg.AuditLogger))
 
 	registerMFARoutes(authenticated, cfg, h)
 	registerAPIRoutes(authenticated, cfg, h)

@@ -79,6 +79,10 @@ func (a *App) Router() *gin.Engine {
 
 // Cleanup cleans up resources
 func (a *App) Cleanup() {
+	// Repeated denials still being counted are written while the database (and the Slack job queue) are up.
+	if a.AuditLogger != nil {
+		a.AuditLogger.FlushDenials()
+	}
 	if a.JobsClient != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()

@@ -139,18 +139,7 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !allowed {
-		methodForRBAC := h.determineMethod(r)
-		resource, action, _ := rbac.MatchRackRoute(methodForRBAC, rackPath)
-		h.auditLogger.LogRequest(
-			r,
-			authUser.Email,
-			rackConfig.Name,
-			"deny",
-			http.StatusForbidden,
-			time.Since(start),
-			fmt.Errorf("permission denied for %s %s", r.Method, path),
-		)
-		http.Error(w, forbiddenMessage(resource, action), http.StatusForbidden)
+		h.refuseUnauthorized(w, r, authUser, rackConfig.Name, rackPath, start)
 		return
 	}
 
@@ -161,8 +150,16 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 		h.handleForwardError(w, r, err, rackConfig.Name, start)
 		return
 	}
+
+	// Every request is recorded before anything acts on it, the deploy approval claim included.
+	r, recorded := h.recordAttempt(w, r, authUser, rackConfig.Name, start)
+	if !recorded {
+		return
+	}
+
 	if err := h.claimDeployApprovalStep(r, rackPath, approvalTracker); err != nil {
 		_, _, _ = h.handlePermissionError(w, r, authUser, err, rackConfig.Name, start)
+		h.recordFailedResult(r, authUser, path, approvalErrorStatus(err), start)
 		return
 	}
 
@@ -171,7 +168,10 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 	status, err := h.forwardRequest(w, r, rackConfig, rackPath, authUser)
 	h.releaseDeployApprovalClaims(r, rackPath, status, err)
 	if err != nil {
-		h.handleForwardError(w, r, err, rackConfig.Name, start)
+		if answered := h.handleForwardError(w, r, err, rackConfig.Name, start); answered != 0 {
+			status = answered
+		}
+		h.recordFailedResult(r, authUser, path, status, start)
 		return
 	}
 
@@ -255,7 +255,7 @@ func (h *Handler) prepareProxyRequest(
 	// This ensures permission-denied errors take precedence over policy errors
 	if allowed {
 		if err := h.enforceDestructivePolicy(
-			r, w, methodForRBAC, resource, action, authUser.Email, rackConfig.Name, start,
+			r, w, methodForRBAC, resource, action, authUser, rackConfig.Name, start,
 		); err != nil {
 			return r, config.RackConfig{}, nil, false, nil, nil, err
 		}
@@ -292,26 +292,30 @@ func (h *Handler) resolveRackRoute(
 	return r, resource, action, nil
 }
 
+// handleForwardError responds to a request that couldn't be forwarded, and returns the status it responded with: 0
+// when the rack's response had already started, so the client has the rack's status.
 func (h *Handler) handleForwardError(
 	w http.ResponseWriter,
 	r *http.Request,
 	err error,
 	rackName string,
 	start time.Time,
-) {
+) int {
 	if fpErr, ok := rackcert.AsFingerprintMismatch(err); ok {
 		logRackTLSMismatch("proxy_forward", fpErr)
 		h.handleError(w, r, "rack certificate verification failed", http.StatusBadGateway, rackName, start)
-		return
+		return http.StatusBadGateway
 	}
 	if errors.Is(err, errResponseInterrupted) {
 		h.logInterruptedResponse(r, err, rackName, start)
-		return
+		return 0
 	}
-	if h.handleRefusal(w, r, err, rackName, start) {
-		return
+	if status, refused := h.handleRefusal(w, r, err, rackName, start); refused {
+		return status
 	}
-	h.handleError(w, r, err.Error(), bodyErrorStatus(err, http.StatusInternalServerError), rackName, start)
+	status := bodyErrorStatus(err, http.StatusInternalServerError)
+	h.handleError(w, r, err.Error(), status, rackName, start)
+	return status
 }
 
 func (h *Handler) isAllowedConvoxRoute(r *http.Request, rackPath string) bool {
@@ -349,6 +353,7 @@ func (h *Handler) checkPermissions(
 	if authUser.IsAPIToken {
 		allowed, approvalTracker, err = h.evaluateAPITokenPermission(r, authUser, resource, action)
 		if err != nil {
+			h.recordApprovalDenial(r, authUser, err)
 			return h.handlePermissionError(w, r, authUser, err, rackName, start)
 		}
 	} else {
@@ -446,7 +451,8 @@ func (h *Handler) enforceDestructivePolicy(
 	method string,
 	resource rbac.Resource,
 	action rbac.Action,
-	userEmail, rackName string,
+	authUser *auth.User,
+	rackName string,
 	start time.Time,
 ) error {
 	allowDestructive, err := h.settingsService.GetAllowDestructiveActions()
@@ -456,16 +462,8 @@ func (h *Handler) enforceDestructivePolicy(
 	}
 
 	if !allowDestructive && isDestructive(method, resource, action) {
-		h.auditLogger.LogRequest(
-			r,
-			userEmail,
-			rackName,
-			"deny",
-			http.StatusForbidden,
-			time.Since(start),
-			fmt.Errorf("destructive actions are disabled by policy"),
-		)
-		http.Error(w, "Destructive rack actions are disabled by policy", http.StatusForbidden)
+		cause := errors.New("destructive actions are disabled by policy")
+		h.refuse(w, r, authUser, rackName, start, cause, "Destructive rack actions are disabled by policy")
 		return errors.New("destructive action blocked")
 	}
 

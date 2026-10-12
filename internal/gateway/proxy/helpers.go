@@ -50,21 +50,23 @@ func (l *logAccumulator) Bytes() []byte {
 	return out
 }
 
-// logAudit is a helper to log audit entries and mark the request context
+// logAudit writes an audit entry for r (linked to r's attempt when it recorded one) and marks r's context as
+// having one.
 func (h *Handler) logAudit(r *http.Request, al *db.AuditLog) error {
-	// Extract deploy approval request ID from context if present
-	if r != nil {
-		if tracker := getDeployApprovalTracker(r.Context()); tracker != nil && tracker.request != nil {
-			al.DeployApprovalRequestID = &tracker.request.ID
-		}
-	}
-
-	err := h.auditLogger.LogDBEntry(al)
-	if err == nil && r != nil {
+	setDeployApprovalID(r, al)
+	err := h.auditLogger.LogRequestEntry(r.Context(), al)
+	if err == nil {
 		ctx := audit.MarkAuditLogCreated(r.Context())
 		*r = *r.WithContext(ctx)
 	}
 	return err
+}
+
+// setDeployApprovalID ties al to the deploy approval that authorized r, if one did.
+func setDeployApprovalID(r *http.Request, al *db.AuditLog) {
+	if tracker := getDeployApprovalTracker(r.Context()); tracker != nil && tracker.request != nil {
+		al.DeployApprovalRequestID = &tracker.request.ID
+	}
 }
 
 // extractAppFromPath extracts the app name from a Convox API path

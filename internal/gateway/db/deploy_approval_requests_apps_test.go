@@ -67,7 +67,7 @@ func TestExpiredApprovalDoesNotBlockNewRequest(t *testing.T) {
 	require.NoError(t, err)
 	_, err = database.ApproveDeployApprovalRequest(stale.ID, userID, time.Now().Add(-time.Minute), "")
 	require.NoError(t, err)
-	_, err = database.ExpireDeployApprovalRequests(0)
+	_, _, err = database.ExpireDeployApprovalRequests(0, expiryEvent)
 	require.NoError(t, err)
 
 	fresh, err := createApproval(t, database, userID, tokenID, "docspring")
@@ -91,7 +91,7 @@ func TestExpireDeployApprovalRequestsOnlyExpiresPastWindows(t *testing.T) {
 	_, err = database.ApproveDeployApprovalRequest(live.ID, userID, time.Now().Add(time.Hour), "")
 	require.NoError(t, err)
 
-	expired, err := database.ExpireDeployApprovalRequests(0)
+	expired, _, err := database.ExpireDeployApprovalRequests(0, expiryEvent)
 	require.NoError(t, err)
 	require.Len(t, expired, 1)
 	require.Equal(t, gwdb.ExpiredDeployApproval{
@@ -117,7 +117,7 @@ func TestExtendRevivesExpiredApprovalUnlessAnotherIsOpen(t *testing.T) {
 	require.NoError(t, err)
 	_, err = database.ApproveDeployApprovalRequest(lapsed.ID, userID, time.Now().Add(-time.Minute), "")
 	require.NoError(t, err)
-	_, err = database.ExpireDeployApprovalRequests(0)
+	_, _, err = database.ExpireDeployApprovalRequests(0, expiryEvent)
 	require.NoError(t, err)
 	extended, err := database.ExtendDeployApprovalRequestExpiry(lapsed.PublicID, time.Now().Add(time.Hour))
 	require.NoError(t, err)
@@ -128,7 +128,7 @@ func TestExtendRevivesExpiredApprovalUnlessAnotherIsOpen(t *testing.T) {
 	require.NoError(t, err)
 	_, err = database.ApproveDeployApprovalRequest(old.ID, userID, time.Now().Add(-time.Minute), "")
 	require.NoError(t, err)
-	_, err = database.ExpireDeployApprovalRequests(0)
+	_, _, err = database.ExpireDeployApprovalRequests(0, expiryEvent)
 	require.NoError(t, err)
 	_, err = createApproval(t, database, userID, tokenID, "docspring")
 	require.NoError(t, err)
@@ -150,7 +150,7 @@ func TestApprovalExpiredDuringPromoteIsMarkedDeployed(t *testing.T) {
 
 	// The window lapses while the promote runs.
 	require.NoError(t, database.SetDeployApprovalExpiryForTest(approval.ID, time.Now().Add(-time.Second)))
-	_, err = database.ExpireDeployApprovalRequests(0)
+	_, _, err = database.ExpireDeployApprovalRequests(0, expiryEvent)
 	require.NoError(t, err)
 
 	require.NoError(t, database.MarkDeployApprovalAsDeployed(approval.ID))
@@ -169,11 +169,11 @@ func TestExpireDeployApprovalRequestsExpiresOldPendingRequests(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, database.SetDeployApprovalCreatedAtForTest(old.ID, time.Now().Add(-8*24*time.Hour)))
 
-	none, err := database.ExpireDeployApprovalRequests(0)
+	none, _, err := database.ExpireDeployApprovalRequests(0, expiryEvent)
 	require.NoError(t, err)
 	require.Empty(t, none, "pending requests never expire without a max age")
 
-	expired, err := database.ExpireDeployApprovalRequests(7 * 24 * time.Hour)
+	expired, _, err := database.ExpireDeployApprovalRequests(7*24*time.Hour, expiryEvent)
 	require.NoError(t, err)
 	require.Len(t, expired, 1)
 	require.Equal(t, old.ID, expired[0].ID)
@@ -191,7 +191,7 @@ func TestExtendRefusesExpiredPendingRequest(t *testing.T) {
 	pending, err := createApproval(t, database, userID, tokenID, "docspring")
 	require.NoError(t, err)
 	require.NoError(t, database.SetDeployApprovalCreatedAtForTest(pending.ID, time.Now().Add(-8*24*time.Hour)))
-	_, err = database.ExpireDeployApprovalRequests(7 * 24 * time.Hour)
+	_, _, err = database.ExpireDeployApprovalRequests(7*24*time.Hour, expiryEvent)
 	require.NoError(t, err)
 
 	_, err = database.ExtendDeployApprovalRequestExpiry(pending.PublicID, time.Now().Add(time.Hour))

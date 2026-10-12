@@ -29,6 +29,7 @@ import (
 type authzEnv struct {
 	router      *gin.Engine
 	database    *db.Database
+	auditLog    *audit.Logger
 	tokens      *token.Service
 	sessions    *auth.SessionManager
 	authService *auth.Service
@@ -66,6 +67,7 @@ func newAuthzEnvWithRouter(t *testing.T, router *gin.Engine) *authzEnv {
 	require.NoError(t, err)
 
 	authService := auth.NewAuthService(tokenSvc, database, sessions)
+	auditLogger := audit.NewLogger(database)
 	Setup(router, &Config{Gateway: &deps.Gateway{
 		Config: &config.Config{
 			Domain:              "gateway.example.com",
@@ -81,11 +83,11 @@ func newAuthzEnvWithRouter(t *testing.T, router *gin.Engine) *authzEnv {
 		TokenService:    tokenSvc,
 		MFAService:      mfaSvc,
 		SettingsService: settingsSvc,
-		AuditLogger:     audit.NewLogger(database),
+		AuditLogger:     auditLogger,
 		EmailSender:     email.NoopSender{},
 	}})
 	return &authzEnv{
-		router: router, database: database, tokens: tokenSvc, sessions: sessions,
+		router: router, database: database, auditLog: auditLogger, tokens: tokenSvc, sessions: sessions,
 		authService: authService, rbac: rbacMgr, mfaService: mfaSvc,
 	}
 }
