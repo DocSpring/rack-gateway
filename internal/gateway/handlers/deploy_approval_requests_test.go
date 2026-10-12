@@ -63,13 +63,23 @@ func (f *createApprovalFixture) create(t *testing.T, commit string) *http.Respon
 
 func (f *createApprovalFixture) createOnBranch(t *testing.T, commit, branch string) *http.Response {
 	t.Helper()
-	payload, err := json.Marshal(map[string]string{
+	return f.createWith(t, map[string]string{"git_commit_hash": commit, "git_branch": branch})
+}
+
+// createWith sends a create request for app "myapp" on branch feature/deploy; fields override any of its values.
+func (f *createApprovalFixture) createWith(t *testing.T, fields map[string]string) *http.Response {
+	t.Helper()
+	body := map[string]string{
 		"message":             "Deploy release",
 		"app":                 "myapp",
-		"git_commit_hash":     commit,
-		"git_branch":          branch,
+		"git_commit_hash":     "abc123def4567890abc123def4567890abc123de",
+		"git_branch":          "feature/deploy",
 		"target_api_token_id": f.token.PublicID,
-	})
+	}
+	for key, value := range fields {
+		body[key] = value
+	}
+	payload, err := json.Marshal(body)
 	require.NoError(t, err)
 
 	req := httptest.NewRequest(http.MethodPost, "/deploy-approval-requests", strings.NewReader(string(payload)))

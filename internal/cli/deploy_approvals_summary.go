@@ -31,7 +31,7 @@ func approvalTarget(req *deployApprovalRequest) string {
 func approvalTouch(rack string, req *deployApprovalRequest, current, total int) string {
 	app := displayText(req.App)
 	if app == "" {
-		app = "request " + req.PublicID
+		app = "request " + displayText(req.PublicID)
 	}
 	touch := fmt.Sprintf("approve %s on %s", app, displayText(rack))
 	if total > 1 {
@@ -44,7 +44,7 @@ func approvalTouch(rack string, req *deployApprovalRequest, current, total int) 
 func approvalSummaryLine(rack string, req *deployApprovalRequest) string {
 	app := displayText(req.App)
 	if app == "" {
-		app = "request " + req.PublicID
+		app = "request " + displayText(req.PublicID)
 	}
 	return fmt.Sprintf(
 		"%s on %s, commit %s: \"%s\"", app, displayText(rack), shortCommit(req.GitCommitHash), displayText(req.Message),

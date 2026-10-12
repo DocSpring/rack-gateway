@@ -213,32 +213,16 @@ func TestGetMFALevel_AllowsReadListWithoutExplicitListing(t *testing.T) {
 	runNamedPermissionCases(t, cases)
 }
 
-func TestGetMFALevel_PanicsForUnlistedWriteOperations(t *testing.T) {
-	// These permissions are NOT explicitly listed and are NOT read/list
-	// so GetMFALevel should panic
-	tests := []struct {
-		name       string
-		permission string
-	}{
-		{
-			name:       "unlisted deploy:create should panic",
-			permission: Convox(ResourceDeploy, ActionCreate),
-		},
-		{
-			name:       "unlisted env:update should panic",
-			permission: Convox(ResourceEnv, ActionUpdate),
-		},
+// A write permission missing from MFARequirements fails closed rather than needing no MFA.
+func TestGetMFALevel_FailsClosedForUnlistedWriteOperations(t *testing.T) {
+	cases := []namedPermissionCase{
+		{name: "unlisted deploy:create", permission: Convox(ResourceDeploy, ActionCreate), want: MFAAlways},
+		{name: "unlisted env:update", permission: Convox(ResourceEnv, ActionUpdate), want: MFAAlways},
 	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			defer func() {
-				if r := recover(); r == nil {
-					t.Errorf("GetMFALevel(%q) did not panic, but should have", tt.permission)
-				}
-			}()
-			GetMFALevel([]string{tt.permission})
-		})
+	runNamedPermissionCases(t, cases)
+	mixed := []string{Convox(ResourceApp, ActionRead), Convox(ResourceEnv, ActionUpdate)}
+	if got := GetMFALevel(mixed); got != MFAAlways {
+		t.Errorf("GetMFALevel(%v) = %v, want %v", mixed, got, MFAAlways)
 	}
 }
 

@@ -14,27 +14,19 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
-
-	"gopkg.in/yaml.v3"
 )
 
 const (
 	maxExtractedSize = 100 * 1024 * 1024 // 100MB max total size of a tarball's files, uncompressed
 	maxFiles         = 10000             // Max number of entries in a tarball
 	maxFileSize      = 10 * 1024 * 1024  // 10MB max per file
-	maxManifestSize  = 1 * 1024 * 1024   // 1MB max for convox.yml
 	maxTarballSize   = 500 * 1024 * 1024 // 500MB max tarball read
+
+	// maxManifestSize bounds convox.yml. A real one is a few kilobytes. The YAML parser builds a node for every
+	// scalar before anything is checked (a couple of hundred bytes each, even for keys the gateway ignores), so a
+	// megabyte of "[1,1,1,...]" would hold around 100MB of nodes, and this caps that at about 13MB.
+	maxManifestSize = 128 * 1024
 )
-
-type convoxManifest struct {
-	Services map[string]convoxService `yaml:"services"`
-}
-
-type convoxService struct {
-	Image string      `yaml:"image"`
-	Build interface{} `yaml:"build"` // Can be string or map, we don't validate it
-	// Ignore all other fields
-}
 
 // validateBuildManifest fetches the tarball from the Convox API and validates the manifest's
 // service images against the policy.
@@ -43,17 +35,10 @@ func (h *Handler) validateBuildManifest(
 	app, objectURL, manifestPath string,
 	policy imagePolicy,
 ) error {
-	// Extract the object key from the URL (e.g., "object://myapp/tmp/file.tgz" -> "tmp/file.tgz")
-	// The object URL format is: object://app/key
-	if !strings.HasPrefix(objectURL, "object://") {
-		return fmt.Errorf("invalid object URL format: %s", objectURL)
+	objectKey, err := objectKeyForApp(objectURL, app)
+	if err != nil {
+		return err
 	}
-
-	parts := strings.SplitN(strings.TrimPrefix(objectURL, "object://"), "/", 2)
-	if len(parts) != 2 {
-		return fmt.Errorf("invalid object URL format: %s", objectURL)
-	}
-	objectKey := parts[1]
 
 	// Fetch the tarball from Convox API
 	tarball, err := h.fetchObject(ctx, app, objectKey)
@@ -69,6 +54,22 @@ func (h *Handler) validateBuildManifest(
 	}
 
 	return policy.validate(manifest)
+}
+
+// objectKeyForApp returns the key of the app's object that a build's url names. The rack builds from the app and
+// key in the parsed URL (pkg/build prepareSource: u.Host and u.Path), not from the app being built, so only a URL
+// of exactly the form object://<app>/<key>, naming this app, is accepted. Another app, a port, a query, a fragment
+// or an escape would have the rack build a different archive from the one checked here.
+func objectKeyForApp(objectURL, app string) (string, error) {
+	u, err := url.Parse(objectURL)
+	if err != nil || u.Scheme != "object" || u.Host != app {
+		return "", fmt.Errorf("build url must name an object of app %s: %s", app, objectURL)
+	}
+	key := strings.TrimPrefix(u.Path, "/")
+	if key == "" || "object://"+app+"/"+key != objectURL {
+		return "", fmt.Errorf("invalid object URL format: %s", objectURL)
+	}
+	return key, nil
 }
 
 // fetchObject opens an object on the Convox API, for the caller to stream and close.
@@ -207,12 +208,7 @@ func parseManifestFromTarballWithin(r io.Reader, manifestPath string, limit int6
 		return nil, err
 	}
 
-	var manifest convoxManifest
-	if err := yaml.Unmarshal(manifestData, &manifest); err != nil {
-		return nil, fmt.Errorf("failed to parse manifest YAML: %w", err)
-	}
-
-	return &manifest, nil
+	return parseManifest(manifestData)
 }
 
 // readManifestFromTarball returns the contents of the manifest at manifestPath in a gzipped tarball. It reads the

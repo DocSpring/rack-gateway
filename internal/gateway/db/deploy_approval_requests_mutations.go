@@ -328,32 +328,6 @@ func (d *Database) RejectDeployApprovalRequestByPublicID(
 	return d.GetDeployApprovalRequestByPublicID(publicID)
 }
 
-// UpdateDeployApprovalRequestObjectURL updates the object URL for an approved deploy approval request
-func (d *Database) UpdateDeployApprovalRequestObjectURL(id int64, objectURL string) error {
-	if strings.TrimSpace(objectURL) == "" {
-		return fmt.Errorf("object url required")
-	}
-	res, err := d.exec(
-		`UPDATE deploy_approval_requests
-         SET object_url = ?, updated_at = NOW()
-         WHERE id = ? AND status = ?`,
-		objectURL,
-		id,
-		DeployApprovalRequestStatusApproved,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to update object url tracking: %w", err)
-	}
-	rows, err := res.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("failed to update object url tracking: %w", err)
-	}
-	if rows == 0 {
-		return ErrDeployApprovalRequestNotFound
-	}
-	return nil
-}
-
 // ExtendDeployApprovalRequestExpiry extends the window of an approved deploy approval request. An approval whose
 // window already lapsed (and was marked expired) is approved again, unless another request for the same commit,
 // token and app has opened since (ErrDeployApprovalRequestActive).

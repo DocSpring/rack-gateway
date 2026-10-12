@@ -263,8 +263,8 @@ func TestProxyToRackLogsReleaseAuditAndUserResource(t *testing.T) {
 		mgr.SaveUser("creator@example.com", &rbac.UserConfig{Name: "Creator", Roles: []string{"deployer"}}),
 	)
 
-	req := httptest.NewRequest(http.MethodPost, "/apps/my-app/builds", strings.NewReader(`{"git_sha":"abc"}`))
-	req.Header.Set("Content-Type", "application/json")
+	req := httptest.NewRequest(http.MethodPost, "/apps/my-app/builds", strings.NewReader("git-sha=abc"))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("X-User-Name", "Creator")
 	req = req.WithContext(requestAs(t, database, "creator@example.com").Context())
 
@@ -356,8 +356,8 @@ func TestForwardRequestRecordsBuildCreator(t *testing.T) {
 		mgr.SaveUser("creator@example.com", &rbac.UserConfig{Name: "Creator", Roles: []string{"deployer"}}),
 	)
 
-	req := httptest.NewRequest(http.MethodPost, "/apps/my-app/builds", strings.NewReader(`{"foo":"bar"}`))
-	req.Header.Set("Content-Type", "application/json")
+	req := httptest.NewRequest(http.MethodPost, "/apps/my-app/builds", strings.NewReader("description=build"))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("X-User-Name", "Creator")
 
 	rr := httptest.NewRecorder()

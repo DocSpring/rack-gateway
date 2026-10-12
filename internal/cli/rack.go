@@ -85,7 +85,7 @@ func populateStatusLines(status *RackStatus, gateway GatewayConfig, now time.Tim
 		status.StatusLines = append(status.StatusLines, "Status: Token expired")
 	default:
 		status.StatusLines = append(status.StatusLines,
-			fmt.Sprintf("Status: Logged in as %s", gateway.Email))
+			fmt.Sprintf("Status: Logged in as %s", displayText(gateway.Email)))
 		status.StatusLines = append(status.StatusLines,
 			fmt.Sprintf("Token expires: %s", gateway.ExpiresAt.Format(time.RFC3339)))
 		if !gateway.MFAVerified {

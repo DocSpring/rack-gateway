@@ -113,8 +113,9 @@ func (h *Handler) approvalResolverFor(resource rbac.Resource, action rbac.Action
 
 // findApprovalForObjectCreate selects the approval an archive upload belongs to. The upload doesn't say which
 // commit it's for, so it binds to the newest open approval, and only when no other open approval is waiting for an
-// upload. It's refused when the newest already has its archive: uploads happen once per approval (unlike builds,
-// which can fail and retry), and the upload is most likely a retry of that deploy.
+// upload. It's refused when the newest already has its archive (or one is being uploaded): uploads happen once per
+// approval, and the upload is most likely a retry of that deploy. The upload claims the approval's archive just
+// before it's forwarded (claimObjectUpload), so two concurrent uploads can't both pass this check.
 func (h *Handler) findApprovalForObjectCreate(
 	tokenID int64,
 	app string,
@@ -165,19 +166,14 @@ func shortCommit(hash string) string {
 }
 
 // findApprovalForBuildCreate selects the approval whose uploaded archive this build uses.
-// A token build can only build the object that was uploaded under its own approved request.
+// A token build can only build the object that was uploaded under its own approved request. The build claims the
+// approval's one build just before it's forwarded (claimBuild).
 func (h *Handler) findApprovalForBuildCreate(
 	r *http.Request,
 	deny denyFunc,
 	tokenID int64,
 	app string,
 ) (*db.DeployApprovalRequest, error) {
-	// A build import uploads an exported build rather than building an approved archive, so no approval covers
-	// it. Its body is an archive, which the gateway never reads.
-	if isArchiveUpload(r, rbac.NormalizeRackPath(r.URL.Path)) {
-		_, _, denyErr := deny()
-		return nil, denyErr
-	}
 	objectURL, err := buildRequestObjectURL(r)
 	if err != nil {
 		return nil, err

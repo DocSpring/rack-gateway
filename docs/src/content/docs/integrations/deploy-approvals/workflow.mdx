@@ -250,7 +250,40 @@ its pattern exactly. The commit always comes from the approval, never from the c
 
 The gateway reads the manifest from the uploaded archive as it streams from the rack, without holding the archive
 in memory. It refuses an archive that contains the manifest more than once, because the rack writes each copy over the
-one before. An archive may have at most 10,000 entries, 10 MB per file and 100 MB of files in total.
+one before. An archive may have at most 10,000 entries, 10 MB per file and 100 MB of files in total, and the manifest
+at most 128 KB.
+
+### What the Manifest Check Covers
+
+These rules apply to every build of an app with `service_image_patterns`, whoever starts it, and to every
+approval-bound build:
+
+- **Every image a service runs is checked.** That's each service's `image` and its `initContainer.image`. An init
+  container without an image runs its service's image; one with an image must match the service's pattern (and,
+  for an approval-bound build, carry the approved commit). Timers have no image of their own: they run their
+  service's. A service built from source (no `image`) is refused wherever a pattern applies, and always in an
+  approval-bound build.
+- **No other image keys.** A resource's image override (`resources.<name>.image`) is refused, and so is an `image`
+  key anywhere else in the manifest, so an image field the gateway doesn't check can't run an image nobody approved.
+- **`${...}` only as `${NAME}`, and never in an image.** The rack substitutes `${...}` with the app's environment
+  (and, during the build, the build's build arguments) before it parses the manifest, and an unset name becomes
+  empty. So a reference must be `${NAME}` (letters, digits and `_`, on one line), on a `key: value` or `- value`
+  line, either inside a quoted value or in an unquoted value made only of letters, digits and `_ . / @ + = ~ , % -`.
+  Quote a value with spaces or colons that uses one. A checked image can't use `${...}` at all.
+- **Plain YAML structure.** Merge keys (`<<`) are refused, because the rack's YAML parser applies them in a different
+  order than the gateway's. An anchor can't hold an image (write each image out where it's used), and a mapping
+  can't repeat a key.
+
+The build request itself is checked for everyone:
+
+- The build may only use the parameters the Convox CLI sends: `url`, `manifest`, `description`, `git-sha`,
+  `build-args`, `development`, `no-cache` and `wildcard-domain`, each at most once.
+- **External builds (`convox build --external`) are refused.** The rack answers one with a registry URL that holds the
+  rack's own API password, and the gateway never hands out the rack's credentials. Build responses never include a
+  `repository` field.
+- Each build argument must be `NAME=value`, with no whitespace, quotes or backslashes in the value. A bare `NAME`
+  would take its value from the build process's environment, which holds the rack's credentials.
+- When the manifest is checked, the build's `url` must be `object://<app>/<key>` for the app being built.
 
 ### What Gets Tracked
 

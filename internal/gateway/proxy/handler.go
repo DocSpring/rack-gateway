@@ -136,8 +136,9 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// prepareProxyRequest made the request's path the rack path.
 	path := r.URL.Path
-	rackPath := rbac.NormalizeRackPath(path)
+	rackPath := path
 
 	if r.Method == http.MethodPost {
 		if releaseID := extractReleaseIDFromPath(rackPath); releaseID != "" {
@@ -164,7 +165,7 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 	// Only an allowed request gets longer deadlines. Nothing before this point reads an upload's body.
 	extendDeadlines(w, r, rackPath)
 
-	if err := h.claimPromote(r, rackPath, approvalTracker); err != nil {
+	if err := h.claimDeployApprovalStep(r, rackPath, approvalTracker); err != nil {
 		_, _, _ = h.handlePermissionError(w, r, authUser, err, rackConfig.Name, start)
 		return
 	}
@@ -172,7 +173,7 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 	beforeParams := h.captureRackParamsIfNeeded(r, rackPath, rackConfig)
 
 	status, err := h.forwardRequest(w, r, rackConfig, rackPath, authUser)
-	h.releasePromoteClaimAfterFailure(r, rackPath, status, err)
+	h.releaseDeployApprovalClaims(r, rackPath, status, err)
 	if err != nil {
 		h.handleForwardError(w, r, err, rackConfig.Name, start)
 		return
@@ -222,29 +223,13 @@ func (h *Handler) prepareProxyRequest(
 		return r, config.RackConfig{}, nil, false, nil, nil, errors.New("unauthorized")
 	}
 
+	// From here on the request's path is the rack path it's authorized and forwarded as.
+	r, resource, action, err := h.resolveRackRoute(w, r, authUser.Email, rackConfig.Name, start)
+	if err != nil {
+		return r, config.RackConfig{}, nil, false, nil, nil, err
+	}
 	path := r.URL.Path
-	rackPath := rbac.NormalizeRackPath(path)
-
-	if !h.isAllowedConvoxRoute(r, rackPath) {
-		http.NotFound(w, r)
-		return r, config.RackConfig{}, nil, false, nil, nil, errors.New("not found")
-	}
-
 	methodForRBAC := h.determineMethod(r)
-	resource, action, ok := rbac.MatchRackRoute(methodForRBAC, rackPath)
-	if !ok {
-		h.auditLogger.LogRequest(
-			r,
-			authUser.Email,
-			rackConfig.Name,
-			"deny",
-			http.StatusNotFound,
-			time.Since(start),
-			fmt.Errorf("unknown route: %s %s", methodForRBAC, path),
-		)
-		http.NotFound(w, r)
-		return r, config.RackConfig{}, nil, false, nil, nil, errors.New("unknown route")
-	}
 
 	allowed, approvalTracker, err := h.checkPermissions(w, r, authUser, resource, action, rackConfig.Name, start)
 	if err != nil {
@@ -264,7 +249,7 @@ func (h *Handler) prepareProxyRequest(
 	}
 
 	envDiffs, err := h.prepareReleaseIfNeeded(
-		r, w, allowed, rackPath, rackConfig, authUser.Email, start,
+		r, w, allowed, path, rackConfig, authUser.Email, start,
 	)
 	if err != nil {
 		return r, config.RackConfig{}, nil, false, nil, nil, err
@@ -285,6 +270,30 @@ func (h *Handler) prepareProxyRequest(
 	}
 
 	return r, rackConfig, authUser, allowed, approvalTracker, envDiffs, nil
+}
+
+// resolveRackRoute rewrites r to its canonical rack path and finds the RBAC resource and action for it. A path
+// that isn't an allowed rack route is answered with 404, and an unknown route is also audited as a denial.
+func (h *Handler) resolveRackRoute(
+	w http.ResponseWriter,
+	r *http.Request,
+	userEmail, rackName string,
+	start time.Time,
+) (*http.Request, rbac.Resource, rbac.Action, error) {
+	r, ok := canonicalRackRequest(r)
+	if !ok || !h.isAllowedConvoxRoute(r, r.URL.Path) {
+		http.NotFound(w, r)
+		return r, 0, 0, errors.New("not found")
+	}
+	method := h.determineMethod(r)
+	resource, action, ok := rbac.MatchRackRoute(method, r.URL.Path)
+	if !ok {
+		err := fmt.Errorf("unknown route: %s %s", method, r.URL.Path)
+		h.auditLogger.LogRequest(r, userEmail, rackName, "deny", http.StatusNotFound, time.Since(start), err)
+		http.NotFound(w, r)
+		return r, 0, 0, errors.New("unknown route")
+	}
+	return r, resource, action, nil
 }
 
 func (h *Handler) handleForwardError(

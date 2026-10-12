@@ -6,7 +6,6 @@ import (
 	"regexp"
 	"sort"
 	"strings"
-	"unicode"
 )
 
 // approvalApps is the set of apps whose deploy approval requests a command acts on: a list of app names, or
@@ -119,16 +118,4 @@ func requireExplicitApprovalTarget(interactive bool, appFlag string, allApps boo
 		return errApprovalTargetNotExplicit
 	}
 	return nil
-}
-
-// displayText makes CI-supplied text (request messages, app and branch names) safe to print: control characters
-// (including terminal escape sequences) and bidirectional overrides are replaced, so a request can't rewrite the
-// terminal or hide text from the person or agent reading it.
-func displayText(s string) string {
-	return strings.Map(func(r rune) rune {
-		if unicode.IsControl(r) || unicode.Is(unicode.Bidi_Control, r) {
-			return '?'
-		}
-		return r
-	}, s)
 }

@@ -10,15 +10,18 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/cli/webauthn"
 )
 
-// errBranchApprovalNotConfirmed is returned when the user doesn't confirm a request found by branch alone.
-var errBranchApprovalNotConfirmed = errors.New("not approved: the request wasn't confirmed")
+// errApprovalNotConfirmed is returned when the user doesn't confirm the commit of a request found by branch or by
+// a short commit.
+var errApprovalNotConfirmed = errors.New("not approved: the request wasn't confirmed")
 
-// approve approves a pending request that was just shown. Without --commit, the request is the newest one for
-// the branch, whatever its commit, so it is only approved once the user confirms it. That only happens in a
-// terminal: without one, approving by branch is refused up front.
+// approve approves a pending request that was just shown. Unless its commit is exactly the full SHA the run was
+// given (the default is the full SHA of HEAD), the request is the newest one for the branch whatever its commit,
+// or the newest one whose commit merely starts with a short --commit (the gateway matches a prefix). It is then
+// only approved once the user confirms its commit. That only happens in a terminal: without one, approving needs
+// a full --commit up front.
 func (w *deployApprovalWaiter) approve(rack string, request deployApprovalRequest) error {
-	if w.commit == "" {
-		if err := w.confirmBranchApproval(request); err != nil {
+	if !strings.EqualFold(w.commit, request.GitCommitHash) {
+		if err := w.confirmCommit(request); err != nil {
 			return err
 		}
 	}
@@ -37,10 +40,14 @@ func (w *deployApprovalWaiter) approve(rack string, request deployApprovalReques
 	return printApprovalSuccess(w.cmd.OutOrStdout(), approved, rack, len(w.racks) > 1)
 }
 
-// confirmBranchApproval asks the user to confirm the commit of a request found by branch alone (y/N).
-func (w *deployApprovalWaiter) confirmBranchApproval(request deployApprovalRequest) error {
-	err := writef(w.cmd.OutOrStdout(), "\nApprove %s at commit %s, the newest request for branch %s? [y/N]: ",
-		displayText(request.App), displayText(request.GitCommitHash), displayText(w.branch))
+// confirmCommit asks the user to confirm the full commit of a request found by branch or by a short commit (y/N).
+func (w *deployApprovalWaiter) confirmCommit(request deployApprovalRequest) error {
+	match := "the newest request for branch " + displayText(w.branch)
+	if w.commit != "" {
+		match = "the newest request for a commit starting with " + displayText(w.commit)
+	}
+	err := writef(w.cmd.OutOrStdout(), "\nApprove %s at commit %s, %s? [y/N]: ",
+		displayText(request.App), displayText(request.GitCommitHash), match)
 	if err != nil {
 		return err
 	}
@@ -53,7 +60,7 @@ func (w *deployApprovalWaiter) confirmBranchApproval(request deployApprovalReque
 	case "y", "yes":
 		return nil
 	default:
-		return errBranchApprovalNotConfirmed
+		return errApprovalNotConfirmed
 	}
 }
 
