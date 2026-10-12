@@ -6,19 +6,40 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 
 	gtwlog "github.com/DocSpring/rack-gateway/internal/gateway/logging"
 )
 
+// formatArgs describes a query's arguments for the sql debug topic without their values where they could be
+// secret. Strings and bytes are login states, PKCE verifiers, token hashes, encrypted MFA secrets, emails and audit
+// details, so only their length is logged; numbers, booleans, times and NULLs (IDs, flags, timestamps) are shown.
 func formatArgs(args []interface{}) string {
 	if len(args) == 0 {
 		return "[]"
 	}
 	parts := make([]string, len(args))
 	for i, arg := range args {
-		parts[i] = fmt.Sprintf("%v", arg)
+		parts[i] = formatArg(arg)
 	}
 	return "[" + strings.Join(parts, ", ") + "]"
+}
+
+func formatArg(arg interface{}) string {
+	switch value := arg.(type) {
+	case nil:
+		return "NULL"
+	case bool, int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64, float32, float64:
+		return fmt.Sprintf("%v", value)
+	case time.Time:
+		return value.Format(time.RFC3339Nano)
+	case string:
+		return fmt.Sprintf("<string len=%d>", len(value))
+	case []byte:
+		return fmt.Sprintf("<bytes len=%d>", len(value))
+	default:
+		return fmt.Sprintf("<%T>", value)
+	}
 }
 
 func sqlColor(query string) string {

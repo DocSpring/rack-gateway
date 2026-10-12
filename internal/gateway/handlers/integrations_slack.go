@@ -41,9 +41,6 @@ var defaultChannelActions = map[string]interface{}{
 	},
 }
 
-// Slack OAuth state management (in production, use Redis or database)
-var oauthStates = make(map[string]bool)
-
 // SlackOAuthAuthorizeHandler initiates the Slack OAuth flow
 func (h *AdminHandler) SlackOAuthAuthorizeHandler(c *gin.Context) {
 	if h.config.SlackClientID == "" || h.config.SlackClientSecret == "" {
@@ -62,7 +59,7 @@ func (h *AdminHandler) SlackOAuthAuthorizeHandler(c *gin.Context) {
 		return
 	}
 	state := base64.URLEncoding.EncodeToString(stateBytes)
-	oauthStates[state] = true
+	slackOAuthStates.Put(state, oauthStateOwnerFor(c.Request.Context(), c.GetString("user_email")))
 
 	redirectURI := h.slackRedirectURI()
 
@@ -94,12 +91,12 @@ func (h *AdminHandler) SlackOAuthCallbackHandler(c *gin.Context) {
 		return
 	}
 
-	// Verify state token
-	if !oauthStates[state] {
+	// The state must be one this user's session started, so a link carrying another flow's state and code can't
+	// connect a workspace the user didn't choose.
+	if !slackOAuthStates.Take(state, oauthStateOwnerFor(c.Request.Context(), c.GetString("user_email"))) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid state token"})
 		return
 	}
-	delete(oauthStates, state)
 
 	redirectURI := h.slackRedirectURI() // must match the authorization request
 

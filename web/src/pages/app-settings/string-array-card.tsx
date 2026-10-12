@@ -12,6 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { toast } from '@/components/ui/use-toast'
 import { useMutation } from '@/hooks/use-mutation'
 import { api } from '@/lib/api'
+import { apiPath } from '@/lib/api-path'
 
 import type { AppSettingsResponse } from '@/pages/app-settings/types'
 import { extractErrorMessage } from '@/pages/app-settings/utils'
@@ -53,7 +54,7 @@ export function StringArrayCard({
   const updateMutation = useMutation({
     mutationFn: async () => {
       const filtered = items.map((value) => value.trim()).filter((value) => value.length > 0)
-      await api.put(`/api/v1/apps/${app}/settings/${pathSegment}`, filtered)
+      await api.put(apiPath`/api/v1/apps/${app}/settings/${pathSegment}`, filtered)
     },
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ['appSettings', app] })
@@ -68,7 +69,7 @@ export function StringArrayCard({
 
   const clearMutation = useMutation({
     mutationFn: async () => {
-      await api.delete(`/api/v1/apps/${app}/settings/${pathSegment}`)
+      await api.delete(apiPath`/api/v1/apps/${app}/settings/${pathSegment}`)
     },
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ['appSettings', app] })

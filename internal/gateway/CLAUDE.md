@@ -134,7 +134,7 @@ Key files:
 
 Common middleware:
 
-- `security.go` - CSP headers, CORS, security headers
+- `security_headers.go` - CSP and other security headers
 - `csrf.go` - CSRF protection for web requests
 - `session.go` - Session management
 
@@ -224,8 +224,10 @@ The gateway enforces strict CSP:
 - No inline scripts (except with nonce)
 - No inline styles (except with nonce)
 - Nonce is generated per request and passed to React via meta tag
+- `connect-src 'self'` (plus Sentry when configured), `base-uri 'self'`, `form-action 'self'` and
+  `frame-ancestors 'none'`
 
-See `middleware/security.go` for CSP configuration.
+See `middleware/security_headers.go` for CSP configuration, and `web/CLAUDE.md` for what it means for the SPA.
 
 ### CSRF Protection
 

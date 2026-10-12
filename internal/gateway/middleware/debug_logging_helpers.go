@@ -4,10 +4,10 @@ import (
 	"bytes"
 	"io"
 	"net/http"
-	"strings"
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/DocSpring/rack-gateway/internal/gateway/debugredact"
 	"github.com/DocSpring/rack-gateway/internal/gateway/httputil"
 	gtwlog "github.com/DocSpring/rack-gateway/internal/gateway/logging"
 )
@@ -42,27 +42,17 @@ func logRequestInfo(req *http.Request, path string, logInfo, logReqHeaders bool)
 	}
 }
 
+// logHeadersToTopic logs headers with credentials (session and API tokens, cookies, CSRF tokens, MFA codes, a
+// redirect's login code) redacted, so turning on debug logging doesn't put them in the logs.
 func logHeadersToTopic(topic string, headers http.Header) {
-	if len(headers) == 0 {
-		return
-	}
-	var builder strings.Builder
-	for key, values := range headers {
-		for _, value := range values {
-			builder.WriteString(key)
-			builder.WriteString(": ")
-			builder.WriteString(value)
-			builder.WriteByte('\n')
-		}
-	}
-	out := strings.TrimSuffix(builder.String(), "\n")
-	if out != "" {
+	if out := debugredact.Headers(headers); out != "" {
 		gtwlog.DebugTopicf(topic, "\n%s", out)
 	}
 }
 
-// logRequestBody logs the start of a JSON request body. It reads only as much as it logs and puts that back in front
-// of the rest, so a large body still streams to the handler instead of being held in memory here.
+// logRequestBody logs a JSON request body with sensitive values (passwords, tokens, MFA codes, env values) redacted.
+// It reads only as much as it logs and puts that back in front of the rest, so a large body still streams to the
+// handler instead of being held in memory here.
 func logRequestBody(req *http.Request, logBody bool) {
 	if !logBody || req.Body == nil {
 		return
@@ -81,7 +71,7 @@ func logRequestBody(req *http.Request, logBody bool) {
 			gtwlog.TopicHTTPRequestBody,
 			"len=%d body=%s",
 			req.ContentLength,
-			httputil.TruncateString(head, httputil.BodyTruncationLimit),
+			debugredact.Body(head, httputil.BodyTruncationLimit),
 		)
 	}
 }

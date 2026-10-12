@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useMemo } from 'react'
 
 import { api, type DeployApprovalRequest } from '@/lib/api'
+import { apiPath } from '@/lib/api-path'
 import { buildCircleCIPipelineUrl, extractCircleCIMetadata } from '@/lib/ci-utils'
 
 export function useDeployApprovalRequestData(id: string) {
@@ -11,14 +12,14 @@ export function useDeployApprovalRequestData(id: string) {
     error: requestError,
   } = useQuery<DeployApprovalRequest, Error>({
     queryKey: ['deploy-approval-request', id],
-    queryFn: () => api.get(`/api/v1/deploy-approval-requests/${id}`),
+    queryFn: () => api.get(apiPath`/api/v1/deploy-approval-requests/${id}`),
     retry: 1,
   })
 
   const { data: appSettings } = useQuery<Record<string, { value: unknown; source: string }>, Error>(
     {
       queryKey: ['app-settings', request?.app],
-      queryFn: () => api.get(`/api/v1/apps/${request?.app}/settings`),
+      queryFn: () => api.get(apiPath`/api/v1/apps/${request?.app ?? ''}/settings`),
       enabled: Boolean(request?.app),
       retry: 1,
     }

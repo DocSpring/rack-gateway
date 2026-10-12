@@ -1,46 +1,81 @@
 import { RefreshCcw } from 'lucide-react'
-import { useMemo } from 'react'
 import { AuthResultCard } from '@/components/auth-result-card'
-import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 
-const REASON_MESSAGES: Record<string, { title: string; description: string }> = {
-  'mfa-finalize': {
-    title: 'Multi-factor verification failed',
-    description:
-      "We couldn't finish verifying your authenticator. Try signing in again and complete the MFA prompt.",
-  },
+type LoginError = { title: string; description: string }
+
+// Reason codes the gateway sends a failed web login here with (see webLoginError in
+// internal/gateway/handlers/auth_web_errors.go). The code only selects a message and is never
+// shown, so a crafted link can't put its own text on this page.
+const LOGIN_ERRORS = new Map<string, LoginError>([
+  [
+    'access_denied',
+    {
+      title: 'Sign-in canceled',
+      description: 'The sign-in was canceled or denied at the identity provider.',
+    },
+  ],
+  [
+    'identity_provider_error',
+    {
+      title: 'Unable to sign in',
+      description: 'The identity provider reported an error. Please try again.',
+    },
+  ],
+  [
+    'missing_code',
+    {
+      title: 'Unable to sign in',
+      description: "The identity provider didn't return a sign-in code. Please try again.",
+    },
+  ],
+  [
+    'state_mismatch',
+    {
+      title: 'Sign-in link mismatch',
+      description:
+        "This sign-in didn't start in this browser, or it took too long. Please sign in again.",
+    },
+  ],
+  [
+    'exchange_failed',
+    {
+      title: 'Unable to sign in',
+      description: "The identity provider sign-in couldn't be completed. Please try again.",
+    },
+  ],
+  [
+    'unauthorized',
+    {
+      title: 'Account not authorized',
+      description:
+        'You are not authorized to access this application. Please contact your administrator.',
+    },
+  ],
+  [
+    'session_failed',
+    {
+      title: 'Unable to sign in',
+      description: "The gateway couldn't start your session. Please try again.",
+    },
+  ],
+])
+
+const UNKNOWN_ERROR: LoginError = {
+  title: 'Unable to sign in',
+  description: 'Something went wrong while completing your login. Please try again.',
 }
 
-export function LoginErrorPage() {
-  const { reason, message } = useMemo(() => {
-    if (typeof window === 'undefined') {
-      return { reason: null as string | null, message: null as string | null }
-    }
-    const params = new URLSearchParams(window.location.search)
-    return {
-      reason: params.get('reason'),
-      message: params.get('message'),
-    }
-  }, [])
+function loginError(code: string | null): LoginError {
+  return (code && LOGIN_ERRORS.get(code)) || UNKNOWN_ERROR
+}
 
-  const info = (reason && REASON_MESSAGES[reason]) || {
-    title: 'Unable to sign in',
-    description: 'Something went wrong while completing your login. Please try again.',
-  }
+// The gateway sends the browser here when a web login fails.
+export function LoginErrorPage() {
+  const info = loginError(new URLSearchParams(window.location.search).get('error'))
 
   return (
-    <AuthResultCard
-      contentClassName="w-full space-y-6 text-left text-sm"
-      description={info.description}
-      status="error"
-      title={info.title}
-    >
-      <Alert className="w-full" variant="destructive">
-        <AlertDescription>
-          {message && message.trim().length > 0 ? message : info.description}
-        </AlertDescription>
-      </Alert>
+    <AuthResultCard description={info.description} status="error" title={info.title}>
       <div className="flex justify-center">
         <Button asChild className="w-full sm:w-auto">
           <a href="/app/login">
