@@ -11,14 +11,14 @@ permissions:
 
 jobs:
   go-tests:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       GOFLAGS: -count=1
       DATABASE_URL: postgres://postgres:postgres@localhost:55432/gateway_test?sslmode=disable
       TEST_DATABASE_URL: postgres://postgres:postgres@localhost:55432/gateway_test?sslmode=disable
       GOLANGCI_LINT_VERSION: v2.14.0
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # setup-go's cache is shared with the lint job, which saves it first without any -race test builds, so
       # compiling the test binaries took most of this job. This job keeps its own build cache: main saves it,
@@ -31,7 +31,7 @@ jobs:
           cache: false
 
       - name: Restore Go test cache
-        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             ~/.cache/go-build
@@ -63,7 +63,7 @@ jobs:
 
       - name: Save Go test cache
         if: ${{ !cancelled() && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
-        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             ~/.cache/go-build
@@ -71,11 +71,11 @@ jobs:
           key: go-tests-${{ runner.os }}-${{ hashFiles('go.sum') }}-${{ github.sha }}
 
   lint:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       GOLANGCI_LINT_VERSION: v2.14.0
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Setup Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
@@ -83,7 +83,7 @@ jobs:
           go-version: "1.27.2"
 
       - name: Cache golangci-lint cache
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             ~/.cache/golangci-lint
@@ -101,7 +101,7 @@ jobs:
         run: task go:deps
 
       - name: Install golangci-lint
-        uses: golangci/golangci-lint-action@4afd733a84b1f43292c63897423277bb7f4313a9 # v8.0.0
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
           version: ${{ env.GOLANGCI_LINT_VERSION }}
           install-only: true
@@ -118,7 +118,7 @@ jobs:
           exit 1
 
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@4afd733a84b1f43292c63897423277bb7f4313a9 # v8.0.0
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
           version: ${{ env.GOLANGCI_LINT_VERSION }}
           verify: false
@@ -128,7 +128,7 @@ jobs:
       # The run above lints the release variant (no build tags). Only the testbypass package has files for builds
       # with the testbypass tag, so this lints just those.
       - name: golangci-lint (testbypass build)
-        uses: golangci/golangci-lint-action@4afd733a84b1f43292c63897423277bb7f4313a9 # v8.0.0
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
           version: ${{ env.GOLANGCI_LINT_VERSION }}
           verify: false
@@ -180,9 +180,9 @@ jobs:
         run: task go:sec:secrets
 
   web-tests:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # The typecheck regenerates the OpenAPI spec and TypeScript types with Go tools.
       - name: Setup Go
@@ -218,9 +218,9 @@ jobs:
         run: task web:test
 
   mock-oauth-tests:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
