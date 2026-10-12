@@ -55,3 +55,27 @@ func TestRepeatColumnUpgradeIsQuietWhenNothingWasEncrypted(t *testing.T) {
 	assert.Zero(t, reported)
 	assert.Contains(t, logs.String(), "[ERROR] Column encryption: repeat upgrade failed: connection refused")
 }
+
+// The startup sweep reports plaintext only in a column that already held values encrypted under this key: that
+// column was upgraded before, so the plaintext was written since. On the first upgrade everything is plaintext.
+func TestStartupColumnUpgradeReportsPlaintextInUpgradedColumns(t *testing.T) {
+	var logs bytes.Buffer
+	log.SetOutput(&logs)
+	t.Cleanup(func() { log.SetOutput(os.Stderr) })
+	var reported []string
+	report := func(message string) { reported = append(reported, message) }
+
+	reportPlaintextInUpgradedColumns(map[string]db.ColumnUpgradeCounts{
+		"mfa_methods.secret":                    {Encrypted: 12},
+		"slack_integration.bot_token_encrypted": {Encrypted: 1},
+	}, report)
+	assert.Empty(t, reported, "the first upgrade encrypts everything")
+
+	reportPlaintextInUpgradedColumns(map[string]db.ColumnUpgradeCounts{
+		"mfa_methods.secret":                    {Encrypted: 1, CurrentKey: 12},
+		"slack_integration.bot_token_encrypted": {Encrypted: 1},
+	}, report)
+	require.Len(t, reported, 1)
+	assert.Contains(t, reported[0], "columns that were already encrypted (mfa_methods.secret: 1)")
+	assert.Contains(t, logs.String(), "[ERROR] "+reported[0])
+}

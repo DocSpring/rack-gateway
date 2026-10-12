@@ -223,7 +223,7 @@ func TestUpgradePlaintextColumns(t *testing.T) {
 
 	upgraded, err := database.UpgradePlaintextColumns(context.Background())
 	require.NoError(t, err)
-	require.Equal(t, gwdb.ColumnUpgradeCounts{Encrypted: 3, OtherKey: 1}, upgraded[mfaColumn])
+	require.Equal(t, gwdb.ColumnUpgradeCounts{Encrypted: 3, OtherKey: 1, CurrentKey: 1}, upgraded[mfaColumn])
 	require.Equal(t, gwdb.ColumnUpgradeCounts{Encrypted: 1}, upgraded[slackColumn])
 
 	for id, plaintext := range legacy {
@@ -255,8 +255,8 @@ func TestUpgradePlaintextColumns(t *testing.T) {
 	// A second run finds nothing left to do.
 	again, err := database.UpgradePlaintextColumns(context.Background())
 	require.NoError(t, err)
-	require.Equal(t, gwdb.ColumnUpgradeCounts{OtherKey: 1}, again[mfaColumn])
-	require.Equal(t, gwdb.ColumnUpgradeCounts{}, again[slackColumn])
+	require.Equal(t, gwdb.ColumnUpgradeCounts{OtherKey: 1, CurrentKey: 4}, again[mfaColumn])
+	require.Equal(t, gwdb.ColumnUpgradeCounts{CurrentKey: 1}, again[slackColumn])
 	require.Equal(t, slackStored, storedBotToken(t, database))
 }
 

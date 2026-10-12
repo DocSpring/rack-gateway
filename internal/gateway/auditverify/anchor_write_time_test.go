@@ -64,3 +64,25 @@ func TestVerifyAllowsClockSkewAndRetriesWithinTheWriteWindow(t *testing.T) {
 
 	requireOK(t, verifyWithAnchors(t, database, bucket, retried.Add(jobaudit.AnchorWriteWindow+time.Hour)))
 }
+
+func TestVerifyFailsALegacyAnchorStoredAfterTheFormatChange(t *testing.T) {
+	database := newAuditDatabase(t)
+	bucket := fakes3.New(firstHour)
+	writeAnchor(t, database, bucket, firstHour) // format 2
+	// During the rolling deploy an instance of the earlier version can still write an anchor without a format.
+	duringDeploy := firstHour.Add(time.Hour)
+	putAnchorAt(t, bucket, jobaudit.AnchorPayload{}, duringDeploy, duringDeploy.Add(time.Minute))
+	// A day later only someone with write access to the bucket can.
+	later := firstHour.Add(legacyAnchorGraceForTest + time.Hour)
+	putAnchorAt(t, bucket, jobaudit.AnchorPayload{}, later, later.Add(time.Minute))
+
+	report := verifyWithAnchors(t, database, bucket, later.Add(time.Hour))
+	requireFailure(t, report, jobaudit.AnchorKey(testChainID, later), "has no format but was stored at "+
+		"2026-05-02T01:01:00Z, after anchors in format 2 began (2026-05-01T00:00:01Z)")
+	for _, failure := range report.Failures {
+		assert.NotContains(t, failure, jobaudit.AnchorKey(testChainID, duringDeploy)+" has no format")
+	}
+}
+
+// legacyAnchorGraceForTest is auditverify's grace period for anchors without a format.
+const legacyAnchorGraceForTest = 24 * time.Hour

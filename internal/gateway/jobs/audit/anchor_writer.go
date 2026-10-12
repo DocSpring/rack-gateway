@@ -100,13 +100,11 @@ func (w *AnchorWriterWorker) anchorWrittenAt(ctx context.Context, key string) (t
 const anchorBusySnooze = time.Minute
 
 // Work writes the anchor for the hour the job was created in. When another anchor write is running, the job is
-// snoozed and tries again later. A retry that starts after the hour's write window gives up, and so does a job
-// that finds its hour's key created before the hour began; both are canceled, since retrying can't help.
+// snoozed and tries again later. An attempt outside the hour's write window gives up, and so does a job that finds
+// its hour's key holding an object the anchor writer didn't write; both are canceled, since retrying can't help.
 func (w *AnchorWriterWorker) Work(ctx context.Context, job *river.Job[AnchorWriterArgs]) error {
-	if delay, late := pastWriteWindow(job.JobRow); late {
-		return cancelAnchorJob(fmt.Errorf("gave up on anchor %s: this attempt started %s after the job was "+
-			"created, past the %s anchor write window (later hours' anchors cover its events)",
-			AnchorKey(w.chainID, job.CreatedAt), delay.Truncate(time.Minute), AnchorWriteWindow))
+	if err := checkAttemptTime(AnchorKey(w.chainID, job.CreatedAt), job.JobRow); err != nil {
+		return cancelAnchorJob(err)
 	}
 	// The job's creation time names the anchor, so retries of a job write the same key.
 	err := w.WriteAnchor(ctx, job.CreatedAt)
@@ -123,7 +121,7 @@ func (w *AnchorWriterWorker) Work(ctx context.Context, job *river.Job[AnchorWrit
 // from the existence check through the write, so concurrent writes can't add a second version of a key or link
 // two anchors to the same predecessor, which verification would report as failures that Object Lock keeps
 // forever. It returns db.ErrAuditAnchorLockBusy when another anchor write holds the lock, and
-// ErrUnexpectedAnchor when the hour's key holds an object stored before the hour began.
+// ErrUnexpectedAnchor when the hour's key holds an object the anchor writer didn't write.
 //
 // The lock is a transaction-scoped Postgres advisory lock, so the write holds one pooled database connection
 // across its S3 calls: releasing it before the PutObject would let a second writer find the key missing and write
@@ -137,6 +135,19 @@ func (w *AnchorWriterWorker) WriteAnchor(ctx context.Context, ts time.Time) erro
 	})
 }
 
+// WriteCurrentAnchor writes the anchor for the current hour by the database's clock, for `write-anchor`. The
+// clock of the host running it could be wrong, and an anchor named by it would fail verification for as long as
+// Object Lock keeps it. Otherwise it behaves like WriteAnchor.
+func (w *AnchorWriterWorker) WriteCurrentAnchor(ctx context.Context) error {
+	return w.db.WithAuditAnchorLock(ctx, func(ctx context.Context, lock *db.AuditAnchorTx) error {
+		now, err := lock.Now(ctx)
+		if err != nil {
+			return err
+		}
+		return w.writeAnchorLocked(ctx, lock, now.UTC())
+	})
+}
+
 func (w *AnchorWriterWorker) writeAnchorLocked(ctx context.Context, lock *db.AuditAnchorTx, timestamp time.Time) error {
 	key := AnchorKey(w.chainID, timestamp) // Hour precision only - no minutes/seconds
 
@@ -145,8 +156,8 @@ func (w *AnchorWriterWorker) writeAnchorLocked(ctx context.Context, lock *db.Aud
 		return err
 	}
 	if exists {
-		// An earlier run wrote this hour's anchor, unless the object was created before the hour began.
-		return checkExistingAnchor(key, timestamp, written)
+		// An earlier run wrote this hour's anchor, unless someone else put an object there first.
+		return w.checkExistingAnchor(ctx, lock, key, timestamp, written)
 	}
 
 	head, err := lock.AuditChainHead(ctx)

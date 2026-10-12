@@ -3,6 +3,7 @@ package audit
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"log"
 	"net/http"
 	"net/http/httptest"
@@ -17,6 +18,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	"github.com/DocSpring/rack-gateway/internal/gateway/testutil/dbtest"
 	"github.com/DocSpring/rack-gateway/internal/gateway/testutil/fakes3"
 )
@@ -80,29 +82,101 @@ func TestAnchorWriterRefusesAKeyCreatedBeforeItsHour(t *testing.T) {
 	assert.Len(t, bucket.Versions(key), 1, "the writer doesn't add a version of its own")
 }
 
-func TestCheckExistingAnchor(t *testing.T) {
-	ts := firstAnchorHour.Add(10*time.Hour + 20*time.Minute) // the job, 20 minutes into the hour
-	key := AnchorKey(testChainID, ts)
+// anchorBody is an anchor for the hour of ts recording the chain up to lastSeq.
+func anchorBody(t *testing.T, chainID string, ts time.Time, lastSeq int64, lastHash string) []byte {
+	t.Helper()
+	body, err := json.Marshal(AnchorPayload{
+		ChainID: chainID, LastSeq: lastSeq, LastHash: lastHash, TimestampUTC: ts.UTC().Format(time.RFC3339),
+	})
+	require.NoError(t, err)
+	return body
+}
+
+func TestAnchorWriterChecksTheExistingAnchor(t *testing.T) {
+	database := dbtest.NewDatabase(t)
+	hour := firstAnchorHour.Add(10 * time.Hour)
+	for i := 0; i < 2; i++ {
+		event := &db.AuditLog{
+			UserEmail: "test@example.com", ActionType: "test", Action: "test.read", Status: "success",
+			Timestamp: hour.Add(time.Minute),
+		}
+		require.NoError(t, database.CreateAuditLog(event))
+	}
+	ts := hour.Add(20 * time.Minute) // the job, 20 minutes into the hour
+	stored := hour.Add(10 * time.Minute)
+	emptyChain := anchorBody(t, testChainID, hour, 0, "")
 	for _, tc := range []struct {
 		name    string
 		written time.Time
+		body    []byte
 		ok      bool
 	}{
-		{"written earlier in the hour", firstAnchorHour.Add(10*time.Hour + time.Minute), true},
-		{"written just before the hour by S3's clock", firstAnchorHour.Add(10*time.Hour - time.Minute), true},
-		{"written by a late retry", ts.Add(5 * time.Hour), true},
-		{"created ahead of time", firstAnchorHour.Add(10*time.Hour - AnchorClockSkew - time.Second), false},
-		{"created a day ahead", firstAnchorHour.Add(-14 * time.Hour), false},
+		{"written earlier in the hour", stored, anchorBody(t, testChainID, hour, 1, "ab"), true},
+		{"written just before the hour by S3's clock", hour.Add(-time.Minute), emptyChain, true},
+		{"written by a late retry", ts.Add(5 * time.Hour), anchorBody(t, testChainID, hour, 1, "ab"), true},
+		{"created ahead of time", hour.Add(-AnchorClockSkew - time.Second), emptyChain, false},
+		{"created a day ahead", hour.Add(-24 * time.Hour), emptyChain, false},
+		{"not an anchor", stored, []byte(`not json`), false},
+		{"another chain's anchor", stored, anchorBody(t, "other", hour, 1, "ab"), false},
+		{"another hour's anchor", stored, anchorBody(t, testChainID, hour.Add(-time.Hour), 1, "ab"), false},
+		{"a stale copy of an earlier anchor", stored, anchorBody(t, testChainID, hour, 0, "ab"), false},
+		{"an empty chain's anchor after events were written", stored, emptyChain, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			err := checkExistingAnchor(key, ts, tc.written)
+			bucket := fakes3.New(firstAnchorHour)
+			key := AnchorKey(testChainID, ts)
+			bucket.PutAt(key, tc.body, tc.written)
+
+			err := newTestWorker(database, bucket).WriteAnchor(context.Background(), ts)
 			if tc.ok {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 			} else {
-				assert.ErrorIs(t, err, ErrUnexpectedAnchor)
+				require.ErrorIs(t, err, ErrUnexpectedAnchor)
 			}
+			assert.Len(t, bucket.Versions(key), 1, "the writer never adds a version of an existing anchor")
 		})
 	}
+}
+
+func TestAnchorJobRefusesACreationTimeAfterItsAttempt(t *testing.T) {
+	bucket := fakes3.New(firstAnchorHour)
+	logs := captureLogs(t)
+	// Someone moved the job's creation time forward in the database to name a later hour.
+	job := anchorJob(firstAnchorHour.Add(5 * time.Hour))
+	attempted := firstAnchorHour.Add(time.Minute)
+	job.AttemptedAt = &attempted
+	key := AnchorKey(testChainID, job.CreatedAt)
+
+	err := newTestWorker(nil, bucket).Work(context.Background(), job)
+	var canceled *river.JobCancelError
+	require.ErrorAs(t, err, &canceled)
+	assert.Contains(t, err.Error(), "refused to write anchor "+key+": the job was created at 2026-01-01T05:00:00Z")
+	assert.Contains(t, logs.String(), "[ERROR] audit anchor: refused to write anchor "+key)
+	assert.Empty(t, bucket.Versions(key))
+
+	// A creation time within the clock skew of the attempt is fine.
+	job = anchorJob(firstAnchorHour.Add(AnchorClockSkew))
+	job.AttemptedAt = &attempted
+	require.NoError(t, newTestWorker(dbtest.NewDatabase(t), bucket).Work(context.Background(), job))
+}
+
+func TestWriteCurrentAnchorUsesTheDatabaseClock(t *testing.T) {
+	database := dbtest.NewDatabase(t)
+	dbNow := func() time.Time {
+		var now time.Time
+		require.NoError(t, database.DB().QueryRow("SELECT now()").Scan(&now))
+		return now
+	}
+	before := dbNow()
+	bucket := fakes3.New(before)
+	require.NoError(t, newTestWorker(database, bucket).WriteCurrentAnchor(context.Background()))
+	after := dbNow()
+
+	versions := bucket.Versions(AnchorKey(testChainID, before))
+	if !before.UTC().Truncate(time.Hour).Equal(after.UTC().Truncate(time.Hour)) {
+		versions = append(versions, bucket.Versions(AnchorKey(testChainID, after))...)
+	}
+	assert.Len(t, versions, 1, "the anchor is named by the database's hour")
 }
 
 func TestAnchorJobGivesUpAfterTheWriteWindow(t *testing.T) {

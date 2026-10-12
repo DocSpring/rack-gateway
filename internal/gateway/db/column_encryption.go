@@ -43,6 +43,9 @@ type ColumnUpgradeCounts struct {
 	Encrypted  int // values written before encryption, now encrypted
 	OtherKey   int // values encrypted under another key (or envelope version), left alone
 	Unreadable int // values written before encryption that couldn't be decoded, left alone
+	// CurrentKey is how many values were already encrypted under this key when the sweep started: when there are
+	// some, the column has been upgraded before, so a plaintext value found now was written since.
+	CurrentKey int
 }
 
 // legacyColumn describes how to find and upgrade one encrypted column's values from before encryption.
@@ -50,6 +53,8 @@ type legacyColumn struct {
 	name string
 	// selectSQL returns (id, binding, value) for rows whose value doesn't start with the LIKE pattern $1.
 	selectSQL string
+	// countSQL counts the rows whose value starts with the LIKE pattern $1.
+	countSQL string
 	// updateSQL sets $1 on row $2 if it still holds $3.
 	updateSQL string
 	plaintext func(stored string) (string, error)
@@ -63,6 +68,7 @@ var legacyColumns = []legacyColumn{
 		name: "mfa_methods.secret",
 		selectSQL: `SELECT id, user_id::text || ':' || type, secret FROM mfa_methods
 			WHERE secret IS NOT NULL AND secret NOT LIKE $1`,
+		countSQL:  `SELECT count(*) FROM mfa_methods WHERE secret LIKE $1`,
 		updateSQL: `UPDATE mfa_methods SET secret = $1 WHERE id = $2 AND secret = $3`,
 		plaintext: func(stored string) (string, error) { return stored, nil },
 		scope: func(binding string) (colcrypt.Scope, error) {
@@ -79,6 +85,7 @@ var legacyColumns = []legacyColumn{
 		name: "slack_integration.bot_token_encrypted",
 		selectSQL: `SELECT id, workspace_id, bot_token_encrypted FROM slack_integration
 			WHERE bot_token_encrypted NOT LIKE $1`,
+		countSQL:  `SELECT count(*) FROM slack_integration WHERE bot_token_encrypted LIKE $1`,
 		updateSQL: `UPDATE slack_integration SET bot_token_encrypted = $1 WHERE id = $2 AND bot_token_encrypted = $3`,
 		// Tokens used to be stored base64-encoded.
 		plaintext: func(stored string) (string, error) {
@@ -115,7 +122,7 @@ func (d *Database) UpgradePlaintextColumns(ctx context.Context) (map[string]Colu
 		if err != nil {
 			return nil, fmt.Errorf("encrypt existing %s values: %w", column.name, err)
 		}
-		if counts != (ColumnUpgradeCounts{}) {
+		if counts.Encrypted+counts.OtherKey+counts.Unreadable > 0 {
 			gtwlog.Infof("Column encryption: %s: encrypted %d existing values, %d under another key, %d unreadable",
 				column.name, counts.Encrypted, counts.OtherKey, counts.Unreadable)
 		}
@@ -126,6 +133,11 @@ func (d *Database) UpgradePlaintextColumns(ctx context.Context) (map[string]Colu
 
 func (d *Database) upgradeColumn(ctx context.Context, column legacyColumn) (ColumnUpgradeCounts, error) {
 	var counts ColumnUpgradeCounts
+	if err := d.db.QueryRowContext(ctx, column.countSQL, d.cipher.EnvelopePrefix()+"%").Scan(
+		&counts.CurrentKey,
+	); err != nil {
+		return counts, err
+	}
 	rows, err := d.legacyRows(ctx, column.selectSQL)
 	if err != nil {
 		return counts, err

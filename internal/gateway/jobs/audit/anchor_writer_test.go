@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/riverqueue/river"
@@ -107,108 +106,6 @@ func TestNewAnchorWriterWorker(t *testing.T) {
 	assert.Equal(t, bucket, worker.bucket)
 	assert.Equal(t, chainID, worker.chainID)
 	assert.Equal(t, retentionDays, worker.retentionDays)
-}
-
-func TestAnchorWriterWorker_Work_BothFilesExist(t *testing.T) {
-	// Setup: Both JSON and SHA256 files already exist
-	s3Client := &mockS3Client{
-		headObjectFunc: func(
-			_ context.Context,
-			_ *s3.HeadObjectInput,
-			_ ...func(*s3.Options),
-		) (*s3.HeadObjectOutput, error) {
-			// Both files exist, written during the hour by an earlier run
-			return &s3.HeadObjectOutput{LastModified: aws.Time(time.Date(2025, 11, 1, 12, 0, 5, 0, time.UTC))}, nil
-		},
-	}
-
-	worker := &AnchorWriterWorker{
-		db:            dbtest.NewDatabase(t), // only for the anchor lock
-		s3Client:      s3Client,
-		bucket:        "test-bucket",
-		chainID:       "staging",
-		retentionDays: 7,
-	}
-
-	job := &river.Job[AnchorWriterArgs]{
-		JobRow: &rivertype.JobRow{
-			CreatedAt: time.Date(2025, 11, 1, 12, 0, 0, 0, time.UTC),
-		},
-	}
-
-	err := worker.Work(context.Background(), job)
-	assert.NoError(t, err, "Should succeed when both files exist")
-}
-
-func TestAnchorWriterWorker_Work_JSONExistsSHA256Missing(t *testing.T) {
-	// Setup: JSON file exists but SHA256 is missing - should write SHA256 only
-	database := dbtest.NewDatabase(t)
-
-	// Create an audit event so we have data to anchor
-	auditLog := &db.AuditLog{
-		UserEmail:      "test@example.com",
-		UserName:       "Test User",
-		ActionType:     "test",
-		Action:         "test:read",
-		Resource:       "test-resource",
-		Status:         "success",
-		ResponseTimeMs: 100,
-	}
-	err := database.CreateAuditLog(auditLog)
-	require.NoError(t, err)
-
-	key := "staging/2025/11/01/12/anchor-20251101T12.json"
-
-	putCalled := false
-	s3Client := &mockS3Client{
-		headObjectFunc: func(
-			_ context.Context,
-			params *s3.HeadObjectInput,
-			_ ...func(*s3.Options),
-		) (*s3.HeadObjectOutput, error) {
-			// JSON file already exists, written during the hour by an earlier run
-			if *params.Key == key {
-				return &s3.HeadObjectOutput{LastModified: aws.Time(time.Date(2025, 11, 1, 12, 0, 5, 0, time.UTC))}, nil
-			}
-			return nil, &types.NotFound{}
-		},
-		listObjectsV2Func: func(
-			_ context.Context,
-			_ *s3.ListObjectsV2Input,
-			_ ...func(*s3.Options),
-		) (*s3.ListObjectsV2Output, error) {
-			// No previous anchors
-			return &s3.ListObjectsV2Output{Contents: []types.Object{}}, nil
-		},
-		putObjectFunc: func(
-			_ context.Context,
-			params *s3.PutObjectInput,
-			_ ...func(*s3.Options),
-		) (*s3.PutObjectOutput, error) {
-			// Should NOT be called - file already exists
-			putCalled = true
-			t.Errorf("PutObject should not be called when file already exists (key=%s)", *params.Key)
-			return &s3.PutObjectOutput{}, nil
-		},
-	}
-
-	worker := &AnchorWriterWorker{
-		db:            database,
-		s3Client:      s3Client,
-		bucket:        "test-bucket",
-		chainID:       "staging",
-		retentionDays: 7,
-	}
-
-	job := &river.Job[AnchorWriterArgs]{
-		JobRow: &rivertype.JobRow{
-			CreatedAt: time.Date(2025, 11, 1, 12, 0, 0, 0, time.UTC),
-		},
-	}
-
-	err = worker.Work(context.Background(), job)
-	assert.NoError(t, err, "Should succeed when file already exists")
-	assert.False(t, putCalled, "PutObject should not be called when file already exists")
 }
 
 func TestAnchorWriterWorker_Work_BothFilesMissing_EmptyChain(t *testing.T) {

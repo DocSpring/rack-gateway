@@ -1,7 +1,6 @@
 package audit
 
 import (
-	"errors"
 	"fmt"
 	"time"
 
@@ -25,30 +24,27 @@ const AnchorWriteWindow = 6 * time.Hour
 // (a minute).
 const AnchorClockSkew = 5 * time.Minute
 
-// ErrUnexpectedAnchor is returned when an hour's anchor key already holds an object that S3 stored before the
-// hour began. The writer never writes a key before its hour, so someone with write access to the bucket created
-// it ahead of time. While Object Lock keeps it, that hour can't be anchored.
-var ErrUnexpectedAnchor = errors.New("anchor key was written before its hour began")
-
-// checkExistingAnchor accepts the existing anchor for the hour of ts, unless S3 stored it before that hour began.
-func checkExistingAnchor(key string, ts, written time.Time) error {
-	hourStart := ts.UTC().Truncate(time.Hour)
-	if !written.Before(hourStart.Add(-AnchorClockSkew)) {
+// checkAttemptTime refuses an attempt the job's times say must not write. One that started more than
+// AnchorWriteWindow after the job was created would be a backfill. One that started before the job was created
+// means the creation time was moved forward in the database: it names an hour that hasn't come yet, and an anchor
+// written for it now would also make the real job for that hour fail. River sets both times from the database's
+// clock; a job River isn't working (no attempt time) is never refused.
+func checkAttemptTime(key string, job *rivertype.JobRow) error {
+	if job.AttemptedAt == nil {
 		return nil
 	}
-	return fmt.Errorf("%w: %s was stored at %s, so the anchor writer didn't write it and this hour can't be "+
-		"anchored (check who can write to the bucket)", ErrUnexpectedAnchor, key, written.UTC().Format(time.RFC3339))
-}
-
-// pastWriteWindow reports whether the job's current attempt started more than AnchorWriteWindow after the job was
-// created, and how long after. River sets both times from the database's clock; a job that isn't being worked by
-// River (no attempt time) is never late.
-func pastWriteWindow(job *rivertype.JobRow) (time.Duration, bool) {
-	if job.AttemptedAt == nil {
-		return 0, false
-	}
 	delay := job.AttemptedAt.Sub(job.CreatedAt)
-	return delay, delay > AnchorWriteWindow
+	switch {
+	case delay > AnchorWriteWindow:
+		return fmt.Errorf("gave up on anchor %s: this attempt started %s after the job was created, past the %s "+
+			"anchor write window (later hours' anchors cover its events)", key, delay.Truncate(time.Minute),
+			AnchorWriteWindow)
+	case delay < -AnchorClockSkew:
+		return fmt.Errorf("refused to write anchor %s: the job was created at %s, after this attempt started (%s), "+
+			"so its creation time was changed in the database (check who can write to it)", key,
+			job.CreatedAt.UTC().Format(time.RFC3339), job.AttemptedAt.UTC().Format(time.RFC3339))
+	}
+	return nil
 }
 
 // cancelAnchorJob reports err and cancels the job, for failures retrying can't fix. River doesn't pass canceled

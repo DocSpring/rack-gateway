@@ -233,10 +233,10 @@ func writeAuditAnchor() error {
 		anchorConfig.RetentionDays,
 	)
 
-	// Write this hour's anchor directly (synchronously). It takes the same lock as the periodic job, and fails
-	// rather than waits while another anchor write holds it.
+	// Write this hour's anchor directly (synchronously), for the hour by the database's clock. It takes the same
+	// lock as the periodic job, and fails rather than waits while another anchor write holds it.
 	fmt.Println("Writing audit anchor to S3...")
-	if err := worker.WriteAnchor(context.Background(), time.Now()); err != nil {
+	if err := worker.WriteCurrentAnchor(context.Background()); err != nil {
 		return fmt.Errorf("failed to write anchor: %w", err)
 	}
 

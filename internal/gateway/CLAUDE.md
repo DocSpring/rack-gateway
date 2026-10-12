@@ -112,13 +112,15 @@ Key files:
 - `db/audit_append.go`, `db/audit_hash.go`, `db/audit_normalize.go` - Hash-chained append (hash v2). The row is
   normalized to its stored form, hashed, then stored, so the stored row always re-hashes to `event_hash`. Never
   change the v2 encoding (existing rows would stop verifying); a new audit column needs a new hash version
-- `jobs/audit/anchor_writer.go` - Hourly S3 Object Lock anchors. Every write (job or `write-anchor`) goes through
-  `WriteAnchor`, which holds the audit anchor advisory lock (`db.WithAuditAnchorLock`) from the existence check
-  through the Put: anchors are permanent, so an overlapping write would be a permanent verification failure.
-  The Put is sent once (`putAnchorOnce`: an SDK retry after a lost response adds a second version); the job's
-  retry re-checks first. A retry starting past `AnchorWriteWindow` gives up, and a key S3 stored before its hour
-  is `ErrUnexpectedAnchor` (`anchor_window.go`); `auditverify` checks `LastModified` against `ts_utc` with the
-  same constants, so keep them in step
+- `jobs/audit/anchor_writer.go` - Hourly S3 Object Lock anchors. Every write (job or `write-anchor`) holds the
+  audit anchor advisory lock (`db.WithAuditAnchorLock`) from the existence check through the Put: anchors are
+  permanent, so an overlapping write would be a permanent verification failure. `write-anchor` uses
+  `WriteCurrentAnchor` (the database's clock, never the host's). The Put is sent once (`putAnchorOnce`: an SDK
+  retry after a lost response adds a second version); the job's retry re-checks first. An attempt starting past
+  `AnchorWriteWindow`, or before the job was created, is refused (`anchor_window.go`). An existing key must be an
+  anchor the writer could have written (`anchor_existing.go`: stored no earlier than its hour, this chain and
+  hour, covering every event written before it), or it's `ErrUnexpectedAnchor`. `auditverify` checks
+  `LastModified` against `ts_utc` with the same constants, so keep them in step
 - `auditverify/` - `rack-gateway-api verify-audit` (chain + anchor verification). Never trust the database's own
   hash v2 start: it comes from `hash_version`, which anyone with database write access can change
 
