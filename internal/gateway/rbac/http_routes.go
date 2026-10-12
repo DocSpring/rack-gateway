@@ -38,6 +38,8 @@ type RouteSpec struct {
 	// user's email, the caller may use the route for their own account without the route's
 	// permissions. API tokens never qualify. Empty means the route has no self-service rule.
 	SelfParam string
+	// AuditAction names the route's audit entries when it has no permission to name them after (see AuditName).
+	AuditAction string
 }
 
 // GetMFALevel returns the MFA level required for this route: the highest level of its permissions.
@@ -99,6 +101,14 @@ func newTokenRoute(method, pattern string, permissions ...string) RouteSpec {
 func newSelfRoute(method, pattern string, mfaPermissions ...string) RouteSpec {
 	spec := newHTTPRoute(method, pattern, mfaPermissions...)
 	spec.Access = AccessAuthenticated
+	return spec
+}
+
+// newSelfRead declares a read any authenticated human user may make. It has no permission, so auditAction names its
+// audit entries.
+func newSelfRead(pattern, auditAction string) RouteSpec {
+	spec := newSelfRoute("GET", pattern)
+	spec.AuditAction = auditAction
 	return spec
 }
 

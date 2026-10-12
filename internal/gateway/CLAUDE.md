@@ -52,6 +52,8 @@ route). Use the builders in `rbac/http_routes.go`:
 - `newHTTPRoute` - humans holding every listed permission
 - `newTokenRoute` - same, and API tokens may call it (keep this list tiny; CI only)
 - `newSelfRoute` - any signed-in human; the handler must scope data to the caller
+- `newSelfRead` - a `newSelfRoute` GET without a permission; it names its own audit entries (`info.read`), since
+  there's no permission to name them after. A route with neither fails `TestEveryRouteHasAnAuditName`
 - `newOwnUserRoute` - `/users/:email/...` routes a user may call for their own account; anyone else
   needs the listed permissions
 
@@ -130,9 +132,10 @@ Structured logging:
   `recordAttempt` (every rack request) write an `attempted` entry first and refuse with 503 when it can't be
   written; the auth handlers do the same around session creation, CLI login MFA and logout
   (`handlers/auth_audit.go`). Write a request's other entries with `LogRequestEntry(ctx, ...)` so they get its
-  request ID (its results). Route names come from `rbac/audit_names.go`. A background job that changes state
-  appends its audit events in the same transaction as the change (`db.ExpireDeployApprovalRequests`), and passes
-  them to `audit.RecordedInTransaction`. Any failed write fails the health check for a minute (`audit/health.go`)
+  request ID (its results). Route names come from `rbac/audit_names.go` (a route's permission, `auditActions`,
+  or the route's `AuditAction`). A background job that changes state appends its audit events in the same
+  transaction as the change (`db.ExpireDeployApprovalRequests`), and passes them to `audit.RecordedInTransaction`.
+  Any failed write fails the health check for a minute (`audit/health.go`)
 - Never change how a released version writes audit events (`audit.append_audit_event`'s signature, the audit
   roles' grants) in one migration: the previous release keeps serving requests between `migrate` and the promote,
   and it refuses every request it can't record, the promote included. Add the new function alongside the old one,

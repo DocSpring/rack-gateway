@@ -31,7 +31,7 @@ func settingsActionPath(segment string) string {
 
 var httpRouteSpecs = []RouteSpec{
 	// MFA management
-	newSelfRoute("GET", "/api/v1/auth/mfa/status"),
+	newSelfRead("/api/v1/auth/mfa/status", "mfa_status.read"),
 	newSelfRoute("POST", "/api/v1/auth/mfa/enroll/totp/start", Auth(ResourceMFAMethod, ActionCreate)),
 	newSelfRoute("POST", "/api/v1/auth/mfa/enroll/totp/confirm", Auth(ResourceMFAMethod, ActionCreate)),
 	newSelfRoute("POST", "/api/v1/auth/mfa/enroll/yubiotp/start", Auth(ResourceMFAMethod, ActionCreate)),
@@ -48,8 +48,11 @@ var httpRouteSpecs = []RouteSpec{
 	newSelfRoute("DELETE", "/api/v1/auth/mfa/methods/:methodID", Auth(ResourceMFAMethod, ActionDelete)),
 
 	// Authenticated info
-	{Method: "GET", Pattern: "/api/v1/info", Access: AccessAuthenticated, AllowAPIToken: true},
-	newSelfRoute("GET", "/api/v1/created-by"),
+	{
+		Method: "GET", Pattern: "/api/v1/info", Access: AccessAuthenticated, AllowAPIToken: true,
+		AuditAction: "info.read",
+	},
+	newSelfRead("/api/v1/created-by", "creator.read"),
 	newTokenRoute("GET", "/api/v1/rack", Convox(ResourceRack, ActionRead)),
 	// Listing every request (and a request's audit trail) is for approvers. The handlers also check
 	// approver permission; the route uses the read-level :list permission so these reads don't
@@ -93,7 +96,7 @@ var httpRouteSpecs = []RouteSpec{
 	newHTTPRoute("GET", "/api/v1/convox/system/processes", Convox(ResourceRack, ActionRead)),
 
 	// Configuration & diagnostics
-	newSelfRoute("GET", "/api/v1/settings"),
+	newSelfRead("/api/v1/settings", "setting.read"),
 	newHTTPRoute(
 		"PUT",
 		globalSettingsGroupPath(settings.GlobalSettingGroupMFAConfiguration),
@@ -148,7 +151,7 @@ var httpRouteSpecs = []RouteSpec{
 	newHTTPRoute("POST", "/api/v1/diagnostics/sentry", Gateway(ResourceIntegration, ActionUpdate)),
 
 	// Users & roles
-	newSelfRoute("GET", "/api/v1/roles"),
+	newSelfRead("/api/v1/roles", "role.list"),
 	// The team directory (names, emails, roles) is visible to every role. The handler only returns
 	// lock and MFA details to callers holding gateway:user:read.
 	newHTTPRoute("GET", "/api/v1/users", Gateway(ResourceUser, ActionList)),
@@ -179,7 +182,7 @@ var httpRouteSpecs = []RouteSpec{
 	// gateway:api_token:manage to see or change another user's tokens, and cap a token's permissions
 	// at its owner's current role.
 	newHTTPRoute("GET", "/api/v1/api-tokens", Gateway(ResourceAPIToken, ActionRead)),
-	newSelfRoute("GET", "/api/v1/api-tokens/permissions"),
+	newSelfRead("/api/v1/api-tokens/permissions", "api_token_permission.list"),
 	newHTTPRoute("GET", "/api/v1/api-tokens/:tokenID", Gateway(ResourceAPIToken, ActionRead)),
 	newHTTPRoute("POST", "/api/v1/api-tokens", Gateway(ResourceAPIToken, ActionCreate)),
 	newHTTPRoute("PUT", "/api/v1/api-tokens/:tokenID", Gateway(ResourceAPIToken, ActionUpdate)),
@@ -202,7 +205,7 @@ var httpRouteSpecs = []RouteSpec{
 	newHTTPRoute("POST", "/api/v1/integrations/slack/test", Gateway(ResourceIntegration, ActionUpdate)),
 
 	// App-specific settings
-	newSelfRoute("GET", "/api/v1/apps/:app/settings"),
+	newSelfRead("/api/v1/apps/:app/settings", "setting.read"),
 	newHTTPRoute(
 		"PUT",
 		appSettingsGroupPath(settings.AppSettingGroupVCSCIDeploy),
