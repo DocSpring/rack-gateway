@@ -99,7 +99,7 @@ The gateway creates two default channel configs:
 - `user.update_roles`
 - `api_token.*`
 - `env.*_protected`
-- `audit_log.verify` (the [hourly audit verification](/deployment/terraform/s3-worm-storage/#hourly-verification-in-the-gateway) failing, and passing again)
+- `audit_log.verification_*` (the [hourly audit verification](/deployment/terraform/s3-worm-storage/#hourly-verification-in-the-gateway) failing, and passing again after failing; a passing run posts nothing)
 
 **#infrastructure**
 - `deploy_approval_request.*`

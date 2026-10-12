@@ -515,10 +515,11 @@ fails and alerts.
   `AUDIT_HMAC_SECRET`, which only `DEV_MODE` allows, it doesn't run.
 - **Alerts.** Every failing run (an integrity failure, or a run that couldn't read the database or the bucket) is
   sent to Sentry, where runs that keep failing group into one issue. The gateway also records an
-  `audit_log.verify` audit event with status `failed` or `error` and the first failures, which goes to every Slack
-  channel whose action patterns match it (the default `#security` channel's do): on the first failing run, when a
-  run finds more failures than the last alert reported, and once a day while it keeps failing. The first passing
-  run after that records one with status `success`. Warnings don't alert. Findings that can't be fixed, such as a
+  `audit_log.verification_failed` audit event with status `failed` or `error` and the first failures, which goes to
+  every Slack channel whose action patterns match it (the default `#security` channel's `audit_log.verification_*`
+  does): on the first failing run, when a run finds more failures than the last alert reported, and once a day while
+  it keeps failing. The first passing run after that records `audit_log.verification_recovered`. A passing run
+  otherwise records nothing, and warnings don't alert. Findings that can't be fixed, such as a
   locked anchor that an earlier version wrote twice, keep verification failing until the anchor's retention ends.
   To be alerted when runs stop, set `AUDIT_VERIFY_HEARTBEAT_URL` to a heartbeat monitor's URL; the gateway requests
   it after every run (see [Heartbeats](/operations/monitoring/#heartbeats)).

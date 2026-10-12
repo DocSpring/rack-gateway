@@ -31,7 +31,7 @@ var defaultChannelActions = map[string]interface{}{
 			// Protected env var changes (env.set_protected, env.unset_protected) and refused attempts to make them
 			rbac.ResourceEnv.String() + ".*_protected",
 			// The scheduled audit log verification failing, and passing again
-			jobverifyaudit.AlertAction,
+			jobverifyaudit.AlertActionPattern,
 		},
 	},
 	"infrastructure": map[string]interface{}{

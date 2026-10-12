@@ -88,7 +88,8 @@ func TestMatchGlob(t *testing.T) {
 		want    bool
 	}{
 		{"mfa_method.*", audit.BuildAction(audit.ActionScopeMFAMethod, audit.ActionVerbEnroll), true},
-		{"mfa_method.*", audit.BuildAction(audit.ActionScopeMFAMethod, audit.ActionVerbVerify), true},
+		{"audit_log.verification_*", "audit_log.verification_failed", true},
+		{"audit_log.verification_*", "audit_log.read", false},
 		{"mfa_method.*", "auth.login", false},
 		{"auth.*", "auth.login", true},
 		{"auth.*", "auth.logout", true},

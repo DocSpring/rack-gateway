@@ -52,7 +52,9 @@ const (
 	ActionVerbUpdateRoles        = "update_roles"
 	ActionVerbUserNotAuthorized  = "user_not_authorized"
 	ActionVerbValidate           = "validate"
-	ActionVerbVerify             = "verify"
+	// The scheduled audit log verification failing, and passing again after failing
+	ActionVerbVerificationFailed    = "verification_failed"
+	ActionVerbVerificationRecovered = "verification_recovered"
 )
 
 // Status constants
