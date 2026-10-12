@@ -88,3 +88,29 @@ func TestSaveConfigReplacesTheFileAtomically(t *testing.T) {
 	require.Len(t, entries, 1, "only config.json is left")
 	require.Equal(t, "config.json", entries[0].Name())
 }
+
+// RACK_GATEWAY_URL can name the gateway of a rack that has none yet, but it can't repoint a configured rack:
+// `rack-gateway login <rack> <url>` does that.
+func TestLoginGatewayURLNeverRepointsAConfiguredRack(t *testing.T) {
+	withLoggedInRack(t)
+	t.Setenv("RACK_GATEWAY_URL", "https://gateway.attacker.example")
+
+	_, err := resolveLoginGatewayURL("us")
+	require.ErrorContains(t, err, "RACK_GATEWAY_URL (https://gateway.attacker.example) is not the gateway of rack us")
+	configured, err := LoadGatewayURL("us")
+	require.NoError(t, err)
+	require.Equal(t, configTestGatewayURL, configured, "the rack's gateway is unchanged")
+
+	t.Setenv("RACK_GATEWAY_URL", "rack-gateway-us.example.com/")
+	gatewayURL, err := resolveLoginGatewayURL("us")
+	require.NoError(t, err)
+	require.Equal(t, configTestGatewayURL, gatewayURL)
+
+	t.Setenv("RACK_GATEWAY_URL", "https://gateway-eu.example.com")
+	gatewayURL, err = resolveLoginGatewayURL("eu")
+	require.NoError(t, err)
+	require.Equal(t, "https://gateway-eu.example.com", gatewayURL)
+	saved, err := LoadGatewayURL("eu")
+	require.NoError(t, err)
+	require.Equal(t, "https://gateway-eu.example.com", saved, "a new rack takes RACK_GATEWAY_URL")
+}

@@ -184,6 +184,9 @@ func TestDescribeCommandQuotesArgumentsThatCouldReadAsSeveral(t *testing.T) {
 		{[]string{"deploy-approval", "approve", "--notes", `say "ok"`}, `deploy-approval approve --notes "say \"ok\""`},
 		{[]string{"deploy-approval", "approve", "--notes", ""}, `deploy-approval approve --notes ""`},
 		{[]string{"ps", "-a", "web\u00a0api"}, `ps -a "web\u00a0api"`},
+		// U+2800 is printable but renders blank, so it could pass for a space between arguments.
+		{[]string{"env", "unset", "X\u2800--app\u2800staging-web"}, `env unset "X\u2800--app\u2800staging-web"`},
+		{[]string{"ps", "-a", "café"}, `ps -a "caf\u00e9"`},
 	}
 	for _, tt := range tests {
 		got := describeCommand(append([]string{"rack-gateway"}, tt.args...))

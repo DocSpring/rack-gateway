@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/convox/convox/sdk"
@@ -40,6 +41,11 @@ func runEnvChange(cmd *cobra.Command, args []string, commandName string, keys []
 	allowProtected, err := cmd.Flags().GetBool(allowProtectedFlag)
 	if err != nil {
 		return err
+	}
+	if allowProtected {
+		if err := requireEnvVarNames(keys); err != nil {
+			return err
+		}
 	}
 	mfaAuth, err := envChangeMFAAuth(cmd, commandName, keys, allowProtected)
 	if err != nil {
@@ -82,6 +88,19 @@ func envChangeMFAAuth(cmd *cobra.Command, commandName string, keys []string, all
 	return checkMFAAndGetAuth(cmd, commandName)
 }
 
+// requireEnvVarNames refuses a key that isn't an env var name before MFA. The keys are shown to the person
+// approving the change, so a key such as "DATABASE_URL on app staging-web (rack staging)" could otherwise make the
+// PIN dialog name a different app or rack (convox env unset accepts any string).
+func requireEnvVarNames(keys []string) error {
+	for _, key := range keys {
+		if envutil.ValidateEnvEntry(key, "") != nil {
+			return fmt.Errorf("invalid env var name %s: names are letters, digits and underscores, "+
+				"not starting with a digit", strconv.Quote(key))
+		}
+	}
+	return nil
+}
+
 // requireExplicitProtectedEnvApp refuses --allow-protected without a terminal (e.g. run by an AI agent) unless
 // --app names the app. In a terminal the person runs the command themselves and sees the resolved app before MFA.
 func requireExplicitProtectedEnvApp(interactive bool, appFlag string) error {
@@ -119,20 +138,20 @@ func protectedEnvMFAAuth(cmd *cobra.Command, commandName string, keys []string) 
 }
 
 // protectedEnvPrompt describes a protected env change for the person approving it: one summary line per key,
-// each naming the app and rack (so a long list that the PIN dialog cuts short never hides where the change goes),
-// and a touch reason naming the app and rack. Values are never shown.
+// each starting with the app and rack (so neither a long list that the PIN dialog cuts short nor a long line hides
+// where the change goes), and a touch reason naming the app and rack. Values are never shown.
 func protectedEnvPrompt(commandName string, keys []string, app, rack string) webauthn.Prompt {
-	action, verb := "Set", "set"
+	verb := "set"
 	if commandName == "env unset" {
-		action, verb = "Unset", "unset"
+		verb = "unset"
 	}
-	target := fmt.Sprintf("on app %s (rack %s)", displayText(app), displayText(rack))
+	target := fmt.Sprintf("app %s (rack %s)", displayText(app), displayText(rack))
 
 	summary := make([]string, 0, len(keys))
 	for _, key := range keys {
-		summary = append(summary, fmt.Sprintf("%s env var %s %s", action, displayText(key), target))
+		summary = append(summary, fmt.Sprintf("On %s: %s env var %s", target, verb, displayText(key)))
 	}
-	return webauthn.Prompt{Summary: summary, Touch: verb + " env vars, protected ones included, " + target}
+	return webauthn.Prompt{Summary: summary, Touch: verb + " env vars, protected ones included, on " + target}
 }
 
 // envSetKeys returns the keys of the KEY=VALUE arguments to env set, parsed the way convox's EnvSet parses

@@ -189,16 +189,17 @@ func describeCommand(args []string) string {
 	return SingleLine(strings.Join(shown, " "), maxCommandLength)
 }
 
-// quoteArg quotes an argument (Go syntax, escaping quotes, backslashes and unprintable characters) when it is
-// empty or contains whitespace, a quote, a backslash or anything unprintable. Otherwise an argument such as
-// "KEY --app staging-web" would read as a key followed by an --app flag, and the dialog would show a different
-// app from the one the command changes. Plain arguments stay unquoted.
+// quoteArg quotes an argument (Go syntax, with every character outside printable ASCII escaped) when it is empty
+// or contains whitespace, a quote, a backslash or anything other than printable ASCII. Otherwise an argument such
+// as "KEY --app staging-web" (or one spaced with a blank-looking character like U+2800) would read as a key
+// followed by an --app flag, and the dialog would show a different app from the one the command changes. Plain
+// arguments stay unquoted.
 func quoteArg(arg string) string {
 	needsQuotes := arg == "" || strings.ContainsFunc(arg, func(r rune) bool {
-		return unicode.IsSpace(r) || r == '"' || r == '\'' || r == '\\' || !unicode.IsPrint(r)
+		return r <= ' ' || r > '~' || r == '"' || r == '\'' || r == '\\'
 	})
 	if needsQuotes {
-		return strconv.Quote(arg)
+		return strconv.QuoteToASCII(arg)
 	}
 	return arg
 }

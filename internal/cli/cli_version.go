@@ -33,7 +33,7 @@ func VersionCommand() *cobra.Command {
 			// Get gateway info
 			info, err := GetGatewayInfo(gatewayURL, token)
 			if err != nil {
-				fmt.Printf("gateway: (error: %v)\n", err)
+				fmt.Printf("gateway: (error: %s)\n", displayText(err.Error()))
 				fmt.Println("server: (unavailable)")
 				return nil
 			}

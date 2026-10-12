@@ -191,13 +191,13 @@ func withoutTerminal(t *testing.T) {
 func TestProtectedEnvPromptNamesKeysAppAndRack(t *testing.T) {
 	prompt := protectedEnvPrompt("env unset", []string{"DATABASE_URL", "REDIS_URL\x1b[2J"}, "prod-web", "us")
 	require.Equal(t, []string{
-		"Unset env var DATABASE_URL on app prod-web (rack us)",
-		"Unset env var REDIS_URL?[2J on app prod-web (rack us)",
+		"On app prod-web (rack us): unset env var DATABASE_URL",
+		"On app prod-web (rack us): unset env var REDIS_URL?[2J",
 	}, prompt.Summary)
 	require.Equal(t, "unset env vars, protected ones included, on app prod-web (rack us)", prompt.Touch)
 
 	set := protectedEnvPrompt("env set", []string{"DATABASE_URL"}, "web\u202eevil", "eu")
-	require.Equal(t, []string{"Set env var DATABASE_URL on app web?evil (rack eu)"}, set.Summary)
+	require.Equal(t, []string{"On app web?evil (rack eu): set env var DATABASE_URL"}, set.Summary)
 	require.Equal(t, "set env vars, protected ones included, on app web?evil (rack eu)", set.Touch)
 }
 
@@ -212,9 +212,24 @@ func TestAllowProtectedShowsWhatItChangesBeforeMFA(t *testing.T) {
 	args := []string{"DATABASE_URL=postgres://new-host/db", "PORT=3000"}
 
 	require.NoError(t, runEnvChange(cmd, args, "env set", envSetKeys(args), listApps))
-	require.Contains(t, stderr.String(), "Set env var DATABASE_URL on app myapp (rack us)\n")
-	require.Contains(t, stderr.String(), "Set env var PORT on app myapp (rack us)\n")
+	require.Contains(t, stderr.String(), "On app myapp (rack us): set env var DATABASE_URL\n")
+	require.Contains(t, stderr.String(), "On app myapp (rack us): set env var PORT\n")
 	require.NotContains(t, stderr.String(), "new-host", "values are never shown")
+}
+
+// Keys are shown to the person approving the change, so one that isn't an env var name is refused before MFA:
+// "DATABASE_URL on app staging-web (rack staging)" would make the PIN dialog name another app. convox env unset
+// accepts any string as a key.
+func TestAllowProtectedRefusesKeysThatArentEnvVarNames(t *testing.T) {
+	gateway := newEnvChangeGateway(t)
+	MFACodeFlag = "123456"
+	cmd := envChangeCommand(t, envUnsetCommand(), true)
+	cmd.SetErr(io.Discard)
+	args := []string{"DATABASE_URL on app staging-web (rack staging)", "DATABASE_URL"}
+
+	err := runEnvChange(cmd, args, "env unset", args, listApps)
+	require.ErrorContains(t, err, `invalid env var name "DATABASE_URL on app staging-web (rack staging)"`)
+	require.Empty(t, gateway.requests())
 }
 
 func TestAllowProtectedWithoutTerminalNeedsExplicitApp(t *testing.T) {

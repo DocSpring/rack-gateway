@@ -212,11 +212,13 @@ The login times out after 10 minutes. A gateway upgrade to this flow needs a mat
 
 ### Protected env vars (`env set` / `env unset --allow-protected`)
 
-`convox_env_protected.go` always collects MFA, and describes the change before it: one line per key (`Set protected
-env var DATABASE_URL on app prod-web (rack us)`) on stderr and in the PIN dialog summary, and the app and rack in the
-touch prompt and notification. Values are never shown. Without a terminal it needs an explicit `--app`, so the
-command line in the PIN dialog names the app. The dialog quotes any argument with whitespace, quotes, backslashes
-or unprintable characters (`pinentry.quoteArg`), so `"X --app staging-web"` can't pass for a key and a flag.
+`convox_env_protected.go` always collects MFA, and describes the change before it: one line per key, starting with
+the target (`On app prod-web (rack us): set env var DATABASE_URL`), on stderr and in the PIN dialog summary, and the
+app and rack in the touch prompt and notification. Values are never shown. Keys that aren't env var names are
+refused before MFA, so a key can't make the dialog name another app. Without a terminal it needs an explicit
+`--app`, so the command line in the PIN dialog names the app. The dialog quotes any argument with whitespace,
+quotes, backslashes or anything outside printable ASCII, escaping non-ASCII characters (`pinentry.quoteArg`), so
+`"X --app staging-web"` can't pass for a key and a flag.
 
 ### Terminal output from the gateway
 

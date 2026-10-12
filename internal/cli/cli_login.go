@@ -172,14 +172,37 @@ func normalizeLoginArgs(args []string) (string, string) {
 	return rack, gatewayURL
 }
 
+// resolveLoginGatewayURL returns the gateway to log in to for a rack named without a URL. RACK_GATEWAY_URL supplies
+// one for a rack that has none yet. A configured rack keeps its gateway (`rack-gateway login <rack> <url>` changes
+// it), so an environment variable can't quietly repoint a rack to another host.
 func resolveLoginGatewayURL(rack string) (string, error) {
-	if gatewayURL := strings.TrimSpace(os.Getenv("RACK_GATEWAY_URL")); gatewayURL != "" {
-		if err := SaveGatewayConfig(rack, gatewayURL); err != nil {
+	envURL := strings.TrimSpace(os.Getenv("RACK_GATEWAY_URL"))
+	configuredURL, err := LoadGatewayURL(rack)
+	switch {
+	case envURL == "":
+		return configuredURL, err
+	case err != nil:
+		if err := SaveGatewayConfig(rack, envURL); err != nil {
 			return "", fmt.Errorf("failed to save gateway config: %w", err)
 		}
-		return gatewayURL, nil
+		return envURL, nil
 	}
-	return LoadGatewayURL(rack)
+	envNormalized, err := NormalizeGatewayURL(envURL)
+	if err != nil {
+		return "", err
+	}
+	configuredNormalized, err := NormalizeGatewayURL(configuredURL)
+	if err != nil {
+		return "", err
+	}
+	if envNormalized != configuredNormalized {
+		return "", fmt.Errorf(
+			"RACK_GATEWAY_URL (%s) is not the gateway of rack %s (%s); unset it, or run "+
+				"rack-gateway login %s <gateway-url> to change the rack's gateway",
+			envNormalized, rack, configuredNormalized, rack,
+		)
+	}
+	return configuredURL, nil
 }
 
 // writeAuthFile records the login URL for automation (e.g. E2E tests drive the browser step).
