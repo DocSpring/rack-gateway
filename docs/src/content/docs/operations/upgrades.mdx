@@ -391,6 +391,11 @@ Check these before upgrading:
   never matched anything) makes that app's env count as all secret and protected. Its env pages return 500 until
   you fix the list under **Apps → `{app}` → Settings**. A stored `service_image_patterns` value that isn't an object
   of valid patterns refuses the app's builds.
+- **Promotes are checked against image patterns:** for an app with `service_image_patterns`, a promote now loads
+  the release's manifest with the release's env, as the rack does, and is refused (403) if an init container image
+  doesn't match the patterns, with `{{GIT_COMMIT}}` as the commit the release was built from, or a resource sets
+  its own `image`. Check this before rolling back to an older release. See
+  [Promotes are checked too](/integrations/deploy-approvals/workflow/#promotes-are-checked-too).
 
 ### Deploy approvals bound to commits (v0.1.3)
 
