@@ -160,6 +160,35 @@ func TestTokenBuildRejectsServicesBuiltFromSource(t *testing.T) {
 	require.ErrorContains(t, err, "must use a pre-built image")
 }
 
+// An init container runs with its service's environment, so in an approval-bound build its image is held to the
+// same rules as the service's: tagged with the approved commit and matching the pattern.
+func TestTokenBuildChecksInitContainerImages(t *testing.T) {
+	f := newBindingFixture(t)
+	image := "docker.io/docspringcom/app:" + approvedCommit
+	withInit := func(initImage string) string {
+		return "services:\n  web:\n    image: " + image + "\n    initContainer:\n      image: " + initImage + "\n"
+	}
+
+	f.manifest = withInit("docker.io/docspringcom/app:" + otherCommit)
+	err := f.build(t, "url="+approvedObjectURL)
+	require.ErrorContains(t, err, "service web init container image")
+	require.ErrorContains(t, err, "not tagged with the approved commit")
+
+	f.manifest = withInit("ghcr.io/attacker/payload:" + approvedCommit)
+	require.ErrorContains(t, f.build(t, "url="+approvedObjectURL), "does not match required pattern")
+
+	f.manifest = withInit(image)
+	require.NoError(t, f.build(t, "url="+approvedObjectURL))
+}
+
+// A resource's image override isn't an image the gateway checks, so it's refused.
+func TestTokenBuildRejectsResourceImageOverride(t *testing.T) {
+	f := newBindingFixture(t)
+	f.manifest = imageManifest("docker.io/docspringcom/app:"+approvedCommit) +
+		"resources:\n  db:\n    type: postgres\n    image: ghcr.io/attacker/postgres\n"
+	require.ErrorContains(t, f.build(t, "url="+approvedObjectURL), "resource db overrides its image")
+}
+
 func TestTokenBuildRejectsObjectNotUploadedUnderApproval(t *testing.T) {
 	f := newBindingFixture(t)
 	f.manifest = imageManifest("docker.io/docspringcom/app:" + approvedCommit)
