@@ -127,11 +127,21 @@ func waitForDatabaseReady(t *testing.T, dsn string) {
 	t.Fatal("database did not become ready in time")
 }
 
+// testPoolConfig is the connection pool of each test database.
+var testPoolConfig = db.PoolConfig{
+	MaxOpenConns:    4,
+	MaxIdleConns:    1,
+	ConnMaxLifetime: 5 * time.Minute,
+	ConnMaxIdleTime: time.Minute,
+}
+
 func connectAppDatabase(t *testing.T, dsn string) *db.Database {
 	t.Helper()
 
-	// The database is a copy of the migrated template, so there's nothing to migrate.
-	app, err := db.NewWithPoolConfigAndMigration(dsn, nil, false)
+	// The database is a copy of the migrated template, so there's nothing to migrate. Tests get a small pool rather
+	// than the production defaults: packages run in parallel, each with many databases on one shared Postgres, and
+	// pgx opens its idle connections up front.
+	app, err := db.NewWithPoolConfigAndMigration(dsn, &testPoolConfig, false)
 	if err != nil {
 		t.Fatalf("open app db: %v", err)
 	}

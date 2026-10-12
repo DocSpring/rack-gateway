@@ -1,9 +1,13 @@
 package db_test
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/base64"
+	"fmt"
+	"log"
+	"os"
 	"testing"
 	"time"
 
@@ -219,7 +223,7 @@ func TestUpgradePlaintextColumns(t *testing.T) {
 
 	upgraded, err := database.UpgradePlaintextColumns(context.Background())
 	require.NoError(t, err)
-	require.Equal(t, gwdb.ColumnUpgradeCounts{Encrypted: 3, OtherKey: 1}, upgraded[mfaColumn])
+	require.Equal(t, gwdb.ColumnUpgradeCounts{Encrypted: 3, OtherKey: 1, CurrentKey: 1}, upgraded[mfaColumn])
 	require.Equal(t, gwdb.ColumnUpgradeCounts{Encrypted: 1}, upgraded[slackColumn])
 
 	for id, plaintext := range legacy {
@@ -251,9 +255,34 @@ func TestUpgradePlaintextColumns(t *testing.T) {
 	// A second run finds nothing left to do.
 	again, err := database.UpgradePlaintextColumns(context.Background())
 	require.NoError(t, err)
-	require.Equal(t, gwdb.ColumnUpgradeCounts{OtherKey: 1}, again[mfaColumn])
-	require.Equal(t, gwdb.ColumnUpgradeCounts{}, again[slackColumn])
+	require.Equal(t, gwdb.ColumnUpgradeCounts{OtherKey: 1, CurrentKey: 4}, again[mfaColumn])
+	require.Equal(t, gwdb.ColumnUpgradeCounts{CurrentKey: 1}, again[slackColumn])
 	require.Equal(t, slackStored, storedBotToken(t, database))
+}
+
+// The sweep encrypts any plaintext it finds, including a seed someone planted in the database after the upgrade,
+// so it logs whose value each row it encrypts holds (never the value).
+func TestUpgradePlaintextColumnsLogsEachEncryptedRow(t *testing.T) {
+	database := dbtest.NewDatabase(t)
+	alice, err := database.CreateUser("alice@example.com", "Alice", []string{"admin"})
+	require.NoError(t, err)
+	planted := insertRawMFAMethod(t, database, alice.ID, "totp", testSeed)
+	insertRawSlackIntegration(t, database, base64.StdEncoding.EncodeToString([]byte(fakeSlackBot)))
+	var logs bytes.Buffer
+	log.SetOutput(&logs)
+	t.Cleanup(func() { log.SetOutput(os.Stderr) })
+
+	_, err = database.UpgradePlaintextColumns(context.Background())
+	require.NoError(t, err)
+
+	out := logs.String()
+	require.Contains(t, out, fmt.Sprintf(
+		"[WARN] Column encryption: encrypted a plaintext %s value: row %d (user %d, totp method)",
+		mfaColumn, planted, alice.ID))
+	require.Contains(t, out, "[WARN] Column encryption: encrypted a plaintext "+slackColumn+" value: row ")
+	require.Contains(t, out, "(Slack workspace T123)")
+	require.NotContains(t, out, testSeed)
+	require.NotContains(t, out, fakeSlackBot)
 }
 
 func TestUpgradePlaintextColumnsLeavesUndecodableSlackToken(t *testing.T) {

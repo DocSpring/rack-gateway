@@ -30,7 +30,14 @@ var firstHour = time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
 // writeAnchor runs the real anchor writer for the hour of at. S3 stores the anchor a second after at.
 func writeAnchor(t *testing.T, database *gwdb.Database, bucket *fakes3.Bucket, at time.Time) {
 	t.Helper()
-	bucket.AdvanceTo(at)
+	writeAnchorStoredAt(t, database, bucket, at, at)
+}
+
+// writeAnchorStoredAt runs the real anchor writer for a job created at at, while S3's clock reads stored. S3
+// stores the anchor a second after stored.
+func writeAnchorStoredAt(t *testing.T, database *gwdb.Database, bucket *fakes3.Bucket, at, stored time.Time) {
+	t.Helper()
+	bucket.AdvanceTo(stored)
 	worker := jobaudit.NewAnchorWriterWorker(database, bucket, testBucket, testChainID, 7)
 	job := &river.Job[jobaudit.AnchorWriterArgs]{JobRow: &rivertype.JobRow{CreatedAt: at}}
 	require.NoError(t, worker.Work(context.Background(), job))
@@ -39,11 +46,17 @@ func writeAnchor(t *testing.T, database *gwdb.Database, bucket *fakes3.Bucket, a
 // putAnchor stores an anchor for the hour of ts, written at ts, and returns its body.
 func putAnchor(t *testing.T, bucket *fakes3.Bucket, payload jobaudit.AnchorPayload, ts time.Time) []byte {
 	t.Helper()
+	return putAnchorAt(t, bucket, payload, ts, ts)
+}
+
+// putAnchorAt stores an anchor for the hour of ts that S3 stored at written, and returns its body.
+func putAnchorAt(t *testing.T, bucket *fakes3.Bucket, payload jobaudit.AnchorPayload, ts, written time.Time) []byte {
+	t.Helper()
 	payload.ChainID = testChainID
 	payload.TimestampUTC = ts.Format(time.RFC3339)
 	body, err := json.Marshal(payload)
 	require.NoError(t, err)
-	bucket.PutAt(jobaudit.AnchorKey(testChainID, ts), body, ts)
+	bucket.PutAt(jobaudit.AnchorKey(testChainID, ts), body, written)
 	return body
 }
 

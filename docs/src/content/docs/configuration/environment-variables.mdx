@@ -54,8 +54,8 @@ against a database, it marks the database as `production`, or `development` in a
 `COLUMN_ENCRYPTION_KEY` encrypts the secrets the gateway stores in its database: TOTP seeds and YubiKey
 public IDs (`mfa_methods.secret`) and the Slack bot token. Values are encrypted with AES-256-GCM and bound
 to where they belong (the user and MFA method type, or the Slack workspace), so a value copied to another
-user's row, or to a method of another type, can't be decrypted there, and a plaintext value written straight
-into the database is never accepted.
+user's row, or to a method of another type, can't be decrypted there. A plaintext value is never used as it is,
+but the upgrade sweep encrypts any it finds (see **Existing data is upgraded at startup** below).
 
 - **Generate it once** with `openssl rand -base64 32` and store it with your other secrets. Use a
   different key per environment. It is separate from `APP_SECRET_KEY`, so rotating the session secret
@@ -72,10 +72,14 @@ into the database is never accepted.
   automatic account lock.
   Slack must be reconnected. The gateway logs (and reports to Sentry, if configured) every value it fails
   to decrypt when it tries to use it.
-- **Existing data is upgraded at startup.** Secrets stored by releases before column encryption (plaintext
-  TOTP seeds, base64 Slack tokens) are encrypted the first time the new release starts, before it serves
+- **Existing data is upgraded at startup.** Secrets stored by releases before column encryption (before
+  v0.1.7: plaintext TOTP seeds, base64 Slack tokens) are encrypted when the server starts, before it serves
   requests, and once more 10 minutes later, in case the previous release stored more during the rollout. The
-  upgrade is safe to repeat and logs only counts.
+  sweep runs on every start and is safe to repeat. It logs a warning naming each row it encrypts (the user
+  and MFA method type, or the Slack workspace, never the value). It will be removed in a later release; until then it encrypts any
+  plaintext value it finds, so someone who can write to the database could plant a TOTP seed they know and
+  have it encrypted. After the upgrade nothing else stores plaintext, so the sweep 10 minutes after startup
+  encrypting anything is reported to Sentry, if configured, and logged as an error.
 - **Rotation isn't supported yet.** Every encrypted value records which key encrypted it, so rotation can
   be added later without changing the stored format.
 
@@ -124,10 +128,12 @@ into the database is never accepted.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `DB_MAX_OPEN_CONNS` | `25` | Max open connections |
-| `DB_MAX_IDLE_CONNS` | `5` | Max idle connections |
+| `DB_MAX_OPEN_CONNS` | `10` | Max open connections per pool. Each process has two pools, so it can open twice this many |
+| `DB_MAX_IDLE_CONNS` | `3` | Max idle connections per pool (the job queue's pool keeps this many open) |
 | `DB_CONN_MAX_LIFETIME` | `30m` | Connection lifetime |
 | `DB_CONN_MAX_IDLE_TIME` | `10m` | Idle timeout |
+
+See [Connection Pool](/deployment/database-setup/#connection-pool) for sizing.
 
 ### Testing
 
