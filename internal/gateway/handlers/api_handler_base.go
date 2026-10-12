@@ -16,7 +16,6 @@ type APIHandler struct {
 	database        *db.Database
 	config          *config.Config
 	rackCertManager *rackcert.Manager
-	mfaSettings     *db.MFASettings
 	auditLogger     *audit.Logger
 	settingsService *settings.Service
 	slackNotifier   SlackNotifier
@@ -34,7 +33,6 @@ func NewAPIHandler(
 	database *db.Database,
 	cfg *config.Config,
 	rackCertManager *rackcert.Manager,
-	mfaSettings *db.MFASettings,
 	auditLogger *audit.Logger,
 	settingsService *settings.Service,
 	slackNotifier SlackNotifier,
@@ -45,7 +43,6 @@ func NewAPIHandler(
 		database:        database,
 		config:          cfg,
 		rackCertManager: rackCertManager,
-		mfaSettings:     mfaSettings,
 		auditLogger:     auditLogger,
 		settingsService: settingsService,
 		slackNotifier:   slackNotifier,

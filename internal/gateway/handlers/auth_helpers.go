@@ -228,24 +228,20 @@ func (h *AuthHandler) clearTrustedDeviceCookie(c *gin.Context) {
 	c.SetSameSite(http.SameSiteDefaultMode)
 }
 
+func (h *AuthHandler) mfaSettings() *db.MFASettings {
+	return mfaSettingsNow(h.settingsService)
+}
+
 func (h *AuthHandler) isMFARequired(user *db.User) bool {
-	return isMFAChallengeRequired(h.mfaSettings, user)
+	return db.IsMFAChallengeRequired(h.mfaSettings(), user)
 }
 
 func (h *AuthHandler) stepUpWindow() time.Duration {
-	window := 10 * time.Minute
-	if h.mfaSettings != nil && h.mfaSettings.StepUpWindowMinutes > 0 {
-		window = time.Duration(h.mfaSettings.StepUpWindowMinutes) * time.Minute
-	}
-	return window
+	return h.mfaSettings().StepUpWindow()
 }
 
 func (h *AuthHandler) trustedDeviceMaxAge() int {
-	ttl := 30 * 24 * time.Hour
-	if h.mfaSettings != nil && h.mfaSettings.TrustedDeviceTTLDays > 0 {
-		ttl = time.Duration(h.mfaSettings.TrustedDeviceTTLDays) * 24 * time.Hour
-	}
-	return int(ttl.Seconds())
+	return int(h.mfaSettings().TrustedDeviceTTL().Seconds())
 }
 
 func makeMFAMethodResponse(method *db.MFAMethod) MFAMethodResponse {

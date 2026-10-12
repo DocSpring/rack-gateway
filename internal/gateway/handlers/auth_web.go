@@ -23,7 +23,7 @@ func (h *AuthHandler) handleMFARedirect(
 	session *db.UserSession,
 	redirectURL string,
 ) bool {
-	enforceMFA := shouldEnforceMFA(h.mfaSettings, userRecord)
+	enforceMFA := db.ShouldEnforceMFA(h.mfaSettings(), userRecord)
 	if !enforceMFA {
 		return false
 	}

@@ -27,7 +27,6 @@ type Gateway struct {
 	AuthService      *auth.Service
 	TokenService     *token.Service
 	MFAService       *mfa.Service
-	MFASettings      *db.MFASettings
 	SettingsService  *settings.Service
 	EmailSender      email.Sender
 	ProxyHandler     *proxy.Handler

@@ -89,7 +89,7 @@ func TestUndecryptableTOTPMethodDoesNotBlockOtherMethods(t *testing.T) {
 
 	database := dbtest.NewDatabase(t)
 	svc, err := NewService(
-		database, "Test", 24*time.Hour, 10*time.Minute, []byte("test-pepper"),
+		database, "Test", nil, []byte("test-pepper"),
 		"", "", "localhost", "http://localhost", nil,
 	)
 	if err != nil {
@@ -200,7 +200,7 @@ func TestUnusableTOTPAttemptsDoNotLockTheAccount(t *testing.T) {
 
 	database := dbtest.NewDatabase(t)
 	svc, err := NewService(
-		database, "Test", 24*time.Hour, 10*time.Minute, []byte("test-pepper"),
+		database, "Test", nil, []byte("test-pepper"),
 		"", "", "localhost", "http://localhost", nil,
 	)
 	if err != nil {

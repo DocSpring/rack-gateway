@@ -16,6 +16,7 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth/mfa"
 	"github.com/DocSpring/rack-gateway/internal/gateway/config"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
+	"github.com/DocSpring/rack-gateway/internal/gateway/settings"
 	"github.com/DocSpring/rack-gateway/internal/gateway/testutil/dbtest"
 )
 
@@ -101,8 +102,7 @@ func TestHandlePostLoginMFAClearsStaleTrustedDevice(t *testing.T) {
 	mfaService, err := mfa.NewService(
 		database,
 		"Rack Gateway",
-		30*time.Minute,
-		10*time.Minute,
+		nil,
 		pepper,
 		"",
 		"",
@@ -114,10 +114,10 @@ func TestHandlePostLoginMFAClearsStaleTrustedDevice(t *testing.T) {
 		t.Fatalf("failed to init mfa service: %v", err)
 	}
 
-	settings := &db.MFASettings{RequireAllUsers: true}
 	cfg := &config.Config{DevMode: true}
 	auditLogger := audit.NewLogger(database)
-	handler := NewAuthHandler(oauth, database, cfg, sessionManager, mfaService, settings, nil, auditLogger)
+	handler := NewAuthHandler(oauth, database, cfg, sessionManager, mfaService,
+		settings.NewService(database), nil, auditLogger)
 
 	c, w := newTestContext(http.MethodGet, "/api/v1/auth/web/callback")
 	c.Request.AddCookie(testCookie(trustedDeviceCookie, "stale-token"))
@@ -401,14 +401,14 @@ func createTestSession(t *testing.T, database *db.Database, user *db.User) strin
 func createTestAuthHandler(database *db.Database, oauth *fakeOAuth) *AuthHandler {
 	pepper := []byte("mfa-pepper-for-tests")
 	mfaService, _ := mfa.NewService(
-		database, "Rack Gateway", 30*time.Minute, 10*time.Minute, pepper,
+		database, "Rack Gateway", nil, pepper,
 		"", "", "", "", nil,
 	)
-	settings := &db.MFASettings{RequireAllUsers: true}
 	cfg := &config.Config{DevMode: true}
 	auditLogger := audit.NewLogger(database)
 	sessionManager := auth.NewSessionManager(database, "test-secret", &auth.StaticTTLProvider{TTL: time.Hour})
-	return NewAuthHandler(oauth, database, cfg, sessionManager, mfaService, settings, nil, auditLogger)
+	return NewAuthHandler(oauth, database, cfg, sessionManager, mfaService,
+		settings.NewService(database), nil, auditLogger)
 }
 
 func setupDeleteMFARequest(

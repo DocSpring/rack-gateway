@@ -17,7 +17,11 @@ import (
 
 // EnforceMFARequirements applies MFA policy based on the canonical HTTP route permissions map.
 // It must run after authentication so the authenticated user is available on the context.
-func EnforceMFARequirements(mfaService MFAVerifier, database *db.Database, settings *db.MFASettings) gin.HandlerFunc {
+func EnforceMFARequirements(
+	mfaService MFAVerifier,
+	database *db.Database,
+	settings db.MFASettingsSource,
+) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		pattern := c.FullPath()
 		if pattern == "" {
@@ -53,7 +57,7 @@ func enforceMFALevel(
 	level rbac.MFALevel,
 	mfaService MFAVerifier,
 	database *db.Database,
-	settings *db.MFASettings,
+	settings db.MFASettingsSource,
 ) {
 	switch level {
 	case rbac.MFANone:
@@ -67,7 +71,7 @@ func enforceMFALevel(
 	}
 }
 
-func enforceStepUpMFA(c *gin.Context, mfaService MFAVerifier, database *db.Database, settings *db.MFASettings) {
+func enforceStepUpMFA(c *gin.Context, mfaService MFAVerifier, database *db.Database, settings db.MFASettingsSource) {
 	if checkStepUpMFA(c, mfaService, database, settings) {
 		c.Next()
 	}
@@ -105,7 +109,7 @@ func handleUnknownMFALevel(c *gin.Context, level rbac.MFALevel) {
 }
 
 // checkStepUpMFA verifies the user has recently completed step-up MFA.
-func checkStepUpMFA(c *gin.Context, mfaService MFAVerifier, database *db.Database, settings *db.MFASettings) bool {
+func checkStepUpMFA(c *gin.Context, mfaService MFAVerifier, database *db.Database, source db.MFASettingsSource) bool {
 	authUser, ok := auth.GetAuthUser(c.Request.Context())
 	if !ok || authUser == nil {
 		gtwlog.DebugTopicf(
@@ -136,6 +140,10 @@ func checkStepUpMFA(c *gin.Context, mfaService MFAVerifier, database *db.Databas
 		return false
 	}
 
+	settings, ok := currentMFASettings(c, source)
+	if !ok {
+		return false
+	}
 	if checkRecentStepUp(authUser, settings) {
 		return true
 	}
@@ -185,7 +193,7 @@ func getUserRecord(c *gin.Context, database *db.Database, email string) *db.User
 
 func checkRecentStepUp(authUser *auth.User, settings *db.MFASettings) bool {
 	session := authUser.Session
-	window := stepUpWindow(settings)
+	window := settings.StepUpWindow()
 	if recent := session.RecentStepUpAt; recent != nil && time.Since(*recent) <= window {
 		gtwlog.DebugTopicf(
 			gtwlog.TopicMFAStepUp,
@@ -339,13 +347,6 @@ func updateStepUpAfterSuccess(c *gin.Context, database *db.Database, authUser *a
 	}
 	authUser.Session.RecentStepUpAt = &now
 	return true
-}
-
-func stepUpWindow(settings *db.MFASettings) time.Duration {
-	if settings != nil && settings.StepUpWindowMinutes > 0 {
-		return time.Duration(settings.StepUpWindowMinutes) * time.Minute
-	}
-	return 10 * time.Minute
 }
 
 // denyStepUp sends a step-up MFA required response.

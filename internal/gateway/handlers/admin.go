@@ -23,7 +23,6 @@ type AdminHandler struct {
 	config          *config.Config
 	rackCertMgr     *rackcert.Manager
 	sessions        *auth.SessionManager
-	mfaSettings     *db.MFASettings
 	auditLogger     *audit.Logger
 	settingsService *settings.Service
 	jobsClient      *jobs.Client
@@ -38,7 +37,6 @@ func NewAdminHandler(
 	cfg *config.Config,
 	rackCertMgr *rackcert.Manager,
 	sessions *auth.SessionManager,
-	mfaSettings *db.MFASettings,
 	auditLogger *audit.Logger,
 	settingsService *settings.Service,
 	jobsClient *jobs.Client,
@@ -51,7 +49,6 @@ func NewAdminHandler(
 		config:          cfg,
 		rackCertMgr:     rackCertMgr,
 		sessions:        sessions,
-		mfaSettings:     mfaSettings,
 		auditLogger:     auditLogger,
 		settingsService: settingsService,
 		jobsClient:      jobsClient,

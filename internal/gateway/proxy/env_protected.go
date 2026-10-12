@@ -129,32 +129,25 @@ func (h *Handler) checkProtectedChangeCaller(r *http.Request, named string) erro
 }
 
 // verifyProtectedChangeMFA requires MFA verified on this request, even when the session's step-up window is
-// still open. verifyMFAIfRequired skips the inline proof while that window is open, so the proof is verified
-// here instead, at most once per request: TOTP codes and WebAuthn challenges are single-use. Verifying it
-// refreshes the step-up window, which covers the rest of the command (e.g. the promote after --promote).
+// still open: a step-up doesn't cover a protected env change. The proof is verified at most once per request, and
+// verifying it refreshes the step-up window, which covers the rest of the command (e.g. the promote after
+// --promote).
 func (h *Handler) verifyProtectedChangeMFA(r *http.Request, authUser *auth.User, named string) error {
-	if inlineMFAVerified(r) {
+	err := h.verifyRequestMFA(r, authUser)
+	switch {
+	case err == nil:
 		return nil
-	}
-	if authUser.MFAType == "" || authUser.MFAValue == "" {
+	case errors.Is(err, errNoMFAProof):
 		return &protectedEnvMFAError{
 			message: "Multi-factor authentication is required to change protected env vars: " + named,
 		}
-	}
-	if h.mfaService == nil || h.database == nil {
+	case errors.Is(err, errMFAUnavailable):
+		gtwlog.Warnf("proxy: MFA verification for a protected env change is unavailable: %v", err)
 		return &protectedEnvMFAError{message: "MFA verification is unavailable, so protected env vars can't change"}
-	}
-	userRecord, err := h.database.GetUser(authUser.Email)
-	if err == nil {
-		err = h.verifyMFAByType(r, authUser, userRecord)
-	}
-	if err != nil {
+	default:
 		gtwlog.Warnf("proxy: MFA verification for a protected env change failed: %v", err)
 		return &protectedEnvMFAError{message: "MFA verification failed, so protected env vars can't change: " + named}
 	}
-	h.updateSessionStepUp(authUser)
-	markInlineMFAVerified(r)
-	return nil
 }
 
 // auditProtectedRefusal records a refused protected env change, one entry per key. Values are never logged.

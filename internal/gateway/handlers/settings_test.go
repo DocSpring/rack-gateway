@@ -33,7 +33,7 @@ type settingsTestEnv struct {
 	rbac           rbac.Manager
 	sessionManager *auth.SessionManager
 	mfaService     *mfa.Service
-	mfaSettings    *db.MFASettings
+	mfaSettings    *settings.Service
 	admin          *db.User
 	totpKey        *otp.Key
 }
@@ -42,7 +42,7 @@ func newSettingsTestEnv(t *testing.T) *settingsTestEnv {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 
-	database, settingsService, sessionManager, mfaService, mfaSettings := setupSettingsServices(t)
+	database, settingsService, sessionManager, mfaService := setupSettingsServices(t)
 
 	mgr, err := rbac.NewDBManager(database, "example.com")
 	require.NoError(t, err)
@@ -69,7 +69,7 @@ func newSettingsTestEnv(t *testing.T) *settingsTestEnv {
 		rbac:           mgr,
 		sessionManager: sessionManager,
 		mfaService:     mfaService,
-		mfaSettings:    mfaSettings,
+		mfaSettings:    settingsService,
 		admin:          admin,
 		totpKey:        key,
 	}
@@ -158,7 +158,7 @@ func (e *settingsTestEnv) performSettingsRequest(
 
 func setupSettingsServices(
 	t *testing.T,
-) (*db.Database, *settings.Service, *auth.SessionManager, *mfa.Service, *db.MFASettings) {
+) (*db.Database, *settings.Service, *auth.SessionManager, *mfa.Service) {
 	t.Helper()
 
 	database := dbtest.NewDatabase(t)
@@ -166,12 +166,10 @@ func setupSettingsServices(
 	settingsService := settings.NewService(database)
 	sessionManager := auth.NewSessionManager(database, "test-secret", &auth.StaticTTLProvider{TTL: time.Hour})
 	pepper := []byte("test-pepper")
-	mfaService, err := mfa.NewService(database, "Test", 24*time.Hour, 10*time.Minute, pepper, "", "", "", "", nil)
-	require.NoError(t, err)
-	mfaSettings, err := settingsService.GetMFASettings()
+	mfaService, err := mfa.NewService(database, "Test", nil, pepper, "", "", "", "", nil)
 	require.NoError(t, err)
 
-	return database, settingsService, sessionManager, mfaService, mfaSettings
+	return database, settingsService, sessionManager, mfaService
 }
 
 func setupSettingsHandler(t *testing.T) (*SettingsHandler, *db.Database, rbac.Manager) {
@@ -227,7 +225,7 @@ func setupRouterWithMFAMiddleware(
 	authUser *auth.User,
 	mfaService middleware.MFAVerifier,
 	database *db.Database,
-	mfaSettings *db.MFASettings,
+	mfaSettings db.MFASettingsSource,
 	handler gin.HandlerFunc,
 	params gin.Params,
 ) *gin.Engine {

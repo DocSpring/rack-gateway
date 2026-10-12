@@ -23,8 +23,7 @@ func TestMockCredentialGeneratesValidAssertion(t *testing.T) {
 	service, err := NewService(
 		database,
 		"Test Gateway",
-		24*time.Hour,
-		10*time.Minute,
+		nil,
 		pepper,
 		"",
 		"",
@@ -99,8 +98,7 @@ func TestWebAuthnEnrollment_Success(t *testing.T) {
 	service, err := NewService(
 		database,
 		"Test Gateway",
-		24*time.Hour,
-		10*time.Minute,
+		nil,
 		pepper,
 		"",
 		"",
@@ -159,8 +157,7 @@ func TestWebAuthnEnrollment_NotConfigured(t *testing.T) {
 	serviceWithoutWebAuthn, _ := NewService(
 		database,
 		"Test",
-		24*time.Hour,
-		10*time.Minute,
+		nil,
 		pepper,
 		"",
 		"",
@@ -186,8 +183,7 @@ func TestWebAuthnEnrollment_CleanupUnconfirmed(t *testing.T) {
 	service, err := NewService(
 		database,
 		"Test Gateway",
-		24*time.Hour,
-		10*time.Minute,
+		nil,
 		pepper,
 		"",
 		"",
@@ -355,7 +351,7 @@ func TestEnsureBackupCodes_GeneratesOnce(t *testing.T) {
 
 	database := dbtest.NewDatabase(t)
 	pepper := []byte("test-pepper")
-	service, _ := NewService(database, "Test", 24*time.Hour, 10*time.Minute, pepper, "", "", "", "", nil)
+	service, _ := NewService(database, "Test", nil, pepper, "", "", "", "", nil)
 	user, _ := database.CreateUser("helper@example.com", "Helper Test", []string{"ops"})
 
 	// First call should generate codes
@@ -382,7 +378,7 @@ func TestFinalizeEnrollment(t *testing.T) {
 
 	database := dbtest.NewDatabase(t)
 	pepper := []byte("test-pepper")
-	service, _ := NewService(database, "Test", 24*time.Hour, 10*time.Minute, pepper, "", "", "", "", nil)
+	service, _ := NewService(database, "Test", nil, pepper, "", "", "", "", nil)
 	user, _ := database.CreateUser("finalize@example.com", "Finalize Test", []string{"ops"})
 
 	method, _ := database.CreateMFAMethod(user.ID, "totp", "Test", "secret", nil, nil, nil, nil)
@@ -443,7 +439,7 @@ func TestPrepareEnrollment_DeletesUnconfirmed(t *testing.T) {
 
 	database := dbtest.NewDatabase(t)
 	pepper := []byte("test-pepper")
-	service, _ := NewService(database, "Test", 24*time.Hour, 10*time.Minute, pepper, "", "", "", "", nil)
+	service, _ := NewService(database, "Test", nil, pepper, "", "", "", "", nil)
 
 	testUser, err := database.CreateUser("prepare-test@example.com", "Prepare Test", []string{"ops"})
 	if err != nil {
@@ -494,7 +490,7 @@ func TestCheckDuplicateYubikey_DetectsDuplicates(t *testing.T) {
 
 	database := dbtest.NewDatabase(t)
 	pepper := []byte("test-pepper")
-	service, _ := NewService(database, "Test", 24*time.Hour, 10*time.Minute, pepper, "", "", "", "", nil)
+	service, _ := NewService(database, "Test", nil, pepper, "", "", "", "", nil)
 
 	testUser, err := database.CreateUser("yubikey-dup-test@example.com", "Yubikey Dup Test", []string{"ops"})
 	if err != nil {
@@ -520,7 +516,7 @@ func TestCheckDuplicateYubikey_AllowsDifferent(t *testing.T) {
 
 	database := dbtest.NewDatabase(t)
 	pepper := []byte("test-pepper")
-	service, _ := NewService(database, "Test", 24*time.Hour, 10*time.Minute, pepper, "", "", "", "", nil)
+	service, _ := NewService(database, "Test", nil, pepper, "", "", "", "", nil)
 
 	testUser, _ := database.CreateUser("yubikey-diff-test@example.com", "Yubikey Diff Test", []string{"ops"})
 
@@ -540,7 +536,7 @@ func TestTimeFunction(t *testing.T) {
 	database := dbtest.NewDatabase(t)
 
 	pepper := []byte("test-pepper")
-	service, _ := NewService(database, "Test", 24*time.Hour, 10*time.Minute, pepper, "", "", "", "", nil)
+	service, _ := NewService(database, "Test", nil, pepper, "", "", "", "", nil)
 
 	t.Run("uses real time by default", func(t *testing.T) {
 		now := service.now()

@@ -22,6 +22,7 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth/mfa"
 	"github.com/DocSpring/rack-gateway/internal/gateway/config"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
+	"github.com/DocSpring/rack-gateway/internal/gateway/settings"
 	"github.com/DocSpring/rack-gateway/internal/gateway/testutil/dbtest"
 )
 
@@ -70,12 +71,14 @@ func newLoopbackEnv(t *testing.T, requireMFA bool) *loopbackEnv {
 	require.NoError(t, err)
 
 	sessions := auth.NewSessionManager(database, "test-secret", &auth.StaticTTLProvider{TTL: time.Hour})
-	mfaService, err := mfa.NewService(database, "Rack Gateway", 30*time.Minute, 10*time.Minute,
+	mfaService, err := mfa.NewService(database, "Rack Gateway", nil,
 		[]byte("pepper"), "", "", "", "", nil)
 	require.NoError(t, err)
+	settingsService := settings.NewService(database)
+	require.NoError(t, settingsService.SetMFASettings(&db.MFASettings{RequireAllUsers: requireMFA}, nil))
 	oauth := &loopbackOAuth{email: "user@example.com"}
 	handler := NewAuthHandler(oauth, database, &config.Config{DevMode: true}, sessions, mfaService,
-		&db.MFASettings{RequireAllUsers: requireMFA}, nil, audit.NewLogger(database))
+		settingsService, nil, audit.NewLogger(database))
 
 	router := gin.New()
 	router.POST("/api/v1/auth/cli/start", handler.CLILoginStart)

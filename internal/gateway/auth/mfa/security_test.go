@@ -131,7 +131,7 @@ func setupMFAService(t *testing.T, email, name string) (*Service, *db.Database, 
 func mustNewService(t *testing.T, database *db.Database) *Service {
 	t.Helper()
 
-	svc, err := NewService(database, "Test", 24*time.Hour, 10*time.Minute, []byte("test-pepper"), "", "", "", "", nil)
+	svc, err := NewService(database, "Test", nil, []byte("test-pepper"), "", "", "", "", nil)
 	if err != nil {
 		t.Fatalf("failed to create service: %v", err)
 	}

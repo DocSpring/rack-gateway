@@ -223,7 +223,7 @@ func registerAdminRoutes(authenticated *gin.RouterGroup, cfg *Config, h *handler
 func registerCLIProxyRoutes(api *gin.RouterGroup, cfg *Config, h *handlerSet) {
 	convoxCLI := api.Group("/rack-proxy")
 	convoxCLI.Use(middleware.CLIOnly(cfg.AuthService))
-	convoxCLI.Use(middleware.RequireMFAEnrollment(cfg.Database, cfg.MFASettings))
+	convoxCLI.Use(middleware.RequireMFAEnrollment(cfg.Database, cfg.SettingsService))
 	convoxCLI.GET("/*path", h.proxy.ProxyStripPrefix)
 	convoxCLI.POST("/*path", h.proxy.ProxyStripPrefix)
 	convoxCLI.PUT("/*path", h.proxy.ProxyStripPrefix)

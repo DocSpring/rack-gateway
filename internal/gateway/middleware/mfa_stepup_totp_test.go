@@ -42,7 +42,7 @@ func TestEnforceMFARequirements_AllowsInlineTOTP(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, database.ConfirmMFAMethod(method.ID, time.Now()))
 
-	mfaService, mfaSettings, sessionManager := setupMFAHelpers(t, database)
+	mfaService, settingsService, sessionManager := setupMFAHelpers(t, database)
 
 	newSession := func(t *testing.T) *db.UserSession {
 		return confirmSession(t, sessionManager, user)
@@ -51,7 +51,7 @@ func TestEnforceMFARequirements_AllowsInlineTOTP(t *testing.T) {
 	const endpoint = "/api/v1/auth/mfa/backup-codes/regenerate"
 
 	newRouter := func(session *db.UserSession) *gin.Engine {
-		middleware := EnforceMFARequirements(mfaService, database, mfaSettings)
+		middleware := EnforceMFARequirements(mfaService, database, settingsService)
 		return buildStepUpRouter(endpoint, session, user, middleware, func(authUser *auth.User, c *gin.Context) {
 			if code := strings.TrimSpace(c.GetHeader("X-MFA-TOTP")); code != "" {
 				authUser.MFAType = "totp"
@@ -117,13 +117,12 @@ func TestEnforceMFARequirements_AllowsInlineTOTP(t *testing.T) {
 	})
 }
 
-func setupMFAHelpers(t *testing.T, database *db.Database) (*mfa.Service, *db.MFASettings, *auth.SessionManager) {
+func setupMFAHelpers(t *testing.T, database *db.Database) (*mfa.Service, *settings.Service, *auth.SessionManager) {
 	pepper := []byte("0123456789abcdef0123456789abcdef")
 	mfaService, err := mfa.NewService(
 		database,
 		"Rack Gateway Test",
-		24*time.Hour,
-		10*time.Minute,
+		nil,
 		pepper,
 		"",
 		"",
@@ -133,12 +132,8 @@ func setupMFAHelpers(t *testing.T, database *db.Database) (*mfa.Service, *db.MFA
 	)
 	require.NoError(t, err)
 
-	settingsService := settings.NewService(database)
-	mfaSettings, err := settingsService.GetMFASettings()
-	require.NoError(t, err)
-
 	sessionManager := auth.NewSessionManager(database, "test-session-secret", &auth.StaticTTLProvider{TTL: time.Hour})
-	return mfaService, mfaSettings, sessionManager
+	return mfaService, settings.NewService(database), sessionManager
 }
 
 func confirmSession(t *testing.T, sessionManager *auth.SessionManager, user *db.User) *db.UserSession {

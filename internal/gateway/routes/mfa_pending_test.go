@@ -51,7 +51,7 @@ func newMFARouteEnv(t *testing.T, enrolledEmail string) *mfaRouteEnv {
 	t.Cleanup(rack.Close)
 
 	sessions := auth.NewSessionManager(database, "test-secret", &auth.StaticTTLProvider{TTL: time.Hour})
-	mfaService, err := mfa.NewService(database, "RG", 30*24*time.Hour, 10*time.Minute, []byte("pepper"),
+	mfaService, err := mfa.NewService(database, "RG", nil, []byte("pepper"),
 		"", "", "", "", nil)
 	if err != nil {
 		t.Fatal(err)
@@ -83,7 +83,6 @@ func newMFARouteEnv(t *testing.T, enrolledEmail string) *mfaRouteEnv {
 		AuthService:     auth.NewAuthService(tokenService, database, sessions),
 		TokenService:    tokenService,
 		MFAService:      mfaService,
-		MFASettings:     &db.MFASettings{RequireAllUsers: true, StepUpWindowMinutes: 10, TrustedDeviceTTLDays: 30},
 		SettingsService: settingsService,
 		AuditLogger:     auditLogger,
 		ProxyHandler: proxy.NewHandler(cfg, rbacManager, auditLogger, database, settingsService, nil,

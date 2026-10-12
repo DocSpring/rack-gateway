@@ -1,6 +1,11 @@
 package settings
 
-import "fmt"
+import (
+	"fmt"
+	"time"
+
+	"github.com/DocSpring/rack-gateway/internal/gateway/db"
+)
 
 // GlobalSettingKey is an enum for global setting keys
 type GlobalSettingKey uint8
@@ -163,6 +168,12 @@ const (
 // otherwise.
 const DefaultDeployApprovalWindowMinutes = 15
 
+// The MFA windows' defaults, in the units their settings use.
+const (
+	defaultStepUpWindowMinutes  = int(db.DefaultStepUpWindow / time.Minute)
+	defaultTrustedDeviceTTLDays = int(db.DefaultTrustedDeviceTTL / (24 * time.Hour))
+)
+
 // DefaultGlobalSettings defines all valid global settings with their default values.
 var DefaultGlobalSettings = map[string]interface{}{
 	KeyAllowDestructiveActions:     false,
@@ -172,8 +183,8 @@ var DefaultGlobalSettings = map[string]interface{}{
 	KeyDeployApprovalWindowMinutes: DefaultDeployApprovalWindowMinutes,
 	KeyMFARequireAllUsers:          true,
 	KeySessionTimeoutMinutes:       5,
-	KeyStepUpWindowMinutes:         10,
-	KeyTrustedDeviceTTLDays:        30,
+	KeyStepUpWindowMinutes:         defaultStepUpWindowMinutes,
+	KeyTrustedDeviceTTLDays:        defaultTrustedDeviceTTLDays,
 }
 
 // DefaultAppSettings defines all valid app-specific settings with their default values.

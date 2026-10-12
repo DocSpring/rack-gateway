@@ -90,11 +90,12 @@ func (h *AuthHandler) GetMFAStatus(c *gin.Context) {
 	methodResp := filterMFAMethods(methods, isCLIRequest)
 	trustedResp := filterTrustedDevices(trustedDevices)
 	summary := summarizeBackupCodes(backupCodes)
-	recentExpires := calculateStepUpExpiration(ctx.authUser.Session, h.stepUpWindow())
+	current := h.mfaSettings()
+	recentExpires := calculateStepUpExpiration(ctx.authUser.Session, current.StepUpWindow())
 
 	response := MFAStatusResponse{
 		Enrolled:              ctx.userRecord.MFAEnrolled,
-		Required:              shouldEnforceMFA(h.mfaSettings, ctx.userRecord),
+		Required:              db.ShouldEnforceMFA(current, ctx.userRecord),
 		Methods:               methodResp,
 		TrustedDevices:        trustedResp,
 		BackupCodes:           summary,

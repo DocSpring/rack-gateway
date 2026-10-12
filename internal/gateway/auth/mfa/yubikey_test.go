@@ -2,7 +2,6 @@ package mfa
 
 import (
 	"testing"
-	"time"
 
 	"github.com/GeertJohan/yubigo"
 
@@ -26,7 +25,7 @@ func TestYubiOTPEnrollment_Success(t *testing.T) {
 
 	database := dbtest.NewDatabase(t)
 	pepper := []byte("test-pepper-for-mfa")
-	service, err := NewService(database, "Test Gateway", 30*24*time.Hour, 10*time.Minute, pepper, "", "", "", "", nil)
+	service, err := NewService(database, "Test Gateway", nil, pepper, "", "", "", "", nil)
 	if err != nil {
 		t.Fatalf("failed to create service: %v", err)
 	}
@@ -91,7 +90,7 @@ func TestYubiOTPEnrollment_InvalidFormat(t *testing.T) {
 
 	database := dbtest.NewDatabase(t)
 	pepper := []byte("test-pepper-for-mfa")
-	service, err := NewService(database, "Test Gateway", 30*24*time.Hour, 10*time.Minute, pepper, "", "", "", "", nil)
+	service, err := NewService(database, "Test Gateway", nil, pepper, "", "", "", "", nil)
 	if err != nil {
 		t.Fatalf("failed to create service: %v", err)
 	}
@@ -119,7 +118,7 @@ func TestYubiOTPEnrollment_Duplicate(t *testing.T) {
 
 	database := dbtest.NewDatabase(t)
 	pepper := []byte("test-pepper-for-mfa")
-	service, err := NewService(database, "Test Gateway", 30*24*time.Hour, 10*time.Minute, pepper, "", "", "", "", nil)
+	service, err := NewService(database, "Test Gateway", nil, pepper, "", "", "", "", nil)
 	if err != nil {
 		t.Fatalf("failed to create service: %v", err)
 	}
@@ -157,7 +156,7 @@ func TestYubiOTPEnrollment_NotConfigured(t *testing.T) {
 
 	database := dbtest.NewDatabase(t)
 	pepper := []byte("test-pepper-for-mfa")
-	serviceWithoutYubi, _ := NewService(database, "Test", 24*time.Hour, 10*time.Minute, pepper, "", "", "", "", nil)
+	serviceWithoutYubi, _ := NewService(database, "Test", nil, pepper, "", "", "", "", nil)
 
 	user, _ := database.CreateUser("test4@example.com", "Test User", []string{"admin"})
 
@@ -173,7 +172,7 @@ func TestYubiOTPVerification(t *testing.T) {
 	database := dbtest.NewDatabase(t)
 
 	pepper := []byte("test-pepper")
-	service, _ := NewService(database, "Test Gateway", 30*24*time.Hour, 10*time.Minute, pepper, "", "", "", "", nil)
+	service, _ := NewService(database, "Test Gateway", nil, pepper, "", "", "", "", nil)
 
 	mockAuth := &mockYubiAuth{
 		verifyFunc: func(otp string) (*yubigo.YubiResponse, bool, error) {

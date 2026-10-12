@@ -126,6 +126,10 @@ The window doesn't cover changes to protected env vars: `env set` and `env unset
 for MFA every time, and the gateway verifies it on the request that makes the change. See
 [Protected env vars](/user-guide/cli/commands/#protected-env-vars).
 
+Nor does it cover the commands whose permissions always need MFA (`apps delete`, `instances terminate`,
+`instances keyroll`, `certs delete` and `builds import`): they ask for MFA every time, and the gateway refuses the
+request unless it carries a proof it verifies on that request.
+
 ### One Key Touch Per Command
 
 The CLI asks for MFA once per command and sends that proof with every request the command makes. The first

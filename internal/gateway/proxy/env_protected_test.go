@@ -69,6 +69,8 @@ func (rk *protectedEnvRack) handler(w http.ResponseWriter, r *http.Request) {
 		rk.created = append(rk.created, createdRelease{env: r.PostForm.Get("env"), header: r.Header.Clone()})
 		rk.mu.Unlock()
 		_, _ = w.Write([]byte(`{"id":"R2"}`))
+	case r.Method == http.MethodDelete && r.URL.Path == "/apps/app":
+		_, _ = w.Write([]byte(`{"name":"app"}`))
 	default:
 		http.NotFound(w, r)
 	}
@@ -111,7 +113,7 @@ func newProtectedEnvFixture(t *testing.T) *protectedEnvFixture {
 	require.NoError(t, err)
 	sessions := auth.NewSessionManager(database, "test-secret", &auth.StaticTTLProvider{TTL: time.Hour})
 	mfaService, err := mfa.NewService(
-		database, "Test", 24*time.Hour, 10*time.Minute, []byte("test-pepper"), "", "", "", "", nil,
+		database, "Test", nil, []byte("test-pepper"), "", "", "", "", nil,
 	)
 	require.NoError(t, err)
 	cfg := &config.Config{Racks: map[string]config.RackConfig{
