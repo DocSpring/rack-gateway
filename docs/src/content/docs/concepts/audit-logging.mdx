@@ -198,7 +198,7 @@ chain: rewriting any event up to an anchor would change the hash the anchor reco
 
 Events written after the latest anchor aren't pinned yet. Anyone with write access to the database can delete
 them without the secret (and with the secret, rewrite them) until the next anchor records them. Anchors are
-written hourly, and `verify-audit` fails when the latest one is too old, which keeps that window to about an hour.
+written hourly, and verification fails when the latest one is too old, which keeps that window to about an hour.
 
 ### Verifying Integrity
 
@@ -222,6 +222,9 @@ exits non-zero on any integrity failure. After upgrading from a version before h
 with `AUDIT_HASH_V2_FROM`. See
 [Verification](/deployment/terraform/s3-worm-storage/#verification) for its options, the permissions it needs, and
 what it can and can't detect.
+
+The gateway runs the same check every hour and alerts through Sentry and Slack when it fails; see
+[Hourly verification in the gateway](/deployment/terraform/s3-worm-storage/#hourly-verification-in-the-gateway).
 
 ## Log Retention
 
@@ -392,7 +395,8 @@ Rack Gateway provides:
 - Audit log viewer in web UI
 - WORM bucket configuration documentation
 - RBAC for log access (admin only)
-- `rack-gateway-api verify-audit` to verify the hash chain and its anchors
+- An hourly verification of the hash chain and its anchors, with its latest result on the Audit Logs page, and
+  `rack-gateway-api verify-audit` to run it by hand
 
 ## Key Takeaways
 

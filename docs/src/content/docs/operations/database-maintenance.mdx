@@ -60,7 +60,7 @@ rack-gateway-api verify-audit [--from N] [--to N] [--hash-v2-from N] [--max-anch
 
 It needs `AUDIT_HMAC_SECRET`, and `AUDIT_HASH_V2_FROM` on a gateway upgraded from a version before hash v2. See
 [Verification](/deployment/terraform/s3-worm-storage/#verification) for the permissions it needs and what it
-checks.
+checks. The gateway also runs this check every hour and alerts when it fails.
 
 ### Check Migration Status
 

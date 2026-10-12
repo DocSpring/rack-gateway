@@ -77,7 +77,7 @@ func (a *App) initializeServices() error {
 	a.initRackCertManager()
 
 	deliverySender := email.NewIdentifiedSender(a.newEmailSender(), a.Config.GatewayIdentity())
-	if err := a.initJobsClient(deliverySender, slackNotifier); err != nil {
+	if err := a.initJobsClient(deliverySender, slackNotifier, auditLogger); err != nil {
 		return err
 	}
 
@@ -271,7 +271,7 @@ func (a *App) newEmailSender() email.Sender {
 	return email.NewSender(pmToken, from, pmStream)
 }
 
-func (a *App) initJobsClient(sender email.Sender, notifier *slackpkg.Notifier) error {
+func (a *App) initJobsClient(sender email.Sender, notifier *slackpkg.Notifier, auditLogger *audit.Logger) error {
 	// Load WORM config if environment variables are set
 	auditAnchorConfig, err := jobs.NewAuditAnchorConfigFromEnv()
 	if err != nil {
@@ -282,6 +282,7 @@ func (a *App) initJobsClient(sender email.Sender, notifier *slackpkg.Notifier) e
 		Database:      a.Database,
 		EmailSender:   sender,
 		SlackNotifier: notifier,
+		AuditLogger:   auditLogger,
 		CircleCIToken: a.Config.CircleCIToken,
 		GitHubToken:   a.Config.GitHubToken,
 		GitHubAPIURL:  a.Config.GitHubAPIURL,

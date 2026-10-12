@@ -4,12 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"os"
-	"strconv"
 	"time"
-
-	awsconfig "github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/service/s3"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -20,14 +15,12 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	"github.com/DocSpring/rack-gateway/internal/gateway/email"
-	jobaudit "github.com/DocSpring/rack-gateway/internal/gateway/jobs/audit"
 	jobcircleci "github.com/DocSpring/rack-gateway/internal/gateway/jobs/circleci"
 	jobdeployapprovals "github.com/DocSpring/rack-gateway/internal/gateway/jobs/deployapprovals"
 	jobemail "github.com/DocSpring/rack-gateway/internal/gateway/jobs/email"
 	jobgithub "github.com/DocSpring/rack-gateway/internal/gateway/jobs/github"
 	jobslack "github.com/DocSpring/rack-gateway/internal/gateway/jobs/slack"
 	"github.com/DocSpring/rack-gateway/internal/gateway/slack"
-	"github.com/DocSpring/rack-gateway/internal/gateway/testbypass"
 )
 
 // Client wraps the River client for background job processing
@@ -41,6 +34,9 @@ type Dependencies struct {
 	Database      *db.Database
 	EmailSender   email.Sender
 	SlackNotifier *slack.Notifier
+	// AuditLogger records audit events and sends them to the Slack channels whose patterns match, as security
+	// alerts are. The scheduled audit verification alerts through it.
+	AuditLogger *audit.Logger
 	// CircleCIToken and GitHubToken are used by the CI/GitHub workers. They are never stored in job
 	// arguments, which are persisted in river_job and returned by the jobs API.
 	CircleCIToken string
@@ -49,14 +45,6 @@ type Dependencies struct {
 	GitHubAPIURL string
 	// DeployApprovalPendingMaxAge is how long a deploy approval request can stay pending (0: forever).
 	DeployApprovalPendingMaxAge time.Duration
-}
-
-// AuditAnchorConfig holds configuration for WORM S3 anchor writer
-type AuditAnchorConfig struct {
-	S3Client      interface{} // *s3.Client
-	Bucket        string
-	ChainID       string
-	RetentionDays int
 }
 
 // NewClient creates a new River job client with all workers registered
@@ -114,7 +102,8 @@ func NewClient(pool *pgxpool.Pool, deps *Dependencies, auditAnchorConfig *AuditA
 	}, nil
 }
 
-// setupPeriodicJobs registers the workers of periodic jobs and returns their schedules.
+// setupPeriodicJobs registers the workers of periodic jobs and returns their schedules. auditAnchorConfig is nil
+// when anchors aren't configured.
 func setupPeriodicJobs(
 	workers *river.Workers,
 	deps *Dependencies,
@@ -131,82 +120,19 @@ func setupPeriodicJobs(
 		&river.PeriodicJobOpts{RunOnStart: true},
 	)}
 
-	// WORM anchor writer periodic job (hourly in prod, configurable for dev)
-	if auditAnchorConfig != nil && auditAnchorConfig.S3Client != nil {
-		s3Client, ok := auditAnchorConfig.S3Client.(*s3.Client)
-		if !ok {
-			return nil, fmt.Errorf("invalid S3 client type for audit anchor config")
-		}
-		anchorWorker := jobaudit.NewAnchorWriterWorker(
-			deps.Database,
-			s3Client,
-			auditAnchorConfig.Bucket,
-			auditAnchorConfig.ChainID,
-			auditAnchorConfig.RetentionDays,
-		)
-		river.AddWorker(workers, anchorWorker)
+	if auditAnchorConfig != nil {
+		periodicJobs = append(periodicJobs, anchorWriterJob(workers, deps, auditAnchorConfig))
+	}
 
-		// Get interval from env (default 60 minutes = 1 hour)
-		intervalMinutes := 60
-		if intervalStr := os.Getenv("AUDIT_ANCHOR_INTERVAL_MINUTES"); intervalStr != "" {
-			if parsed, err := strconv.Atoi(intervalStr); err == nil && parsed > 0 {
-				intervalMinutes = parsed
-			}
-		}
-
-		periodicJobs = append(periodicJobs, river.NewPeriodicJob(
-			river.PeriodicInterval(time.Duration(intervalMinutes)*time.Minute),
-			func() (river.JobArgs, *river.InsertOpts) {
-				return jobaudit.AnchorWriterArgs{}, nil
-			},
-			&river.PeriodicJobOpts{RunOnStart: true},
-		))
+	verification, err := auditVerificationJob(workers, deps, auditAnchorConfig)
+	if err != nil {
+		return nil, err
+	}
+	if verification != nil {
+		periodicJobs = append(periodicJobs, verification)
 	}
 
 	return periodicJobs, nil
-}
-
-// NewAuditAnchorConfigFromEnv creates audit anchor config from environment variables if set
-func NewAuditAnchorConfigFromEnv() (*AuditAnchorConfig, error) {
-	bucket := os.Getenv("AUDIT_ANCHOR_BUCKET")
-	if bucket == "" {
-		return nil, nil // WORM not configured
-	}
-
-	chainID := os.Getenv("AUDIT_ANCHOR_CHAIN_ID")
-	if chainID == "" {
-		return nil, fmt.Errorf("AUDIT_ANCHOR_BUCKET is set but AUDIT_ANCHOR_CHAIN_ID is missing")
-	}
-
-	retentionDaysStr := os.Getenv("AUDIT_ANCHOR_RETENTION_DAYS")
-	retentionDays := 400 // default
-	if retentionDaysStr != "" {
-		var err error
-		retentionDays, err = strconv.Atoi(retentionDaysStr)
-		if err != nil {
-			return nil, fmt.Errorf("invalid AUDIT_ANCHOR_RETENTION_DAYS: %w", err)
-		}
-	}
-
-	// Initialize AWS config and S3 client
-	cfg, err := awsconfig.LoadDefaultConfig(context.Background())
-	if err != nil {
-		return nil, fmt.Errorf("failed to load AWS config: %w", err)
-	}
-
-	s3Client := s3.NewFromConfig(cfg, func(o *s3.Options) {
-		// MinIO requires path-style addressing
-		if testbypass.S3EndpointOverride() {
-			o.UsePathStyle = true
-		}
-	})
-
-	return &AuditAnchorConfig{
-		S3Client:      s3Client,
-		Bucket:        bucket,
-		ChainID:       chainID,
-		RetentionDays: retentionDays,
-	}, nil
 }
 
 // Start begins processing jobs in the background

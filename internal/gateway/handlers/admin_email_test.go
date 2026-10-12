@@ -14,7 +14,6 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
 	"github.com/DocSpring/rack-gateway/internal/gateway/config"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
-	emailpkg "github.com/DocSpring/rack-gateway/internal/gateway/email"
 	"github.com/DocSpring/rack-gateway/internal/gateway/handlers"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 	"github.com/DocSpring/rack-gateway/internal/gateway/settings"
@@ -22,7 +21,7 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/token"
 )
 
-func newAdminHandler(t *testing.T, sender emailpkg.Sender) (*handlers.AdminHandler, *db.Database, rbac.Manager) {
+func newAdminHandler(t *testing.T) (*handlers.AdminHandler, *db.Database, rbac.Manager) {
 	t.Helper()
 
 	database := dbtest.NewDatabase(t)
@@ -49,7 +48,7 @@ func newAdminHandler(t *testing.T, sender emailpkg.Sender) (*handlers.AdminHandl
 		rbacManager,
 		database,
 		tokenService,
-		sender,
+		nil,
 		cfg,
 		nil,
 		nil,
@@ -89,7 +88,7 @@ func attachUserContext(c *gin.Context, email, name string) {
 // Settings are now managed via generic settings service and API endpoints
 
 func TestUpdateUser_AllowsEmailNameAndRoleChanges(t *testing.T) {
-	handler, database, rbacManager := newAdminHandler(t, nil)
+	handler, database, rbacManager := newAdminHandler(t)
 
 	adminCfg := &rbac.UserConfig{Name: "Admin", Roles: []string{"admin"}}
 	if err := rbacManager.SaveUser("admin@example.com", adminCfg); err != nil {
@@ -132,7 +131,7 @@ func TestUpdateUser_AllowsEmailNameAndRoleChanges(t *testing.T) {
 }
 
 func TestUpdateUserName_OnlyUpdatesName(t *testing.T) {
-	handler, database, rbacManager := newAdminHandler(t, nil)
+	handler, database, rbacManager := newAdminHandler(t)
 
 	adminCfg := &rbac.UserConfig{Name: "Admin", Roles: []string{"admin"}}
 	if err := rbacManager.SaveUser("admin@example.com", adminCfg); err != nil {
@@ -184,7 +183,7 @@ func TestUpdateUserName_OnlyUpdatesName(t *testing.T) {
 }
 
 func TestUpdateUser_PreventsSelfRoleChange(t *testing.T) {
-	handler, _, rbacManager := newAdminHandler(t, nil)
+	handler, _, rbacManager := newAdminHandler(t)
 
 	adminCfg := &rbac.UserConfig{Name: "Admin", Roles: []string{"admin"}}
 	if err := rbacManager.SaveUser("admin@example.com", adminCfg); err != nil {
