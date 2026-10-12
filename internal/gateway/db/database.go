@@ -152,12 +152,21 @@ func applyPoolConfig(db *sql.DB, poolConfig *PoolConfig) {
 	db.SetConnMaxIdleTime(poolConfig.ConnMaxIdleTime)
 }
 
-// poolConfigFromEnv returns pool configuration values from environment variables.
-// Defaults to conservative values safe for parallel unit tests if env vars are not set.
+// Default pool sizes. Each process has two pools of this size (database/sql for requests, audit writes and the
+// anchor lock; pgx for River), so it can open up to twice defaultMaxOpenConns connections. A request holds one for
+// milliseconds and the hourly anchor write holds one for at most River's one-minute job timeout, so 10 leaves
+// room for audit writes (which give up after 10 seconds, including the wait for a connection) while staying
+// well under the connection limit of a small Postgres instance during a rolling deploy.
+const (
+	defaultMaxOpenConns = 10
+	defaultMaxIdleConns = 3
+)
+
+// poolConfigFromEnv returns pool configuration values from environment variables, or the defaults.
 func poolConfigFromEnv() *PoolConfig {
 	return &PoolConfig{
-		MaxOpenConns:    envInt("DB_MAX_OPEN_CONNS", 2),
-		MaxIdleConns:    envInt("DB_MAX_IDLE_CONNS", 1),
+		MaxOpenConns:    envInt("DB_MAX_OPEN_CONNS", defaultMaxOpenConns),
+		MaxIdleConns:    envInt("DB_MAX_IDLE_CONNS", defaultMaxIdleConns),
 		ConnMaxLifetime: envDuration("DB_CONN_MAX_LIFETIME", 30*time.Minute),
 		ConnMaxIdleTime: envDuration("DB_CONN_MAX_IDLE_TIME", 10*time.Minute),
 	}

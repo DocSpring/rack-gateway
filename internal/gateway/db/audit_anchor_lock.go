@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"time"
 )
 
 // ErrAuditAnchorLockBusy is returned by WithAuditAnchorLock when another anchor write holds the lock.
@@ -18,6 +19,35 @@ type AuditAnchorTx struct {
 // AuditChainHead reads the chain head in the lock's transaction, so it doesn't need a second connection.
 func (a *AuditAnchorTx) AuditChainHead(ctx context.Context) (AuditChainHead, error) {
 	return auditChainHead(ctx, a.tx)
+}
+
+// Now returns the database's clock (when the lock's transaction started). River times jobs by the same clock, so
+// an anchor named by it lands in the hour verification expects, whatever the clock of the host running it says.
+func (a *AuditAnchorTx) Now(ctx context.Context) (time.Time, error) {
+	var now time.Time
+	if err := a.tx.QueryRowContext(ctx, "SELECT now()").Scan(&now); err != nil {
+		return time.Time{}, fmt.Errorf("failed to read the database clock: %w", err)
+	}
+	return now, nil
+}
+
+// LastIndexWrittenBy returns the chain index of the latest event whose timestamp is at or before t, and whether
+// there is one. The anchor writer uses it to check that an anchor already in the bucket covers the events that
+// existed when S3 stored it.
+func (a *AuditAnchorTx) LastIndexWrittenBy(ctx context.Context, t time.Time) (int64, bool, error) {
+	var index int64
+	err := a.tx.QueryRowContext(ctx, `
+		SELECT chain_index FROM audit.audit_event
+		WHERE chain_index >= 0 AND timestamp <= $1
+		ORDER BY chain_index DESC
+		LIMIT 1`, t).Scan(&index)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, false, nil
+	}
+	if err != nil {
+		return 0, false, fmt.Errorf("failed to read the audit chain: %w", err)
+	}
+	return index, true, nil
 }
 
 // WithAuditAnchorLock runs fn while holding the audit anchor lock, so anchor writes (the periodic job on every
