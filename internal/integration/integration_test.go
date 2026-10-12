@@ -899,9 +899,11 @@ func testCLIWebAuthnMFA(t *testing.T, s *TestServers) {
 
 	// Step 4: Make HTTP request to proxy endpoint requiring MFA with inline MFA in Authorization header
 	// Use POST /api/v1/rack-proxy/apps/myapp/builds which requires MFAStepUp
-	buildReq, err := http.NewRequest("POST", "http://localhost:"+gatewayPort+"/api/v1/rack-proxy/apps/myapp/builds", strings.NewReader(`{"manifest":"web:\n  build: ./"}`))
+	// The body is a build form, as the Convox CLI sends: the gateway refuses build parameters it doesn't know.
+	buildURL := "http://localhost:" + gatewayPort + "/api/v1/rack-proxy/apps/myapp/builds"
+	buildReq, err := http.NewRequest("POST", buildURL, strings.NewReader("description=mfa-step-up"))
 	require.NoError(t, err)
-	buildReq.Header.Set("Content-Type", "application/json")
+	buildReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	buildReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s.webauthn.%s", sessionToken, inlineBase64))
 
 	buildResp, err := s.client.Do(buildReq)

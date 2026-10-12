@@ -59,7 +59,9 @@ run_admin_tests() {
     clear_mfa_replay_protection
     local protected_mfa_code
     protected_mfa_code=$(generate_totp_code "$(get_totp_secret 'admin@example.com')")
-    verify_rgw_command "env set DATABASE_URL=postgres://rotated --allow-protected --mfa-code $protected_mfa_code" \
+    # Without a terminal --allow-protected needs an explicit --app, so the PIN dialog's command line names it
+    verify_rgw_command \
+        "env set DATABASE_URL=postgres://rotated --app rack-gateway --allow-protected --mfa-code $protected_mfa_code" \
         "Setting DATABASE_URL..." "Release:"
 
     # Clean up the protected_env_vars setting

@@ -212,6 +212,12 @@ rack-gateway env unset LEGACY_API_URL --allow-protected -a myapp
   permissions, because they can't complete MFA.
 - Every such command asks for MFA (one code or key touch), even within the step-up window, and the gateway
   verifies it on the request that changes the protected key.
+- Before MFA the CLI prints each key it changes with the app and rack (for example `On app myapp (rack production):
+  set env var DATABASE_URL`). The macOS PIN dialog lists the same lines, and the key touch prompt and notification
+  name the app and rack. Values are never shown. A key that isn't an env var name is refused before MFA.
+- Without a terminal (scripts, AI agents) `--allow-protected` needs an explicit `-a`/`--app`, so the command line
+  in the PIN dialog names the app being changed. The dialog quotes any argument that contains spaces or unusual
+  characters, so one argument can't pass for several.
 - Only the keys named on the command line are unlocked. Other protected keys stay as they are.
 - The gateway writes one audit log entry per protected key changed (`env.set_protected` or
   `env.unset_protected`) and never logs the values.

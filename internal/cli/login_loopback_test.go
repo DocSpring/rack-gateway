@@ -138,6 +138,17 @@ func TestLoopbackServerReportsGatewayError(t *testing.T) {
 	require.ErrorContains(t, err, "not authorized")
 }
 
+// The error code comes from the browser redirect; an unknown one is shown in the terminal, so it is made safe.
+func TestLoopbackServerNeutralizesUnknownErrorCodes(t *testing.T) {
+	server, err := startLoopbackServer("expected-state", testGatewayURL)
+	require.NoError(t, err)
+	defer server.close()
+
+	getURL(t, server.redirectURI+"?error=evil%1B%5B2J%E2%80%AE&state=expected-state")
+	_, err = server.wait(time.Second)
+	require.EqualError(t, err, "the gateway could not complete the login (evil?[2J?)")
+}
+
 func TestLoopbackServerReportsMissingCode(t *testing.T) {
 	server, err := startLoopbackServer("expected-state", testGatewayURL)
 	require.NoError(t, err)

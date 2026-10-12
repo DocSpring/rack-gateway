@@ -75,7 +75,36 @@ func TestWaitApproveByBranchNeedsConfirmation(t *testing.T) {
 				require.NoError(t, err)
 				require.Len(t, gateway.seen(), 1)
 			} else {
-				require.ErrorIs(t, err, errBranchApprovalNotConfirmed)
+				require.ErrorIs(t, err, errApprovalNotConfirmed)
+				require.Empty(t, gateway.seen())
+			}
+		})
+	}
+}
+
+// The gateway matches a short --commit as a prefix, so the request it finds can be for another commit that starts
+// the same way: approving it needs a confirmation of the full commit.
+func TestWaitApproveByShortCommitNeedsConfirmation(t *testing.T) {
+	answers := map[string]bool{"y\n": true, "\n": false, "": false}
+	for answer, wantApproved := range answers {
+		t.Run(fmt.Sprintf("%q", answer), func(t *testing.T) {
+			gateway := startFakeDeployGateway(t, shownRequest("p-web", "web", "pending"))
+			waiter := newDeployApprovalWaiter(gateway.command(answer), deployApprovalWaitConfig{
+				racks: []string{"staging"}, apps: approvalApps{names: []string{"web"}},
+				commit: appsTestCommit[:7], pollInterval: time.Millisecond, autoApprove: true,
+			})
+			defer waiter.waitForSound()
+
+			_, err := waiter.pollNextRack()
+
+			prompt := "Approve web at commit " + appsTestCommit +
+				", the newest request for a commit starting with 36a302d? [y/N]"
+			require.Contains(t, gateway.output.String(), prompt)
+			if wantApproved {
+				require.NoError(t, err)
+				require.Len(t, gateway.seen(), 1)
+			} else {
+				require.ErrorIs(t, err, errApprovalNotConfirmed)
 				require.Empty(t, gateway.seen())
 			}
 		})
