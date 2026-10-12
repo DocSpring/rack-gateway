@@ -6,15 +6,21 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// convoxManifest is the part of a convox.yml the gateway checks: the images its services run.
+// convoxManifest is the part of a convox.yml the gateway checks: the images its services and resources run.
 type convoxManifest struct {
-	Services map[string]convoxService `yaml:"services"`
+	Services  map[string]convoxService  `yaml:"services"`
+	Resources map[string]convoxResource `yaml:"resources"`
 }
 
 // convoxService is one service's images. Without an image, the rack builds the service from the archive's source.
 type convoxService struct {
 	Image         string               `yaml:"image"`
 	InitContainer *convoxInitContainer `yaml:"initContainer"`
+}
+
+// convoxResource is a resource's image override. Without one, the rack runs its default image for the type.
+type convoxResource struct {
+	Image string `yaml:"image"`
 }
 
 // convoxInitContainer is a service's init container. It gets the service's environment, and without an image of
