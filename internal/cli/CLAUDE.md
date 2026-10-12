@@ -56,6 +56,10 @@ Structure:
 }
 ```
 
+`SaveConfig` keeps the directory at `0700` and the file at `0600` (it takes away group and other permissions from
+an existing directory) and replaces the file atomically: it writes a `0600` temp file in the same directory, syncs it
+and renames it over `config.json`. Never write the config any other way.
+
 **Configuration Fields:**
 
 **Global Settings:**
@@ -104,6 +108,16 @@ cx deploy-approval approve --app docspring,api-proxy --commit <40-char sha> --ra
 ```
 
 The `all` value expands to all configured racks in `gateways`, excluding any racks listed in `all_racks_exclude`. This is useful for avoiding local development racks when operating on production infrastructure.
+
+Without `--commit`, deploy approval commands use the full SHA of `HEAD` (`git rev-parse HEAD`): the gateway matches
+`--commit` as a prefix, so a short SHA could also match another commit's request. `wait --approve` in a terminal asks
+for y/N on every request whose commit isn't exactly the full `--commit` (found by `--branch`, or by a short
+`--commit`); without a terminal it needs a full `--commit` up front.
+
+**`RACK_GATEWAY_URL`:** with `RACK_GATEWAY_API_TOKEN` it replaces the rack's URL (the rack name is only a label).
+Without an API token it must match the selected rack's configured URL (`LoadRackAuth` refuses otherwise), so a
+stored session token is only ever sent to the gateway that issued it. `--rack all` and rack lists are refused while
+it is set.
 
 ## Commands
 
@@ -195,6 +209,22 @@ The integration tests create backups of the real Convox CLI configuration to pre
 
 The browser must be on the same machine as the CLI (remote hosts: `ssh -L <port>:127.0.0.1:<port>`).
 The login times out after 10 minutes. A gateway upgrade to this flow needs a matching CLI build.
+
+### Protected env vars (`env set` / `env unset --allow-protected`)
+
+`convox_env_protected.go` always collects MFA, and describes the change before it: one line per key (`Set protected
+env var DATABASE_URL on app prod-web (rack us)`) on stderr and in the PIN dialog summary, and the app and rack in the
+touch prompt and notification. Values are never shown. Without a terminal it needs an explicit `--app`, so the
+command line in the PIN dialog names the app. The dialog quotes any argument with whitespace, quotes, backslashes
+or unprintable characters (`pinentry.quoteArg`), so `"X --app staging-web"` can't pass for a key and a flag.
+
+### Terminal output from the gateway
+
+Every gateway-supplied string printed to the terminal (request IDs, statuses, token names and IDs, emails, error
+bodies, login error codes) goes through `displayText` (`display.go`): control characters, C1 controls, line and
+paragraph separators and bidi overrides become `?`. `RenderGatewayError` returns sanitized text, `main` prints
+errors through `DisplayError` (same, but keeps newlines and tabs), and `printJSON` escapes DEL, C1 and bidi
+characters as `\uXXXX`, which `encoding/json` leaves raw, so `-o json` stays valid JSON with the exact strings.
 
 ### Error Handling
 

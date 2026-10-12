@@ -52,7 +52,7 @@ func loginCommandWithFlags(args []string, noOpen bool, authFile string) error {
 		return err
 	}
 
-	fmt.Printf("✓ Successfully logged in to %s as %s\n", rack, loginResp.Email)
+	fmt.Printf("✓ Successfully logged in to %s as %s\n", rack, displayText(loginResp.Email))
 	return nil
 }
 

@@ -161,9 +161,38 @@ func TestDescribeCommandEscapesControlCharacters(t *testing.T) {
 	}
 
 	got := describeCommand(args)
-	want := "rack-gateway deploy-approval approve --notes ok?Gateway: evil.example.com ?[2J ?gnp.exe a?b"
+	want := `rack-gateway deploy-approval approve --notes "ok\nGateway: evil.example.com" "\x1b[2J" "\u202egnp.exe" ` +
+		`"a\u2028b"`
 	if got != want {
 		t.Fatalf("describeCommand = %q, want %q", got, want)
+	}
+}
+
+// An argument with spaces must not pass for several: "X --app staging-web" is one key to unset, not a key and an
+// --app flag, so the dialog can't suggest a different app from the one the command changes.
+func TestDescribeCommandQuotesArgumentsThatCouldReadAsSeveral(t *testing.T) {
+	tests := []struct {
+		args []string
+		want string
+	}{
+		{
+			[]string{"env", "unset", "X --app staging-web", "--allow-protected", "-a", "prod-web"},
+			`env unset "X --app staging-web" --allow-protected -a prod-web`,
+		},
+		{[]string{"env", "set", "X --app staging-web=hunter2"}, `env set "X --app staging-web=***"`},
+		{[]string{"run", "web", "--", "rails", "runner", "puts 'hi'"}, `run web -- rails runner "puts 'hi'"`},
+		{[]string{"deploy-approval", "approve", "--notes", `say "ok"`}, `deploy-approval approve --notes "say \"ok\""`},
+		{[]string{"deploy-approval", "approve", "--notes", ""}, `deploy-approval approve --notes ""`},
+		{[]string{"ps", "-a", "web\u00a0api"}, `ps -a "web\u00a0api"`},
+	}
+	for _, tt := range tests {
+		got := describeCommand(append([]string{"rack-gateway"}, tt.args...))
+		if got != "rack-gateway "+tt.want {
+			t.Errorf("describeCommand(%q) = %q, want %q", tt.args, got, "rack-gateway "+tt.want)
+		}
+		if strings.Contains(got, "hunter2") {
+			t.Errorf("describeCommand(%q) shows a secret value: %q", tt.args, got)
+		}
 	}
 }
 

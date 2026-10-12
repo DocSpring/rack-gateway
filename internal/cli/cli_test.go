@@ -271,4 +271,13 @@ func TestRenderGatewayError(t *testing.T) {
 		msg := RenderGatewayError([]byte("permission denied"))
 		assert.Equal(t, "permission denied", msg)
 	})
+
+	// The body comes from the gateway (or anything in front of it); it must not drive the terminal.
+	t.Run("escape sequences", func(t *testing.T) {
+		msg := RenderGatewayError([]byte(`{"error":"denied\u001b[2J\u001b]0;title\u0007\u009b31m\u202eevil"}`))
+		assert.Equal(t, "denied?[2J?]0;title??31m?evil", msg)
+
+		msg = RenderGatewayError([]byte("<html>\x1b[2J\nApproved</html>"))
+		assert.Equal(t, "<html>?[2J?Approved</html>", msg)
+	})
 }

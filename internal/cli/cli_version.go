@@ -40,7 +40,7 @@ func VersionCommand() *cobra.Command {
 
 			// Show gateway version
 			if info.Version.Version != "" {
-				fmt.Printf("gateway: %s (%s)\n", info.Version.Version, info.Version.CommitHash)
+				fmt.Printf("gateway: %s\n", gatewayVersion(info))
 			} else {
 				fmt.Println("gateway: (unknown)")
 			}
@@ -58,7 +58,7 @@ func VersionCommand() *cobra.Command {
 				return nil
 			}
 
-			fmt.Printf("server: %s\n", system.Version)
+			fmt.Printf("server: %s\n", displayText(system.Version))
 
 			return nil
 		}),

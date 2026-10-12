@@ -15,6 +15,7 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -163,29 +164,43 @@ func describeSummary(lines []string) string {
 
 // describeCommand renders the command line for display with secret values masked: KEY=value arguments
 // (e.g. env set, --env KEY=value) and the values of flags that can carry credentials. After "--" (a command run
-// on the rack) arguments aren't rack-gateway flags, so any argument with a value is masked.
+// on the rack) arguments aren't rack-gateway flags, so any argument with a value is masked. Each argument is
+// quoted when it needs to be (see quoteArg), so one argument can't pass for several.
 func describeCommand(args []string) string {
 	shown := make([]string, 0, len(args))
 	maskNext, remoteCommand := false, false
 	for i, arg := range args {
+		var display string
 		switch {
 		case i == 0:
-			shown = append(shown, "rack-gateway")
+			display = "rack-gateway"
 		case maskNext:
-			shown = append(shown, "***")
-			maskNext = false
+			display, maskNext = "***", false
 		case remoteCommand || !strings.HasPrefix(arg, "-"):
-			shown = append(shown, maskAssignment(arg))
+			display = maskAssignment(arg)
 		case arg == "--":
 			remoteCommand = true
-			shown = append(shown, arg)
+			display = arg
 		default:
-			var flag string
-			flag, maskNext = describeFlag(arg)
-			shown = append(shown, flag)
+			display, maskNext = describeFlag(arg)
 		}
+		shown = append(shown, quoteArg(display))
 	}
 	return SingleLine(strings.Join(shown, " "), maxCommandLength)
+}
+
+// quoteArg quotes an argument (Go syntax, escaping quotes, backslashes and unprintable characters) when it is
+// empty or contains whitespace, a quote, a backslash or anything unprintable. Otherwise an argument such as
+// "KEY --app staging-web" would read as a key followed by an --app flag, and the dialog would show a different
+// app from the one the command changes. Plain arguments stay unquoted.
+func quoteArg(arg string) string {
+	needsQuotes := arg == "" || strings.ContainsFunc(arg, func(r rune) bool {
+		return unicode.IsSpace(r) || r == '"' || r == '\'' || r == '\\' || !unicode.IsPrint(r)
+	})
+	if needsQuotes {
+		return strconv.Quote(arg)
+	}
+	return arg
 }
 
 // maskAssignment masks the value of a KEY=value argument.
