@@ -8,24 +8,19 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
-	"strings"
 	"syscall"
 	"time"
-
-	"github.com/aws/aws-sdk-go-v2/service/s3"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/auditverify"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	"github.com/DocSpring/rack-gateway/internal/gateway/jobs"
 )
 
-// hashV2FromEnv pins where hash v2 starts when --hash-v2-from isn't given.
-const hashV2FromEnv = "AUDIT_HASH_V2_FROM"
-
 type verifyAuditFlags struct {
-	from         int64
-	to           int64
-	hashV2From   chainIndexFlag
+	from       int64
+	to         int64
+	hashV2From chainIndexFlag
+	// maxAnchorAge is 0 unless --max-anchor-age is given.
 	maxAnchorAge time.Duration
 	noAnchors    bool
 }
@@ -43,20 +38,12 @@ func (f *chainIndexFlag) String() string {
 }
 
 func (f *chainIndexFlag) Set(value string) error {
-	index, err := parseChainIndex(value)
+	index, err := auditverify.ParseChainIndex(value)
 	if err != nil {
 		return err
 	}
 	f.value = &index
 	return nil
-}
-
-func parseChainIndex(value string) (int64, error) {
-	index, err := strconv.ParseInt(strings.TrimSpace(value), 10, 64)
-	if err != nil || index < 0 {
-		return 0, fmt.Errorf("expected a chain index (a whole number, 0 or more), got %q", value)
-	}
-	return index, nil
 }
 
 func parseVerifyAuditFlags(args []string) (verifyAuditFlags, error) {
@@ -65,9 +52,10 @@ func parseVerifyAuditFlags(args []string) (verifyAuditFlags, error) {
 	set.Int64Var(&parsed.from, "from", 0, "first chain index to verify")
 	set.Int64Var(&parsed.to, "to", -1, "last chain index to verify (default: the latest event)")
 	set.Var(&parsed.hashV2From, "hash-v2-from",
-		"chain index of the first hash v2 event, recorded after upgrading (default: $"+hashV2FromEnv+")")
-	set.DurationVar(&parsed.maxAnchorAge, "max-anchor-age", auditverify.DefaultMaxAnchorAge,
-		"fail when the latest anchor is older than this")
+		"chain index of the first hash v2 event, recorded after upgrading (default: $"+auditverify.HashV2FromEnv+")")
+	set.DurationVar(&parsed.maxAnchorAge, "max-anchor-age", 0,
+		"fail when the latest anchor is older than this (default: 3h, or three anchor intervals when "+
+			"AUDIT_ANCHOR_INTERVAL_MINUTES is longer than an hour)")
 	set.BoolVar(&parsed.noAnchors, "no-anchors", false, "skip the S3 anchor checks")
 	if err := set.Parse(args); err != nil {
 		return parsed, err
@@ -75,27 +63,12 @@ func parseVerifyAuditFlags(args []string) (verifyAuditFlags, error) {
 	if set.NArg() > 0 {
 		return parsed, fmt.Errorf("verify-audit does not accept arguments, got: %v", set.Args())
 	}
-	if parsed.maxAnchorAge <= 0 {
+	maxAnchorAgeGiven := false
+	set.Visit(func(given *flag.Flag) { maxAnchorAgeGiven = maxAnchorAgeGiven || given.Name == "max-anchor-age" })
+	if maxAnchorAgeGiven && parsed.maxAnchorAge <= 0 {
 		return parsed, fmt.Errorf("--max-anchor-age must be positive, got %s", parsed.maxAnchorAge)
 	}
 	return parsed, nil
-}
-
-// pinnedHashV2Start returns the hash v2 start from --hash-v2-from, or else from AUDIT_HASH_V2_FROM (nil if
-// neither is set).
-func pinnedHashV2Start(parsed verifyAuditFlags) (*int64, error) {
-	if parsed.hashV2From.value != nil {
-		return parsed.hashV2From.value, nil
-	}
-	value := os.Getenv(hashV2FromEnv)
-	if strings.TrimSpace(value) == "" {
-		return nil, nil
-	}
-	start, err := parseChainIndex(value)
-	if err != nil {
-		return nil, fmt.Errorf("invalid %s: %w", hashV2FromEnv, err)
-	}
-	return &start, nil
 }
 
 // verifyAudit runs `rack-gateway-api verify-audit`: it checks the audit log's hash chain and, unless
@@ -138,30 +111,36 @@ func verifyAudit(args []string) error {
 	return nil
 }
 
+// verifyAuditOptions is the configuration the gateway's scheduled verification uses (jobs.AuditVerifyOptions),
+// with the flags applied.
 func verifyAuditOptions(parsed verifyAuditFlags) (auditverify.Options, error) {
-	// Never the development fallback: hashes written with the real secret would all fail, and hashes written
-	// with the development secret prove nothing.
-	secret, err := db.AuditHMACSecretFromEnv()
+	anchors, err := verifyAuditAnchors(parsed)
 	if err != nil {
 		return auditverify.Options{}, err
 	}
-	opts := auditverify.Options{Secret: secret, From: parsed.from}
+	opts, err := jobs.AuditVerifyOptions(anchors)
+	if err != nil {
+		return auditverify.Options{}, err
+	}
+	opts.From = parsed.from
 	if parsed.to >= 0 {
 		opts.To = &parsed.to
 	}
-	if opts.HashV2From, err = pinnedHashV2Start(parsed); err != nil {
-		return auditverify.Options{}, err
+	if parsed.hashV2From.value != nil {
+		opts.HashV2From = parsed.hashV2From.value
 	}
-	if !parsed.noAnchors {
-		if opts.Anchors, err = anchorOptionsFromEnv(); err != nil {
-			return auditverify.Options{}, err
-		}
+	if opts.Anchors != nil && parsed.maxAnchorAge > 0 {
 		opts.Anchors.MaxAge = parsed.maxAnchorAge
 	}
 	return opts, nil
 }
 
-func anchorOptionsFromEnv() (*auditverify.AnchorOptions, error) {
+// verifyAuditAnchors returns the anchor configuration, or nil with --no-anchors. Unlike the scheduled verification,
+// the command doesn't skip the anchor checks just because anchors aren't configured.
+func verifyAuditAnchors(parsed verifyAuditFlags) (*jobs.AuditAnchorConfig, error) {
+	if parsed.noAnchors {
+		return nil, nil
+	}
 	config, err := jobs.NewAuditAnchorConfigFromEnv()
 	if err != nil {
 		return nil, fmt.Errorf("failed to load audit anchor config: %w", err)
@@ -171,9 +150,5 @@ func anchorOptionsFromEnv() (*auditverify.AnchorOptions, error) {
 			"audit anchors aren't configured: set AUDIT_ANCHOR_BUCKET and AUDIT_ANCHOR_CHAIN_ID, or pass --no-anchors",
 		)
 	}
-	client, ok := config.S3Client.(*s3.Client)
-	if !ok {
-		return nil, errors.New("invalid S3 client type")
-	}
-	return &auditverify.AnchorOptions{Store: client, Bucket: config.Bucket, ChainID: config.ChainID}, nil
+	return config, nil
 }

@@ -65,12 +65,18 @@ type AuditChainRow struct {
 	DeployApprovalRequestID sql.NullInt64
 }
 
+// ErrAuditHMACSecretNotSet is returned by AuditHMACSecretFromEnv when AUDIT_HMAC_SECRET isn't set, which the
+// gateway only allows in DEV_MODE.
+var ErrAuditHMACSecretNotSet = errors.New(
+	"AUDIT_HMAC_SECRET is not set: it is required to verify audit event hashes",
+)
+
 // AuditHMACSecretFromEnv returns AUDIT_HMAC_SECRET. Verification uses it and must never fall back to the
 // development secret, so a missing secret is an error.
 func AuditHMACSecretFromEnv() ([]byte, error) {
 	secret := os.Getenv("AUDIT_HMAC_SECRET")
 	if strings.TrimSpace(secret) == "" {
-		return nil, errors.New("AUDIT_HMAC_SECRET is not set: it is required to verify audit event hashes")
+		return nil, ErrAuditHMACSecretNotSet
 	}
 	return []byte(secret), nil
 }

@@ -15,6 +15,7 @@ var (
 // These use the String() method from stringer-generated code
 var (
 	ActionScopeAPIToken              = rbac.ResourceAPIToken.String()
+	ActionScopeAuditLog              = rbac.ResourceAuditLog.String()
 	ActionScopeDeployApprovalRequest = rbac.ResourceDeployApprovalRequest.String()
 	ActionScopeLogin                 = "login"
 	ActionScopeLogout                = "logout"

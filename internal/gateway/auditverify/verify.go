@@ -65,6 +65,10 @@ type Options struct {
 	// upgrading (nil: not pinned). The database's own value can't be trusted: v2 events relabeled as legacy skip
 	// their HMAC check. Without a pin or a format 2 anchor, legacy events make verification fail.
 	HashV2From *int64
+	// VerifiedThrough is the latest event an earlier verification checked (nil: none). The chain must still hold
+	// it, unchanged: otherwise events were removed from the end, perhaps with new ones written in their place,
+	// which checking the events that are now there can't show.
+	VerifiedThrough *VerifiedEvent
 	// BatchSize is how many events are read per query (default 1000).
 	BatchSize int
 	// Anchors, when set, also checks every anchor in the bucket.
@@ -72,6 +76,12 @@ type Options struct {
 	// Now is the time the latest anchor's age and missing anchor hours are measured at (default: the current
 	// time).
 	Now time.Time
+}
+
+// VerifiedEvent is an event a verification checked, by chain index and hash.
+type VerifiedEvent struct {
+	Index int64
+	Hash  []byte
 }
 
 // Run verifies the chain (events From..To) and, if configured, every anchor. A full run (no From or To) also
@@ -87,6 +97,9 @@ func Run(ctx context.Context, source ChainSource, opts Options) (*Report, error)
 	}
 	report := &Report{Head: head, HashV2FromPinned: opts.HashV2From}
 	checkPinnedHashV2Start(head, opts.HashV2From, report)
+	if err := checkVerifiedEvent(ctx, source, head, opts.VerifiedThrough, report); err != nil {
+		return nil, err
+	}
 	if err := verifyRows(ctx, source, opts, head, report); err != nil {
 		return nil, err
 	}
@@ -123,6 +136,9 @@ func (o *Options) validate() error {
 	}
 	if o.HashV2From != nil && *o.HashV2From < 0 {
 		return fmt.Errorf("the hash v2 start must not be negative (got %d)", *o.HashV2From)
+	}
+	if o.VerifiedThrough != nil && o.VerifiedThrough.Index < 0 {
+		return fmt.Errorf("the verified chain index must not be negative (got %d)", o.VerifiedThrough.Index)
 	}
 	if o.BatchSize <= 0 {
 		o.BatchSize = defaultBatchSize

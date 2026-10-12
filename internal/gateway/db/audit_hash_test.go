@@ -193,11 +193,12 @@ func TestComputeAuditEventHashSeparatesFields(t *testing.T) {
 func TestAuditHMACSecretFromEnv(t *testing.T) {
 	t.Setenv("AUDIT_HMAC_SECRET", "")
 	_, err := gwdb.AuditHMACSecretFromEnv()
-	require.Error(t, err, "verification must never fall back to the development secret")
+	require.ErrorIs(t, err, gwdb.ErrAuditHMACSecretNotSet,
+		"verification must never fall back to the development secret")
 
 	t.Setenv("AUDIT_HMAC_SECRET", "   ")
 	_, err = gwdb.AuditHMACSecretFromEnv()
-	require.Error(t, err)
+	require.ErrorIs(t, err, gwdb.ErrAuditHMACSecretNotSet)
 
 	t.Setenv("AUDIT_HMAC_SECRET", "real-secret")
 	secret, err := gwdb.AuditHMACSecretFromEnv()

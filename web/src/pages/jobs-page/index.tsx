@@ -165,6 +165,7 @@ function JobsPageInner() {
         >
           <option value="">All Job Types</option>
           <option value="audit:anchor_writer">Audit Anchor</option>
+          <option value="audit:verify">Audit Verification</option>
           <option value="deploy:approval_notify">Deploy Approval</option>
           <option value="email:failed_login">Failed Login</option>
           <option value="email:failed_mfa">Failed MFA</option>

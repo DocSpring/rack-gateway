@@ -106,8 +106,10 @@ Exports include all fields, not just the columns visible in the UI.
 ### Tamper Detection
 
 Each event is HMAC-chained to the one before it, and the chain is anchored hourly in S3 Object Lock storage when
-anchoring is configured. The web UI doesn't check the chain; run `rack-gateway-api verify-audit` to verify it (see
-[Verification](/deployment/terraform/s3-worm-storage/#verification)).
+anchoring is configured. The gateway verifies the chain and its anchors every hour; the top of the Audit Logs page
+shows the latest run: when it ran, whether it passed, how long it has been failing, and its full report. Failures
+are also sent to Sentry and Slack. See
+[Hourly verification in the gateway](/deployment/terraform/s3-worm-storage/#hourly-verification-in-the-gateway).
 
 ### Retention
 

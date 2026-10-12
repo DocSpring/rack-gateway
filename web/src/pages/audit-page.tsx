@@ -12,6 +12,7 @@ import { useAuditMetrics } from '@/pages/audit/metrics'
 import { AuditStatsCards } from '@/pages/audit/stats-cards'
 import { useAuditSearchParams } from '@/pages/audit/use-audit-search-params'
 import { createAuditQueryParams } from '@/pages/audit/utils'
+import { AuditVerificationCard } from '@/pages/audit/verification-status'
 
 // A user's own activity is read through /users/:email/audit-logs, which every user may call for
 // themselves; the full log (and CSV export) needs gateway:audit_log:read.
@@ -19,7 +20,15 @@ function auditLogsPath(userEmail: string): string {
   return userEmail ? apiPath`/api/v1/users/${userEmail}/audit-logs` : '/api/v1/audit-logs'
 }
 
-export function AuditPage({ userId, userEmail }: { userId?: string; userEmail?: string } = {}) {
+type AuditPageProps = {
+  userId?: string
+  userEmail?: string
+  // The gateway-wide log also shows the latest scheduled verification of the audit chain, to
+  // users who can read the whole log.
+  showVerification?: boolean
+}
+
+export function AuditPage({ userId, userEmail, showVerification = false }: AuditPageProps = {}) {
   const can = useCan()
   const canExport = can(PERMISSIONS.auditLogRead)
   // Use the new custom hook for search parameters and persistence
@@ -213,6 +222,8 @@ export function AuditPage({ userId, userEmail }: { userId?: string; userEmail?: 
         </p>
       </div>
 
+      {showVerification && canExport && <AuditVerificationCard />}
+
       <AuditStatsCards
         averageResponseTimeMs={avgResponseTime}
         deniedEvents={deniedEvents}
@@ -267,4 +278,9 @@ export function AuditPage({ userId, userEmail }: { userId?: string; userEmail?: 
       />
     </div>
   )
+}
+
+// The gateway-wide audit log.
+export function AuditLogPage() {
+  return <AuditPage showVerification />
 }

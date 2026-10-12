@@ -11,6 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
+	jobverifyaudit "github.com/DocSpring/rack-gateway/internal/gateway/jobs/verifyaudit"
 	gtwlog "github.com/DocSpring/rack-gateway/internal/gateway/logging"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 	"github.com/DocSpring/rack-gateway/internal/gateway/slack"
@@ -29,6 +30,8 @@ var defaultChannelActions = map[string]interface{}{
 			audit.ActionScopeAPIToken + ".*", // Matches all API token actions
 			// Protected env var changes (env.set_protected, env.unset_protected) and refused attempts to make them
 			rbac.ResourceEnv.String() + ".*_protected",
+			// The scheduled audit log verification failing, and passing again
+			jobverifyaudit.AlertAction,
 		},
 	},
 	"infrastructure": map[string]interface{}{

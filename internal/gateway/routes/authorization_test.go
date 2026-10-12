@@ -161,6 +161,7 @@ var adminOnlyCalls = []routeCall{
 	{http.MethodGet, "/api/v1/users/admin@example.com/audit-logs", nil},
 	{http.MethodGet, "/api/v1/audit-logs", nil},
 	{http.MethodGet, "/api/v1/audit-logs/export", nil},
+	{http.MethodGet, "/api/v1/audit-logs/verification", nil},
 	{http.MethodPut, "/api/v1/settings/deploy-approvals", map[string]interface{}{"deploy_approvals_enabled": false}},
 	{http.MethodPut, "/api/v1/settings/mfa-configuration", map[string]interface{}{"mfa_require_all_users": false}},
 	{http.MethodPut, "/api/v1/apps/web/settings/protected-env-vars", []string{}},

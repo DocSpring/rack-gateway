@@ -1435,6 +1435,37 @@
                 }
             }
         },
+        "/audit-logs/verification": {
+            "get": {
+                "security": [
+                    {
+                        "SessionCookie": []
+                    }
+                ],
+                "description": "Returns the outcome of the gateway's hourly check of the audit hash chain and its S3 anchors.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Audit"
+                ],
+                "summary": "Get the latest audit log verification",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.AuditVerificationResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/auth/cli/callback": {
             "get": {
                 "description": "Exchanges the authorization code and, only once that succeeds, binds the login to this browser.",
@@ -4511,6 +4542,52 @@
                 }
             }
         },
+        "db.AuditVerificationStatus": {
+            "type": "object",
+            "required": [
+                "checked_at",
+                "failure_count",
+                "result",
+                "summary",
+                "warning_count"
+            ],
+            "properties": {
+                "checked_at": {
+                    "description": "CheckedAt is when the latest run started.",
+                    "type": "string"
+                },
+                "failing_since": {
+                    "description": "FailingSince is when the first failing run since the last passing one started (nil while passing).",
+                    "type": "string"
+                },
+                "failure_count": {
+                    "type": "integer"
+                },
+                "full_checked_at": {
+                    "description": "FullCheckedAt is when the last passing run that checked every event started.",
+                    "type": "string"
+                },
+                "last_passed_at": {
+                    "type": "string"
+                },
+                "result": {
+                    "description": "Result is AuditVerificationPassed, AuditVerificationFailed or AuditVerificationError.",
+                    "type": "string",
+                    "enum": [
+                        "passed",
+                        "failed",
+                        "error"
+                    ]
+                },
+                "summary": {
+                    "description": "Summary is the latest run's report, as verify-audit prints it, or why it couldn't run.",
+                    "type": "string"
+                },
+                "warning_count": {
+                    "type": "integer"
+                }
+            }
+        },
         "db.CreatorInfo": {
             "type": "object",
             "properties": {
@@ -4663,6 +4740,14 @@
                 },
                 "total": {
                     "type": "integer"
+                }
+            }
+        },
+        "handlers.AuditVerificationResponse": {
+            "type": "object",
+            "properties": {
+                "status": {
+                    "$ref": "#/definitions/db.AuditVerificationStatus"
                 }
             }
         },

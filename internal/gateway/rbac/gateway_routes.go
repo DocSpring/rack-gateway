@@ -173,6 +173,7 @@ var httpRouteSpecs = []RouteSpec{
 	// Audit logs (every user's activity)
 	newHTTPRoute("GET", "/api/v1/audit-logs", Gateway(ResourceAuditLog, ActionRead)),
 	newHTTPRoute("GET", "/api/v1/audit-logs/export", Gateway(ResourceAuditLog, ActionRead)),
+	newHTTPRoute("GET", "/api/v1/audit-logs/verification", Gateway(ResourceAuditLog, ActionRead)),
 
 	// API tokens. The permissions below let a user manage their own tokens; the handlers also require
 	// gateway:api_token:manage to see or change another user's tokens, and cap a token's permissions

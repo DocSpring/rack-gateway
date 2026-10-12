@@ -157,6 +157,11 @@ Key files:
   `LastModified` against `ts_utc` with the same constants, so keep them in step
 - `auditverify/` - `rack-gateway-api verify-audit` (chain + anchor verification). Never trust the database's own
   hash v2 start: it comes from `hash_version`, which anyone with database write access can change
+- `jobs/verifyaudit/` - The same verification as an hourly River job, configured by `jobs.AuditVerifyOptions` (shared
+  with the command). Full check on start, while failing and daily; otherwise the events since the last passing run.
+  What it has verified and alerted is in memory only (a database writer must not be able to skip checks or silence
+  alerts); `audit_verification_status` is display-only (Audit Logs page). Failures go to Sentry every run and to
+  Slack as `audit_log.verify` audit events (first failure, more failures, daily reminder, recovery)
 
 ### `/middleware` - HTTP Middleware
 

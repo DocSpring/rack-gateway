@@ -141,3 +141,36 @@ func checkRowCounts(ctx context.Context, source ChainSource, head db.AuditChainH
 	}
 	return nil
 }
+
+// checkVerifiedEvent fails when the chain no longer holds the latest event an earlier verification checked, as it
+// was then: events were removed from the end, and perhaps replaced by new ones. Anchors only catch that for events
+// an anchor recorded.
+func checkVerifiedEvent(
+	ctx context.Context,
+	source ChainSource,
+	head db.AuditChainHead,
+	verified *VerifiedEvent,
+	report *Report,
+) error {
+	switch {
+	case verified == nil:
+		return nil
+	case head.Empty:
+		report.fail("the chain has no events, but an earlier verification checked it through event %d: events "+
+			"were removed", verified.Index)
+		return nil
+	case head.LastIndex < verified.Index:
+		report.fail("the chain ends at event %d, but an earlier verification checked it through event %d: events "+
+			"were removed from the end", head.LastIndex, verified.Index)
+		return nil
+	}
+	row, err := source.AuditChainRowAt(ctx, verified.Index)
+	if err != nil {
+		return err
+	}
+	if row == nil || !bytes.Equal(row.EventHash, verified.Hash) {
+		report.fail("event %d isn't the event an earlier verification checked: events were removed from the end "+
+			"and others written in their place, or the event was changed", verified.Index)
+	}
+	return nil
+}

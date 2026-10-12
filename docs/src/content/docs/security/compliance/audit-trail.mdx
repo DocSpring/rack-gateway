@@ -390,8 +390,9 @@ Audit logs include integrity measures:
 2. **Timestamps**: Server-generated, not client-provided
 3. **User context**: Extracted from verified session/token
 4. **Hash chain**: Each event's HMAC covers all of its stored fields and the previous event's hash, and anchors in
-   S3 Object Lock record the chain head every hour. `rack-gateway-api verify-audit` checks both (see
-   [Verification](/deployment/terraform/s3-worm-storage/#verification)).
+   S3 Object Lock record the chain head every hour. The gateway checks both every hour, alerts through Sentry and
+   Slack when the check fails, and shows the latest result on the Audit Logs page; `rack-gateway-api verify-audit`
+   runs the same check by hand (see [Verification](/deployment/terraform/s3-worm-storage/#verification)).
 
 ### S3 WORM Protection
 

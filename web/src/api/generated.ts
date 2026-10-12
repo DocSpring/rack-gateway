@@ -39,6 +39,7 @@ import type {
   GetSettings200,
   GetUsersEmailAuditLogsParams,
   HandlersAuditLogsResponse,
+  HandlersAuditVerificationResponse,
   HandlersBackupCodesResponse,
   HandlersCLILoginCancelRequest,
   HandlersCLILoginCompleteRequest,
@@ -522,6 +523,21 @@ export const getRackGatewayAPI = () => {
         params,
         responseType: "blob",
       },
+      options,
+    );
+  };
+
+  /**
+   * Returns the outcome of the gateway's hourly check of the audit hash chain and its S3 anchors.
+   * @summary Get the latest audit log verification
+   */
+  const getAuditLogsVerification = (
+    options?: SecondParameter<
+      typeof createGatewayClient<HandlersAuditVerificationResponse>
+    >,
+  ) => {
+    return createGatewayClient<HandlersAuditVerificationResponse>(
+      { url: `/audit-logs/verification`, method: "GET" },
       options,
     );
   };
@@ -1507,6 +1523,7 @@ export const getRackGatewayAPI = () => {
     deleteAppsAppSettingsServiceImagePatterns,
     getAuditLogs,
     getAuditLogsExport,
+    getAuditLogsVerification,
     getAuthCliCallback,
     postAuthCliCancel,
     postAuthCliComplete,
@@ -1703,6 +1720,11 @@ export type GetAuditLogsResult = NonNullable<
 export type GetAuditLogsExportResult = NonNullable<
   Awaited<
     ReturnType<ReturnType<typeof getRackGatewayAPI>["getAuditLogsExport"]>
+  >
+>;
+export type GetAuditLogsVerificationResult = NonNullable<
+  Awaited<
+    ReturnType<ReturnType<typeof getRackGatewayAPI>["getAuditLogsVerification"]>
   >
 >;
 export type GetAuthCliCallbackResult = NonNullable<

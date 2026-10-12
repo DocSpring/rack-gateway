@@ -267,7 +267,10 @@ Object Lock headers: the bucket's default retention (above) locks every new obje
 for `worm_retention_days`, so a policy requiring the header would deny every anchor write. Uploads to an Object
 Lock bucket must carry an integrity checksum; the gateway sends a SHA-256 checksum with each anchor.
 
-### IAM Role for Writer
+### IAM Role for the Gateway
+
+The gateway writes the anchors and [verifies them every hour](#hourly-verification-in-the-gateway), which reads
+every version of each anchor.
 
 ```hcl
 resource "aws_iam_role_policy" "anchor_writer" {
@@ -283,7 +286,9 @@ resource "aws_iam_role_policy" "anchor_writer" {
           "s3:PutObject",
           "s3:PutObjectRetention",
           "s3:GetObject",
-          "s3:ListBucket"
+          "s3:GetObjectVersion",
+          "s3:ListBucket",
+          "s3:ListBucketVersions"
         ]
         Resource = [
           aws_s3_bucket.audit_anchors.arn,
@@ -381,7 +386,8 @@ AWS_REGION=us-east-1
 ## Verification
 
 `rack-gateway-api verify-audit` checks the audit chain in the database and every anchor in the bucket. It only
-reads.
+reads. The gateway also runs these checks itself every hour and alerts when they fail (see
+[Hourly Verification in the Gateway](#hourly-verification-in-the-gateway)).
 
 ```bash
 rack-gateway-api verify-audit [--from N] [--to N] [--hash-v2-from N] [--max-anchor-age 3h] [--no-anchors]
@@ -392,7 +398,7 @@ rack-gateway-api verify-audit [--from N] [--to N] [--hash-v2-from N] [--max-anch
 | `--from N` | First chain index to check (default 0). The event before it is still read to check the link. |
 | `--to N` | Last chain index to check (default: the latest event) |
 | `--hash-v2-from N` | Where hash v2 starts, recorded after upgrading (default: `AUDIT_HASH_V2_FROM`). See [Pinning where hash v2 starts](#pinning-where-hash-v2-starts). |
-| `--max-anchor-age D` | Fail when the latest anchor was written longer ago than this (default `3h`) |
+| `--max-anchor-age D` | Fail when the latest anchor was written longer ago than this (default `3h`, or three anchor intervals when `AUDIT_ANCHOR_INTERVAL_MINUTES` is longer than an hour) |
 | `--no-anchors` | Skip the S3 checks and only check the database |
 
 It prints a summary and exits non-zero if it finds any integrity failure. Warnings don't change the exit code.
@@ -446,7 +452,7 @@ Anchors, in the order they were written:
   events relabeled as legacy events to skip their HMAC check.
 - There is at least one anchor once there are events, and the latest anchor was written within
   `--max-anchor-age`. Either failing means anchors aren't being written, so nothing outside the database protects
-  new events. If you raised `AUDIT_ANCHOR_INTERVAL_MINUTES`, raise `--max-anchor-age` above it.
+  new events.
 
 It warns about hours without an anchor and about events written after the latest anchor. Unanchored events fail
 verification once the oldest was written more than `--max-anchor-age` ago: anchors are being written but don't
@@ -489,24 +495,37 @@ version before hash v2 has no legacy events and needs no pin.
   database then says which events are hash v2. `verify-audit` reports this as a failure rather than passing, but
   it can't tell whether anything was relabeled.
 
-### Running It on a Schedule
+### Hourly Verification in the Gateway
 
-The gateway doesn't run the verifier itself. Run `verify-audit` from a scheduled task (a Convox timer, a cron job
-or a CI schedule) and alert when it exits non-zero. For a check that doesn't depend on the gateway's own
-credentials, run it with the read-only verifier role and a database role that can only read the audit schema.
+The gateway runs these checks itself at half past every hour (UTC), with the configuration `verify-audit` reads:
+`AUDIT_HMAC_SECRET`, `AUDIT_HASH_V2_FROM` and the anchor settings. Its role needs `s3:ListBucketVersions` and
+`s3:GetObjectVersion` on the bucket ([IAM Role for the Gateway](#iam-role-for-the-gateway)); without them every run
+fails and alerts.
 
-To run it inside the gateway app instead, for example as a Convox timer, add `s3:ListBucketVersions` and
-`s3:GetObjectVersion` to the gateway's role (the writer policy above doesn't include them):
+- **What a run checks.** The first run after the gateway starts, every run while verification is failing, and one
+  run a day check every event. The hourly runs in between check the events written since the last passing run,
+  every anchor against the database, and that the last event that run checked is still there, unchanged, which
+  catches events removed from the end even after new ones take their place. A change to an earlier event is found
+  by the next daily check unless an anchor records that event. Anchor versions can't change, so the gateway fetches
+  each one once and lists the bucket on every run.
+- **What it remembers.** How far it has checked and what it has alerted about stay in the gateway's memory, never
+  in the database, so someone who can write to the database can't use them to skip checks or silence alerts. A
+  restart starts over: the next run checks every event, and alerts again if verification is still failing.
+- **Without anchors** (no `AUDIT_ANCHOR_BUCKET`), it checks the hash chain only and says so in its log. Without
+  `AUDIT_HMAC_SECRET`, which only `DEV_MODE` allows, it doesn't run.
+- **Alerts.** Every failing run (an integrity failure, or a run that couldn't read the database or the bucket) is
+  sent to Sentry, where runs that keep failing group into one issue. The gateway also records an
+  `audit_log.verify` audit event with status `failed` or `error` and the first failures, which goes to every Slack
+  channel whose action patterns match it (the default `#security` channel's do): on the first failing run, when a
+  run finds more failures than the last alert reported, and once a day while it keeps failing. The first passing
+  run after that records one with status `success`. Warnings don't alert. Findings that can't be fixed, such as a
+  locked anchor that an earlier version wrote twice, keep verification failing until the anchor's retention ends.
+- **Results.** Each run logs a line saying what it checked and found, and the **Audit Logs** page shows the latest
+  run: when it ran, its result, how long it has been failing and the full report. The page reads that from the
+  database, so treat the alerts and the log as the record.
 
-```yaml
-timers:
-  verify-audit:
-    schedule: "17 * * * *"
-    command: ./rack-gateway-api verify-audit
-    service: gateway
-```
-
-Set `AUDIT_HASH_V2_FROM` in that app's environment if the gateway was upgraded from a version before hash v2.
+Run `verify-audit` to look into a failure. For a check that doesn't depend on the gateway's own credentials, also
+run it on a schedule with the read-only verifier role and a database role that can only read the audit schema.
 
 ## Cross-Region Replication
 

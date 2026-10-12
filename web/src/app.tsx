@@ -24,7 +24,7 @@ import { AppReleasesPage } from './pages/app-releases-page'
 import { AppServicesPage } from './pages/app-services-page'
 import { AppSettingsPage } from './pages/app-settings-page'
 import { AppsListPage } from './pages/apps-list-page'
-import { AuditPage } from './pages/audit-page'
+import { AuditLogPage } from './pages/audit-page'
 import { CLIAuthErrorPage } from './pages/cli-auth-error-page'
 import { CLIAuthSuccessPage } from './pages/cli-auth-success-page'
 import { DeployApprovalRequestDetailPage } from './pages/deploy-approval-request-detail-page'
@@ -146,7 +146,7 @@ function buildRouteTree() {
   const auditRoute = createRoute({
     getParentRoute: () => layoutRoute,
     path: 'audit-logs',
-    component: AuditPage,
+    component: AuditLogPage,
   })
 
   const settingsRoute = createRoute({

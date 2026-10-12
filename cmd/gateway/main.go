@@ -11,7 +11,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/getsentry/sentry-go"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/app"
@@ -224,15 +223,9 @@ func writeAuditAnchor() error {
 	}
 	defer closeDatabase(database)
 
-	// Create anchor writer worker directly
-	s3Client, ok := anchorConfig.S3Client.(*s3.Client)
-	if !ok {
-		return fmt.Errorf("invalid S3 client type")
-	}
-
 	worker := jobaudit.NewAnchorWriterWorker(
 		database,
-		s3Client,
+		anchorConfig.S3Client,
 		anchorConfig.Bucket,
 		anchorConfig.ChainID,
 		anchorConfig.RetentionDays,

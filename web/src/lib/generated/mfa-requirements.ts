@@ -164,6 +164,12 @@ export const HTTP_ROUTE_MFA_REQUIREMENTS: HttpRouteMfaRequirement[] = [
   },
   {
     method: "GET",
+    pattern: "/api/v1/audit-logs/verification",
+    permissions: ["gateway:audit_log:read"],
+    mfaLevel: "none",
+  },
+  {
+    method: "GET",
     pattern: "/api/v1/auth/mfa/status",
     permissions: [],
     mfaLevel: "none",

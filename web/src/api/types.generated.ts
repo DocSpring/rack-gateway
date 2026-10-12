@@ -1445,6 +1445,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/audit-logs/verification": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get the latest audit log verification
+         * @description Returns the outcome of the gateway's hourly check of the audit hash chain and its S3 anchors.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.AuditVerificationResponse"];
+                    };
+                };
+                /** @description Internal Server Error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/cli/callback": {
         parameters: {
             query?: never;
@@ -5045,6 +5093,24 @@ export interface components {
             user_email?: string;
             user_name?: string;
         };
+        "db.AuditVerificationStatus": {
+            /** @description CheckedAt is when the latest run started. */
+            checked_at: string;
+            /** @description FailingSince is when the first failing run since the last passing one started (nil while passing). */
+            failing_since?: string;
+            failure_count: number;
+            /** @description FullCheckedAt is when the last passing run that checked every event started. */
+            full_checked_at?: string;
+            last_passed_at?: string;
+            /**
+             * @description Result is AuditVerificationPassed, AuditVerificationFailed or AuditVerificationError.
+             * @enum {string}
+             */
+            result: "passed" | "failed" | "error";
+            /** @description Summary is the latest run's report, as verify-audit prints it, or why it couldn't run. */
+            summary: string;
+            warning_count: number;
+        };
         "db.CreatorInfo": {
             email?: string;
             name?: string;
@@ -5095,6 +5161,9 @@ export interface components {
             logs: components["schemas"]["db.AuditLogAggregated"][];
             page: number;
             total: number;
+        };
+        "handlers.AuditVerificationResponse": {
+            status?: components["schemas"]["db.AuditVerificationStatus"];
         };
         "handlers.BackupCodesResponse": {
             backup_codes: string[];

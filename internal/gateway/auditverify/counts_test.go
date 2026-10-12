@@ -61,3 +61,28 @@ func TestVerifyCountsEventsOutsideAnEmptyChain(t *testing.T) {
 	assert.True(t, report.Head.Empty, "an event with a negative chain index isn't the head")
 	requireFailure(t, report, "events outside the chain (NULL or negative chain_index): 1")
 }
+
+// Events removed from the end leave a valid, shorter chain, and events written after them take their indexes. The
+// event an earlier verification checked shows both, even when no event in the range is left to check.
+func TestVerifyFailsWhenTheVerifiedEventIsGone(t *testing.T) {
+	database := newAuditDatabase(t)
+	writeEvents(t, database, 5)
+	head := verify(t, database, auditverify.Options{}).Head
+	verified := &auditverify.VerifiedEvent{Index: head.LastIndex, Hash: head.LastHash}
+	requireOK(t, verify(t, database, auditverify.Options{VerifiedThrough: verified}))
+	requireOK(t, verify(t, database, auditverify.Options{From: 5, VerifiedThrough: verified}))
+
+	tamper(t, database, `DELETE FROM audit.audit_event WHERE chain_index >= 3`)
+	requireOK(t, verify(t, database, auditverify.Options{}))
+	report := verify(t, database, auditverify.Options{From: 5, VerifiedThrough: verified})
+	requireFailure(t, report, "the chain ends at event 2, but an earlier verification checked it through event 4")
+
+	writeEvents(t, database, 2)
+	requireOK(t, verify(t, database, auditverify.Options{}))
+	report = verify(t, database, auditverify.Options{From: 5, VerifiedThrough: verified})
+	requireFailure(t, report, "event 4 isn't the event an earlier verification checked")
+
+	tamper(t, database, `DELETE FROM audit.audit_event`)
+	report = verify(t, database, auditverify.Options{VerifiedThrough: verified})
+	requireFailure(t, report, "the chain has no events, but an earlier verification checked it through event 4")
+}
