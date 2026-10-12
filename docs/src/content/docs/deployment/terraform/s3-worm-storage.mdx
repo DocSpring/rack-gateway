@@ -520,6 +520,8 @@ fails and alerts.
   run finds more failures than the last alert reported, and once a day while it keeps failing. The first passing
   run after that records one with status `success`. Warnings don't alert. Findings that can't be fixed, such as a
   locked anchor that an earlier version wrote twice, keep verification failing until the anchor's retention ends.
+  To be alerted when runs stop, set `AUDIT_VERIFY_HEARTBEAT_URL` to a heartbeat monitor's URL; the gateway requests
+  it after every run (see [Heartbeats](/operations/monitoring/#heartbeats)).
 - **Results.** Each run logs a line saying what it checked and found, and the **Audit Logs** page shows the latest
   run: when it ran, its result, how long it has been failing and the full report. The page reads that from the
   database, so treat the alerts and the log as the record.

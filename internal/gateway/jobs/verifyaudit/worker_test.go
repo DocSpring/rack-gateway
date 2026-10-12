@@ -2,6 +2,7 @@ package verifyaudit
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -36,6 +37,7 @@ func TestRunPassesAnIntactChainWithoutAlerting(t *testing.T) {
 
 	assert.Empty(t, h.sentryEvents)
 	assert.Empty(t, h.slack.ids)
+	assert.Equal(t, 1, h.heartbeats)
 }
 
 // A failure is alerted once, then only when there are more failures or a day later; Sentry gets every failing run
@@ -214,6 +216,22 @@ func TestRunRecordsWhyItCouldNotVerify(t *testing.T) {
 	require.Len(t, alerts, 1)
 	assert.Equal(t, audit.StatusError, alerts[0].Status)
 	assert.Contains(t, alerts[0].Details, "AccessDenied")
+	assert.Equal(t, 1, h.heartbeats, "a run that couldn't verify still ran")
+}
+
+// The heartbeat says runs happen, whatever they find (failures alert through Sentry and Slack). A ping that fails
+// doesn't fail the run.
+func TestRunPingsTheHeartbeatAfterEveryRun(t *testing.T) {
+	h := newHarness(t, nil)
+	h.writeEvents(2)
+	assert.Equal(t, db.AuditVerificationPassed, h.runAt(firstRun).Result)
+	h.setAction(h.writeEvents(1)[0], "tampered")
+	assert.Equal(t, db.AuditVerificationFailed, h.runAt(firstRun.Add(time.Hour)).Result)
+	assert.Equal(t, 2, h.heartbeats)
+
+	h.heartbeatErr = errors.New("AUDIT_VERIFY_HEARTBEAT_URL ping failed: HTTP 500")
+	h.runAt(firstRun.Add(2 * time.Hour))
+	assert.Equal(t, 3, h.heartbeats)
 }
 
 // Anchor versions never change, so each is fetched once; a new version of an anchor is still fetched and reported.

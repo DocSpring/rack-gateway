@@ -226,6 +226,18 @@ See [Deploy Approvals](/integrations/deploy-approvals/) for common keys.
 | `AWS_SECRET_ACCESS_KEY` | | AWS secret key |
 | `AWS_REGION` | `us-east-1` | AWS region |
 
+## Heartbeats
+
+Heartbeat monitors (Cronitor, Healthchecks.io and the like) alert when the gateway stops requesting a URL on
+schedule. See [Heartbeats](/operations/monitoring/#heartbeats). The URLs must be `https`; they usually carry the
+monitoring service's key, so set them as secrets. An invalid value stops the gateway from starting.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `UPTIME_HEARTBEAT_URL` | | Requested when the gateway starts and every `UPTIME_HEARTBEAT_INTERVAL_MINUTES` while it's healthy |
+| `UPTIME_HEARTBEAT_INTERVAL_MINUTES` | `15` | How often the uptime heartbeat is requested |
+| `AUDIT_VERIFY_HEARTBEAT_URL` | | Requested after every [hourly audit verification](/deployment/terraform/s3-worm-storage/#hourly-verification-in-the-gateway) run (half past the hour, UTC), whatever it found |
+
 ## Email (Postmark)
 
 | Variable | Default | Description |

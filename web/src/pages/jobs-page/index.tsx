@@ -172,6 +172,7 @@ function JobsPageInner() {
           <option value="email:mfa_auto_lock">MFA Auto Lock</option>
           <option value="email:send_single">Send Email</option>
           <option value="email:welcome">Welcome Email</option>
+          <option value="heartbeat:uptime">Uptime Heartbeat</option>
           <option value="slack:audit_event">Slack Audit</option>
           <option value="slack:deploy_approval">Slack Deploy</option>
           <option value="github:post_pr_comment">GitHub Comment</option>

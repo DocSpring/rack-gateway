@@ -14,6 +14,7 @@ import (
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/auditverify"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
+	gtwlog "github.com/DocSpring/rack-gateway/internal/gateway/logging"
 )
 
 // Interval is how often the gateway verifies its audit log.
@@ -49,12 +50,23 @@ type Database interface {
 // Slack channels whose action patterns match it.
 type AuditFunc func(*db.AuditLog) error
 
+// HeartbeatEnv is the URL of the verification's heartbeat monitor, pinged after every run (unset: no heartbeat).
+const HeartbeatEnv = "AUDIT_VERIFY_HEARTBEAT_URL"
+
+// HeartbeatFunc pings the verification's heartbeat monitor (HeartbeatEnv).
+type HeartbeatFunc func(context.Context) error
+
+// heartbeatTimeout bounds the ping after a run, which happens even when the run itself timed out.
+const heartbeatTimeout = 15 * time.Second
+
 // Worker runs the scheduled verification.
 type Worker struct {
 	river.WorkerDefaults[Args]
 	database Database
 	opts     auditverify.Options
 	audit    AuditFunc
+	// heartbeat is pinged after every run (nil: no heartbeat).
+	heartbeat HeartbeatFunc
 	// capture sends an event to Sentry.
 	capture func(*sentry.Event)
 	now     func() time.Time
@@ -65,19 +77,21 @@ type Worker struct {
 }
 
 // NewWorker returns the worker. opts is verify-audit's configuration (see jobs.AuditVerifyOptions); auditFn
-// records alerts as audit events, which reach Slack the way security alerts do.
-func NewWorker(database Database, opts auditverify.Options, auditFn AuditFunc) *Worker {
+// records alerts as audit events, which reach Slack the way security alerts do; heartbeat, unless nil, is pinged
+// after every run, so a monitor can alert when runs stop.
+func NewWorker(database Database, opts auditverify.Options, auditFn AuditFunc, heartbeat HeartbeatFunc) *Worker {
 	if opts.Anchors != nil {
 		anchors := *opts.Anchors
 		anchors.Store = newAnchorCache(anchors.Store)
 		opts.Anchors = &anchors
 	}
 	return &Worker{
-		database: database,
-		opts:     opts,
-		audit:    auditFn,
-		capture:  func(event *sentry.Event) { sentry.CaptureEvent(event) },
-		now:      time.Now,
+		database:  database,
+		opts:      opts,
+		audit:     auditFn,
+		heartbeat: heartbeat,
+		capture:   func(event *sentry.Event) { sentry.CaptureEvent(event) },
+		now:       time.Now,
 	}
 }
 
@@ -146,7 +160,21 @@ func (w *Worker) Run(ctx context.Context) error {
 		return err
 	}
 	logOutcome(result, status)
+	w.pingHeartbeat(ctx)
 	return nil
+}
+
+// pingHeartbeat tells the heartbeat monitor a run finished, whatever it found: failures alert through Sentry and
+// Slack, and the monitor alerts when runs stop.
+func (w *Worker) pingHeartbeat(ctx context.Context) {
+	if w.heartbeat == nil {
+		return
+	}
+	pingCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), heartbeatTimeout)
+	defer cancel()
+	if err := w.heartbeat(pingCtx); err != nil {
+		gtwlog.Errorf("Audit verification: %v", err)
+	}
 }
 
 // verify runs the checks the plan calls for. It returns an error only when the gateway is shutting down, which
