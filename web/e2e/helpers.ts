@@ -227,10 +227,14 @@ export async function ensureMfaEnrollment(
     }
     await expect(page.getByRole('heading', { name: 'Account Security' })).toBeVisible()
 
-    const secret = await startTotpEnrollmentViaUi(page, email)
+    // With a redirect parameter or in CLI mode, the page navigates away after enrollment, so the
+    // label dialog it may show first is left alone: clicking it would wait on a page that's gone.
+    const navigatesAway = hasRedirectParam || isCliMode
+    const secret = await startTotpEnrollmentViaUi(page, email, {
+      dismissLabelDialog: !navigatesAway,
+    })
 
-    // If there was a redirect parameter or CLI mode, the page will navigate away after enrollment
-    if (hasRedirectParam || isCliMode) {
+    if (navigatesAway) {
       // Wait for navigation to complete (triggered by window.location.assign in the frontend)
       await page.waitForURL((url) => !url.pathname.includes('/account/security'), {
         timeout: 15_000,

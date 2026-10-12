@@ -156,8 +156,9 @@ the gateway out of service instead of letting anything through unrecorded, and i
 
 - every failed write is logged and sent to Sentry;
 - the health check (`GET /api/v1/health`) answers 503 for a minute after an audit write fails, unless a later write
-  succeeds, so your platform's health checks and uptime monitoring see the outage. After that minute, requests are
-  let through to try again, and the next failure starts another minute;
+  succeeds, so your platform's health checks and uptime monitoring see the outage. After that minute the health
+  check passes again so traffic can return, but every request still has to write its audit entry before it acts,
+  and gets 503 if it can't; the next failed write starts another minute;
 - background jobs don't act unrecorded either: the deploy approval expiry writes its audit events in the same
   database transaction as the expiry, so if they can't be written, nothing expires and the job fails.
 
