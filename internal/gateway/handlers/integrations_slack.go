@@ -26,6 +26,7 @@ var defaultChannelActions = map[string]interface{}{
 			audit.BuildAction(audit.ActionScopeLogin, audit.ActionVerbComplete),
 			audit.ActionScopeLogin + ".*_failed", // Matches oauth_failed, user_not_authorized, etc.
 			audit.ActionScopeMFAMethod + ".*",    // MFA enrollment events
+			audit.ActionMFAVerifyFailed,          // Failed MFA verifications
 			audit.BuildAction(rbac.ResourceUser.String(), audit.ActionVerbUpdateRoles),
 			audit.ActionScopeAPIToken + ".*", // Matches all API token actions
 			// Protected env var changes (env.set_protected, env.unset_protected) and refused attempts to make them

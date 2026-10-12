@@ -313,8 +313,8 @@ func (h *AuthHandler) CLILoginMFASubmit(c *gin.Context) {
 		return
 	}
 
-	if !h.recordAuthAttempt(c, cliLoginMFAAction, "cli", userRecord.Email, userRecord.Name) {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": audit.RefusalMessage(cliLoginMFAAction)})
+	if !h.recordAuthAttempt(c, audit.ActionMFAVerify, "cli", userRecord.Email, userRecord.Name) {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": audit.RefusalMessage(audit.ActionMFAVerify)})
 		return
 	}
 	verified := h.verifyCLILoginMFA(c, userRecord, parsed)
@@ -322,14 +322,11 @@ func (h *AuthHandler) CLILoginMFASubmit(c *gin.Context) {
 	if !verified {
 		status = audit.StatusFailed
 	}
-	h.recordAuthResult(c, cliLoginMFAAction, "cli", userRecord.Email, userRecord.Name, status)
+	h.recordAuthResult(c, audit.ActionMFAVerify, "cli", userRecord.Email, userRecord.Name, status)
 	if verified {
 		c.JSON(http.StatusOK, gin.H{"redirect": cliReturnRoute(parsed.state)})
 	}
 }
-
-// cliLoginMFAAction names the audit entries of a CLI login's MFA verification.
-const cliLoginMFAAction = "mfa.verify"
 
 // verifyCLILoginMFA verifies the MFA proof a CLI login submitted and marks the login (and the browser session it
 // came from) verified. It answers the request itself when verification fails, and reports whether it succeeded.
