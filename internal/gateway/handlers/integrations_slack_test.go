@@ -229,33 +229,7 @@ func TestUpdateSlackChannels(t *testing.T) {
 		},
 	}
 
-	payload, err := json.Marshal(map[string]interface{}{
-		"channel_actions": updatedActions,
-	})
-	require.NoError(t, err)
-
-	req := httptest.NewRequest(
-		http.MethodPut,
-		"/api/v1/integrations/slack/channels",
-		strings.NewReader(string(payload)),
-	)
-	req.Header.Set("Content-Type", "application/json")
-	req = req.WithContext(context.WithValue(req.Context(), auth.UserContextKey, &auth.User{
-		Email: user.Email,
-		Name:  user.Name,
-	}))
-
-	w := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(w)
-	c.Request = req
-	c.Set("user_email", user.Email)
-
-	handler.UpdateSlackChannelsHandler(c)
-
-	resp := w.Result()
-	defer resp.Body.Close() //nolint:errcheck,gosec // G104: cleanup
-
-	require.Equal(t, http.StatusOK, resp.StatusCode)
+	require.Equal(t, http.StatusOK, putSlackChannels(t, handler, user, channelActions, updatedActions).Code)
 
 	// Verify update
 	integration, err := database.GetSlackIntegration()
@@ -343,16 +317,67 @@ func TestUpdateSlackChannels_NoIntegration(t *testing.T) {
 		auditLogger: auditLogger,
 	}
 
-	payload, err := json.Marshal(map[string]interface{}{
-		"channel_actions": map[string]interface{}{},
-	})
+	w := putSlackChannels(t, handler, user, map[string]interface{}{}, map[string]interface{}{})
+	require.Equal(t, http.StatusNotFound, w.Code)
+}
+
+// A change made to a configuration that has changed since is refused with 409, and the newer one is kept.
+func TestUpdateSlackChannels_Conflict(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	database := dbtest.NewDatabase(t)
+	user, err := database.CreateUser("admin@example.com", "Admin User", []string{"admin"})
+	require.NoError(t, err)
+	security := func(actions ...string) map[string]interface{} {
+		return map[string]interface{}{"security": map[string]interface{}{
+			"id": "C123456", "name": "security", "actions": actions,
+		}}
+	}
+	_, err = database.CreateSlackIntegration("T123456", "Test Workspace", fakeSlackBot, "U123456",
+		"channels:read,chat:write", security("login.*_failed"), &user.ID)
+	require.NoError(t, err)
+	handler := &AdminHandler{rbac: newAllowAllRBAC(user), database: database, config: &config.Config{}}
+
+	added := security("login.*_failed", "mfa.verify_failed")
+	require.Equal(t, http.StatusOK, putSlackChannels(t, handler, user, security("login.*_failed"), added).Code)
+	w := putSlackChannels(t, handler, user, security("login.*_failed"), security())
+	require.Equal(t, http.StatusConflict, w.Code)
+	require.Contains(t, w.Body.String(), "slack_channels_changed")
+
+	integration, err := database.GetSlackIntegration()
+	require.NoError(t, err)
+	actions := integration.ChannelActions["security"].(map[string]interface{})["actions"]
+	require.Equal(t, []interface{}{"login.*_failed", "mfa.verify_failed"}, actions)
+}
+
+// A change without the configuration it was made to is refused.
+func TestUpdateSlackChannels_RequiresPrevious(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	database := dbtest.NewDatabase(t)
+	user, err := database.CreateUser("admin@example.com", "Admin User", []string{"admin"})
+	require.NoError(t, err)
+	handler := &AdminHandler{rbac: newAllowAllRBAC(user), database: database, config: &config.Config{}}
+
+	w := putSlackChannels(t, handler, user, nil, map[string]interface{}{})
+	require.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+// putSlackChannels sends PUT /integrations/slack/channels as user. A nil previous is left out of the request.
+func putSlackChannels(
+	t *testing.T,
+	handler *AdminHandler,
+	user *db.User,
+	previous, next map[string]interface{},
+) *httptest.ResponseRecorder {
+	t.Helper()
+	body := map[string]interface{}{"channel_actions": next}
+	if previous != nil {
+		body["previous_channel_actions"] = previous
+	}
+	payload, err := json.Marshal(body)
 	require.NoError(t, err)
 
-	req := httptest.NewRequest(
-		http.MethodPut,
-		"/api/v1/integrations/slack/channels",
-		strings.NewReader(string(payload)),
-	)
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/integrations/slack/channels", strings.NewReader(
+		string(payload)))
 	req.Header.Set("Content-Type", "application/json")
 	req = req.WithContext(context.WithValue(req.Context(), auth.UserContextKey, &auth.User{
 		Email: user.Email,
@@ -363,13 +388,8 @@ func TestUpdateSlackChannels_NoIntegration(t *testing.T) {
 	c, _ := gin.CreateTestContext(w)
 	c.Request = req
 	c.Set("user_email", user.Email)
-
 	handler.UpdateSlackChannelsHandler(c)
-
-	resp := w.Result()
-	defer resp.Body.Close() //nolint:errcheck,gosec // G104: cleanup
-
-	require.Equal(t, http.StatusNotFound, resp.StatusCode)
+	return w
 }
 
 func TestEnforceIntegrationPermission_Unauthorized(t *testing.T) {

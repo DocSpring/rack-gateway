@@ -15,7 +15,7 @@ type ChannelConfigCardProps = {
   channels: SlackChannel[]
   onUpdateChannel: (key: string, channelId: string, channelName: string) => void
   onAddAction: (key: string, action: string) => void
-  onRemoveAction: (key: string, actionIndex: number) => void
+  onRemoveAction: (key: string, action: string) => void
   onRemoveChannel: (key: string) => void
   onTestNotification: (channelId: string) => void
   isUpdating: boolean
@@ -45,9 +45,9 @@ export function ChannelConfigCard({
       }
 
       if (newActions.length < config.actions.length) {
-        const removedIndex = config.actions.findIndex((action) => !newActions.includes(action))
-        if (removedIndex !== -1) {
-          onRemoveAction(configKey, removedIndex)
+        const removed = config.actions.find((action, index) => newActions[index] !== action)
+        if (removed !== undefined) {
+          onRemoveAction(configKey, removed)
         }
       }
     },

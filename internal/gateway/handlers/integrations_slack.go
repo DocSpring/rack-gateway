@@ -3,6 +3,7 @@ package handlers
 import (
 	"crypto/rand"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -11,6 +12,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
+	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	jobverifyaudit "github.com/DocSpring/rack-gateway/internal/gateway/jobs/verifyaudit"
 	gtwlog "github.com/DocSpring/rack-gateway/internal/gateway/logging"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
@@ -168,19 +170,30 @@ func (h *AdminHandler) UpdateSlackChannelsHandler(c *gin.Context) {
 		return
 	}
 
+	// previous_channel_actions is the configuration the change was made to: the update is refused if it has changed
+	// since, so a change made to an older one can't undo another save.
 	var req struct {
-		ChannelActions map[string]interface{} `json:"channel_actions"`
+		ChannelActions         map[string]interface{} `json:"channel_actions"          binding:"required"`
+		PreviousChannelActions map[string]interface{} `json:"previous_channel_actions" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
 		return
 	}
 
-	if err := h.database.UpdateSlackIntegrationChannels(req.ChannelActions); err != nil {
-		if err.Error() == "no Slack integration found to update" {
-			c.JSON(http.StatusNotFound, gin.H{"error": "no Slack integration configured"})
-			return
-		}
+	err := h.database.UpdateSlackIntegrationChannels(req.PreviousChannelActions, req.ChannelActions)
+	switch {
+	case errors.Is(err, db.ErrNoSlackIntegration):
+		c.JSON(http.StatusNotFound, gin.H{"error": "no Slack integration configured"})
+		return
+	case errors.Is(err, db.ErrSlackChannelsChanged):
+		c.JSON(http.StatusConflict, gin.H{
+			"error": "slack_channels_changed",
+			"message": "The channel configuration changed since it was loaded. " +
+				"Showing the latest; make your change again.",
+		})
+		return
+	case err != nil:
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update channels"})
 		return
 	}
