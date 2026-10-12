@@ -68,6 +68,20 @@ func (h *Handler) captureSentryError(r *http.Request, err error, userEmail strin
 	})
 }
 
+// logInterruptedResponse records a response that failed after its status was sent (see errResponseInterrupted).
+// The client already has the status, so nothing more is written; a client that hangs up mid-download ends up here
+// too, so it isn't sent to Sentry.
+func (h *Handler) logInterruptedResponse(r *http.Request, err error, rack string, start time.Time) {
+	userEmail := "anonymous"
+	if authUser, ok := auth.GetAuthUser(r.Context()); ok {
+		userEmail = authUser.Email
+	}
+	log.Printf("proxy: %s %s: %v", r.Method, r.URL.Path, err)
+	if !audit.RequestAlreadyLogged(r) {
+		h.auditLogger.LogRequest(r, userEmail, rack, "error", http.StatusBadGateway, time.Since(start), err)
+	}
+}
+
 // refusalError is a request the gateway refuses after looking at what it would do on the rack, such as a build
 // whose manifest runs an image the app's patterns don't allow. The client gets status, and the audit log a deny.
 type refusalError struct {

@@ -26,7 +26,16 @@ func newVerifyServer(t *testing.T, compareStatus string) (*Client, *[]string) {
 		paths = append(paths, r.URL.EscapedPath())
 		switch {
 		case r.URL.EscapedPath() == "/repos/DocSpring/docspring/branches/feature%2Fdeploy":
-			_ = json.NewEncoder(w).Encode(map[string]interface{}{"commit": map[string]string{"sha": branchHead}})
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"name": "feature/deploy", "commit": map[string]string{"sha": branchHead},
+			})
+		case r.URL.EscapedPath() == "/repos/DocSpring/docspring/branches/master":
+			// GitHub redirects a renamed branch's old name to the branch's new name.
+			http.Redirect(w, r, "/repos/DocSpring/docspring/branches/main", http.StatusMovedPermanently)
+		case r.URL.EscapedPath() == "/repos/DocSpring/docspring/branches/main":
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"name": "main", "commit": map[string]string{"sha": branchHead},
+			})
 		case strings.HasPrefix(r.URL.Path, "/repos/DocSpring/docspring/compare/"):
 			_ = json.NewEncoder(w).Encode(map[string]string{"status": compareStatus})
 		case strings.HasSuffix(r.URL.Path, "/pulls") && r.URL.Query().Get("head") == "DocSpring:feature/deploy":
@@ -92,4 +101,17 @@ func TestBranchNamesArePathEscaped(t *testing.T) {
 	require.Error(t, err, "path traversal in a branch name must not reach another endpoint")
 	require.Contains(t, *paths, "/repos/DocSpring/docspring/branches/..%2F..%2Fother%2Frepo",
 		"the branch name must stay inside the branches path")
+}
+
+// A renamed branch's old name redirects to the branch under its new name. Deploying "master" after it became "main"
+// would pass the default-branch rule (which goes by the name sent) while the commit is checked against main.
+func TestRenamedBranchIsRefused(t *testing.T) {
+	client, _ := newVerifyServer(t, "identical")
+	_, err := client.VerifyCommitAndFindPR("DocSpring", "docspring", "master", branchHead,
+		VerifyCommitOptions{Mode: settings.VerifyGitCommitModeLatest})
+	require.ErrorContains(t, err, `branch master in DocSpring/docspring has been renamed to "main"`)
+
+	_, err = client.VerifyCommitAndFindPR("DocSpring", "docspring", "main", branchHead,
+		VerifyCommitOptions{Mode: settings.VerifyGitCommitModeLatest})
+	require.NoError(t, err)
 }

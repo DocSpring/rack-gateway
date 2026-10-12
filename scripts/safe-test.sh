@@ -147,7 +147,8 @@ PY
             ''|localhost|127.0.0.*)
                 if [ "${port:-}" = "55432" ]; then
                     compose_cmd up -d postgres >/dev/null 2>&1 || true
-                    for _ in $(seq 1 20); do
+                    # A cold CI runner can take well over 20s to pull and start the image.
+                    for _ in $(seq 1 60); do
                         if compose_cmd exec -T postgres pg_isready -U postgres -h 127.0.0.1 >/dev/null 2>&1; then
                             use_docker=true
                             break
@@ -182,6 +183,12 @@ PY
 
     if ! command -v psql >/dev/null 2>&1; then
         return
+    fi
+
+    # Without a database every test that needs one fails with its own connection error, so stop here instead.
+    if ! psql "$admin_uri" -tAc "SELECT 1" >/dev/null; then
+        echo "Error: Postgres at ${host:-localhost}:${port:-5432} isn't reachable; the tests need it." >&2
+        exit 1
     fi
 
     if psql "$admin_uri" -tAc "SELECT 1 FROM pg_database WHERE datname='${db_name}'" | grep -q 1; then

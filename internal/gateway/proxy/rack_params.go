@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"sort"
 	"strings"
@@ -54,7 +55,7 @@ func (h *Handler) fetchSystemParams(ctx context.Context, rack config.RackConfig)
 	var payload struct {
 		Parameters map[string]string `json:"parameters"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+	if err := json.NewDecoder(io.LimitReader(resp.Body, maxRackJSONBytes)).Decode(&payload); err != nil {
 		return nil, err
 	}
 	if payload.Parameters == nil {

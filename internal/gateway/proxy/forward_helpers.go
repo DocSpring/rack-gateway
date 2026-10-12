@@ -29,13 +29,16 @@ var errBodyTooLarge = fmt.Errorf(
 var errBodyNotAllowed = errors.New("request body not allowed: GET, HEAD and DELETE requests to the rack take no body")
 
 // bodyErrorStatus is the HTTP status for a request the gateway couldn't handle: 413 for a body over
-// maxBufferedBodyBytes, 400 for a body on a method that takes none, otherwise fallback.
+// maxBufferedBodyBytes, 400 for a body on a method that takes none, 502 for a rack response too large to filter,
+// otherwise fallback.
 func bodyErrorStatus(err error, fallback int) int {
 	switch {
 	case errors.Is(err, errBodyTooLarge):
 		return http.StatusRequestEntityTooLarge
 	case errors.Is(err, errBodyNotAllowed):
 		return http.StatusBadRequest
+	case errors.Is(err, errRackResponseTooLarge):
+		return http.StatusBadGateway
 	default:
 		return fallback
 	}
