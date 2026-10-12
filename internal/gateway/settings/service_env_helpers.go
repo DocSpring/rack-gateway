@@ -69,30 +69,19 @@ func (s *Service) GetApprovedDeployCommands(appName string) ([]string, error) {
 	return s.getListSetting(appName, KeyApprovedDeployCommands, stringList)
 }
 
-// GetServiceImagePatterns returns service image patterns for an app.
+// GetServiceImagePatterns returns service image patterns for an app. A stored value that isn't an object of
+// compiling patterns is an error, which refuses the app's builds: an empty map would leave its images unchecked.
 func (s *Service) GetServiceImagePatterns(appName string) (map[string]string, error) {
 	setting, err := s.GetAppSetting(appName, KeyServiceImagePatterns, map[string]string(nil))
 	if err != nil {
-		return map[string]string{}, err
+		return nil, err
 	}
-
 	if setting.Value == nil {
 		return map[string]string{}, nil
 	}
-
-	// Handle both map[string]interface{} and map[string]string from JSON unmarshaling
-	switch val := setting.Value.(type) {
-	case map[string]string:
-		return val, nil
-	case map[string]interface{}:
-		result := make(map[string]string)
-		for k, v := range val {
-			if s, ok := v.(string); ok {
-				result[k] = s
-			}
-		}
-		return result, nil
-	default:
-		return map[string]string{}, nil
+	patterns, err := imagePatternMap(setting.Value)
+	if err != nil {
+		return nil, fmt.Errorf("app %s: %w", appName, err)
 	}
+	return patterns, nil
 }

@@ -171,6 +171,7 @@ func TestEnvVarListsRefuseQuotedValuesAndInvalidNames(t *testing.T) {
 		"RGW_APP_ADMIN_SETTING_AUDIT_VISIBLE_ENV_VARS=PORT,LOG-LEVEL",
 		`RGW_APP_JOBS_SETTING_SECRET_ENV_VARS=["BILLING ID"]`,
 		`RGW_APP_CRON_SETTING_APPROVED_DEPLOY_COMMANDS="bin/migrate"`,
+		`CONVOX_SECRET_ENV_VARS="DATABASE_URL,REDIS_URL"`,
 	}
 	err := ValidateEnvironment(invalid)
 	require.Error(t, err)
@@ -183,6 +184,36 @@ func TestEnvVarListsRefuseQuotedValuesAndInvalidNames(t *testing.T) {
 	t.Setenv("RGW_APP_WEB_SETTING_PROTECTED_ENV_VARS", `"DATABASE_URL,SECRET_KEY_BASE"`)
 	_, err = svc.GetProtectedEnvVars("web")
 	require.Error(t, err, "callers treat an error as every key protected")
+}
+
+// CONVOX_SECRET_ENV_VARS is parsed like the list settings. A quoted value would split into names with quotes in
+// them, which match no key, so it's an error, which callers treat as every key being secret.
+func TestSecretEnvVarNames(t *testing.T) {
+	env := func(value string) func(string) string {
+		return func(name string) string {
+			if name == MaskedNamesEnvVar {
+				return value
+			}
+			return ""
+		}
+	}
+	for _, c := range []struct {
+		value string
+		want  []string
+	}{
+		{"", nil},
+		{" database_url , REDIS_URL ", []string{"DATABASE_URL", "REDIS_URL"}},
+		{`["DATABASE_URL","database_url"]`, []string{"DATABASE_URL"}},
+	} {
+		names, err := SecretEnvVarNames(env(c.value))
+		require.NoErrorf(t, err, "value %q", c.value)
+		require.Equalf(t, c.want, names, "value %q", c.value)
+	}
+	for _, value := range []string{`"DATABASE_URL,REDIS_URL"`, `'DATABASE_URL'`, "null", "DATABASE-URL", `["A B"]`} {
+		names, err := SecretEnvVarNames(env(value))
+		require.ErrorContainsf(t, err, MaskedNamesEnvVar, "value %q", value)
+		require.Nil(t, names)
+	}
 }
 
 // A stored list that isn't a list of env var names (written before validation, or straight to the database) is an
@@ -210,6 +241,22 @@ func TestMalformedStoredListsFailClosed(t *testing.T) {
 	commands, err := svc.GetApprovedDeployCommands("unset-app")
 	require.NoError(t, err)
 	require.Empty(t, commands)
+
+	// Image patterns that can't be read refuse the app's builds rather than leave its images unchecked.
+	for _, value := range []interface{}{
+		"web=repo/web",
+		[]interface{}{"repo/web"},
+		map[string]interface{}{"web": 1},
+		map[string]interface{}{"web": "repo/(web"},
+	} {
+		require.NoError(t, database.UpsertSetting(&app, KeyServiceImagePatterns, value, nil))
+		patterns, err := svc.GetServiceImagePatterns(app)
+		require.ErrorIsf(t, err, ErrInvalidSettingValue, "stored %#v", value)
+		require.Nil(t, patterns)
+	}
+	patterns, err := svc.GetServiceImagePatterns("unset-app")
+	require.NoError(t, err)
+	require.Empty(t, patterns)
 }
 
 func stringPtr(s string) *string { return &s }

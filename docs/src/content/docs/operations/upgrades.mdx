@@ -373,6 +373,22 @@ A database the gateway first started with `DEV_MODE` on is marked `development`,
 `SELECT environment FROM rgw_internal_metadata` on production databases; a production
 gateway should report `production`.
 
+### Secrets and env var lists checked at startup (v0.1.7)
+
+Check these before upgrading:
+
+- **Secrets:** `APP_SECRET_KEY` and `AUDIT_HMAC_SECRET` must each be at least 32 bytes, and neither can be the
+  development value from this repository. `migrate` refuses weak ones too, so a deploy stops before it promotes.
+  Generate new ones with `openssl rand -base64 32`. Changing `AUDIT_HMAC_SECRET` breaks verification of earlier
+  audit events, so only replace it if it's actually weak.
+- **Env var list variables:** `CONVOX_SECRET_ENV_VARS` and the `protected_env_vars`, `secret_env_vars` and
+  `audit_visible_env_vars` setting variables must be a JSON array of names or a comma-separated list of names. A
+  quoted value (`'"A,B"'`, as `jsonencode` of a string writes) or an invalid name stops the gateway from starting.
+- **Stored lists and image patterns:** a stored env var list with an invalid name (for example `STRIPE_*`, which
+  never matched anything) makes that app's env count as all secret and protected. Its env pages return 500 until
+  you fix the list under **Apps → `{app}` → Settings**. A stored `service_image_patterns` value that isn't an object
+  of valid patterns refuses the app's builds.
+
 ### Deploy approvals bound to commits (v0.1.3)
 
 Approval-bound CI builds now have to use pre-built images tagged with the approved commit, from a repository

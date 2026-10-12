@@ -51,22 +51,41 @@ func ValidName(name string) bool {
 	return envKeyPattern.MatchString(name)
 }
 
+// maxShownKeyBytes is how much of a key an error message shows: the message goes back to the client and into the
+// logs, and a key can be most of a posted env.
+const maxShownKeyBytes = 40
+
 // ValidateEnvEntry checks that key is a valid env var name and value is UTF-8 without control characters other
-// than tab. The error names the key, quoted so it is safe to print.
+// than tab. An invalid name isn't shown in the error (it may be a line of a multi-line secret value); a value error
+// names its key, cut to 40 bytes.
 func ValidateEnvEntry(key, value string) error {
 	if !ValidName(key) {
-		return fmt.Errorf("%w: %q is not a valid name (letters, digits and underscores, not starting with a digit)",
-			ErrInvalidEnvEntry, key)
+		return fmt.Errorf("%w: names must be letters, digits and underscores, not starting with a digit",
+			ErrInvalidEnvEntry)
 	}
-	if !utf8.ValidString(value) || strings.IndexFunc(value, isForbiddenValueRune) >= 0 {
-		return fmt.Errorf("%w: the value of %s contains a control character or isn't UTF-8", ErrInvalidEnvEntry, key)
+	if HasControlCharacter(value) {
+		return fmt.Errorf("%w: the value of %s contains a control character or isn't UTF-8",
+			ErrInvalidEnvEntry, shownKey(key))
 	}
 	return nil
 }
 
-// isForbiddenValueRune reports the control characters (C0, DEL and C1) an env value can't contain. Tab is allowed.
-func isForbiddenValueRune(r rune) bool {
+// HasControlCharacter reports whether s isn't UTF-8 or contains a control character (C0, DEL or C1) other than tab.
+func HasControlCharacter(s string) bool {
+	return !utf8.ValidString(s) || strings.IndexFunc(s, isControlRune) >= 0
+}
+
+// isControlRune reports a control character (C0, DEL or C1) other than tab.
+func isControlRune(r rune) bool {
 	return r != '\t' && unicode.IsControl(r)
+}
+
+// shownKey is a valid env var name as an error message shows it, cut to maxShownKeyBytes.
+func shownKey(key string) string {
+	if len(key) <= maxShownKeyBytes {
+		return key
+	}
+	return key[:maxShownKeyBytes] + "…"
 }
 
 // EnvDiff describes a change applied to an environment variable.

@@ -23,20 +23,50 @@ func TestParsePostedEnv(t *testing.T) {
 	require.Equal(t, map[string]string{"PORT": "4000", "FLAG": "", "URL": " a=b "}, posted)
 }
 
-// Keys must be env var names, and values can't hold control characters: the rack stores them, and `convox env`
-// prints them to other users' terminals.
-func TestParsePostedEnvRefusesInvalidEntries(t *testing.T) {
-	for name, env := range map[string]string{
-		"escape sequence in value": "PORT=3000\nBANNER=hi\x1b[2J",
-		"NUL in value":             "PORT=3000\x00",
-		"carriage return in value": "PORT=3000\r",
-		"control character in key": "PO\x1bRT=3000",
-		"empty key":                "=3000",
-		"space in key":             "MY PORT=3000",
-	} {
+// A key with a control character is refused while parsing: the permission checks name keys in audit entries
+// before the current env is fetched. Names and values are otherwise checked against the current env.
+func TestParsePostedEnvRefusesControlCharactersInKeys(t *testing.T) {
+	for _, env := range []string{"PO\x1bRT=3000", "PORT=3000\nA\x00B=1", "K\xff=1"} {
 		_, _, err := parsePostedEnv(env)
-		require.ErrorIsf(t, err, envutil.ErrInvalidEnvEntry, "%s", name)
+		require.ErrorIsf(t, err, envutil.ErrInvalidEnvEntry, "%q", env)
 	}
+	_, order, err := parsePostedEnv("spring.profiles.active=prod\nBANNER=hi\x1b[1m")
+	require.NoError(t, err)
+	require.Equal(t, []string{"spring.profiles.active", "BANNER"}, order)
+}
+
+// A new or changed entry needs an env var name and a value without control characters: the rack stores it, and
+// `convox env` prints it to other users' terminals. Entries the current env already has are left alone, so an app
+// whose env has a name the gateway wouldn't accept can still change its other keys.
+func TestValidateChangedEntries(t *testing.T) {
+	base := map[string]string{"spring.profiles.active": "prod", "BANNER": "hi\x1b[1m", "API_TOKEN": "t"}
+	unchanged := "PORT=3000\nspring.profiles.active=prod\nBANNER=hi\x1b[1m\nAPI_TOKEN=" + maskedSecret
+	require.NoError(t, validateChangedEntries(unchanged, base))
+
+	for env, line := range map[string]int{
+		"PORT=3000\nBANNER=hi\x1b[2J": 2,
+		"spring.profiles.active=dev":  1,
+		"PORT=3000\x00":               1,
+		"PORT=3000\r":                 1,
+		"PORT=3000\n\n=3000":          3,
+		"MY PORT=3000":                1,
+	} {
+		err := validateChangedEntries(env, base)
+		require.ErrorIsf(t, err, envutil.ErrInvalidEnvEntry, "%q", env)
+		require.ErrorContainsf(t, err, fmt.Sprintf("line %d: ", line), "%q", env)
+	}
+}
+
+// Errors name the line, not an invalid key, which may be a line of a multi-line secret, and cut a long key short.
+func TestValidateChangedEntriesDoesNotEchoKeys(t *testing.T) {
+	err := validateChangedEntries("TLS_KEY=-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBg+kqhkiG9w0BAQEFAASC=x", nil)
+	require.ErrorContains(t, err, "line 2: ")
+	require.NotContains(t, err.Error(), "MIIEvQ")
+
+	longKey := strings.Repeat("A", 100)
+	err = validateChangedEntries(longKey+"=hi\x1b[2J", nil)
+	require.ErrorContains(t, err, "the value of "+strings.Repeat("A", 40)+"…")
+	require.NotContains(t, err.Error(), strings.Repeat("A", 41))
 }
 
 // The env is parsed before any permission check, so its size is checked before it is parsed: an env of millions of
@@ -58,6 +88,10 @@ func TestParsePostedEnvRefusesOversizedEnvs(t *testing.T) {
 	_, order, err := parsePostedEnv(strings.Repeat("\n", maxPostedEnvLines-1) + "PORT=3000")
 	require.NoError(t, err, "an env of exactly the line limit is accepted")
 	require.Equal(t, []string{"PORT"}, order)
+	_, _, err = parsePostedEnv(strings.Repeat("A=1\n", maxPostedEnvLines))
+	require.NoError(t, err, "a newline at the end doesn't start another line")
+	_, _, err = parsePostedEnv(strings.Repeat("A=1\n", maxPostedEnvLines) + "B=2")
+	require.ErrorIs(t, err, errBodyTooLarge)
 }
 
 // Within the limits, parsing allocates per entry, not per line: blank lines cost nothing. A slice entry per line
@@ -91,6 +125,29 @@ func TestReleaseCreateRefusesInvalidEnvEntries(t *testing.T) {
 		require.Contains(t, rr.Body.String(), envutil.ErrInvalidEnvEntry.Error())
 	}
 	require.Empty(t, f.rack.releases())
+}
+
+// An app whose current env has an entry the gateway wouldn't accept today can still change its other keys: the CLI
+// posts every entry back, and only new or changed ones are checked.
+func TestReleaseCreateLeavesExistingEntriesAlone(t *testing.T) {
+	f := newProtectedEnvFixture(t)
+	f.rack.setEnv(protectedEnvRackEnv + "\nspring.profiles.active=prod\nBANNER=hi\x1b[1m")
+	existing := maskedProtectedEnv + "\nspring.profiles.active=prod\nBANNER=hi\x1b[1m"
+
+	req, _ := f.request(t, f.deployer, existing+"\nNEW_FLAG=1", "", "", stepUpAgeFresh)
+	rr := f.proxy(req)
+	require.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
+	releases := f.rack.releases()
+	require.Len(t, releases, 1)
+	require.Contains(t, releases[0].env, "NEW_FLAG=1")
+	require.Contains(t, releases[0].env, "spring.profiles.active=prod")
+
+	changed := strings.Replace(existing, "spring.profiles.active=prod", "spring.profiles.active=dev", 1)
+	req, _ = f.request(t, f.deployer, changed, "", "", stepUpAgeFresh)
+	rr = f.proxy(req)
+	require.Equal(t, http.StatusBadRequest, rr.Code, rr.Body.String())
+	require.Contains(t, rr.Body.String(), "line 4: ")
+	require.Len(t, f.rack.releases(), 1)
 }
 
 func TestReleaseCreateRefusesOversizedEnv(t *testing.T) {

@@ -62,6 +62,9 @@ func TestCheckProductionSafetyRefusesWeakSecrets(t *testing.T) {
 		},
 		"APP_SECRET_KEY (shorter than 32 bytes)":    {"APP_SECRET_KEY": strings.Repeat("k", minSecretBytes-1)},
 		"AUDIT_HMAC_SECRET (shorter than 32 bytes)": {"AUDIT_HMAC_SECRET": "release-smoke-audit-secret"},
+		// Not unset: config takes a whitespace-only value as the key.
+		"APP_SECRET_KEY (blank: only whitespace)":    {"APP_SECRET_KEY": " \n"},
+		"AUDIT_HMAC_SECRET (blank: only whitespace)": {"AUDIT_HMAC_SECRET": "\t"},
 	}
 	for want, values := range weak {
 		for _, mode := range []struct {
@@ -84,5 +87,25 @@ func TestCheckProductionSafetyRefusesWeakSecrets(t *testing.T) {
 	}
 	if err := checkProductionSafety("production", true, fakeEnv(nil)); err != nil {
 		t.Errorf("release build with the secrets unset (refused elsewhere): err=%v, want nil", err)
+	}
+}
+
+// `migrate` runs the weak secret check in a release build, so a deploy fails before it promotes the release.
+func TestCheckReleaseSecrets(t *testing.T) {
+	weak := fakeEnv(map[string]string{"APP_SECRET_KEY": developmentAppKey, "AUDIT_HMAC_SECRET": " "})
+	err := refuseWeakReleaseSecrets(true, weak)
+	if err == nil || !strings.Contains(err.Error(), "APP_SECRET_KEY (the development value published in this "+
+		"repository), AUDIT_HMAC_SECRET (blank: only whitespace)") {
+		t.Errorf("release build with weak secrets: err=%v, want a refusal naming both", err)
+	}
+	if err := refuseWeakReleaseSecrets(false, weak); err != nil {
+		t.Errorf("testbypass build with weak secrets: err=%v, want nil", err)
+	}
+	strong := fakeEnv(map[string]string{"APP_SECRET_KEY": randomBase64, "AUDIT_HMAC_SECRET": randomBase64})
+	if err := refuseWeakReleaseSecrets(true, strong); err != nil {
+		t.Errorf("release build with strong secrets: err=%v, want nil", err)
+	}
+	if err := refuseWeakReleaseSecrets(true, fakeEnv(nil)); err != nil {
+		t.Errorf("release build with the secrets unset: err=%v, want nil", err)
 	}
 }

@@ -40,10 +40,28 @@ func checkProductionSafety(dbEnvironment string, releaseBuild bool, getenv func(
 	)
 }
 
+// CheckReleaseSecrets refuses to run a release build (one without the testbypass tag) with a weak secret (see
+// weakSecrets). The server checks this when it starts (checkProductionSafety); main runs it before `migrate` too,
+// so a deploy, which migrates before it promotes, fails before the new release could start and crash. getenv is
+// os.Getenv outside tests.
+func CheckReleaseSecrets(getenv func(string) string) error {
+	return refuseWeakReleaseSecrets(!testbypass.Compiled, getenv)
+}
+
+func refuseWeakReleaseSecrets(releaseBuild bool, getenv func(string) string) error {
+	if !releaseBuild {
+		return nil
+	}
+	if weak := weakSecrets(getenv); len(weak) > 0 {
+		return fmt.Errorf("refusing to run: a release build can't use these weak secrets: %s", strings.Join(weak, ", "))
+	}
+	return nil
+}
+
 // weakSecrets lists the secrets in the environment that no deployment may use: a development value published in
 // this repository, with which anyone could forge sessions, CSRF tokens and audit hashes or decrypt stored secrets,
-// or an APP_SECRET_KEY or AUDIT_HMAC_SECRET shorter than 32 bytes. Unset secrets aren't listed: the server refuses
-// those itself.
+// or an APP_SECRET_KEY or AUDIT_HMAC_SECRET that is blank or shorter than 32 bytes. Unset secrets aren't listed:
+// the server refuses those itself.
 func weakSecrets(getenv func(string) string) []string {
 	var weak []string
 	if colcrypt.IsDevelopmentKey(getenv(colcrypt.EnvVar)) {
@@ -68,8 +86,10 @@ func weakSecrets(getenv func(string) string) []string {
 func secretProblem(raw string, isDev func(string) bool) string {
 	value := strings.TrimSpace(raw)
 	switch {
-	case value == "":
+	case raw == "":
 		return ""
+	case value == "":
+		return "blank: only whitespace"
 	case isDev(value):
 		return "the development value published in this repository"
 	case len(value) < minSecretBytes:

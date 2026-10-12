@@ -68,6 +68,9 @@ func stringList(key string, value interface{}) ([]string, error) {
 	}
 }
 
+// envVarNameRule says what the env var name lists must hold, for error messages.
+const envVarNameRule = "env var names (letters, digits and underscores, not starting with a digit)"
+
 // envVarNameList returns value as a list of env var names, or ErrInvalidSettingValue when it isn't a list of
 // strings or a name (ignoring surrounding spaces) isn't a valid env var name.
 func envVarNameList(key string, value interface{}) ([]string, error) {
@@ -75,24 +78,33 @@ func envVarNameList(key string, value interface{}) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
+	if invalid := invalidEnvVarNames(names); invalid != "" {
+		return nil, fmt.Errorf("%w: %s must list %s, got %s", ErrInvalidSettingValue, key, envVarNameRule, invalid)
+	}
+	return names, nil
+}
+
+// invalidEnvVarNames returns the names (ignoring surrounding spaces) that aren't valid env var names, quoted and
+// comma-separated, or "" when they all are.
+func invalidEnvVarNames(names []string) string {
 	var invalid []string
 	for _, name := range names {
 		if !envutil.ValidName(strings.TrimSpace(name)) {
 			invalid = append(invalid, strconv.Quote(name))
 		}
 	}
-	if len(invalid) > 0 {
-		return nil, fmt.Errorf(
-			"%w: %s must list env var names (letters, digits and underscores, not starting with a digit), got %s",
-			ErrInvalidSettingValue, key, strings.Join(invalid, ", "),
-		)
-	}
-	return names, nil
+	return strings.Join(invalid, ", ")
 }
 
-// validateImagePatterns requires an object of service name to pattern, where each pattern compiles once
-// {{GIT_COMMIT}} is substituted.
+// validateImagePatterns requires an object of service name to pattern, where each pattern compiles.
 func validateImagePatterns(value interface{}) error {
+	_, err := imagePatternMap(value)
+	return err
+}
+
+// imagePatternMap returns value as a map of service name to image pattern, or ErrInvalidSettingValue when it isn't
+// an object of strings or a pattern doesn't compile (with {{GIT_COMMIT}} standing for a commit).
+func imagePatternMap(value interface{}) (map[string]string, error) {
 	patterns := map[string]string{}
 	switch v := value.(type) {
 	case map[string]string:
@@ -101,12 +113,12 @@ func validateImagePatterns(value interface{}) error {
 		for service, raw := range v {
 			pattern, ok := raw.(string)
 			if !ok {
-				return fmt.Errorf("%w: image pattern for %s must be a string", ErrInvalidSettingValue, service)
+				return nil, fmt.Errorf("%w: image pattern for %s must be a string", ErrInvalidSettingValue, service)
 			}
 			patterns[service] = pattern
 		}
 	default:
-		return fmt.Errorf("%w: %s must be an object of service name to pattern", ErrInvalidSettingValue,
+		return nil, fmt.Errorf("%w: %s must be an object of service name to pattern", ErrInvalidSettingValue,
 			KeyServiceImagePatterns)
 	}
 	services := make([]string, 0, len(patterns))
@@ -117,8 +129,8 @@ func validateImagePatterns(value interface{}) error {
 	for _, service := range services {
 		pattern := strings.ReplaceAll(patterns[service], "{{GIT_COMMIT}}", "0")
 		if _, err := regexp.Compile("^(?:" + pattern + ")$"); err != nil {
-			return fmt.Errorf("%w: image pattern for %s: %v", ErrInvalidSettingValue, service, err)
+			return nil, fmt.Errorf("%w: image pattern for %s: %v", ErrInvalidSettingValue, service, err)
 		}
 	}
-	return nil
+	return patterns, nil
 }

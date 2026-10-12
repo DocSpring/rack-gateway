@@ -39,6 +39,7 @@ convox apps | grep -q "^$APP_NAME\b" || convox apps create "$APP_NAME"
 # you pass them (pass the same column key on later runs to keep existing TOTP enrollments readable).
 convox env set \
   APP_SECRET_KEY="${APP_SECRET_KEY:-$(openssl rand -base64 32)}" \
+  AUDIT_HMAC_SECRET="${AUDIT_HMAC_SECRET:-$(openssl rand -base64 32)}" \
   COLUMN_ENCRYPTION_KEY="${COLUMN_ENCRYPTION_KEY:-$(openssl rand -base64 32)}" \
   GOOGLE_CLIENT_ID="${GOOGLE_CLIENT_ID:-mock-client-id}" \
   GOOGLE_CLIENT_SECRET="${GOOGLE_CLIENT_SECRET:-mock-client-secret}" \

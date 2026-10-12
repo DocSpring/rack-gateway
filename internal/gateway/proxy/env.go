@@ -95,6 +95,10 @@ func (h *Handler) prepareReleaseCreate(
 		return nil, err
 	}
 
+	if err := validateChangedEntries(envStr, baseEnv); err != nil {
+		return nil, err
+	}
+
 	if err := h.validateEnvPermissions(r, email, app, order); err != nil {
 		return nil, err
 	}
