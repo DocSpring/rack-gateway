@@ -12,6 +12,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"golang.org/x/sync/errgroup"
 
 	jobaudit "github.com/DocSpring/rack-gateway/internal/gateway/jobs/audit"
 )
@@ -48,10 +49,10 @@ func loadAnchors(ctx context.Context, opts AnchorOptions, report *Report) ([]*an
 		return nil, err
 	}
 	reportOverwrittenAnchors(records, report)
+	if err := fetchAnchors(ctx, opts, records); err != nil {
+		return nil, err
+	}
 	for _, record := range records {
-		if err := fetchAnchor(ctx, opts, record); err != nil {
-			return nil, err
-		}
 		if err := json.Unmarshal(record.raw, &record.payload); err != nil {
 			record.invalid = true
 			report.fail("anchor %s (version %s) is not valid anchor JSON: %v", record.key, record.versionID, err)
@@ -130,6 +131,22 @@ func reportOverwrittenAnchors(records []*anchorRecord, report *Report) {
 	for _, key := range keys {
 		report.fail("anchor %s has %d versions: it was overwritten after it was first written", key, versions[key])
 	}
+}
+
+// anchorReadConcurrency is how many anchor versions are read at once. A full check reads every anchor ever
+// written, one GET of about 100ms each and about 8,800 a year, so one at a time it would take most of an hour
+// after a few years.
+const anchorReadConcurrency = 16
+
+// fetchAnchors reads every record's anchor version, anchorReadConcurrency at a time, and stops at the first that
+// can't be read.
+func fetchAnchors(ctx context.Context, opts AnchorOptions, records []*anchorRecord) error {
+	group, ctx := errgroup.WithContext(ctx)
+	group.SetLimit(anchorReadConcurrency)
+	for _, record := range records {
+		group.Go(func() error { return fetchAnchor(ctx, opts, record) })
+	}
+	return group.Wait()
 }
 
 func fetchAnchor(ctx context.Context, opts AnchorOptions, record *anchorRecord) error {

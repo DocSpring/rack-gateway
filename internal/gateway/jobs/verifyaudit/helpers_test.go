@@ -3,6 +3,7 @@ package verifyaudit
 import (
 	"context"
 	"fmt"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -171,10 +172,10 @@ func (h *harness) setAction(index int64, action string) {
 	h.tamper(fmt.Sprintf(`UPDATE audit.audit_event SET action = '%s' WHERE chain_index = %d`, action, index))
 }
 
-// countingStore counts the anchor versions fetched from the bucket.
+// countingStore counts the anchor versions fetched from the bucket (concurrently).
 type countingStore struct {
 	*fakes3.Bucket
-	gets int
+	gets atomic.Int64
 }
 
 func (c *countingStore) GetObject(
@@ -182,7 +183,7 @@ func (c *countingStore) GetObject(
 	params *s3.GetObjectInput,
 	optFns ...func(*s3.Options),
 ) (*s3.GetObjectOutput, error) {
-	c.gets++
+	c.gets.Add(1)
 	return c.Bucket.GetObject(ctx, params, optFns...)
 }
 

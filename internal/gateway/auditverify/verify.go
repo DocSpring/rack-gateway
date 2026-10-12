@@ -31,7 +31,8 @@ type ChainSource interface {
 	AuditChainStats(ctx context.Context, toIndex int64) (db.AuditChainStats, error)
 }
 
-// AnchorStore reads anchors and their versions. *s3.Client implements it.
+// AnchorStore reads anchors and their versions. *s3.Client implements it. GetObject is called from several
+// goroutines at once.
 type AnchorStore interface {
 	ListObjectVersions(
 		ctx context.Context,
