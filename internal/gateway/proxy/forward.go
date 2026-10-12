@@ -208,7 +208,7 @@ func (_ *Handler) logProxyResponse(
 	if resp.Request != nil {
 		upstreamMethod = resp.Request.Method
 		if resp.Request.URL != nil {
-			upstreamURL = resp.Request.URL.String()
+			upstreamURL = urlForLog(resp.Request.URL)
 		}
 	}
 
@@ -245,7 +245,7 @@ func (_ *Handler) logProxyResponse(
 			r.Method,
 			path,
 			resp.StatusCode,
-			string(logSnippet),
+			responseBodyForLog(r, path, logSnippet, bytesWritten),
 		)
 	}
 }

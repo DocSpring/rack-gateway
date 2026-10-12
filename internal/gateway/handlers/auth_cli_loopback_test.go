@@ -84,6 +84,7 @@ func newLoopbackEnv(t *testing.T, requireMFA bool) *loopbackEnv {
 	router.POST("/api/v1/auth/cli/mfa", handler.CLILoginMFASubmit)
 	router.GET("/api/v1/auth/cli/return", handler.CLILoginReturn)
 	router.POST("/api/v1/auth/cli/cancel", handler.CLILoginCancel)
+	router.GET("/api/v1/auth/cli/initiator", handler.CLILoginInitiator)
 	router.POST("/api/v1/auth/cli/complete", handler.CLILoginComplete)
 	return &loopbackEnv{router: router, database: database, oauth: oauth, sessions: sessions}
 }
@@ -235,6 +236,30 @@ func TestCLILoginBrowserStepsRequireBindingCookie(t *testing.T) {
 
 	// The original browser still works.
 	require.NotEmpty(t, e.loginCodeFromBrowser(t, state, binding))
+}
+
+// The MFA page shows where the login was started from the gateway's record, never from its own URL, which a crafted
+// link could fill with a reassuring device or address. So the challenge URL carries only the state.
+func TestCLILoginInitiatorComesFromTheGateway(t *testing.T) {
+	e := newLoopbackEnv(t, false)
+	state, binding := e.startAndBind(t)
+
+	res := e.send(t, http.MethodGet, "/api/v1/auth/cli/initiator?state="+state, nil, binding)
+	require.Equal(t, http.StatusOK, res.StatusCode)
+	var initiator CLILoginInitiatorResponse
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&initiator))
+	require.Equal(t, "laptop.local", initiator.Device)
+	require.Equal(t, "192.0.2.1", initiator.IP)
+
+	// Only the browser bound to the login can read it.
+	res = e.send(t, http.MethodGet, "/api/v1/auth/cli/initiator?state="+state, nil)
+	require.Equal(t, http.StatusBadRequest, res.StatusCode)
+
+	record, err := e.database.GetCLILoginState(state)
+	require.NoError(t, err)
+	challenge, err := url.Parse(cliChallengeURL(record))
+	require.NoError(t, err)
+	require.Equal(t, url.Values{"state": {state}}, challenge.Query())
 }
 
 func TestCLILoginExpiresAfterTenMinutes(t *testing.T) {

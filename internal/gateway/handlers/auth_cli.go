@@ -266,17 +266,12 @@ func (h *AuthHandler) cliRedirectToEnrollment(c *gin.Context, record *db.CLILogi
 	c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s?%s", WebRoute("account/security"), params.Encode()))
 }
 
-// cliChallengeURL builds the MFA challenge page URL, including where the login was started so the
-// user can spot a login they did not start.
+// cliChallengeURL builds the MFA challenge page URL. It carries only the login state: the page asks the gateway
+// where the login was started (see CLILoginInitiator), since a crafted link could put any device or address in
+// its URL.
 func cliChallengeURL(record *db.CLILoginState) string {
 	params := url.Values{}
 	params.Set("state", record.State)
-	if record.InitiatorDevice.Valid && record.InitiatorDevice.String != "" {
-		params.Set("device", record.InitiatorDevice.String)
-	}
-	if record.InitiatorIP.Valid && record.InitiatorIP.String != "" {
-		params.Set("ip", record.InitiatorIP.String)
-	}
 	return buildChallengeURL(WebRoute("auth/mfa/challenge"), params)
 }
 

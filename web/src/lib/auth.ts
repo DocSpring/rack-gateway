@@ -26,19 +26,11 @@ export type User = {
   }
 }
 
-type AuthState = {
-  user: User | null
-  token: string | null
-  isAuthenticated: boolean
-}
-
 class AuthService {
   // (PKCE helpers removed; web flow uses server-side OAuth)
 
-  // Start OAuth flow for web (no PKCE needed)
-  startLogin(rack = 'default', returnTo?: string): void {
-    // Store rack for callback
-    sessionStorage.setItem('oauth_rack', rack)
+  // Start OAuth flow for web (no PKCE needed). The gateway handles the identity provider's callback.
+  startLogin(returnTo?: string): void {
     // Build login URL with optional returnTo parameter
     const loginURL = new URL(APIRoute('auth/web/login'), window.location.origin)
     if (returnTo) {
@@ -46,29 +38,6 @@ class AuthService {
     }
     // Redirect directly to web login endpoint
     window.location.href = loginURL.toString()
-  }
-
-  // Handle OAuth callback
-  async handleCallback(_code: string, _state: string): Promise<AuthState> {
-    // For web flow, the callback is handled server-side
-    // This method is called after server redirect with token
-    // rack selection is only used server-side; just clear any prior selection
-
-    // The server should have set a cookie or returned a token
-    // We just need to fetch the current user
-    const user = await this.getCurrentUser()
-    if (!user) {
-      throw new Error('Failed to get user after OAuth callback')
-    }
-
-    // Clean up session storage
-    sessionStorage.removeItem('oauth_rack')
-
-    return {
-      user,
-      token: null,
-      isAuthenticated: true,
-    }
   }
 
   // Get current user (cookie-based auth; no JS access to HttpOnly cookie needed)

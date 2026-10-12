@@ -7,6 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/DocSpring/rack-gateway/internal/gateway/debugredact"
 	"github.com/DocSpring/rack-gateway/internal/gateway/httputil"
 	gtwlog "github.com/DocSpring/rack-gateway/internal/gateway/logging"
 )
@@ -41,10 +42,10 @@ func logRequestInfo(req *http.Request, path string, logInfo, logReqHeaders bool)
 	}
 }
 
-// logHeadersToTopic logs headers with the values of credentials (session and API tokens, cookies, CSRF tokens, MFA
-// codes) redacted, so turning on debug logging doesn't put them in the logs.
+// logHeadersToTopic logs headers with credentials (session and API tokens, cookies, CSRF tokens, MFA codes, a
+// redirect's login code) redacted, so turning on debug logging doesn't put them in the logs.
 func logHeadersToTopic(topic string, headers http.Header) {
-	if out := formatHeadersForLog(headers); out != "" {
+	if out := debugredact.Headers(headers); out != "" {
 		gtwlog.DebugTopicf(topic, "\n%s", out)
 	}
 }
@@ -66,21 +67,13 @@ func logRequestBody(req *http.Request, logBody bool) {
 		return
 	}
 	if len(head) > 0 && !httputil.IsBinaryContent(req.Header.Get("Content-Type")) {
-		gtwlog.DebugTopicf(gtwlog.TopicHTTPRequestBody, "len=%d body=%s", req.ContentLength, requestBodyForLog(head))
+		gtwlog.DebugTopicf(
+			gtwlog.TopicHTTPRequestBody,
+			"len=%d body=%s",
+			req.ContentLength,
+			debugredact.Body(head, httputil.BodyTruncationLimit),
+		)
 	}
-}
-
-// requestBodyForLog is the start of a JSON request body as it's logged. Only a whole body of valid JSON can be
-// redacted, so the start of a longer body, or one that isn't JSON, isn't logged at all.
-func requestBodyForLog(head []byte) string {
-	if len(head) > httputil.BodyTruncationLimit {
-		return "[not logged: too long to redact]"
-	}
-	redacted, ok := redactJSONForLog(head)
-	if !ok {
-		return "[not logged: not valid JSON, so it can't be redacted]"
-	}
-	return httputil.TruncateString([]byte(redacted), httputil.BodyTruncationLimit)
 }
 
 // replayedBody is a request body whose first bytes were already read, and are read again before the rest.

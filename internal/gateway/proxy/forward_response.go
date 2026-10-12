@@ -2,10 +2,13 @@ package proxy
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 
+	"github.com/DocSpring/rack-gateway/internal/gateway/debugredact"
 	"github.com/DocSpring/rack-gateway/internal/gateway/httputil"
 	gtwlog "github.com/DocSpring/rack-gateway/internal/gateway/logging"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
@@ -26,7 +29,7 @@ func (h *Handler) processProxyResponse(
 		(rbac.KeyMatch3(path, "/apps/{app}/releases") || rbac.KeyMatch3(path, "/apps/{app}/releases/{id}"))
 
 	// GET /apps/{app}/environment returns a flat JSON map that needs secret masking
-	filterEnvironment := isJSON && r.Method == http.MethodGet && rbac.KeyMatch3(path, "/apps/{app}/environment")
+	filterEnvironment := isJSON && isEnvironmentRead(r, path)
 
 	shouldCapture, captureProcess := h.shouldCaptureResponse(r, path, isJSON)
 	needsBuffer := filterRelease || filterEnvironment || shouldCapture || captureProcess
@@ -147,11 +150,33 @@ func (h *Handler) writeResponse(
 	return h.writeStreamedResponse(w, respReader, shouldCaptureBody)
 }
 
-// logResponseHeaders logs all response headers.
+// isEnvironmentRead reports whether r reads an app's environment: a map of env var names to values.
+func isEnvironmentRead(r *http.Request, path string) bool {
+	return r.Method == http.MethodGet && rbac.KeyMatch3(path, "/apps/{app}/environment")
+}
+
+// logResponseHeaders logs the rack's response headers, with credentials redacted (see debugredact.Headers).
 func (_ *Handler) logResponseHeaders(resp *http.Response) {
-	for key, values := range resp.Header {
-		for _, value := range values {
-			gtwlog.DebugTopicf(gtwlog.TopicHTTPResponseHeaders, "%s: %s", key, value)
-		}
+	if out := debugredact.Headers(resp.Header); out != "" {
+		gtwlog.DebugTopicf(gtwlog.TopicHTTPResponseHeaders, "upstream response headers\n%s", out)
 	}
+}
+
+// urlForLog is the rack URL a request went to, as it may be logged: a rack URL can carry the rack's password.
+func urlForLog(target *url.URL) string {
+	return debugredact.URL(target.String())
+}
+
+// responseBodyForLog is the start of a rack response body as it may be logged: JSON with its secrets redacted
+// (resource URLs carry credentials, and an app's environment is all values), or a placeholder, with the body's
+// size, for one that can't be redacted.
+func responseBodyForLog(r *http.Request, path string, snippet []byte, size int64) string {
+	logged := debugredact.Body(snippet, proxyLogBodyLimit)
+	if isEnvironmentRead(r, path) {
+		logged = debugredact.EnvBody(snippet, proxyLogBodyLimit)
+	}
+	if logged == debugredact.TooLongPlaceholder || logged == debugredact.NotJSONPlaceholder {
+		return fmt.Sprintf("%s (%d bytes)", logged, size)
+	}
+	return logged
 }

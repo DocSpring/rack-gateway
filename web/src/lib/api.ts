@@ -315,6 +315,13 @@ export const cancelCliLogin = (payload: { state: string }): Promise<{ redirect: 
     })
     .then((res) => res.data)
 
+// Where the CLI login bound to this browser was started. The MFA page shows it from here, never from its own URL,
+// which a crafted link could fill with a reassuring device or address.
+export const getCliLoginInitiator = (state: string): Promise<{ device?: string; ip?: string }> =>
+  getHttpClientInstance()
+    .get<{ device?: string; ip?: string }>('/auth/cli/initiator', { params: { state } })
+    .then((res) => res.data)
+
 export const verifyCliMfa = (payload: {
   state: string
   method?: string
