@@ -267,6 +267,14 @@ func (c *Client) getBranch(owner, repo, branch string) (*Branch, error) {
 	if err := c.doRequest("GET", apiURL, nil, http.StatusOK, notFoundError, &branchInfo); err != nil {
 		return nil, err
 	}
+	// GitHub answers a renamed branch's old name with a redirect to its new name, which the client follows. The
+	// checks that go by the name CI sent (no deploys from the default branch) would then pass for the default
+	// branch's old name, while the commit checks ran against the default branch. So the branch must come back under
+	// the name asked for.
+	if branchInfo.Name != branch {
+		return nil, fmt.Errorf("branch %s in %s/%s has been renamed to %q; deploy from its current name",
+			branch, owner, repo, branchInfo.Name)
+	}
 
 	return &branchInfo, nil
 }

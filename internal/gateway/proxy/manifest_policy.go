@@ -31,12 +31,15 @@ func newImagePolicy(patternTemplates map[string]string, commit string, requireCo
 	return policy
 }
 
-// validate checks every image the manifest's services run: each service's image, and its init container's when it
-// sets one (without one, the init container runs the service's image). A service's init container is held to the
-// service's pattern. checkManifestStructure has already refused image keys anywhere else.
+// validate checks every image a build's manifest runs: each service's image, and its init container's when it sets
+// one (without one, the init container runs the service's image). A service's init container is held to the
+// service's pattern. A resource may not override its image.
 func (p imagePolicy) validate(manifest *convoxManifest) error {
 	if manifest == nil || len(manifest.Services) == 0 {
 		return fmt.Errorf("no services defined in manifest")
+	}
+	if err := refuseResourceImages(manifest); err != nil {
+		return err
 	}
 	compiled, err := compileImagePatterns(p.patterns)
 	if err != nil {
@@ -48,6 +51,69 @@ func (p imagePolicy) validate(manifest *convoxManifest) error {
 		}
 	}
 	return nil
+}
+
+// validateReleaseImages checks the images a promote takes from the release's manifest: init container images and
+// resource images. Each service itself runs the image its build pushed to the app's registry
+// (<repository>:<service>.<build>), whatever the manifest's image says now, so only these come from the manifest.
+func (p imagePolicy) validateReleaseImages(manifest *convoxManifest) error {
+	if err := refuseResourceImages(manifest); err != nil {
+		return err
+	}
+	compiled, err := compileImagePatterns(p.patterns)
+	if err != nil {
+		return err
+	}
+	for _, name := range sortedServiceNames(manifest) {
+		init := manifest.Services[name].InitContainer
+		if init == nil || init.Image == "" {
+			continue // the init container runs the service's own image
+		}
+		pattern, hasPattern := patternFor(name, compiled)
+		if !hasPattern && p.commit == "" {
+			continue // no pattern applies, so the service's images aren't restricted
+		}
+		if !hasPattern {
+			return noPatternError(name)
+		}
+		if err := p.validateImage("service "+name+" init container", init.Image, pattern); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// refuseResourceImages refuses a resource that overrides its image: the rack would run it in place of the
+// resource type's default image, and no pattern covers resources.
+func refuseResourceImages(manifest *convoxManifest) error {
+	names := make([]string, 0, len(manifest.Resources))
+	for name := range manifest.Resources {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		if image := manifest.Resources[name].Image; image != "" {
+			return fmt.Errorf("resource %s overrides its image (%q), which isn't allowed", name, image)
+		}
+	}
+	return nil
+}
+
+// noPatternError refuses a service with no pattern where its images must be tied to a commit: the commit tag
+// doesn't pin the repository, so every service needs a pattern that does.
+func noPatternError(service string) error {
+	return fmt.Errorf(
+		`service %s has no image pattern; add one for it or a "*" pattern to service_image_patterns`, service,
+	)
+}
+
+// patternFor returns the pattern for a service: its own, or the wildcard pattern (lowest precedence).
+func patternFor(service string, compiled map[string]imagePattern) (imagePattern, bool) {
+	if pattern, ok := compiled[service]; ok {
+		return pattern, true
+	}
+	pattern, ok := compiled["*"]
+	return pattern, ok
 }
 
 // compileImagePatterns compiles each pattern anchored, so it must match the whole image reference.
@@ -64,11 +130,7 @@ func compileImagePatterns(patterns map[string]string) (map[string]imagePattern, 
 }
 
 func (p imagePolicy) validateService(name string, service convoxService, compiled map[string]imagePattern) error {
-	pattern, hasPattern := compiled[name]
-	if !hasPattern {
-		// The wildcard pattern applies to services without their own pattern (lowest precedence).
-		pattern, hasPattern = compiled["*"]
-	}
+	pattern, hasPattern := patternFor(name, compiled)
 	if !hasPattern && p.commit == "" {
 		return nil // no pattern applies, so the service's images aren't restricted
 	}
@@ -83,10 +145,7 @@ func (p imagePolicy) validateService(name string, service convoxService, compile
 		return fmt.Errorf("service %s must use a pre-built image (image pattern is configured for this service)", name)
 	}
 	if !hasPattern {
-		// The commit tag doesn't pin the repository, so every service needs a pattern that does.
-		return fmt.Errorf(
-			`service %s has no image pattern; add one for it or a "*" pattern to service_image_patterns`, name,
-		)
+		return noPatternError(name)
 	}
 
 	if err := p.validateImage("service "+name, service.Image, pattern); err != nil {

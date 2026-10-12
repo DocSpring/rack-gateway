@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -54,9 +55,12 @@ func (h *Handler) processBufferedResponse(
 	authUserEmail string,
 	handling responseHandling,
 ) ([]byte, error) {
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxBufferedResponseBytes+1))
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
+	if len(body) > maxBufferedResponseBytes {
+		return nil, errRackResponseTooLarge
 	}
 
 	if handling.filterRelease {
@@ -137,7 +141,7 @@ func (_ *Handler) writeStreamedResponse(
 	if !shouldCaptureBody {
 		bytesWritten, err := io.Copy(w, respReader)
 		if err != nil {
-			return 0, nil, fmt.Errorf("failed to stream response body: %w", err)
+			return bytesWritten, nil, fmt.Errorf("failed to stream response body: %w", err)
 		}
 		return bytesWritten, nil, nil
 	}
@@ -146,7 +150,7 @@ func (_ *Handler) writeStreamedResponse(
 	reader := io.TeeReader(respReader, acc)
 	bytesWritten, err := io.Copy(w, reader)
 	if err != nil {
-		return 0, nil, fmt.Errorf("failed to stream response body: %w", err)
+		return bytesWritten, nil, fmt.Errorf("failed to stream response body: %w", err)
 	}
 
 	return bytesWritten, acc.Bytes(), nil
@@ -230,9 +234,26 @@ const (
 
 	// uploadForwardTimeout gives an archive room to reach the rack and be processed: the gateway streams it from
 	// the client as it arrives (up to uploadReadTimeout), and the rack answers once it has the whole archive and
-	// has stored it, or for an import, pushed its images.
+	// has stored it, or for an import, pushed its images. A build export streams the other way, and the client's
+	// timeout covers reading the whole archive, so it gets the same.
 	uploadForwardTimeout = 20 * time.Minute
 )
+
+// maxBufferedResponseBytes caps a rack response the gateway reads into memory to filter or record it. The largest
+// is a release list at the most the gateway lets a client ask for (maxListLimit releases, each with the app's env
+// and manifest), a few MB.
+const maxBufferedResponseBytes = 16 << 20
+
+// errRackResponseTooLarge refuses a rack response over maxBufferedResponseBytes. The client gets a 502.
+var errRackResponseTooLarge = fmt.Errorf(
+	"the rack's response is too large: the gateway reads at most %d MB of a response it filters",
+	maxBufferedResponseBytes>>20,
+)
+
+// errResponseInterrupted marks a failure after the rack's response status was passed on, typically while its body
+// streams: the client already has a status and part of the body, so the gateway can only stop. An error body would
+// be appended to the response.
+var errResponseInterrupted = errors.New("the response was interrupted")
 
 var promotePathPattern = regexp.MustCompile(`^/apps/[^/]+/releases/[^/]+/promote$`)
 
@@ -241,6 +262,8 @@ const (
 	objectUploadRoute = "/apps/{app}/objects/tmp/{name}"
 	// buildImportRoute is where `convox builds import` uploads an exported build.
 	buildImportRoute = "/apps/{app}/builds/import"
+	// buildExportRoute is where `convox builds export` downloads a build's archive.
+	buildExportRoute = "/apps/{app}/builds/{id}.tgz"
 )
 
 // isObjectUpload reports whether r uploads a source archive to path.
@@ -260,7 +283,8 @@ func forwardTimeout(r *http.Request, path string) time.Duration {
 	switch {
 	case r.Method == http.MethodPost && promotePathPattern.MatchString(normalized):
 		return promoteForwardTimeout
-	case isArchiveUpload(r, normalized):
+	case isArchiveUpload(r, normalized),
+		r.Method == http.MethodGet && rbac.KeyMatch3(normalized, buildExportRoute):
 		return uploadForwardTimeout
 	default:
 		return defaultForwardTimeout

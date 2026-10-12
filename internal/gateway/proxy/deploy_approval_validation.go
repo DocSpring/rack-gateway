@@ -1,12 +1,12 @@
 package proxy
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
 
-	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	gtwlog "github.com/DocSpring/rack-gateway/internal/gateway/logging"
 )
 
@@ -19,7 +19,7 @@ const defaultManifestPath = "convox.yml"
 func (h *Handler) validateBuildManifestForAllUsers(r *http.Request, app string, vals url.Values) error {
 	// Without the app, its patterns can't be looked up: refuse the build rather than let it through unchecked.
 	if app == "" {
-		return fmt.Errorf("could not determine the app for this build")
+		return refuse(http.StatusBadRequest, errors.New("could not determine the app for this build"))
 	}
 	patterns, err := h.settingsService.GetServiceImagePatterns(app)
 	if err != nil {
@@ -29,20 +29,12 @@ func (h *Handler) validateBuildManifestForAllUsers(r *http.Request, app string, 
 		return nil
 	}
 
-	objectURL := vals.Get("url")
-	if objectURL == "" {
-		return fmt.Errorf("build request missing object URL")
-	}
 	gitSHA := strings.TrimSpace(vals.Get("git-sha"))
 	if gitSHA == "" {
-		return fmt.Errorf("git-sha is required when image pattern validation is configured")
+		return refuse(http.StatusBadRequest,
+			errors.New("git-sha is required when image pattern validation is configured"))
 	}
-
-	policy := newImagePolicy(patterns, gitSHA, false)
-	if err := h.validateBuildManifest(r.Context(), app, objectURL, manifestPathFrom(vals), policy); err != nil {
-		return fmt.Errorf("manifest validation failed: %w", err)
-	}
-	return nil
+	return h.validateBuildManifest(r.Context(), app, vals, newImagePolicy(patterns, gitSHA, false))
 }
 
 // validateTokenBuildBinding binds an API-token build to the deploy approval that authorized it:
@@ -54,40 +46,32 @@ func (h *Handler) validateBuildManifestForAllUsers(r *http.Request, app string, 
 // The approved commit always comes from the approval record, never from the client.
 func (h *Handler) validateTokenBuildBinding(r *http.Request, vals url.Values, tracker *deployApprovalTracker) error {
 	approval := tracker.request
-	objectURL := vals.Get("url")
-	if objectURL == "" || objectURL != approval.ObjectURL {
-		return fmt.Errorf("build must use the archive uploaded for deploy approval %s", approval.PublicID)
-	}
-
-	commit, ok := db.NormalizeCommitSHA(approval.GitCommitHash)
-	if !ok {
-		return fmt.Errorf("deploy approval %s is not bound to a full git commit SHA", approval.PublicID)
-	}
-	if gitSHA := strings.TrimSpace(vals.Get("git-sha")); gitSHA != "" && !strings.EqualFold(gitSHA, commit) {
-		return fmt.Errorf("git-sha %s does not match the approved commit %s", gitSHA, commit)
+	if objectURL := vals.Get("url"); objectURL == "" || objectURL != approval.ObjectURL {
+		return refuse(http.StatusForbidden,
+			fmt.Errorf("build must use the archive uploaded for deploy approval %s", approval.PublicID))
 	}
 
 	patterns, err := h.settingsService.GetServiceImagePatterns(tracker.app)
 	if err != nil {
 		return fmt.Errorf("failed to get service image patterns: %w", err)
 	}
-	// The commit tag alone doesn't pin the image repository (attacker/image:<sha> would pass),
-	// so approval-bound builds require patterns that name the repository.
-	if len(patterns) == 0 {
-		return fmt.Errorf(
-			"deploy approvals for app %s require service_image_patterns to pin the image repository "+
-				`(e.g. {"*": "docker\\.io/org/app:{{GIT_COMMIT}}-amd64"})`,
-			tracker.app,
-		)
+	commit, err := approvalCommit(approval, tracker.app, patterns)
+	if err != nil {
+		return refuse(http.StatusForbidden, err)
+	}
+	if gitSHA := strings.TrimSpace(vals.Get("git-sha")); gitSHA != "" && !strings.EqualFold(gitSHA, commit) {
+		return refuse(http.StatusForbidden,
+			fmt.Errorf("git-sha %s does not match the approved commit %s", gitSHA, commit))
 	}
 
 	policy := newImagePolicy(patterns, commit, true)
-	if err := h.validateBuildManifest(r.Context(), tracker.app, objectURL, manifestPathFrom(vals), policy); err != nil {
+	if err := h.validateBuildManifest(r.Context(), tracker.app, vals, policy); err != nil {
 		gtwlog.Warnf("deploy approval %s: build manifest rejected: %v", approval.PublicID, err)
-		return fmt.Errorf("manifest validation failed: %w", err)
+		return err
 	}
 
-	gtwlog.Infof("deploy approval %s: build bound to commit %s and object %s", approval.PublicID, commit, objectURL)
+	gtwlog.Infof("deploy approval %s: build bound to commit %s and object %s", approval.PublicID, commit,
+		approval.ObjectURL)
 	return nil
 }
 

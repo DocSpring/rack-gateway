@@ -31,12 +31,16 @@ type bindingFixture struct {
 	authUser *auth.User
 	approval *db.DeployApprovalRequest
 	manifest string // convox.yml served inside the uploaded archive
+	reads    rackReads
 }
 
 func newBindingFixture(t *testing.T) *bindingFixture {
 	t.Helper()
 	f := &bindingFixture{}
 	rack := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if f.reads.serve(w, r) {
+			return
+		}
 		if r.Method == http.MethodGet && r.URL.Path == "/apps/docspring/objects/tmp/approved.tgz" {
 			_, _ = w.Write(tarballWithManifest(t, f.manifest))
 			return
@@ -316,9 +320,14 @@ func TestTokenBuildAcceptsDocSpringManifest(t *testing.T) {
 	f := newBindingFixture(t)
 	f.setImagePatterns(t, map[string]string{"*": `docker\.io/docspringcom/app:{{GIT_COMMIT}}-amd64`})
 	image := "docker.io/docspringcom/app:" + approvedCommit + "-amd64"
-	f.manifest = "appSettings:\n  awsLogs: true\n" +
+	// The rack substitutes ${NAME} references into the manifest; the build is checked with them substituted too.
+	f.reads.addRelease(rackRelease{ID: "R1", Env: "DATABASE_URL=postgres://db\nLOG_RETENTION_DAYS=30\nRACK=staging\nWEB_COUNT=2"})
+	f.manifest = "appSettings:\n  awsLogs:\n    cwRetention: ${LOG_RETENTION_DAYS}\n    disableRetention: false\n" +
 		"services:\n" +
-		"  web:\n    image: " + image + "\n    port: 3000\n    environment:\n      - DATABASE_URL\n" +
+		"  web:\n    image: " + image + "\n    port: 3000\n    domain: ${CONVOX_DOMAINS}\n" +
+		"    scale:\n      count: ${WEB_COUNT}\n" +
+		"    annotations:\n      - tailscale.com/hostname: app-web-${RACK}\n      - tailscale.com/tags: 'tag:app'\n" +
+		"    environment:\n      - DATABASE_URL\n" +
 		"  worker:\n    image: " + image + "\n    command: bundle exec sidekiq\n" +
 		"  worker-gj:\n    image: " + image + "\n" +
 		"  command:\n    image: " + image + "\n" +
@@ -335,4 +344,48 @@ func TestApprovedDeployCommandsAllowOnlyListedCommands(t *testing.T) {
 	require.True(t, h.isCommandApproved("docspring", "bin/pre_release_checks migrate"))
 	require.False(t, h.isCommandApproved("docspring", "bin/rails console"))
 	require.False(t, h.isCommandApproved("docspring", "bin/pre_release_checks migrate; bin/rails console"))
+}
+
+// An exec under a deploy approval may only run an approved command. One without a command is refused too, rather
+// than let through unchecked.
+func TestApprovalExecMustRunAnApprovedCommand(t *testing.T) {
+	h, database := newProxyForDeployApprovalTest(t)
+	app := "docspring"
+	require.NoError(t, database.UpsertSetting(
+		&app, "approved_deploy_commands", []string{"bin/pre_release_checks migrate"}, nil,
+	))
+	tracker := &deployApprovalTracker{request: &db.DeployApprovalRequest{ID: 1}, app: app}
+	exec := func(command string) int {
+		r := httptest.NewRequest(http.MethodGet, "/apps/docspring/processes/p1/exec", nil)
+		if command != "" {
+			r.Header.Set("Command", command)
+		}
+		r = r.WithContext(context.WithValue(r.Context(), deployApprovalContextKey, tracker))
+		return h.validateExecCommand(httptest.NewRecorder(), r, r.URL.Path)
+	}
+
+	require.Zero(t, exec("bin/pre_release_checks migrate"))
+	for _, command := range []string{"", "   ", "bin/rails console"} {
+		require.Equal(t, http.StatusForbidden, exec(command), "command %q", command)
+	}
+}
+
+// The rack substitutes ${NAME} before it parses the manifest, so an env value can change what the lines after it
+// mean. Here a quote in the app's env swallows the image line into a value: the gateway's own parse sees a
+// pre-built image, but the rack would build the service from the archive's source.
+func TestBuildIsCheckedWithTheAppsEnvSubstituted(t *testing.T) {
+	f := newBindingFixture(t)
+	image := "docker.io/docspringcom/app:" + approvedCommit
+	f.manifest = "services:\n  web:\n    x-a: ${OPEN}\n    image: " + image + "\n    x-b: ${CLOSE}\n"
+	f.reads.addRelease(rackRelease{ID: "R1", Env: "OPEN=\"\nCLOSE=\""})
+
+	err := f.build(t, "url="+approvedObjectURL)
+	require.ErrorContains(t, err, "with the app's env and build arguments substituted, service web must use a "+
+		"pre-built image tagged with the approved commit")
+	var refusal *refusalError
+	require.ErrorAs(t, err, &refusal)
+	require.Equal(t, http.StatusForbidden, refusal.status)
+
+	// Build arguments override the app's env, as they do on the rack.
+	require.NoError(t, f.build(t, "url="+approvedObjectURL+"&build-args=OPEN%3Dx%2CCLOSE%3Dy"))
 }

@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -32,7 +33,10 @@ func fakeGitHub(t *testing.T, withPR bool) *httptest.Server {
 		case r.Header.Get("Authorization") != "Bearer gh-token":
 			w.WriteHeader(http.StatusUnauthorized)
 		case strings.HasPrefix(path, "/repos/acme/web/branches/"):
-			_ = json.NewEncoder(w).Encode(map[string]interface{}{"commit": map[string]string{"sha": ghBranchHead}})
+			name, _ := url.PathUnescape(strings.TrimPrefix(path, "/repos/acme/web/branches/"))
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"name": name, "commit": map[string]string{"sha": ghBranchHead},
+			})
 		case strings.HasPrefix(path, "/repos/acme/web/compare/"):
 			status := "behind"
 			switch {
