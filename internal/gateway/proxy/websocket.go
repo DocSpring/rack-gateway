@@ -32,6 +32,12 @@ func (h *Handler) proxyWebSocket(
 	authUser *auth.User,
 	originalPath string,
 ) (int, error) {
+	release, ok := acquireWebSocketSession(w, authUser)
+	if !ok {
+		return http.StatusTooManyRequests, nil
+	}
+	defer release()
+
 	if status := h.validateExecCommand(w, r, originalPath); status != 0 {
 		return status, nil
 	}
@@ -58,7 +64,7 @@ func (h *Handler) proxyWebSocket(
 	}
 	defer clientConn.Close() //nolint:errcheck
 
-	h.proxyWebSocketMessages(clientConn, upstreamConn)
+	proxyWebSocketMessages(clientConn, upstreamConn, defaultClientKeepalive)
 	return http.StatusSwitchingProtocols, nil
 }
 
@@ -331,31 +337,6 @@ func (h *Handler) upgradeClientConnection(
 	}
 
 	return upgrader.Upgrade(w, r, nil)
-}
-
-// proxyWebSocketMessages bidirectionally proxies WebSocket messages
-func (h *Handler) proxyWebSocketMessages(clientConn, upstreamConn *websocket.Conn) {
-	errc := make(chan error, 2)
-
-	go h.forwardMessages(clientConn, upstreamConn, errc)
-	go h.forwardMessages(upstreamConn, clientConn, errc)
-
-	<-errc
-}
-
-// forwardMessages forwards messages from source to destination
-func (_ *Handler) forwardMessages(src, dst *websocket.Conn, errc chan error) {
-	for {
-		msgType, message, err := src.ReadMessage()
-		if err != nil {
-			errc <- err
-			return
-		}
-		if err := dst.WriteMessage(msgType, message); err != nil {
-			errc <- err
-			return
-		}
-	}
 }
 
 // validateExecCommand validates exec commands for deploy approval tracking

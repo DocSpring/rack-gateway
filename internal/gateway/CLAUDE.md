@@ -83,8 +83,14 @@ Request forwarding with WebSocket support:
   (`handlers/api_handler_env.go`) still refuses protected keys
 - Client IPs: use `c.ClientIP()` in gin handlers and `netutil.ClientIP(r)` elsewhere. Both trust
   `X-Forwarded-For` only from `TRUSTED_PROXY_CIDRS`. Never parse forwarding headers yourself
-- Forwards all methods: GET, POST, PUT, PATCH, DELETE
-- Full WebSocket proxy support for `convox exec` and logs
+- Forwards all methods: GET, POST, PUT, PATCH, DELETE. Request bodies are capped at 1 MiB as they're read
+  (archive uploads stream through), and a body on GET, HEAD or DELETE is refused (`proxy/forward_helpers.go`).
+  Release and build list `limit` must be 1-100 (`proxy/forward_query.go`)
+- Full WebSocket proxy support for `convox exec` and logs. Messages stream through (1 MiB cap from the client,
+  16 MiB from the rack); the gateway pings the client and ends a session whose client stops answering; each
+  user or API token may hold 10 sessions at once (`proxy/websocket_stream.go`, `proxy/websocket_sessions.go`)
+- Rack HTTP clients share one connection pool per TLS config (`httpclient`); rackcert keeps the same
+  `*tls.Config` until the pinned certificate changes, and must not hand out copies
 
 Key files:
 

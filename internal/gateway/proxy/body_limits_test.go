@@ -173,3 +173,39 @@ func TestTokenBuildImportIsRefusedUnread(t *testing.T) {
 	require.Equal(t, http.StatusForbidden, approvalErr.status)
 	require.False(t, body.read, "the gateway must not read an imported build")
 }
+
+// The Convox SDK never sends a body on GET, HEAD or DELETE, so the gateway refuses one instead of holding it in
+// memory and forwarding it, whether or not the client said how long it is.
+func TestBodyOnABodylessMethodIsRefused(t *testing.T) {
+	h, database, rack := newRecordingProxy(t)
+	for _, unknownLength := range []bool{false, true} {
+		req := withPath(requestAs(t, database, "deployer@test.com"), http.MethodGet, "/apps/myapp/processes")
+		req = withBody(req, "service=web", "application/x-www-form-urlencoded")
+		if unknownLength {
+			req.ContentLength = -1
+		}
+
+		rr := httptest.NewRecorder()
+		h.ProxyToRack(rr, req)
+		require.Equal(t, http.StatusBadRequest, rr.Code, rr.Body.String())
+		require.Contains(t, rr.Body.String(), "request body not allowed")
+	}
+	require.Zero(t, rack.count(), "refused requests must not reach the rack")
+
+	req := withPath(requestAs(t, database, "deployer@test.com"), http.MethodGet, "/apps/myapp/processes")
+	rr := httptest.NewRecorder()
+	h.ProxyToRack(rr, req)
+	require.Equal(t, http.StatusOK, rr.Code, "a GET without a body is forwarded: %s", rr.Body.String())
+}
+
+func TestReadBufferedBodyRefusesABodyOnHeadAndDelete(t *testing.T) {
+	for _, method := range []string{http.MethodHead, http.MethodDelete} {
+		_, err := readBufferedBody(httptest.NewRequest(method, "/apps/myapp", strings.NewReader("x")))
+		require.ErrorIs(t, err, errBodyNotAllowed, method)
+		require.Equal(t, http.StatusBadRequest, bodyErrorStatus(err, http.StatusInternalServerError))
+
+		body, err := readBufferedBody(httptest.NewRequest(method, "/apps/myapp", nil))
+		require.NoError(t, err, method)
+		require.Empty(t, body)
+	}
+}
