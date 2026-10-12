@@ -64,3 +64,18 @@ func TestAppEnvKeysFailClosedWhenTheSettingsCantBeRead(t *testing.T) {
 	require.True(t, keys.isProtected("PORT"))
 	require.Equal(t, "PORT="+maskedSecret, maskSecretAndProtectedEnvVars("PORT=3000", keys))
 }
+
+// A stored list that isn't a list of env var names is an error, not an empty list, so every key counts as secret
+// and protected rather than none of them.
+func TestAppEnvKeysFailClosedOnMalformedStoredLists(t *testing.T) {
+	h, database, _ := newProxyForEnvTest(t)
+	app := "app"
+	malformed := map[string]bool{"BILLING_ID": true}
+	require.NoError(t, database.UpsertSetting(&app, settings.KeySecretEnvVars, malformed, nil))
+	require.NoError(t, database.UpsertSetting(&app, settings.KeyProtectedEnvVars, "DATABASE_URL", nil))
+
+	keys := h.loadAppEnvKeys(app)
+	require.True(t, keys.isSecret("PORT"))
+	require.True(t, keys.isProtected("PORT"))
+	require.Equal(t, "PORT="+maskedSecret, maskSecretAndProtectedEnvVars("PORT=3000", keys))
+}

@@ -385,7 +385,7 @@ func (_ *APIHandler) respondMergeError(c *gin.Context, mergeErr error) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "This environment variable is protected and cannot be changed."})
 	case errors.Is(mergeErr, envutil.ErrInvalidEnvEntry):
 		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "Env var names must match [A-Za-z_][A-Za-z0-9_]* and values cannot contain line breaks.",
+			"error": "Env var names must match [A-Za-z_][A-Za-z0-9_]* and values can't contain control characters.",
 		})
 	case errors.Is(mergeErr, envutil.ErrMaskedSecretWithoutBase):
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Masked secret value submitted without an existing secret."})

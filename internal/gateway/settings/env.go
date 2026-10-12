@@ -146,8 +146,13 @@ func parseEnvString(key, raw string) (string, error) {
 	return raw, nil
 }
 
-// parseEnvList reads a JSON array of strings, or a comma-separated list.
+// parseEnvList reads a JSON array of strings, or a comma-separated list. A quoted value is refused: a JSON string
+// ("A,B", as jsonencode writes a string) or a single-quoted one would split into names with quotes in them, which
+// match nothing. So is null (unset the variable instead).
 func parseEnvList(raw string) ([]string, error) {
+	if strings.HasPrefix(raw, `"`) || strings.HasPrefix(raw, "'") || raw == "null" {
+		return nil, fmt.Errorf("must be a JSON array of strings or a comma-separated list, got %s", raw)
+	}
 	if strings.HasPrefix(raw, "[") {
 		var list []string
 		if err := json.Unmarshal([]byte(raw), &list); err != nil {

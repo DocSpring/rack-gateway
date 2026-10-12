@@ -76,7 +76,10 @@ func (h *Handler) prepareReleaseCreate(
 		return nil, fmt.Errorf("could not infer app name from path")
 	}
 
-	posted, order := parsePostedEnv(envStr)
+	posted, order, err := parsePostedEnv(envStr)
+	if err != nil {
+		return nil, err
+	}
 	keys := h.loadAppEnvKeys(app)
 
 	if err := h.validateSecretsPermissions(r, email, keys, posted, order); err != nil {
@@ -128,31 +131,6 @@ func readAndParseRequestBody(r *http.Request) ([]byte, url.Values, error) {
 		return nil, nil, fmt.Errorf("invalid form body: %w", err)
 	}
 	return bodyBuf, vals, nil
-}
-
-func parsePostedEnv(envStr string) (map[string]string, []string) {
-	postedLines := strings.Split(envStr, "\n")
-	posted := make(map[string]string)
-	order := make([]string, 0, len(postedLines))
-	for _, ln := range postedLines {
-		if strings.TrimSpace(ln) == "" {
-			continue
-		}
-		parts := strings.SplitN(ln, "=", 2)
-		key := strings.TrimSpace(parts[0])
-		val := ""
-		if len(parts) == 2 {
-			val = parts[1]
-		}
-		if key == "" {
-			continue
-		}
-		if _, seen := posted[key]; !seen {
-			order = append(order, key)
-		}
-		posted[key] = val
-	}
-	return posted, order
 }
 
 func (h *Handler) validateSecretsPermissions(
@@ -236,9 +214,15 @@ func (h *Handler) mergeEnvAndComputeDiffs(
 
 	for _, key := range order {
 		val := posted[key]
-		base := baseEnv[key]
+		base, exists := baseEnv[key]
 		isSecret := keys.isSecret(key)
 		if val == maskedSecret {
+			// The mask keeps the current value. Without one, the key would be created empty, past the secret and
+			// protected checks (which skip masked values) and without an audit entry.
+			if !exists {
+				return nil, nil, fmt.Errorf("%w: %s is masked, but has no current value to keep",
+					envutil.ErrMaskedSecretWithoutBase, key)
+			}
 			merged[key] = base
 			continue
 		}

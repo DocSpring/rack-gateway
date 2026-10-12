@@ -10,6 +10,7 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/config"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	"github.com/DocSpring/rack-gateway/internal/gateway/deps"
+	"github.com/DocSpring/rack-gateway/internal/gateway/testbypass"
 )
 
 // App holds all application dependencies
@@ -43,7 +44,7 @@ func New() (*App, error) {
 	}
 	dbEnvironment, err := database.CurrentEnvironment()
 	if err == nil {
-		err = checkProductionSafety(dbEnvironment, os.Getenv)
+		err = checkProductionSafety(dbEnvironment, !testbypass.Compiled, os.Getenv)
 	}
 	if err != nil {
 		database.Close() //nolint:errcheck,gosec // G104: cleanup on init failure

@@ -251,8 +251,10 @@ services:
       <<: *gateway_common_env
       DOMAIN: gateway.example.test
       PORT: ${RELEASE_GATEWAY_PORT:-9460}
-      AUDIT_HMAC_SECRET: release-smoke-audit-secret
-      # A fresh key from scripts/release-smoke.sh: release builds refuse the published development key.
+      # Fresh secrets from scripts/release-smoke.sh: release builds refuse the published development values and
+      # secrets shorter than 32 bytes.
+      APP_SECRET_KEY: ${RELEASE_APP_SECRET_KEY:-}
+      AUDIT_HMAC_SECRET: ${RELEASE_AUDIT_HMAC_SECRET:-}
       COLUMN_ENCRYPTION_KEY: ${RELEASE_COLUMN_ENCRYPTION_KEY:-}
       DATABASE_URL: postgres://postgres:postgres@postgres:5432/gateway_release?sslmode=disable
     ports:

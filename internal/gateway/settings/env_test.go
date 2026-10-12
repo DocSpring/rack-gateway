@@ -160,4 +160,56 @@ func TestValidateEnvironment(t *testing.T) {
 	}
 }
 
+// A quoted list (what Terraform's jsonencode writes for a string, or `- KEY="A,B"` in convox.yml) used to split
+// into names with the quotes in them, so it protected nothing. It is refused at startup, as are names that aren't
+// env var names, and a running gateway that reads one fails closed.
+func TestEnvVarListsRefuseQuotedValuesAndInvalidNames(t *testing.T) {
+	invalid := []string{
+		`RGW_APP_WEB_SETTING_PROTECTED_ENV_VARS="DATABASE_URL,SECRET_KEY_BASE"`,
+		`RGW_APP_API_SETTING_SECRET_ENV_VARS='BILLING_ID'`,
+		"RGW_APP_WORKER_SETTING_PROTECTED_ENV_VARS=null",
+		"RGW_APP_ADMIN_SETTING_AUDIT_VISIBLE_ENV_VARS=PORT,LOG-LEVEL",
+		`RGW_APP_JOBS_SETTING_SECRET_ENV_VARS=["BILLING ID"]`,
+		`RGW_APP_CRON_SETTING_APPROVED_DEPLOY_COMMANDS="bin/migrate"`,
+	}
+	err := ValidateEnvironment(invalid)
+	require.Error(t, err)
+	for _, entry := range invalid {
+		name, _, _ := strings.Cut(entry, "=")
+		require.ErrorContains(t, err, name+":")
+	}
+
+	svc := NewService(dbtest.NewDatabase(t))
+	t.Setenv("RGW_APP_WEB_SETTING_PROTECTED_ENV_VARS", `"DATABASE_URL,SECRET_KEY_BASE"`)
+	_, err = svc.GetProtectedEnvVars("web")
+	require.Error(t, err, "callers treat an error as every key protected")
+}
+
+// A stored list that isn't a list of env var names (written before validation, or straight to the database) is an
+// error, not an empty list: callers then treat every key as secret or protected, and allow no deploy commands.
+func TestMalformedStoredListsFailClosed(t *testing.T) {
+	database := dbtest.NewDatabase(t)
+	svc := NewService(database)
+	app := "web"
+	for _, value := range []interface{}{
+		"DATABASE_URL",
+		map[string]interface{}{"DATABASE_URL": true},
+		[]interface{}{"DATABASE_URL", 1},
+		nil,
+		[]string{`"DATABASE_URL`},
+	} {
+		require.NoError(t, database.UpsertSetting(&app, KeyProtectedEnvVars, value, nil))
+		names, err := svc.GetProtectedEnvVars(app)
+		require.ErrorIsf(t, err, ErrInvalidSettingValue, "stored %#v", value)
+		require.Nil(t, names)
+	}
+
+	require.NoError(t, database.UpsertSetting(&app, KeyApprovedDeployCommands, "bin/migrate", nil))
+	_, err := svc.GetApprovedDeployCommands(app)
+	require.ErrorIs(t, err, ErrInvalidSettingValue)
+	commands, err := svc.GetApprovedDeployCommands("unset-app")
+	require.NoError(t, err)
+	require.Empty(t, commands)
+}
+
 func stringPtr(s string) *string { return &s }
