@@ -15,6 +15,7 @@ import (
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/auditverify"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
+	"github.com/DocSpring/rack-gateway/internal/gateway/heartbeat"
 	jobaudit "github.com/DocSpring/rack-gateway/internal/gateway/jobs/audit"
 	jobverifyaudit "github.com/DocSpring/rack-gateway/internal/gateway/jobs/verifyaudit"
 	"github.com/DocSpring/rack-gateway/internal/gateway/testbypass"
@@ -129,14 +130,19 @@ func anchorWriterJob(workers *river.Workers, deps *Dependencies, anchors *AuditA
 	)
 }
 
-// auditVerificationJob registers the scheduled audit verification, which runs the same checks as verify-audit.
-// It returns nil when AUDIT_HMAC_SECRET isn't set, which the gateway only allows in DEV_MODE: verification never
-// uses the development secret. Without anchors it checks the hash chain only.
+// auditVerificationJob registers the scheduled audit verification, which runs the same checks as verify-audit
+// and pings AUDIT_VERIFY_HEARTBEAT_URL after every run. It returns nil when AUDIT_HMAC_SECRET isn't set, which the
+// gateway only allows in DEV_MODE: verification never uses the development secret. Without anchors it checks the
+// hash chain only.
 func auditVerificationJob(
 	workers *river.Workers,
 	deps *Dependencies,
 	anchors *AuditAnchorConfig,
 ) (*river.PeriodicJob, error) {
+	pinger, err := heartbeat.FromEnv(jobverifyaudit.HeartbeatEnv)
+	if err != nil {
+		return nil, err
+	}
 	opts, err := AuditVerifyOptions(anchors)
 	if errors.Is(err, db.ErrAuditHMACSecretNotSet) {
 		log.Printf("Audit verification: disabled because AUDIT_HMAC_SECRET is not set")
@@ -149,6 +155,10 @@ func auditVerificationJob(
 		log.Printf("Audit verification: anchors aren't configured (AUDIT_ANCHOR_BUCKET), so the hourly " +
 			"verification checks the hash chain only")
 	}
-	river.AddWorker(workers, jobverifyaudit.NewWorker(deps.Database, opts, deps.AuditLogger.LogDBEntry))
+	var ping jobverifyaudit.HeartbeatFunc
+	if pinger != nil {
+		ping = pinger.Ping
+	}
+	river.AddWorker(workers, jobverifyaudit.NewWorker(deps.Database, opts, deps.AuditLogger.LogDBEntry, ping))
 	return jobverifyaudit.PeriodicJob(), nil
 }

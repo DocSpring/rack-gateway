@@ -161,7 +161,11 @@ Key files:
   with the command). Full check on start, while failing and daily; otherwise the events since the last passing run.
   What it has verified and alerted is in memory only (a database writer must not be able to skip checks or silence
   alerts); `audit_verification_status` is display-only (Audit Logs page). Failures go to Sentry every run and to
-  Slack as `audit_log.verify` audit events (first failure, more failures, daily reminder, recovery)
+  Slack as `audit_log.verify` audit events (first failure, more failures, daily reminder, recovery). Every run
+  pings `AUDIT_VERIFY_HEARTBEAT_URL`, so a heartbeat monitor alerts when runs stop.
+- `heartbeat/`, `jobs/uptime/` - Heartbeat pings (https URLs from env vars, never logged: they carry the monitor's
+  key). `UPTIME_HEARTBEAT_URL` is pinged on start and every `UPTIME_HEARTBEAT_INTERVAL_MINUTES` while the health
+  check would pass.
 
 ### `/middleware` - HTTP Middleware
 

@@ -27,6 +27,26 @@ Use for:
 - Basic uptime monitoring
 - Load balancer health checks
 
+## Heartbeats
+
+A gateway usually runs on a private network (for example behind Tailscale) that an uptime service can't reach,
+so it reports in instead: it requests heartbeat URLs on a schedule, and a heartbeat monitor (Cronitor,
+Healthchecks.io and the like) alerts when the requests stop. Set the URLs as secrets: they usually carry the
+monitoring service's key, so the gateway never logs them.
+
+- **Uptime** (`UPTIME_HEARTBEAT_URL`): requested when the gateway starts and every 15 minutes
+  (`UPTIME_HEARTBEAT_INTERVAL_MINUTES`) while the health check would pass. It's a background job, so it stops when
+  the gateway is down, can't reach its database, has stopped running jobs, or can't write its audit log. Give the
+  monitor that schedule and some grace for restarts, for example 15 minutes.
+- **Audit verification** (`AUDIT_VERIFY_HEARTBEAT_URL`): requested after every
+  [hourly audit verification](/deployment/terraform/s3-worm-storage/#hourly-verification-in-the-gateway) run,
+  half past every hour (UTC), whatever it found: failures already alert through Sentry and Slack, and the monitor
+  alerts when runs stop. A run takes about a minute for a year of anchors, so expect the ping a few minutes after
+  :30 and give the monitor up to 30 minutes of grace, the run's time limit.
+
+A ping that fails is logged and not retried; the next one is due on schedule. Leave both unset on a gateway that
+is stopped on purpose (for example a staging rack shut down at night), or its monitors will alert.
+
 ## Kubernetes Probes
 
 Configure health checks in your Kubernetes deployment:

@@ -41,6 +41,9 @@ type harness struct {
 	slack  *queuedSlackEvents
 	// sentryEvents are the events sent to Sentry.
 	sentryEvents []*sentry.Event
+	// heartbeats counts the heartbeat pings; heartbeatErr is what they return.
+	heartbeats   int
+	heartbeatErr error
 	now          time.Time
 	nextUser     int
 }
@@ -76,7 +79,10 @@ func newHarness(t *testing.T, store auditverify.AnchorStore) *harness {
 
 // restart replaces the worker with a new one, as a gateway restart does.
 func (h *harness) restart() {
-	h.worker = NewWorker(h.database, h.opts, h.logger.LogDBEntry)
+	h.worker = NewWorker(h.database, h.opts, h.logger.LogDBEntry, func(context.Context) error {
+		h.heartbeats++
+		return h.heartbeatErr
+	})
 	h.worker.capture = func(event *sentry.Event) { h.sentryEvents = append(h.sentryEvents, event) }
 	h.worker.now = func() time.Time { return h.now }
 }

@@ -129,6 +129,14 @@ func setupPeriodicJobs(
 		periodicJobs = append(periodicJobs, verification)
 	}
 
+	uptimeHeartbeat, err := uptimeHeartbeatJob(workers)
+	if err != nil {
+		return nil, err
+	}
+	if uptimeHeartbeat != nil {
+		periodicJobs = append(periodicJobs, uptimeHeartbeat)
+	}
+
 	return periodicJobs, nil
 }
 
