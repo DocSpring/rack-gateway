@@ -336,3 +336,27 @@ func TestApprovedDeployCommandsAllowOnlyListedCommands(t *testing.T) {
 	require.False(t, h.isCommandApproved("docspring", "bin/rails console"))
 	require.False(t, h.isCommandApproved("docspring", "bin/pre_release_checks migrate; bin/rails console"))
 }
+
+// An exec under a deploy approval may only run an approved command. One without a command is refused too, rather
+// than let through unchecked.
+func TestApprovalExecMustRunAnApprovedCommand(t *testing.T) {
+	h, database := newProxyForDeployApprovalTest(t)
+	app := "docspring"
+	require.NoError(t, database.UpsertSetting(
+		&app, "approved_deploy_commands", []string{"bin/pre_release_checks migrate"}, nil,
+	))
+	tracker := &deployApprovalTracker{request: &db.DeployApprovalRequest{ID: 1}, app: app}
+	exec := func(command string) int {
+		r := httptest.NewRequest(http.MethodGet, "/apps/docspring/processes/p1/exec", nil)
+		if command != "" {
+			r.Header.Set("Command", command)
+		}
+		r = r.WithContext(context.WithValue(r.Context(), deployApprovalContextKey, tracker))
+		return h.validateExecCommand(httptest.NewRecorder(), r, r.URL.Path)
+	}
+
+	require.Zero(t, exec("bin/pre_release_checks migrate"))
+	for _, command := range []string{"", "   ", "bin/rails console"} {
+		require.Equal(t, http.StatusForbidden, exec(command), "command %q", command)
+	}
+}

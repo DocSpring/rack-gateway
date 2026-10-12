@@ -355,11 +355,9 @@ func (h *Handler) validateExecCommand(w http.ResponseWriter, r *http.Request, or
 	processID := extractProcessIDFromPath(originalPath)
 	command := strings.TrimSpace(r.Header.Get("Command"))
 
-	if processID == "" || command == "" || h.database == nil {
-		return 0
-	}
-
-	if !h.isCommandApproved(app, command) {
+	// An exec under a deploy approval may only run one of the app's approved commands, and no approved command is
+	// empty: an exec without one is refused, not let through unchecked.
+	if processID == "" || command == "" || h.database == nil || !h.isCommandApproved(app, command) {
 		http.Error(w, forbiddenMessage(rbac.ResourceProcess, rbac.ActionExec), http.StatusForbidden)
 		return http.StatusForbidden
 	}

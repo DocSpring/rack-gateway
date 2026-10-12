@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -57,7 +58,7 @@ func (h *Handler) processProxyResponse(
 		shouldCaptureBody,
 	)
 	if err != nil {
-		return resp.StatusCode, err
+		return resp.StatusCode, fmt.Errorf("%w after %d bytes: %w", errResponseInterrupted, bytesWritten, err)
 	}
 
 	if logResponseHeaders {

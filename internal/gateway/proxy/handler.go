@@ -300,6 +300,10 @@ func (h *Handler) handleForwardError(
 		h.handleError(w, r, "rack certificate verification failed", http.StatusBadGateway, rackName, start)
 		return
 	}
+	if errors.Is(err, errResponseInterrupted) {
+		h.logInterruptedResponse(r, err, rackName, start)
+		return
+	}
 	h.handleError(w, r, err.Error(), bodyErrorStatus(err, http.StatusInternalServerError), rackName, start)
 }
 

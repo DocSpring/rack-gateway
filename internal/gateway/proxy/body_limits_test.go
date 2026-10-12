@@ -187,3 +187,49 @@ func TestReadBufferedBodyRefusesABodyOnHeadAndDelete(t *testing.T) {
 		require.Empty(t, body)
 	}
 }
+
+// A rack response the gateway filters is read into memory, so it's capped too: one over the limit gets a 502
+// instead of being held. One at the limit is passed on.
+func TestOversizedRackResponseIsRefused(t *testing.T) {
+	size := maxBufferedResponseBytes
+	h, database, mgr, cleanup := newProxyWithRackServer(t, func(w http.ResponseWriter, _ *http.Request) {
+		// Whitespace keeps the release list valid JSON at any size.
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, "["+strings.Repeat(" ", size-2)+"]")
+	})
+	t.Cleanup(cleanup)
+	require.NoError(t, mgr.SaveUser("admin@test.com", &rbac.UserConfig{Name: "Admin", Roles: []string{"admin"}}))
+
+	rr := httptest.NewRecorder()
+	h.ProxyToRack(rr, withPath(requestAs(t, database, "admin@test.com"), http.MethodGet, "/apps/myapp/releases"))
+	require.Equal(t, http.StatusOK, rr.Code, "a response at the limit is passed on")
+
+	size = maxBufferedResponseBytes + 1
+	rr = httptest.NewRecorder()
+	h.ProxyToRack(rr, withPath(requestAs(t, database, "admin@test.com"), http.MethodGet, "/apps/myapp/releases"))
+	require.Equal(t, http.StatusBadGateway, rr.Code)
+	require.Contains(t, rr.Body.String(), "the rack's response is too large")
+}
+
+// When the rack's response breaks off after its status was passed on, the client has the status and part of the
+// body, so the gateway just stops: an error body would be appended to the download.
+func TestInterruptedResponseIsNotAppendedTo(t *testing.T) {
+	const partial = "partial archive"
+	h, database, mgr, cleanup := newProxyWithRackServer(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/octet-stream")
+		w.Header().Set("Content-Length", "1000")
+		_, _ = io.WriteString(w, partial)
+		rc := http.NewResponseController(w)
+		_ = rc.Flush()
+		if conn, _, err := rc.Hijack(); err == nil {
+			_ = conn.Close()
+		}
+	})
+	t.Cleanup(cleanup)
+	require.NoError(t, mgr.SaveUser("admin@test.com", &rbac.UserConfig{Name: "Admin", Roles: []string{"admin"}}))
+
+	rr := httptest.NewRecorder()
+	h.ProxyToRack(rr, withPath(requestAs(t, database, "admin@test.com"), http.MethodGet, "/apps/myapp/builds/B1.tgz"))
+	require.Equal(t, http.StatusOK, rr.Code)
+	require.Equal(t, partial, rr.Body.String())
+}
