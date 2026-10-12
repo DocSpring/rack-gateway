@@ -309,12 +309,22 @@ func (m *SessionManager) ListActiveForUser(userID int64) ([]*db.UserSession, err
 	return m.db.ListActiveSessionsByUser(userID)
 }
 
-// UpdateSessionMFAVerified marks the session as MFA verified.
+// UpdateSessionMFAVerified records that the session verified a factor: it is MFA-verified and its step-up window
+// starts.
 func (m *SessionManager) UpdateSessionMFAVerified(sessionID int64, verifiedAt time.Time, trustedDeviceID *int64) error {
 	if m == nil {
 		return fmt.Errorf("session manager not initialized")
 	}
 	return m.db.UpdateSessionMFAVerified(sessionID, verifiedAt, trustedDeviceID)
+}
+
+// ExemptSessionFromMFAChallenge marks a new session MFA-verified without a factor (no challenge needed, or a trusted
+// device). It opens no step-up window.
+func (m *SessionManager) ExemptSessionFromMFAChallenge(sessionID int64, at time.Time, trustedDeviceID *int64) error {
+	if m == nil {
+		return fmt.Errorf("session manager not initialized")
+	}
+	return m.db.ExemptSessionFromMFAChallenge(sessionID, at, trustedDeviceID)
 }
 
 // UpdateSessionRecentStepUp updates the recent step-up timestamp for the session.

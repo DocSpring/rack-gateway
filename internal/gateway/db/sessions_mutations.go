@@ -92,17 +92,38 @@ func (d *Database) RevokeAllUserSessions(userID int64, revokedBy *int64) (int64,
 	return count, nil
 }
 
-// UpdateSessionMFAVerified marks a session as MFA-verified and optionally associates a trusted device.
+// UpdateSessionMFAVerified records that the session verified a factor at verifiedAt: it is MFA-verified and its
+// step-up window starts. trustedDeviceID, when set, attaches the trusted device the verification minted.
 func (d *Database) UpdateSessionMFAVerified(sessionID int64, verifiedAt time.Time, trustedDeviceID *int64) error {
-	var trusted interface{}
+	return d.markSessionMFAVerified(sessionID, verifiedAt, &verifiedAt, trustedDeviceID)
+}
+
+// ExemptSessionFromMFAChallenge marks a new session MFA-verified without a factor: its user needs no MFA challenge,
+// or it presented a trusted-device cookie (trustedDeviceID). It opens no step-up window; only a verified factor does.
+func (d *Database) ExemptSessionFromMFAChallenge(sessionID int64, at time.Time, trustedDeviceID *int64) error {
+	return d.markSessionMFAVerified(sessionID, at, nil, trustedDeviceID)
+}
+
+// markSessionMFAVerified sets the session's MFA-verified time, its step-up time when stepUpAt is set, and its
+// trusted device when trustedDeviceID is set.
+func (d *Database) markSessionMFAVerified(
+	sessionID int64,
+	verifiedAt time.Time,
+	stepUpAt *time.Time,
+	trustedDeviceID *int64,
+) error {
+	var stepUp, trusted interface{}
+	if stepUpAt != nil {
+		stepUp = *stepUpAt
+	}
 	if trustedDeviceID != nil {
 		trusted = *trustedDeviceID
 	}
 	_, err := d.exec(
-		`UPDATE user_sessions SET mfa_verified_at = ?, recent_step_up_at = ?,
+		`UPDATE user_sessions SET mfa_verified_at = ?, recent_step_up_at = COALESCE(?, recent_step_up_at),
 		trusted_device_id = COALESCE(?, trusted_device_id), updated_at = NOW() WHERE id = ?`,
 		verifiedAt,
-		verifiedAt,
+		stepUp,
 		trusted,
 		sessionID,
 	)

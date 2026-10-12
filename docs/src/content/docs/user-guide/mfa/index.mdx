@@ -53,12 +53,16 @@ Some sensitive actions require MFA verification even with an active session. Exa
 - Updating user roles
 - Changing security-related settings
 - Revealing a secret env value in the web UI
+- Adding another MFA method (your first one needs no verification)
 
-The step-up window defaults to 10 minutes and is configurable by admins.
+Verifying a factor opens a step-up window, 10 minutes by default and configurable by admins. Only a verified factor
+opens one: signing in on a trusted device, or without an MFA prompt, doesn't.
 
 ## Trusted Devices
 
-You can trust a device during verification or from **Account Security → Trusted Devices**. Trusted devices skip MFA prompts until their TTL expires (default 30 days).
+You can trust a device during verification or from **Account Security → Trusted Devices**. A trusted device skips
+the MFA prompt at sign-in until its TTL expires (default 30 days). It doesn't skip step-up: the first sensitive action
+after signing in still asks for a factor.
 
 ## Backup Codes
 

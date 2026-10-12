@@ -10,8 +10,9 @@ Trusted devices let the gateway remember a browser after a successful MFA verifi
 ## How It Works
 
 - A trusted-device cookie is set after verification
-- Future logins skip MFA until the TTL expires (default 30 days)
+- Future logins skip the MFA prompt until the TTL expires (default 30 days)
 - Trust is browser-specific
+- A trusted device is not a factor: sensitive actions that need step-up still ask you to verify one
 
 ## Trusting a Device
 
