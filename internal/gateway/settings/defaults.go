@@ -159,13 +159,17 @@ const (
 	VerifyGitCommitModeLatest = "latest" // Commit must be the latest on the specified branch
 )
 
+// DefaultDeployApprovalWindowMinutes is how long an approval stays open unless deploy_approval_window_minutes says
+// otherwise.
+const DefaultDeployApprovalWindowMinutes = 15
+
 // DefaultGlobalSettings defines all valid global settings with their default values.
 var DefaultGlobalSettings = map[string]interface{}{
 	KeyAllowDestructiveActions:     false,
 	KeyDefaultCIProvider:           "circleci",
 	KeyDefaultVCSProvider:          "github",
 	KeyDeployApprovalsEnabled:      true,
-	KeyDeployApprovalWindowMinutes: 15,
+	KeyDeployApprovalWindowMinutes: DefaultDeployApprovalWindowMinutes,
 	KeyMFARequireAllUsers:          true,
 	KeySessionTimeoutMinutes:       5,
 	KeyStepUpWindowMinutes:         10,

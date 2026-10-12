@@ -98,15 +98,36 @@ Every approval is tied to a specific full (40-character) git commit SHA. An API 
 
 - Build the archive it uploaded under that approval (one upload and one build per approval)
 - Send no `git-sha`, or one equal to the approved commit (the gateway always uses the approved commit, never the client's)
-- Reference only pre-built images, each tagged with the approved commit (`<sha>` or `<sha>-<suffix>`, e.g. `<sha>-amd64`) and matching the app's `service_image_patterns`
+- Reference only pre-built images, each tagged with the approved commit (`<sha>` or `<sha>-<suffix>`, e.g. `<sha>-amd64`) and matching the app's `service_image_patterns`. Every image a service runs is checked (its `image` and its `initContainer.image`); resource image overrides and any other `image` key are refused, and `${...}` can't change an image or the manifest's structure (see [What the Manifest Check Covers](/integrations/deploy-approvals/workflow/#what-the-manifest-check-covers))
 - Run only commands listed in `approved_deploy_commands` (an empty list allows none)
 
 `service_image_patterns` is required for approval-bound builds: the commit tag alone does not pin the image repository.
+
+External builds (`convox build --external`) are refused for everyone: the rack would answer with its own API
+password. The gateway never returns a build's `repository` field.
 
 An archive upload doesn't say which commit it's for, so it binds to the token's newest open approval for the app.
 The gateway refuses it (409) when that approval already has its archive (an upload is most likely a retry, and
 uploads happen once per approval), or when several approvals for the app are waiting for an upload: reject the
 ones that aren't being deployed.
+
+Each step claims the approval before the gateway forwards it to the rack, so two concurrent requests under one
+approval can't both reach the rack:
+
+- **Upload**: the upload claims the approval's archive. A second upload while the first is in flight gets 409. An
+  upload the rack refuses (or that fails before the gateway records it) releases the claim, so CI can upload again.
+- **Archive objects**: an object that holds an approval's archive can't be uploaded again by anyone, admins
+  included (409). The rack would replace the archive that the build's manifest is checked against.
+- **Build**: an approval creates one build, only from an archive whose upload finished. A second build while the
+  first is in flight, or after it, gets 409. A build the rack refuses releases the claim. The build's release is
+  recorded once, from that build, and never replaced.
+- **Promote**: one promote at a time; see the promote rules under [Several Apps per Commit](#several-apps-per-commit).
+
+A claim held by a request that never finished (for example, the gateway restarted mid-upload) isn't released. Reject
+the request and create a new one.
+
+`convox builds import` is never covered by an approval: an imported build brings its own manifest and images, which
+the gateway doesn't check. It needs `convox:build:import`, which only admins hold, and MFA.
 
 ### MFA Step-Up
 
@@ -161,12 +182,12 @@ The `deploy_approval_requests` table tracks the complete lifecycle:
 | Column | Type | Description |
 |--------|------|-------------|
 | `public_id` | UUID | External identifier for API access |
-| `app` | varchar | Application name |
+| `app` | varchar | Application name (a Convox app name that exists on the rack) |
 | `git_commit_hash` | varchar | Git commit SHA (indexed) |
 | `git_branch` | varchar | Branch name |
 | `pr_url` | text | Pull request URL (from GitHub) |
 | `ci_metadata` | JSONB | Provider-specific data |
-| `message` | text | Human-readable context |
+| `message` | text | Human-readable context (at most 2000 characters) |
 | `status` | varchar | Current state |
 | `target_api_token_id` | bigint | CI/CD token that will use approval |
 | `approved_by_user_id` | bigint | Admin who approved |
@@ -250,8 +271,11 @@ flags that can carry secrets (tokens, passwords, keys, MFA codes); other flag va
 
 `wait --approve --app a,b --commit <sha>` waits until every listed app has an approved (or deployed) request on
 every rack, approving pending ones as they appear (each is shown first, with its commit), then prints what it
-approved. In a terminal, `wait --approve --branch <branch>` without `--commit` asks you to confirm each request
-(y/N), because the newest request for a branch can be for any commit.
+approved. In a terminal, `wait --approve` asks you to confirm (y/N) each request whose commit isn't exactly the full
+`--commit`: with `--branch` and no `--commit` the newest request for a branch can be for any commit, and a short
+`--commit` matches every commit that starts with it.
+
+Without `--commit` (and `--branch`), the commands use the full SHA of the current git commit.
 
 ### List Pending
 

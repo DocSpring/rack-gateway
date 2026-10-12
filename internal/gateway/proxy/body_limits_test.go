@@ -152,24 +152,38 @@ func TestOversizedTokenBuildIsRefused(t *testing.T) {
 	require.Contains(t, rr.Body.String(), "request body too large")
 }
 
-// unreadBody is a request body that records whether anything read it.
-type unreadBody struct{ read bool }
+// The Convox SDK never sends a body on GET, HEAD or DELETE, so the gateway refuses one instead of holding it in
+// memory and forwarding it, whether or not the client said how long it is.
+func TestBodyOnABodylessMethodIsRefused(t *testing.T) {
+	h, database, rack := newRecordingProxy(t)
+	for _, unknownLength := range []bool{false, true} {
+		req := withPath(requestAs(t, database, "deployer@test.com"), http.MethodGet, "/apps/myapp/processes")
+		req = withBody(req, "service=web", "application/x-www-form-urlencoded")
+		if unknownLength {
+			req.ContentLength = -1
+		}
 
-func (b *unreadBody) Read([]byte) (int, error) {
-	b.read = true
-	return 0, io.EOF
+		rr := httptest.NewRecorder()
+		h.ProxyToRack(rr, req)
+		require.Equal(t, http.StatusBadRequest, rr.Code, rr.Body.String())
+		require.Contains(t, rr.Body.String(), "request body not allowed")
+	}
+	require.Zero(t, rack.count(), "refused requests must not reach the rack")
+
+	req := withPath(requestAs(t, database, "deployer@test.com"), http.MethodGet, "/apps/myapp/processes")
+	rr := httptest.NewRecorder()
+	h.ProxyToRack(rr, req)
+	require.Equal(t, http.StatusOK, rr.Code, "a GET without a body is forwarded: %s", rr.Body.String())
 }
 
-// A build import uploads an exported build, not an archive uploaded under an approval, so an approval never covers
-// it. It's refused without the gateway reading the import.
-func TestTokenBuildImportIsRefusedUnread(t *testing.T) {
-	f := newBindingFixture(t)
-	body := &unreadBody{}
-	r := httptest.NewRequest(http.MethodPost, "/apps/myapp/builds/import", body)
-	allowed, _, err := f.h.evaluateAPITokenPermission(r, f.authUser, rbac.ResourceBuild, rbac.ActionCreate)
-	require.False(t, allowed)
-	var approvalErr *deployApprovalError
-	require.ErrorAs(t, err, &approvalErr)
-	require.Equal(t, http.StatusForbidden, approvalErr.status)
-	require.False(t, body.read, "the gateway must not read an imported build")
+func TestReadBufferedBodyRefusesABodyOnHeadAndDelete(t *testing.T) {
+	for _, method := range []string{http.MethodHead, http.MethodDelete} {
+		_, err := readBufferedBody(httptest.NewRequest(method, "/apps/myapp", strings.NewReader("x")))
+		require.ErrorIs(t, err, errBodyNotAllowed, method)
+		require.Equal(t, http.StatusBadRequest, bodyErrorStatus(err, http.StatusInternalServerError))
+
+		body, err := readBufferedBody(httptest.NewRequest(method, "/apps/myapp", nil))
+		require.NoError(t, err, method)
+		require.Empty(t, body)
+	}
 }

@@ -6,7 +6,6 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"net/url"
 	"regexp"
 	"strings"
 	"time"
@@ -24,44 +23,6 @@ const proxyLogBodyLimit = 16384
 // attachedRunCommand is the placeholder command `convox run` starts before exec'ing the real command
 // into the process (default --timeout). The real command is checked on the exec path.
 const attachedRunCommand = "sleep 3600"
-
-func (h *Handler) validateBuildRequest(
-	r *http.Request,
-	original string,
-	bodyBytes []byte,
-	authUser *auth.User,
-) error {
-	if r.Method != http.MethodPost || !rbac.KeyMatch3(original, "/apps/{app}/builds") {
-		return nil
-	}
-
-	vals, err := url.ParseQuery(string(bodyBytes))
-	if err != nil {
-		return fmt.Errorf("invalid build request body")
-	}
-	if err := refuseSurroundingWhitespace(vals, "url", "manifest"); err != nil {
-		return err
-	}
-
-	if authUser.IsAPIToken {
-		if tracker := getDeployApprovalTracker(r.Context()); tracker != nil && tracker.request != nil {
-			return h.validateTokenBuildBinding(r, vals, tracker)
-		}
-	}
-	return h.validateBuildManifestForAllUsers(r, vals)
-}
-
-// refuseSurroundingWhitespace refuses a build whose archive or manifest value starts or ends with whitespace. The
-// rack uses these values exactly as sent, so "convox.yml " would be a different manifest (and a trailing space in
-// the url a different object) from the one the gateway checked.
-func refuseSurroundingWhitespace(vals url.Values, names ...string) error {
-	for _, name := range names {
-		if value := vals.Get(name); value != strings.TrimSpace(value) {
-			return fmt.Errorf("invalid build request: %s must not start or end with whitespace", name)
-		}
-	}
-	return nil
-}
 
 func (h *Handler) validateProcessCommand(
 	r *http.Request,
@@ -91,31 +52,34 @@ func (h *Handler) processBufferedResponse(
 	resp *http.Response,
 	pth string,
 	authUserEmail string,
-	filterRelease bool,
-	filterEnvironment bool,
-	shouldCapture bool,
-	captureProcess bool,
+	handling responseHandling,
 ) ([]byte, error) {
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response body: %w", err)
 	}
 
-	if filterRelease {
+	if handling.filterRelease {
 		app := extractAppFromPath(pth)
 		body = h.filterReleaseEnvForUser(r, body, app)
 	}
 
-	if filterEnvironment {
+	if handling.filterEnvironment {
 		app := extractAppFromPath(pth)
 		body = h.filterEnvironmentMapResponse(r, body, app)
 	}
 
-	if shouldCapture {
+	if handling.filterBuild {
+		if body, err = stripBuildRepository(body); err != nil {
+			return nil, fmt.Errorf("failed to filter build response: %w", err)
+		}
+	}
+
+	if handling.capture {
 		h.captureResourceCreator(r, pth, body, authUserEmail)
 	}
 
-	if captureProcess && resp.StatusCode >= 200 && resp.StatusCode < 300 {
+	if handling.captureProcess && resp.StatusCode >= 200 && resp.StatusCode < 300 {
 		h.handleProcessCreation(r, body)
 	}
 

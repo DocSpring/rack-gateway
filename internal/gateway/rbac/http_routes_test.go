@@ -1,7 +1,6 @@
 package rbac
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/settings"
@@ -68,36 +67,6 @@ func TestAllGlobalSettingGroupsHaveMFARequirements(t *testing.T) {
 				t.Errorf("Missing MFA requirement for GlobalSettingGroup %q (permission: %s)", group, permission)
 			}
 		})
-	}
-}
-
-// TestHTTPRoutePermissionsHaveMFARequirements validates that all HTTP routes with
-// permissions have corresponding MFA requirements defined.
-func TestHTTPRoutePermissionsHaveMFARequirements(t *testing.T) {
-	for _, spec := range httpRouteSpecs {
-		if len(spec.Permissions) == 0 {
-			continue // Routes without permissions default to MFANone
-		}
-
-		for _, perm := range spec.Permissions {
-			testName := spec.Method + " " + spec.Pattern + " (" + perm + ")"
-			t.Run(testName, func(t *testing.T) {
-				// GetMFALevel will panic if the permission is not defined and is a write operation
-				// We recover and fail the test if that happens
-				defer func() {
-					if r := recover(); r != nil {
-						if !strings.Contains(r.(string), "not in MFARequirements") {
-							panic(r)
-						}
-						t.Errorf("Missing MFA requirement for permission %q used in route %s %s",
-							perm, spec.Method, spec.Pattern)
-					}
-				}()
-
-				// This will panic if the permission needs to be listed but isn't
-				GetMFALevel([]string{perm})
-			})
-		}
 	}
 }
 

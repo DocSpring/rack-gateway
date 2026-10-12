@@ -21,8 +21,10 @@ type Config struct {
 const (
 	// maxUnauthenticatedBodyBytes covers login and the CLI login flow, whose bodies are a few small JSON fields.
 	maxUnauthenticatedBodyBytes = 64 << 10
-	// maxAPIBodyBytes covers the signed-in API. The largest body is the web env editor's whole env, well under 1 MB.
-	maxAPIBodyBytes = 10 << 20
+	// maxAPIBodyBytes covers the signed-in API. The largest body is the web env editor's changes, at most the app's
+	// whole env, which comes to tens of KB; settings bodies are short lists. The cap applies before authentication,
+	// so it stays close to that: several concurrent oversized bodies must not exhaust the gateway's memory.
+	maxAPIBodyBytes = 1 << 20
 )
 
 // Setup configures all routes for the application

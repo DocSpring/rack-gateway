@@ -76,7 +76,7 @@ func testAPITokenAuth(rack, testMode string) error {
 	if err != nil {
 		return fmt.Errorf("authentication failed: %w", err)
 	}
-	fmt.Printf("✓ Authentication successful (token owned by %s)\n", info.User.Email)
+	fmt.Printf("✓ Authentication successful (token owned by %s)\n", displayText(info.User.Email))
 	return nil
 }
 
@@ -119,7 +119,7 @@ func displayMFAStatus(status *MFAStatusResponse) {
 		if method.IsEnrolling {
 			suffix = " (enrolling)"
 		}
-		fmt.Printf("    - %s (%s)%s\n", label, method.Type, suffix)
+		fmt.Printf("    - %s (%s)%s\n", displayText(label), displayText(method.Type), suffix)
 	}
 }
 
@@ -156,7 +156,7 @@ func testPreferredMFA(cmd *cobra.Command, baseURL, bearer string, status *MFASta
 		if !ok {
 			return fmt.Errorf("MFA method %q not found or not enrolled", MFAMethodFlag)
 		}
-		fmt.Printf("  Using --mfa-method override: %s\n", method.Type)
+		fmt.Printf("  Using --mfa-method override: %s\n", displayText(method.Type))
 		return runMFAMethod(cmd, baseURL, bearer, method, status.Methods)
 	}
 
@@ -164,7 +164,7 @@ func testPreferredMFA(cmd *cobra.Command, baseURL, bearer string, status *MFASta
 		if method.IsEnrolling {
 			return fmt.Errorf("preferred MFA method %q is still enrolling", method.Type)
 		}
-		fmt.Printf("  Server preferred method: %s\n", method.Type)
+		fmt.Printf("  Server preferred method: %s\n", displayText(method.Type))
 		return runMFAMethod(cmd, baseURL, bearer, method, status.Methods)
 	}
 
@@ -190,11 +190,11 @@ func availableMFAMethods(methods []MFAMethodResponse) []MFAMethodResponse {
 }
 
 func runMFAMethod(cmd *cobra.Command, baseURL, bearer string, method MFAMethodResponse, all []MFAMethodResponse) error {
-	fmt.Printf("\nAttempting %s authentication...\n", method.Type)
+	fmt.Printf("\nAttempting %s authentication...\n", displayText(method.Type))
 	if err := testMFAMethod(cmd, baseURL, bearer, method, all); err != nil {
 		return fmt.Errorf("%s failed: %v", method.Type, err)
 	}
-	fmt.Printf("✓ MFA verification successful with %s\n", method.Type)
+	fmt.Printf("✓ MFA verification successful with %s\n", displayText(method.Type))
 	return nil
 }
 
@@ -205,12 +205,12 @@ func tryMFAMethods(
 	all []MFAMethodResponse,
 ) error {
 	for _, method := range ordered {
-		fmt.Printf("\nAttempting %s authentication...\n", method.Type)
+		fmt.Printf("\nAttempting %s authentication...\n", displayText(method.Type))
 		if err := testMFAMethod(cmd, baseURL, bearer, method, all); err != nil {
-			fmt.Printf("  ✗ %s failed: %v\n", method.Type, err)
+			fmt.Printf("  ✗ %s failed: %s\n", displayText(method.Type), DisplayError(err))
 			continue
 		}
-		fmt.Printf("✓ MFA verification successful with %s\n", method.Type)
+		fmt.Printf("✓ MFA verification successful with %s\n", displayText(method.Type))
 		return nil
 	}
 	return fmt.Errorf("all MFA methods failed")
@@ -230,7 +230,7 @@ func testOTPAuth(cmd *cobra.Command, baseURL, bearer string, status *MFAStatusRe
 		return fmt.Errorf("TOTP/OTP not configured")
 	}
 
-	fmt.Printf("\nTesting TOTP authentication with: %s\n", totpMethod.Label)
+	fmt.Printf("\nTesting TOTP authentication with: %s\n", displayText(totpMethod.Label))
 	return testMFAMethod(cmd, baseURL, bearer, *totpMethod, status.Methods)
 }
 
@@ -253,7 +253,7 @@ func testWebAuthnAuth(baseURL, bearer string, status *MFAStatusResponse) error {
 		return fmt.Errorf("WebAuthn not configured")
 	}
 
-	fmt.Printf("\nTesting WebAuthn authentication with: %s\n", webauthnMethod.Label)
+	fmt.Printf("\nTesting WebAuthn authentication with: %s\n", displayText(webauthnMethod.Label))
 	if err := tryWebAuthnVerification(baseURL, bearer); err != nil {
 		return err
 	}

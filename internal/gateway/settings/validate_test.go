@@ -36,3 +36,23 @@ func TestValidateAppSettingValue(t *testing.T) {
 	require.ErrorIs(t, ValidateAppSettingValue(KeyServiceImagePatterns, map[string]interface{}{"web": 1}),
 		ErrInvalidSettingValue)
 }
+
+// The env var lists must hold env var names: a name with quotes or other characters in it matches no key, so the
+// list would quietly protect, mask or show nothing.
+func TestValidateAppSettingValueRefusesInvalidEnvVarNames(t *testing.T) {
+	for _, key := range []string{KeyProtectedEnvVars, KeySecretEnvVars, KeyAuditVisibleEnvVars} {
+		require.NoErrorf(t, ValidateAppSettingValue(key, []interface{}{"DATABASE_URL", " port ", "_X1"}), "key %s", key)
+		for _, names := range [][]string{
+			{`"DATABASE_URL`, `SECRET_KEY_BASE"`}, // a quoted comma-separated value split on its comma
+			{"DATABASE-URL"},
+			{"1PASSWORD"},
+			{"A B"},
+			{""},
+		} {
+			err := ValidateAppSettingValue(key, names)
+			require.ErrorIsf(t, err, ErrInvalidSettingValue, "key %s, names %q", key, names)
+		}
+	}
+	// Approved deploy commands are commands, not names.
+	require.NoError(t, ValidateAppSettingValue(KeyApprovedDeployCommands, []string{`bin/rails "db:migrate"`}))
+}

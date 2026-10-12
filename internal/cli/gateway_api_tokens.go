@@ -375,12 +375,18 @@ func gatewayAuthInfo(rack string) (string, string, error) {
 	return normalized, bearer, nil
 }
 
+// formatList renders values (from the gateway) as a sorted, indented list, one per line, each made safe to print by
+// displayText.
 func formatList(values []string) string {
 	if len(values) == 0 {
 		return ""
 	}
-	sort.Strings(values)
-	return "\n  - " + strings.Join(values, "\n  - ")
+	shown := make([]string, len(values))
+	for i, value := range values {
+		shown[i] = displayText(value)
+	}
+	sort.Strings(shown)
+	return "\n  - " + strings.Join(shown, "\n  - ")
 }
 
 type permissionSet struct {
@@ -410,10 +416,12 @@ func (p *permissionSet) list() []string {
 	return out
 }
 
+// printJSON prints v as indented JSON. Gateway-supplied strings stay intact for a JSON parser, but the
+// characters a terminal acts on are escaped (see terminalSafeJSON).
 func printJSON(cmd *cobra.Command, v interface{}) error {
 	data, err := json.MarshalIndent(v, "", "  ")
 	if err != nil {
 		return err
 	}
-	return writeLine(cmd.OutOrStdout(), string(data))
+	return writeLine(cmd.OutOrStdout(), terminalSafeJSON(data))
 }

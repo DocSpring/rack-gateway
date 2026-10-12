@@ -30,9 +30,9 @@ func (s *Service) GetDeployApprovalsEnabled() (bool, error) {
 
 // GetDeployApprovalWindowMinutes returns the deploy approval window in minutes.
 func (s *Service) GetDeployApprovalWindowMinutes() (int, error) {
-	setting, err := s.GetGlobalSetting(KeyDeployApprovalWindowMinutes, 15)
+	setting, err := s.GetGlobalSetting(KeyDeployApprovalWindowMinutes, DefaultDeployApprovalWindowMinutes)
 	if err != nil {
-		return 15, err
+		return DefaultDeployApprovalWindowMinutes, err
 	}
 
 	// Handle both int and float64 (JSON unmarshaling quirk)
@@ -42,6 +42,6 @@ func (s *Service) GetDeployApprovalWindowMinutes() (int, error) {
 	case float64:
 		return int(val), nil
 	default:
-		return 15, nil
+		return DefaultDeployApprovalWindowMinutes, nil
 	}
 }

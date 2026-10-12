@@ -120,7 +120,7 @@ func (h *APIHandler) GetEnvValues(c *gin.Context) {
 
 	extraSecrets, _, err := h.secretAndProtectedKeys(app)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read the app's env var settings"})
+		respondEnvSettingsError(c, app, err)
 		return
 	}
 	h.maskSecretsIfNeeded(envMap, extraSecrets, allowedSecrets)
@@ -349,7 +349,7 @@ func (h *APIHandler) prepareEnvUpdateContext(c *gin.Context) (*envUpdateContext,
 
 	extraSecrets, protectedKeys, err := h.secretAndProtectedKeys(ctx.app)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read the app's env var settings"})
+		respondEnvSettingsError(c, ctx.app, err)
 		return nil, false
 	}
 	ctx.extraSecrets, ctx.protectedKeys = extraSecrets, protectedKeys
@@ -385,7 +385,7 @@ func (_ *APIHandler) respondMergeError(c *gin.Context, mergeErr error) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "This environment variable is protected and cannot be changed."})
 	case errors.Is(mergeErr, envutil.ErrInvalidEnvEntry):
 		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "Env var names must match [A-Za-z_][A-Za-z0-9_]* and values cannot contain line breaks.",
+			"error": "Env var names must match [A-Za-z_][A-Za-z0-9_]* and values can't contain control characters.",
 		})
 	case errors.Is(mergeErr, envutil.ErrMaskedSecretWithoutBase):
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Masked secret value submitted without an existing secret."})

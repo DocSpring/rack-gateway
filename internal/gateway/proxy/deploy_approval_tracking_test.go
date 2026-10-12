@@ -108,8 +108,12 @@ func TestUpdateObjectURLApprovalTracking_WithTracker(t *testing.T) {
 	ctx := context.WithValue(req.Context(), deployApprovalContextKey, tracker)
 	req = req.WithContext(ctx)
 
-	// Call the function under test
+	// A response only confirms an upload that claimed the approval before it was forwarded.
 	objectURL := "object://test-app/tmp/abc.tgz"
+	require.Error(t, h.updateObjectURLApprovalTracking(req, objectURL), "an unclaimed upload must not bind")
+	claimed, err := database.ClaimDeployApprovalObjectUpload(approvalReq.ID, objectURL)
+	require.NoError(t, err)
+	require.True(t, claimed)
 	err = h.updateObjectURLApprovalTracking(req, objectURL)
 	require.NoError(t, err)
 
@@ -184,9 +188,11 @@ func TestUpdateBuildApprovalTracking_WithTracker(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	// IMPORTANT: Simulate object upload first (object_url must be set before build_id)
-	err = database.UpdateDeployApprovalRequestObjectURL(approvalReq.ID, "object://test-app/tmp/source.tgz")
+	// As in the proxy: the archive's upload finished, and the build claimed the approval before it was forwarded.
+	bindApprovalArchive(t, database, approvalReq.ID, "object://test-app/tmp/source.tgz")
+	claimed, err := database.ClaimDeployApprovalBuild(approvalReq.ID)
 	require.NoError(t, err)
+	require.True(t, claimed)
 
 	// Create a tracker and set it in context
 	tracker := &deployApprovalTracker{
@@ -207,6 +213,8 @@ func TestUpdateBuildApprovalTracking_WithTracker(t *testing.T) {
 
 	// First call: save build_id only (release is empty initially)
 	h.updateBuildApprovalTracking(req, buildID, "")
+	// Another build can't be recorded, and a build can't take another build's release.
+	h.updateBuildApprovalTracking(req, "BOTHER", "ROTHER")
 
 	// Verify build_id was saved
 	updated, err := database.FindDeployApprovalRequest(db.DeployApprovalLookup{
@@ -302,8 +310,13 @@ func TestCaptureObjectUpload_CallsUpdateObjectURLApprovalTracking(t *testing.T) 
 	ctx := context.WithValue(req.Context(), deployApprovalContextKey, tracker)
 	req = req.WithContext(ctx)
 
+	// The upload claimed the approval before it was forwarded.
+	objectURL := "object://test-app/tmp/source.tgz"
+	claimed, err := database.ClaimDeployApprovalObjectUpload(approvalReq.ID, objectURL)
+	require.NoError(t, err)
+	require.True(t, claimed)
+
 	// Simulate object upload response (Convox API returns "Url" with capital U)
-	objectURL := "object://test-app/tmp/abc123.tgz"
 	responseObj := map[string]interface{}{
 		"Url": objectURL,
 		"key": "tmp/source.tgz",
@@ -325,6 +338,9 @@ func TestCaptureObjectUpload_CallsUpdateObjectURLApprovalTracking(t *testing.T) 
 		updated.ObjectURL,
 		"captureObjectUpload should save object_url via updateObjectURLApprovalTracking",
 	)
+	claimed, err = database.ClaimDeployApprovalBuild(approvalReq.ID)
+	require.NoError(t, err)
+	require.True(t, claimed, "the response recorded that the upload finished, so the approval can build it")
 }
 
 // TestCaptureBuildCreation_CallsUpdateBuildApprovalTracking tests the integration
@@ -371,9 +387,11 @@ func TestCaptureBuildCreation_CallsUpdateBuildApprovalTracking(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	// IMPORTANT: Simulate object upload first (object_url must be set before build_id)
-	err = database.UpdateDeployApprovalRequestObjectURL(approvalReq.ID, "object://test-app/tmp/source.tgz")
+	// As in the proxy: the archive's upload finished, and the build claimed the approval before it was forwarded.
+	bindApprovalArchive(t, database, approvalReq.ID, "object://test-app/tmp/source.tgz")
+	claimed, err := database.ClaimDeployApprovalBuild(approvalReq.ID)
 	require.NoError(t, err)
+	require.True(t, claimed)
 
 	// Create a tracker and set it in context
 	tracker := &deployApprovalTracker{

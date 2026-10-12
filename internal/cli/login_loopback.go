@@ -188,9 +188,11 @@ var loginErrorMessages = map[string]string{
 	"load_failure":            "the gateway could not load the login; run rack-gateway login again",
 }
 
+// loginErrorMessage explains a login error code. The code arrives in the browser redirect from the gateway, so an
+// unknown one is shown through displayText.
 func loginErrorMessage(code string) string {
 	if message, ok := loginErrorMessages[code]; ok {
 		return message
 	}
-	return fmt.Sprintf("the gateway could not complete the login (%s)", code)
+	return fmt.Sprintf("the gateway could not complete the login (%s)", displayText(code))
 }

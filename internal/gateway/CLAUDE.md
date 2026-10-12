@@ -83,8 +83,14 @@ Request forwarding with WebSocket support:
   (`handlers/api_handler_env.go`) still refuses protected keys
 - Client IPs: use `c.ClientIP()` in gin handlers and `netutil.ClientIP(r)` elsewhere. Both trust
   `X-Forwarded-For` only from `TRUSTED_PROXY_CIDRS`. Never parse forwarding headers yourself
-- Forwards all methods: GET, POST, PUT, PATCH, DELETE
-- Full WebSocket proxy support for `convox exec` and logs
+- Forwards all methods: GET, POST, PUT, PATCH, DELETE. Request bodies are capped at 1 MiB as they're read
+  (archive uploads stream through), and a body on GET, HEAD or DELETE is refused (`proxy/forward_helpers.go`).
+  Release and build list `limit` must be 1-100 (`proxy/forward_query.go`)
+- Full WebSocket proxy support for `convox exec` and logs. Messages stream through (1 MiB cap from the client,
+  16 MiB from the rack); the gateway pings the client and ends a session whose client stops answering; each
+  user or API token may hold 10 sessions at once (`proxy/websocket_stream.go`, `proxy/websocket_sessions.go`)
+- Rack HTTP clients share one connection pool per TLS config (`httpclient`); rackcert keeps the same
+  `*tls.Config` until the pinned certificate changes, and must not hand out copies
 
 Key files:
 
@@ -190,7 +196,9 @@ All configuration via environment variables. See `docs/CONFIGURATION.md` for com
 
 - `RACK_HOST` - Convox rack API URL
 - `RACK_TOKEN` - Convox rack API token
-- `APP_SECRET_KEY` - Secret for session tokens and CSRF protection
+- `APP_SECRET_KEY` - Secret for session tokens and CSRF protection. The server refuses the published dev value
+  (`mise.toml`) and anything under 32 bytes, for it and `AUDIT_HMAC_SECRET`, in a release build or against a
+  production database (`app/production_guard.go`)
 - `COLUMN_ENCRYPTION_KEY` - Key for encrypted columns (`mfa_methods.secret`, the Slack bot token); base64 of
   32 bytes, required in every mode (dev/test use the published key in `mise.toml`, refused against a
   production database). See `colcrypt/`. Read and write these columns only through the `db` package

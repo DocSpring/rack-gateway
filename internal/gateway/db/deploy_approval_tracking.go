@@ -1,56 +1,33 @@
 package db
 
 import (
-	"database/sql"
 	"fmt"
 	"strings"
 )
 
-// MarkDeployApprovalRequestBuildStarted records that a build has started for an approved deploy approval request.
-// The releaseID may be empty initially since the real Convox API returns builds with an empty release field
-// that gets populated later when the build completes.
+// MarkDeployApprovalRequestBuildStarted records the build created under an approval's build claim and, once the
+// build has finished, its release: the real Convox API returns a new build with an empty release, which a later
+// read of the build fills in. Neither is ever replaced, so a second build can't be recorded and a build read can't
+// rebind the release.
 func (d *Database) MarkDeployApprovalRequestBuildStarted(id int64, buildID, releaseID string) error {
 	if strings.TrimSpace(buildID) == "" {
 		return fmt.Errorf("build id required")
 	}
-
-	var res sql.Result
-	var err error
-
-	// Flow: build creation returns buildID (releaseID empty), then later build completion returns releaseID
-	if releaseID != "" {
-		// Update only release_id (build_id already set from build creation)
-		res, err = d.exec(
-			`UPDATE deploy_approval_requests
-             SET release_id = ?,
-                 updated_at = NOW()
-             WHERE id = ? AND status = ?`,
-			releaseID,
-			id,
-			DeployApprovalRequestStatusApproved,
-		)
-	} else {
-		// Update only build_id (first call from build creation)
-		res, err = d.exec(
-			`UPDATE deploy_approval_requests
-             SET build_id = ?,
-                 updated_at = NOW()
-             WHERE id = ? AND status = ?`,
-			buildID,
-			id,
-			DeployApprovalRequestStatusApproved,
-		)
-	}
-
+	res, err := d.exec(
+		`UPDATE deploy_approval_requests
+         SET build_id = ?, release_id = COALESCE(NULLIF(release_id, ''), NULLIF(?::text, '')), updated_at = NOW()
+         WHERE id = ? AND status = ?
+           AND (build_id = ? OR (build_id IS NULL AND build_started_at IS NOT NULL))
+           AND (?::text = '' OR NULLIF(release_id, '') IS NULL OR release_id = ?)`,
+		buildID, releaseID, id, DeployApprovalRequestStatusApproved, buildID, releaseID, releaseID,
+	)
+	updated, err := updatedOneRow(res, err)
 	if err != nil {
 		return fmt.Errorf("failed to update build tracking: %w", err)
 	}
-	rows, err := res.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("failed to update build tracking: %w", err)
-	}
-	if rows == 0 {
-		return fmt.Errorf("deployment approval not found or not approved")
+	if !updated {
+		return fmt.Errorf("deploy approval request %d is not approved, has no build claim, or has another build "+
+			"or release", id)
 	}
 	return nil
 }

@@ -94,10 +94,9 @@ Session tokens are stored in `~/.config/rack-gateway/config.json`:
 ```
 
 <Aside type="caution" title="Protect Your Config">
-The config file contains session tokens. Protect it with appropriate file permissions:
-```bash
-chmod 600 ~/.config/rack-gateway/config.json
-```
+The config file contains session tokens. The CLI keeps it readable only by you: every time it saves the file it
+sets the directory to `700` and the file to `600` (removing any group or other permissions), and it replaces the
+file atomically, so a crash never leaves a partial config. Don't copy it anywhere less private.
 </Aside>
 
 ## Session Lifecycle
@@ -263,7 +262,7 @@ Contact your administrator to adjust your role if needed.
 | `RACK_GATEWAY_API_TOKEN` | API token for authentication (bypasses OAuth) |
 | `GATEWAY_CLI_CONFIG_DIR` | Override config directory location |
 | `RACK_GATEWAY_RACK` | Override current rack for this command |
-| `RACK_GATEWAY_URL` | Override gateway URL (used with API token) |
+| `RACK_GATEWAY_URL` | Gateway URL for `RACK_GATEWAY_API_TOKEN`. Without an API token it must match the rack's configured URL (a session token is never sent to another gateway). Not allowed with `--rack all` or a list of racks |
 
 ## Next Steps
 
