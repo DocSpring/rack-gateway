@@ -165,7 +165,7 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 	// Only an allowed request gets longer deadlines. Nothing before this point reads an upload's body.
 	extendDeadlines(w, r, rackPath)
 
-	if err := h.claimPromote(r, rackPath, approvalTracker); err != nil {
+	if err := h.claimDeployApprovalStep(r, rackPath, approvalTracker); err != nil {
 		_, _, _ = h.handlePermissionError(w, r, authUser, err, rackConfig.Name, start)
 		return
 	}
@@ -173,7 +173,7 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 	beforeParams := h.captureRackParamsIfNeeded(r, rackPath, rackConfig)
 
 	status, err := h.forwardRequest(w, r, rackConfig, rackPath, authUser)
-	h.releasePromoteClaimAfterFailure(r, rackPath, status, err)
+	h.releaseDeployApprovalClaims(r, rackPath, status, err)
 	if err != nil {
 		h.handleForwardError(w, r, err, rackConfig.Name, start)
 		return

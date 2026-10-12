@@ -135,6 +135,8 @@ Authentication and MFA resources:
 | `convox:build:list` | List builds | viewer, ops, deployer, admin |
 | `convox:build:read` | View build details | viewer, ops, deployer, admin |
 | `convox:build:create` | Create new build | deployer, admin |
+| `convox:build:update` | Update a build | admin |
+| `convox:build:import` | Import an exported build (its manifest and images aren't checked) | admin |
 
 </TabItem>
 <TabItem label="Releases">
@@ -349,6 +351,7 @@ Common API endpoints and their required permissions:
 | `/api/v1/rack-proxy/apps/:name` | GET | `convox:app:read` |
 | `/api/v1/rack-proxy/apps/:name` | DELETE | `convox:app:delete` |
 | `/api/v1/rack-proxy/apps/:name/builds` | POST | `convox:build:create` |
+| `/api/v1/rack-proxy/apps/:name/builds/import` | POST | `convox:build:import` |
 | `/api/v1/rack-proxy/apps/:name/processes` | GET | `convox:process:list` |
 | `/api/v1/rack-proxy/apps/:name/processes/:id/exec` | POST | `convox:process:exec` |
 | `/api/v1/apps/:app/env` | GET | `convox:env:read` |

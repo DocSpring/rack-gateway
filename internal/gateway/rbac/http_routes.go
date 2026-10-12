@@ -40,18 +40,9 @@ type RouteSpec struct {
 	SelfParam string
 }
 
-// GetMFALevel returns the MFA level required for this route
-// Panics if the permission is not defined in MFARequirements
+// GetMFALevel returns the MFA level required for this route: the highest level of its permissions.
 func (r *RouteSpec) GetMFALevel() MFALevel {
-	perms := r.PermissionStrings()
-	level := MFANone
-	for _, perm := range perms {
-		pl := GetMFALevel([]string{perm})
-		if pl > level {
-			level = pl
-		}
-	}
-	return level
+	return GetMFALevel(r.PermissionStrings())
 }
 
 // RequiresMFAStepUp returns true if this route requires MFA step-up (time window)
@@ -142,7 +133,8 @@ var rackRouteSpecs = []RouteSpec{
 	newRackRoute("GET", "/apps/{app}/builds/{id}", ResourceBuild, ActionRead),
 	newRackRoute("GET", "/apps/{app}/builds/{id}.tgz", ResourceBuild, ActionRead),
 	newRackRoute("POST", "/apps/{app}/builds", ResourceBuild, ActionCreate),
-	newRackRoute("POST", "/apps/{app}/builds/import", ResourceBuild, ActionCreate),
+	// An import brings its own manifest and images, unchecked, so it needs build:import (admins), not build:create.
+	newRackRoute("POST", "/apps/{app}/builds/import", ResourceBuild, ActionImport),
 	newRackRoute("PUT", "/apps/{app}/builds/{id}", ResourceBuild, ActionUpdate),
 	// Releases
 	newRackRoute("GET", "/apps/{app}/releases", ResourceRelease, ActionList),
