@@ -37,16 +37,10 @@ func (h *Handler) validateBuildRequest(
 
 	vals, err := url.ParseQuery(string(bodyBytes))
 	if err != nil {
-		return fmt.Errorf("invalid build request body")
+		return refuse(http.StatusBadRequest, errors.New("invalid build request body"))
 	}
-	if err := checkBuildParams(vals); err != nil {
-		return err
-	}
-	if err := refuseSurroundingWhitespace(vals, "url", "manifest"); err != nil {
-		return err
-	}
-	if err := checkBuildArgs(vals.Get("build-args")); err != nil {
-		return err
+	if err := checkBuildForm(vals); err != nil {
+		return refuse(http.StatusBadRequest, err)
 	}
 
 	if authUser.IsAPIToken {
@@ -55,6 +49,17 @@ func (h *Handler) validateBuildRequest(
 		}
 	}
 	return h.validateBuildManifestForAllUsers(r, extractAppFromPath(original), vals)
+}
+
+// checkBuildForm checks a build create's parameters before anything is read from the rack.
+func checkBuildForm(vals url.Values) error {
+	if err := checkBuildParams(vals); err != nil {
+		return err
+	}
+	if err := refuseSurroundingWhitespace(vals, "url", "manifest"); err != nil {
+		return err
+	}
+	return checkBuildArgs(vals.Get("build-args"))
 }
 
 // checkBuildParams refuses a build with a parameter the gateway doesn't accept, or one given more than once. An

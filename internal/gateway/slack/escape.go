@@ -4,6 +4,7 @@ import (
 	"net/url"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 )
 
 // mrkdwnEscaper escapes the characters Slack's mrkdwn reserves for links, mentions and formatting.
@@ -20,9 +21,9 @@ func escapeMrkdwn(value string) string {
 	return mrkdwnEscaper.Replace(value)
 }
 
-// inlineCode shows a value as inline code.
+// inlineCode shows a value as inline code, shortened to fit in a section.
 func inlineCode(value string) string {
-	return "`" + codeEscaper.Replace(value) + "`"
+	return "`" + truncateMrkdwn(codeEscaper.Replace(value), maxSectionValue) + "`"
 }
 
 // codeBlock shows a value as a code block, shortened to fit in a section.
@@ -30,9 +31,18 @@ func codeBlock(value string) string {
 	return "```" + truncateMrkdwn(codeEscaper.Replace(value), maxSectionValue) + "```"
 }
 
-// maxSectionValue is how long a value in a section's text may be. Slack refuses a whole message whose section text
-// is over 3000 characters, so a long value (or one that escaping made longer) must leave room for its label.
-const maxSectionValue = 2500
+// Slack refuses a whole message when any of its text is too long, so an alert carrying a long value from CI or a
+// user would never arrive. Every value is shortened (or, for a link, left out) to fit.
+const (
+	// maxSectionValue is how long a value in a section's text may be. Section text may be up to 3000 characters,
+	// so a long value (or one that escaping made longer) must leave room for its label.
+	maxSectionValue = 2500
+	// maxFieldText is how long a section field's text may be, label included.
+	maxFieldText = 2000
+	// maxFallbackText is how long a message's fallback text may be. Slack only truncates it (at about 40,000
+	// characters), but it's what notifications show, so this keeps it to a readable length.
+	maxFallbackText = 3000
+)
 
 // truncateMrkdwn shortens escaped mrkdwn to at most limit characters, ending with "…". It doesn't cut an escape
 // such as &amp; in two.
@@ -46,6 +56,23 @@ func truncateMrkdwn(escaped string, limit int) string {
 		cut = cut[:amp]
 	}
 	return cut + "…"
+}
+
+// mrkdwnField is a section field showing a bold label over a value that's already mrkdwn, shortened to fit in a
+// field.
+func mrkdwnField(label, value string) map[string]interface{} {
+	prefix := "*" + label + ":*\n"
+	return mrkdwnElement(prefix + truncateMrkdwn(value, maxFieldText-utf8.RuneCountInString(prefix)))
+}
+
+// appendLinkField adds a field showing link, unless link is "" (see externalLink) or too long for a field. A link
+// can't be shortened without breaking it, so a long one is left out rather than have Slack refuse the message.
+func appendLinkField(fields []map[string]interface{}, link string) []map[string]interface{} {
+	text := "🔗 " + link
+	if link == "" || utf8.RuneCountInString(text) > maxFieldText {
+		return fields
+	}
+	return append(fields, mrkdwnElement(text))
 }
 
 // mrkdwnLink links label, which must already be mrkdwn, to target.

@@ -6,6 +6,7 @@ import type { UserEditDialogValues } from '@/components/user-edit-dialog'
 import { useMutation } from '@/hooks/use-mutation'
 import type { GatewayUser, RoleName } from '@/lib/api'
 import { api } from '@/lib/api'
+import { apiPath } from '@/lib/api-path'
 import { QUERY_KEYS } from '@/lib/query-keys'
 
 import type { EditPlan } from '@/pages/user/edit-plan'
@@ -49,7 +50,7 @@ export function useUserEditing({
       email: string
       name: string
     }) => {
-      await api.put(`/api/v1/users/${encodeURIComponent(originalEmail)}`, {
+      await api.put(apiPath`/api/v1/users/${originalEmail}`, {
         email: nextEmail,
         name,
       })

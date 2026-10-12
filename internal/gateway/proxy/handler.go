@@ -157,6 +157,10 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 	// Only an allowed request gets longer deadlines. Nothing before this point reads an upload's body.
 	extendDeadlines(w, r, rackPath)
 
+	if err := h.checkPromoteImages(r, rackPath, approvalTracker); err != nil {
+		h.handleForwardError(w, r, err, rackConfig.Name, start)
+		return
+	}
 	if err := h.claimDeployApprovalStep(r, rackPath, approvalTracker); err != nil {
 		_, _, _ = h.handlePermissionError(w, r, authUser, err, rackConfig.Name, start)
 		return
@@ -302,6 +306,9 @@ func (h *Handler) handleForwardError(
 	}
 	if errors.Is(err, errResponseInterrupted) {
 		h.logInterruptedResponse(r, err, rackName, start)
+		return
+	}
+	if h.handleRefusal(w, r, err, rackName, start) {
 		return
 	}
 	h.handleError(w, r, err.Error(), bodyErrorStatus(err, http.StatusInternalServerError), rackName, start)

@@ -326,8 +326,8 @@ func TestWebLoginCallbackRejectsInvalidState(t *testing.T) {
 	if loc == nil || !strings.Contains(loc.Path, "/auth/error") {
 		t.Fatalf("expected redirect to auth error page, got %v", loc)
 	}
-	if !strings.Contains(loc.RawQuery, "message=Invalid") {
-		t.Fatalf("expected error message in query, got %v", loc.RawQuery)
+	if loc.RawQuery != "error=state_mismatch" {
+		t.Fatalf("expected the state_mismatch reason in the query, got %v", loc.RawQuery)
 	}
 }
 

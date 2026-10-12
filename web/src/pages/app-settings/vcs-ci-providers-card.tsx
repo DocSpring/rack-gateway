@@ -14,6 +14,7 @@ import { Label } from '@/components/ui/label'
 import { toast } from '@/components/ui/use-toast'
 import { useMutation } from '@/hooks/use-mutation'
 import { api } from '@/lib/api'
+import { apiPath } from '@/lib/api-path'
 
 import type { AppSettingsResponse } from '@/pages/app-settings/types'
 import { extractErrorMessage } from '@/pages/app-settings/utils'
@@ -292,7 +293,7 @@ export function VCSCIProvidersCard({
       if (Object.keys(payload).length === 0) {
         return
       }
-      await api.put(`/api/v1/apps/${app}/settings/vcs-ci-deploy`, payload)
+      await api.put(apiPath`/api/v1/apps/${app}/settings/vcs-ci-deploy`, payload)
     },
     onSuccess: async () => {
       // Refetch before dropping local edits, so the card never shows the old cached value
@@ -308,7 +309,7 @@ export function VCSCIProvidersCard({
 
   const clearMutation = useMutation({
     mutationFn: async () => {
-      await api.delete(`/api/v1/apps/${app}/settings/vcs-ci-deploy`)
+      await api.delete(apiPath`/api/v1/apps/${app}/settings/vcs-ci-deploy`)
     },
     onSuccess: async () => {
       // Refetch before dropping local edits, so the card never shows the old cached value

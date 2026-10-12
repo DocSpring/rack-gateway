@@ -13,6 +13,7 @@ import {
   TableRow,
 } from '../components/ui/table'
 import { api } from '../lib/api'
+import { apiPath } from '../lib/api-path'
 import { DEFAULT_PER_PAGE } from '../lib/constants'
 
 type Release = {
@@ -31,7 +32,7 @@ export function AppReleasesPage() {
   } = useQuery({
     queryKey: ['app-releases', app],
     queryFn: async () => {
-      const items = await api.get<Release[]>(`/api/v1/convox/apps/${app}/releases`)
+      const items = await api.get<Release[]>(apiPath`/api/v1/convox/apps/${app}/releases`)
       try {
         const ids = Array.from(new Set(items.map((r) => r.id))).join(',')
         if (ids) {

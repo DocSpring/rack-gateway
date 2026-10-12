@@ -163,7 +163,7 @@ func TestParseManifestFromTarball(t *testing.T) {
 			if manifestPath == "" {
 				manifestPath = defaultManifestPath
 			}
-			got, err := parseManifestFromTarball(bytes.NewReader(tc.archive), manifestPath)
+			got, err := parseArchiveManifest(t, bytes.NewReader(tc.archive), manifestPath)
 			if tc.wantErr != "" {
 				require.ErrorContains(t, err, tc.wantErr)
 				return
@@ -186,12 +186,12 @@ func TestManifestScanStreamsTheWholeTarball(t *testing.T) {
 		entries = append(entries, tarEntry{name: fmt.Sprintf("assets/%d.bin", i), body: padding})
 	}
 
-	manifest, err := parseManifestFromTarball(streamedTarball(t, entries...), defaultManifestPath)
+	manifest, err := parseArchiveManifest(t, streamedTarball(t, entries...), defaultManifestPath)
 	require.NoError(t, err)
 	require.Equal(t, "docker.io/org/app:abc", manifest.Services["web"].Image)
 
 	replacement := tarEntry{name: "convox.yml", body: []byte("services:\n  web:\n    image: attacker/app\n")}
-	_, err = parseManifestFromTarball(streamedTarball(t, append(entries, replacement)...), defaultManifestPath)
+	_, err = parseArchiveManifest(t, streamedTarball(t, append(entries, replacement)...), defaultManifestPath)
 	require.ErrorContains(t, err, "tarball contains convox.yml more than once")
 }
 
@@ -204,10 +204,20 @@ func TestManifestScanRefusesAnArchiveThatReachesTheSizeLimit(t *testing.T) {
 	require.NoError(t, writeGzippedTar(&second, true, replacement))
 	archive := append(append([]byte{}, first.Bytes()...), second.Bytes()...)
 
-	_, err := parseManifestFromTarballWithin(bytes.NewReader(archive), defaultManifestPath, int64(first.Len()))
+	_, err := readArchiveManifest(bytes.NewReader(archive), defaultManifestPath, int64(first.Len()))
 	require.ErrorContains(t, err, "tarball exceeds maximum size")
 
 	// Read in full, the same archive has two manifests.
-	_, err = parseManifestFromTarballWithin(bytes.NewReader(archive), defaultManifestPath, int64(len(archive)+1))
+	_, err = readArchiveManifest(bytes.NewReader(archive), defaultManifestPath, int64(len(archive)+1))
 	require.ErrorContains(t, err, "tarball contains convox.yml more than once")
+}
+
+// parseArchiveManifest reads and parses the manifest in an archive, as a build's check does.
+func parseArchiveManifest(t *testing.T, r io.Reader, manifestPath string) (*convoxManifest, error) {
+	t.Helper()
+	data, err := readArchiveManifest(r, manifestPath, maxTarballSize)
+	if err != nil {
+		return nil, err
+	}
+	return parseManifest(data)
 }

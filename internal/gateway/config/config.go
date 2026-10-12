@@ -40,10 +40,6 @@ type Config struct {
 	GitHubToken           string
 	GitHubAPIURL          string
 	CircleCIToken         string
-	DBMaxOpenConns        int
-	DBMaxIdleConns        int
-	DBConnMaxLifetime     time.Duration
-	DBConnMaxIdleTime     time.Duration
 	// DeployApprovalPendingMaxAge is how long a deploy approval request can stay pending before it expires
 	// (0 keeps pending requests forever).
 	DeployApprovalPendingMaxAge time.Duration
@@ -100,7 +96,6 @@ func Load() (*Config, error) {
 	cfg.loadTrustedProxies()
 	cfg.loadRacksFromEnv()
 	cfg.loadIntegrationTokens()
-	cfg.loadDatabasePoolConfig()
 	cfg.DeployApprovalPendingMaxAge = getEnvDuration("DEPLOY_APPROVAL_PENDING_MAX_AGE", 7*24*time.Hour)
 
 	return cfg, nil
@@ -195,13 +190,6 @@ func (c *Config) loadIntegrationTokens() {
 	c.CircleCIToken = strings.TrimSpace(getEnv("CIRCLECI_TOKEN", ""))
 }
 
-func (c *Config) loadDatabasePoolConfig() {
-	c.DBMaxOpenConns = getEnvInt("DB_MAX_OPEN_CONNS", 25)
-	c.DBMaxIdleConns = getEnvInt("DB_MAX_IDLE_CONNS", 5)
-	c.DBConnMaxLifetime = getEnvDuration("DB_CONN_MAX_LIFETIME", 30*time.Minute)
-	c.DBConnMaxIdleTime = getEnvDuration("DB_CONN_MAX_IDLE_TIME", 10*time.Minute)
-}
-
 func (c *Config) loadRacksFromEnv() {
 	rackHost := os.Getenv("RACK_HOST")
 	rackToken := os.Getenv("RACK_TOKEN")
@@ -282,15 +270,6 @@ func generateDevKey() (string, error) {
 func getEnv(key, defaultVal string) string {
 	if val := os.Getenv(key); val != "" {
 		return val
-	}
-	return defaultVal
-}
-
-func getEnvInt(key string, defaultVal int) int {
-	if val := strings.TrimSpace(os.Getenv(key)); val != "" {
-		if i, err := strconv.Atoi(val); err == nil {
-			return i
-		}
 	}
 	return defaultVal
 }

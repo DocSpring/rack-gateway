@@ -24,6 +24,7 @@ import type {
   GetAuditLogsExportParams,
   GetAuditLogsParams,
   GetAuthCliCallbackParams,
+  GetAuthCliInitiatorParams,
   GetAuthCliMfaParams,
   GetAuthCliReturnParams,
   GetAuthWebCallbackParams,
@@ -41,6 +42,7 @@ import type {
   HandlersBackupCodesResponse,
   HandlersCLILoginCancelRequest,
   HandlersCLILoginCompleteRequest,
+  HandlersCLILoginInitiatorResponse,
   HandlersCLILoginRedirectResponse,
   HandlersCLILoginResponse,
   HandlersCLILoginStartRequest,
@@ -577,6 +579,24 @@ export const getRackGatewayAPI = () => {
         headers: { "Content-Type": "application/json" },
         data: handlersCLILoginCompleteRequest,
       },
+      options,
+    );
+  };
+
+  /**
+   * Returns the device name and IP address that started the CLI login bound to this browser, so the
+   * MFA challenge page can show the user a login they didn't start. The page reads them from the
+   * gateway, not from its own URL, which a crafted link could fill with a reassuring device or address.
+   * @summary Show where a CLI login was started
+   */
+  const getAuthCliInitiator = (
+    params: GetAuthCliInitiatorParams,
+    options?: SecondParameter<
+      typeof createGatewayClient<HandlersCLILoginInitiatorResponse>
+    >,
+  ) => {
+    return createGatewayClient<HandlersCLILoginInitiatorResponse>(
+      { url: `/auth/cli/initiator`, method: "GET", params },
       options,
     );
   };
@@ -1489,6 +1509,7 @@ export const getRackGatewayAPI = () => {
     getAuthCliCallback,
     postAuthCliCancel,
     postAuthCliComplete,
+    getAuthCliInitiator,
     getAuthCliMfa,
     getAuthCliReturn,
     postAuthCliStart,
@@ -1694,6 +1715,11 @@ export type PostAuthCliCancelResult = NonNullable<
 export type PostAuthCliCompleteResult = NonNullable<
   Awaited<
     ReturnType<ReturnType<typeof getRackGatewayAPI>["postAuthCliComplete"]>
+  >
+>;
+export type GetAuthCliInitiatorResult = NonNullable<
+  Awaited<
+    ReturnType<ReturnType<typeof getRackGatewayAPI>["getAuthCliInitiator"]>
   >
 >;
 export type GetAuthCliMfaResult = NonNullable<

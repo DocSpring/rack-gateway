@@ -25,7 +25,6 @@ import { AppServicesPage } from './pages/app-services-page'
 import { AppSettingsPage } from './pages/app-settings-page'
 import { AppsListPage } from './pages/apps-list-page'
 import { AuditPage } from './pages/audit-page'
-import { CallbackPage } from './pages/callback-page'
 import { CLIAuthErrorPage } from './pages/cli-auth-error-page'
 import { CLIAuthSuccessPage } from './pages/cli-auth-success-page'
 import { DeployApprovalRequestDetailPage } from './pages/deploy-approval-request-detail-page'
@@ -62,11 +61,6 @@ function buildRouteTree() {
     getParentRoute: () => rootRoute,
     path: 'login',
     component: LoginPage,
-  })
-  const callbackRoute = createRoute({
-    getParentRoute: () => rootRoute,
-    path: 'auth/callback',
-    component: CallbackPage,
   })
   const loginErrorRoute = createRoute({
     getParentRoute: () => rootRoute,
@@ -267,7 +261,6 @@ function buildRouteTree() {
 
   return rootRoute.addChildren([
     loginRoute,
-    callbackRoute,
     loginErrorRoute,
     mfaChallengeRoute,
     cliAuthSuccessRoute,

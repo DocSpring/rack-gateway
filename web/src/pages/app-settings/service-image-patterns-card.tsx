@@ -13,6 +13,7 @@ import { Label } from '@/components/ui/label'
 import { toast } from '@/components/ui/use-toast'
 import { useMutation } from '@/hooks/use-mutation'
 import { api } from '@/lib/api'
+import { apiPath } from '@/lib/api-path'
 
 import type { AppSettingsResponse } from '@/pages/app-settings/types'
 import { extractErrorMessage } from '@/pages/app-settings/utils'
@@ -50,7 +51,7 @@ export function ServiceImagePatternsCard({
       }
       try {
         const parsed = JSON.parse(value)
-        await api.put(`/api/v1/apps/${app}/settings/service-image-patterns`, parsed)
+        await api.put(apiPath`/api/v1/apps/${app}/settings/service-image-patterns`, parsed)
       } catch {
         throw new Error('Invalid JSON format')
       }
@@ -69,7 +70,7 @@ export function ServiceImagePatternsCard({
 
   const clearMutation = useMutation({
     mutationFn: async () => {
-      await api.delete(`/api/v1/apps/${app}/settings/service-image-patterns`)
+      await api.delete(apiPath`/api/v1/apps/${app}/settings/service-image-patterns`)
     },
     onSuccess: async () => {
       // Refetch before dropping local edits, so the card never shows the old cached value

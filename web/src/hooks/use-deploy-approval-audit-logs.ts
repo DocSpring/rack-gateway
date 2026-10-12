@@ -3,6 +3,7 @@ import { useCallback, useState } from 'react'
 
 import type { AuditLogRecord } from '@/components/audit-logs-pane'
 import { type AuditLogsResponse, api } from '@/lib/api'
+import { apiPath } from '@/lib/api-path'
 import { DEFAULT_PER_PAGE } from '@/lib/constants'
 
 export function useDeployApprovalAuditLogs(id: string, enabled: boolean) {
@@ -11,9 +12,9 @@ export function useDeployApprovalAuditLogs(id: string, enabled: boolean) {
   const { data, isLoading, error } = useQuery<AuditLogsResponse, Error>({
     queryKey: ['deployApprovalRequestAuditLogs', id, pageIndex, DEFAULT_PER_PAGE],
     queryFn: () =>
-      api.get(
-        `/api/v1/deploy-approval-requests/${id}/audit-logs?limit=${DEFAULT_PER_PAGE}&page=${pageIndex}`
-      ),
+      api.get(apiPath`/api/v1/deploy-approval-requests/${id}/audit-logs`, {
+        params: { limit: DEFAULT_PER_PAGE, page: pageIndex },
+      }),
     enabled,
     placeholderData: keepPreviousData,
     refetchOnWindowFocus: true,

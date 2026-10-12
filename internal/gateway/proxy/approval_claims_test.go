@@ -61,6 +61,7 @@ type claimRack struct {
 	release chan struct{}
 	once    sync.Once
 	archive []byte // served to the gateway's manifest check
+	reads   rackReads
 }
 
 func newClaimRack() *claimRack {
@@ -68,6 +69,9 @@ func newClaimRack() *claimRack {
 }
 
 func (rk *claimRack) handler(w http.ResponseWriter, r *http.Request) {
+	if rk.reads.serve(w, r) {
+		return
+	}
 	if r.Method == http.MethodGet {
 		_, _ = w.Write(rk.archive)
 		return

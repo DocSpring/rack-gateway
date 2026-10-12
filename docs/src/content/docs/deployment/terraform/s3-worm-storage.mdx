@@ -46,7 +46,28 @@ does nothing. `rack-gateway-api write-anchor` writes one by hand.
 Anchor writes hold a database advisory lock from the check for this hour's anchor until the write, so two of them
 (on different gateway instances, or the job and `write-anchor`) never overlap: an overlap could write an hour's
 key twice or link two anchors to the same predecessor, and Object Lock would keep that forever. A job that finds
-the lock taken tries again a minute later; `write-anchor` fails and can be run again.
+the lock taken tries again a minute later; `write-anchor` fails and can be run again. The lock lives on one of the
+gateway's database connections, which the write holds for the length of its S3 calls (well under a second
+normally, at most the job's one-minute timeout).
+
+The upload itself is sent once. S3 can store an object and still fail the request (a 5xx, or a connection dropped
+before the response), and the AWS SDK's automatic retry would then add a second version of the key. Instead the
+job fails, and its retry finds the anchor if S3 stored it.
+
+A failing job is retried, but not past the hour's **write window**: a retry that starts more than 6 hours after
+the job was created gives up (it's logged as an error and sent to Sentry, if configured), and the next hours' anchors cover the
+events. `verify-audit` fails an anchor written later than that.
+
+If a job finds its hour's key already holds an object, it checks the anchor writer could have written it: S3
+stored it no earlier than the hour began, it is an anchor for this chain and hour, and it records every event
+written before S3 stored it. Otherwise someone with write access to the bucket put it there (created ahead of
+time, or a stale copy of an earlier anchor), and while Object Lock keeps it that hour can't be anchored. The job
+is cancelled and the error logged and sent to Sentry, and `write-anchor` fails; `verify-audit` reports the object
+too.
+
+A job's hour comes from its creation time in the database. An attempt that started before the job was created
+means someone moved that time forward to name a later hour, so the job refuses it the same way. `write-anchor`
+names the anchor by the database's clock, not the clock of the host running it.
 
 ### Anchor Content
 
@@ -70,7 +91,7 @@ Each anchor is a JSON blob containing chain state:
 | `chain_id` | Environment identifier (`AUDIT_ANCHOR_CHAIN_ID`) |
 | `last_seq` | Latest event's chain index (0 with an empty `last_hash` when there are no events) |
 | `last_hash` | Latest event's hash (hex-encoded) |
-| `ts_utc` | When the anchor job was scheduled; the key is derived from its hour |
+| `ts_utc` | When the anchor job was created; the key is derived from its hour |
 | `db_snapshot_lsn` | Reserved, always empty |
 | `prev_anchor_hash` | SHA-256 of the anchor written before this one (creates the anchor chain) |
 | `format` | `2` for anchors written by current versions; absent in older anchors |
@@ -227,18 +248,6 @@ resource "aws_s3_bucket_policy" "audit_anchors" {
         }
       },
       {
-        Sid       = "DenyWithoutObjectLock"
-        Effect    = "Deny"
-        Principal = "*"
-        Action    = "s3:PutObject"
-        Resource  = "${aws_s3_bucket.audit_anchors.arn}/*"
-        Condition = {
-          StringNotEquals = {
-            "s3:x-amz-object-lock-mode" = "COMPLIANCE"
-          }
-        }
-      },
-      {
         Sid       = "DenyDelete"
         Effect    = "Deny"
         Principal = "*"
@@ -252,6 +261,11 @@ resource "aws_s3_bucket_policy" "audit_anchors" {
   })
 }
 ```
+
+Don't add a statement that denies uploads without an `x-amz-object-lock-mode` header. The gateway doesn't send
+Object Lock headers: the bucket's default retention (above) locks every new object version in `COMPLIANCE` mode
+for `worm_retention_days`, so a policy requiring the header would deny every anchor write. Uploads to an Object
+Lock bucket must carry an integrity checksum; the gateway sends a SHA-256 checksum with each anchor.
 
 ### IAM Role for Writer
 
@@ -289,6 +303,8 @@ resource "aws_iam_role_policy" "anchor_writer" {
   })
 }
 ```
+
+`s3:GetObject` also covers the `HeadObject` check for an existing anchor.
 
 ### IAM Role for Verification (Read-Only)
 
@@ -413,6 +429,14 @@ Anchors, in the order they were written:
 
 - Each anchor key has exactly one version and no delete marker.
 - `chain_id` matches, and the key matches `ts_utc`.
+- S3 stored the anchor (its `LastModified`) no earlier than its `ts_utc` and no more than 6 hours (the write
+  window) after it, give or take 5 minutes of clock skew. An anchor stored earlier was created ahead of time by
+  someone with write access to the bucket, and stops the gateway anchoring that hour; one stored later was
+  backfilled. Anchors without a `format` written late only get a warning: earlier versions retried a failing job
+  for weeks.
+- An anchor without a `format` was stored no more than 24 hours after the first `format` 2 anchor (an instance of
+  the earlier version can still write one during the rolling deploy). Later ones weren't written by the anchor
+  writer, and the allowances for earlier versions' anchors mustn't excuse them.
 - The event at `last_seq` exists and its hash equals `last_hash`.
 - `last_seq` never goes down (events removed from the end of the chain).
 - `prev_anchor_hash` is the SHA-256 of the anchor written before it (failure for `format` 2 anchors; older anchors
@@ -424,7 +448,9 @@ Anchors, in the order they were written:
   `--max-anchor-age`. Either failing means anchors aren't being written, so nothing outside the database protects
   new events. If you raised `AUDIT_ANCHOR_INTERVAL_MINUTES`, raise `--max-anchor-age` above it.
 
-It warns about hours without an anchor and about events written after the latest anchor.
+It warns about hours without an anchor and about events written after the latest anchor. Unanchored events fail
+verification once the oldest was written more than `--max-anchor-age` ago: anchors are being written but don't
+cover new events.
 
 ### Pinning Where Hash v2 Starts
 
@@ -614,7 +640,7 @@ In COMPLIANCE mode, you **cannot** delete objects before retention expires. Opti
 # Apply legal hold (does not affect retention)
 aws s3api put-object-legal-hold \
   --bucket audit-anchors-prod \
-  --key "production/2025/01/15/14/anchor-20250115T140000Z.json" \
+  --key "production/2025/01/15/14/anchor-20250115T14.json" \
   --legal-hold Status=ON
 ```
 

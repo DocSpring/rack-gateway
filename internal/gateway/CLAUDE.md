@@ -72,6 +72,12 @@ Request forwarding with WebSocket support:
 - Forwards only the query parameters the Convox SDK sends (`proxy/forward_query.go`) and refuses
   requests with any other: the rack reads options such as the exec command, release env and build
   manifest from the query string too, which would bypass the gateway's checks
+- Build manifests are checked twice: as written (`proxy/manifest_parse.go`, `manifest_structure.go`,
+  `manifest_interpolation.go`) and as the rack will load them (`loadManifestAsRack`: Convox's own `manifest.Load`
+  with the app's env and the build args substituted). Promotes are checked with the release's env
+  (`proxy/promote_images.go`). Keep the `github.com/convox/convox` module in step with the racks' Convox version
+- Refuse a request after looking at the rack with `refuse(status, err)` (`proxy/error_handling.go`), so the client
+  gets that status and the audit log a deny, never a 500
 - Sets `X-Convox-Actor` (user email or `token:<name>`); internal identity headers sent by clients are
   stripped by `middleware/internal_headers.go`
 - Protected env vars (the app's `protected_env_vars`) are refused on release
@@ -118,9 +124,15 @@ Key files:
 - `db/audit_append.go`, `db/audit_hash.go`, `db/audit_normalize.go` - Hash-chained append (hash v2). The row is
   normalized to its stored form, hashed, then stored, so the stored row always re-hashes to `event_hash`. Never
   change the v2 encoding (existing rows would stop verifying); a new audit column needs a new hash version
-- `jobs/audit/anchor_writer.go` - Hourly S3 Object Lock anchors. Every write (job or `write-anchor`) goes through
-  `WriteAnchor`, which holds the audit anchor advisory lock (`db.WithAuditAnchorLock`) from the existence check
-  through the Put: anchors are permanent, so an overlapping write would be a permanent verification failure
+- `jobs/audit/anchor_writer.go` - Hourly S3 Object Lock anchors. Every write (job or `write-anchor`) holds the
+  audit anchor advisory lock (`db.WithAuditAnchorLock`) from the existence check through the Put: anchors are
+  permanent, so an overlapping write would be a permanent verification failure. `write-anchor` uses
+  `WriteCurrentAnchor` (the database's clock, never the host's). The Put is sent once (`putAnchorOnce`: an SDK
+  retry after a lost response adds a second version); the job's retry re-checks first. An attempt starting past
+  `AnchorWriteWindow`, or before the job was created, is refused (`anchor_window.go`). An existing key must be an
+  anchor the writer could have written (`anchor_existing.go`: stored no earlier than its hour, this chain and
+  hour, covering every event written before it), or it's `ErrUnexpectedAnchor`. `auditverify` checks
+  `LastModified` against `ts_utc` with the same constants, so keep them in step
 - `auditverify/` - `rack-gateway-api verify-audit` (chain + anchor verification). Never trust the database's own
   hash v2 start: it comes from `hash_version`, which anyone with database write access can change
 
@@ -128,7 +140,7 @@ Key files:
 
 Common middleware:
 
-- `security.go` - CSP headers, CORS, security headers
+- `security_headers.go` - CSP and other security headers
 - `csrf.go` - CSRF protection for web requests
 - `session.go` - Session management
 
@@ -218,8 +230,10 @@ The gateway enforces strict CSP:
 - No inline scripts (except with nonce)
 - No inline styles (except with nonce)
 - Nonce is generated per request and passed to React via meta tag
+- `connect-src 'self'` (plus Sentry when configured), `base-uri 'self'`, `form-action 'self'` and
+  `frame-ancestors 'none'`
 
-See `middleware/security.go` for CSP configuration.
+See `middleware/security_headers.go` for CSP configuration, and `web/CLAUDE.md` for what it means for the SPA.
 
 ### CSRF Protection
 

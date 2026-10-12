@@ -268,8 +268,14 @@ approval-bound build:
 - **`${...}` only as `${NAME}`, and never in an image.** The rack substitutes `${...}` with the app's environment
   (and, during the build, the build's build arguments) before it parses the manifest, and an unset name becomes
   empty. So a reference must be `${NAME}` (letters, digits and `_`, on one line), on a `key: value` or `- value`
-  line, either inside a quoted value or in an unquoted value made only of letters, digits and `_ . / @ + = ~ , % -`.
-  Quote a value with spaces or colons that uses one. A checked image can't use `${...}` at all.
+  line (the key may contain `/`, as Kubernetes annotation keys do), either inside a quoted value or in an unquoted
+  value made only of letters, digits and `_ . / @ + = ~ , % -`. Quote a value with spaces or colons that uses one.
+  A checked image can't use `${...}` at all.
+- **Checked again as the rack will load it.** A value can still change what the lines after it mean once it's
+  substituted (a `"` or `[` swallows the lines that follow), and the app's environment is set separately from the
+  manifest. So the gateway also loads the manifest with Convox's own parser, with the app's current environment and
+  the build's arguments substituted, and checks the images in that result too. A manifest the rack couldn't load
+  (a missing required environment variable, say) is refused.
 - **Plain YAML structure.** Merge keys (`<<`) are refused, because the rack's YAML parser applies them in a different
   order than the gateway's. An anchor can't hold an image (write each image out where it's used), and a mapping
   can't repeat a key.
@@ -297,6 +303,21 @@ After successful build:
 ## Phase 6: Deploy Validation
 
 Every deployment action validates the approval.
+
+### Promotes Are Checked Too
+
+A promote loads the release's manifest again, with the release's environment substituted, and takes its init
+container images and resource images from that (each service itself runs the image its build pushed to the app's
+registry). The environment can change between the build and the promote, so before forwarding a promote of an app
+with `service_image_patterns`, and every approval-bound promote, the gateway reads the release from the rack and
+loads its manifest the same way:
+
+- each init container image must match its service's pattern, with `{{GIT_COMMIT}}` as the commit the release's
+  build was made from (for an approval-bound promote, the approved commit, and the image must be tagged with it);
+- no resource may override its image.
+
+A promote the gateway refuses is answered with 403 and isn't forwarded, and one whose release it can't read with
+502. Without patterns or an approval, promotes aren't checked.
 
 ### Gated Actions
 

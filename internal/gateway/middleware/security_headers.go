@@ -32,7 +32,7 @@ func SecurityHeaders(cfg *config.Config) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		isProdLike := determineProductionMode(cfg)
 		nonce := injectNonce(c)
-		csp := buildCSP(nonce, isProdLike, sentryCfg)
+		csp := buildCSP(nonce, sentryCfg)
 		applySecurityHeaders(c, csp, isProdLike, sentryCfg)
 	}
 }
@@ -66,18 +66,21 @@ func injectNonce(c *gin.Context) string {
 	return nonce
 }
 
-func buildCSP(nonce string, isProdLike bool, sentryCfg *sentrySecurityConfig) string {
-	connectSrc := buildConnectSrc(isProdLike, sentryCfg)
-	imgSrc := buildImgSrc(isProdLike, sentryCfg)
-	scriptSrc := buildScriptSrc(nonce, isProdLike)
-	styleSrc := buildStyleSrc(nonce, isProdLike)
-
+// buildCSP is the Content-Security-Policy. It's only sent when isProdLike (see applySecurityHeaders: in dev mode
+// the secure middleware sends no security headers), so it has no development allowances.
+func buildCSP(nonce string, sentryCfg *sentrySecurityConfig) string {
 	cspParts := []string{
 		"default-src 'self'",
-		connectSrc,
-		scriptSrc,
-		styleSrc,
-		imgSrc,
+		buildConnectSrc(sentryCfg),
+		buildScriptSrc(nonce),
+		buildStyleSrc(nonce),
+		buildImgSrc(sentryCfg),
+		// default-src doesn't cover these. A <base> tag can't point relative URLs elsewhere, a form can only submit to
+		// the gateway (the SPA submits every form with fetch, and the gateway never renders one), and no other site
+		// can frame the gateway's pages to trick clicks on them.
+		"base-uri 'self'",
+		"form-action 'self'",
+		"frame-ancestors 'none'",
 	}
 	if sentryCfg != nil {
 		cspParts = append(cspParts,
@@ -88,48 +91,38 @@ func buildCSP(nonce string, isProdLike bool, sentryCfg *sentrySecurityConfig) st
 	return strings.Join(cspParts, "; ")
 }
 
-func buildConnectSrc(isProdLike bool, sentryCfg *sentrySecurityConfig) string {
-	directives := []string{"'self'", "ws:", "wss:"}
-	if !isProdLike {
-		directives = append(directives, "http://localhost:*", "https://localhost:*")
-	}
+// buildConnectSrc lists where the SPA may connect: only the gateway's own API (and Sentry, when it's configured),
+// so a script that got onto a page can't send what it reads to another host. The SPA opens no WebSockets.
+func buildConnectSrc(sentryCfg *sentrySecurityConfig) string {
+	directives := []string{"'self'"}
 	if sentryCfg != nil && sentryCfg.ConnectOrigin != "" {
 		directives = append(directives, sentryCfg.ConnectOrigin)
 	}
 	return "connect-src " + strings.Join(directives, " ")
 }
 
-func buildImgSrc(isProdLike bool, sentryCfg *sentrySecurityConfig) string {
+func buildImgSrc(sentryCfg *sentrySecurityConfig) string {
 	directives := []string{"'self'", "data:"}
-	if !isProdLike {
-		directives = append(directives, "http://localhost:*", "https://localhost:*")
-	}
 	if sentryCfg != nil && sentryCfg.ConnectOrigin != "" {
 		directives = append(directives, sentryCfg.ConnectOrigin)
 	}
 	return "img-src " + strings.Join(directives, " ")
 }
 
-func buildScriptSrc(nonce string, isProdLike bool) string {
+func buildScriptSrc(nonce string) string {
 	directives := []string{"'self'"}
 	if nonce != "" {
 		directives = append(directives, fmt.Sprintf("'nonce-%s'", nonce))
 	}
-	if !isProdLike {
-		directives = append(directives, "'unsafe-inline'")
-	}
 	return "script-src " + strings.Join(directives, " ")
 }
 
-func buildStyleSrc(nonce string, isProdLike bool) string {
+func buildStyleSrc(nonce string) string {
 	directives := []string{"'self'"}
 	if nonce != "" {
 		directives = append(directives, fmt.Sprintf("'nonce-%s'", nonce))
 	}
 	directives = append(directives, defaultStyleHashes...)
-	if !isProdLike {
-		directives = append(directives, "'unsafe-inline'")
-	}
 	return "style-src " + strings.Join(directives, " ")
 }
 

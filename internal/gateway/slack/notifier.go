@@ -227,7 +227,7 @@ func formatUserIdentifier(auditLog *db.AuditLog) string {
 // buildSlackBlocks constructs the full Slack message block structure
 func buildSlackBlocks(auditLog *db.AuditLog, emoji, user string) []map[string]interface{} {
 	blocks := []map[string]interface{}{
-		mrkdwnSection(fmt.Sprintf("*%s %s*", emoji, escapeMrkdwn(auditLog.Action))),
+		mrkdwnSection(fmt.Sprintf("*%s %s*", emoji, truncateMrkdwn(escapeMrkdwn(auditLog.Action), maxSectionValue))),
 		buildFieldsBlock(auditLog, user),
 	}
 
@@ -244,9 +244,9 @@ func buildFieldsBlock(auditLog *db.AuditLog, user string) map[string]interface{}
 	return map[string]interface{}{
 		"type": "section",
 		"fields": []map[string]interface{}{
-			mrkdwnElement("*User:*\n" + user),
-			mrkdwnElement("*Status:*\n" + escapeMrkdwn(auditLog.Status)),
-			mrkdwnElement("*Time:*\n" + auditLog.Timestamp.Format(time.RFC3339)),
+			mrkdwnField("User", user),
+			mrkdwnField("Status", escapeMrkdwn(auditLog.Status)),
+			mrkdwnField("Time", auditLog.Timestamp.Format(time.RFC3339)),
 		},
 	}
 }
@@ -263,7 +263,7 @@ func appendResourceBlock(blocks []map[string]interface{}, auditLog *db.AuditLog)
 		resourceText = fmt.Sprintf("%s (%s)", resourceText, escapeMrkdwn(auditLog.ResourceType))
 	}
 
-	newField := mrkdwnElement("*Resource:*\n" + resourceText)
+	newField := mrkdwnField("Resource", resourceText)
 
 	// Insert resource field after user, before status
 	blocks[1]["fields"] = append(fields[:1], append([]map[string]interface{}{newField}, fields[1:]...)...)
@@ -288,7 +288,9 @@ func appendContextBlock(blocks []map[string]interface{}, auditLog *db.AuditLog) 
 	}
 
 	return append(blocks, map[string]interface{}{
-		"type":     "context",
-		"elements": []map[string]interface{}{mrkdwnElement("IP: " + escapeMrkdwn(auditLog.IPAddress))},
+		"type": "context",
+		"elements": []map[string]interface{}{
+			mrkdwnElement("IP: " + truncateMrkdwn(escapeMrkdwn(auditLog.IPAddress), maxSectionValue)),
+		},
 	})
 }

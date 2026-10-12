@@ -197,18 +197,6 @@ aws s3api put-bucket-encryption \
       }
     },
     {
-      "Sid": "DenyObjectsWithoutObjectLock",
-      "Effect": "Deny",
-      "Principal": "*",
-      "Action": "s3:PutObject",
-      "Resource": "arn:aws:s3:::audit-anchors/*",
-      "Condition": {
-        "StringNotEquals": {
-          "s3:x-amz-object-lock-mode": "COMPLIANCE"
-        }
-      }
-    },
-    {
       "Sid": "DenyDeleteOperations",
       "Effect": "Deny",
       "Principal": "*",
@@ -221,6 +209,9 @@ aws s3api put-bucket-encryption \
   ]
 }
 ```
+
+The writer sends no Object Lock headers (the bucket's default retention locks each anchor), so don't require
+`s3:x-amz-object-lock-mode` in the policy: every anchor write would be denied.
 
 Apply:
 
@@ -246,7 +237,6 @@ Create a dedicated role with minimal permissions:
       "Resource": "arn:aws:s3:::audit-anchors/*",
       "Condition": {
         "StringEquals": {
-          "s3:x-amz-object-lock-mode": "COMPLIANCE",
           "s3:x-amz-server-side-encryption": "aws:kms"
         }
       }
