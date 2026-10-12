@@ -24,11 +24,12 @@ func TestStripInternalHeadersRemovesClientCopies(t *testing.T) {
 	for _, name := range gatewayInternalHeaders {
 		req.Header.Set(name, "spoofed")
 	}
-	req.Header.Set("X-Request-ID", "kept")
+	req.Header.Set("Accept", "kept")
 	router.ServeHTTP(httptest.NewRecorder(), req)
 
 	for _, name := range gatewayInternalHeaders {
 		require.Emptyf(t, seen.Get(name), "%s must be stripped", name)
 	}
-	require.Equal(t, "kept", seen.Get("X-Request-ID"))
+	require.Contains(t, gatewayInternalHeaders, "X-Request-ID", "clients must not choose the audit request ID")
+	require.Equal(t, "kept", seen.Get("Accept"))
 }

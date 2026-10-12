@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"encoding/json"
-	"log"
 
 	"github.com/gin-gonic/gin"
 
@@ -39,7 +38,6 @@ func (h *AuthHandler) auditMFAEvent(c *gin.Context, user *db.User, event mfaAudi
 		IPAddress:    c.ClientIP(),
 		UserAgent:    c.Request.UserAgent(),
 	}
-	if err := h.auditLogger.LogDBEntry(entry); err != nil {
-		log.Printf(`{"level":"error","event":"audit_log_failed","action":%q,"error":%q}`, action, err.Error())
-	}
+	// The logger reports a failed write (it can't be undone: the change has been made).
+	_ = h.auditLogger.LogRequestEntry(c.Request.Context(), entry)
 }

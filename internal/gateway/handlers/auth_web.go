@@ -4,7 +4,6 @@ import (
 	"crypto/subtle"
 	"errors"
 	"fmt"
-	"log"
 	"net/http"
 	"net/url"
 	"strings"
@@ -14,7 +13,6 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
-	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 )
 
 func (h *AuthHandler) handleMFARedirect(
@@ -68,7 +66,10 @@ func (h *AuthHandler) getValidatedRedirectURL(c *gin.Context) string {
 // @Success 302 {string} string "Redirect to identity provider"
 // @Router /auth/web/login [get]
 func (h *AuthHandler) WebLoginStart(c *gin.Context) {
-	h.auditLogin(c, "web", "success")
+	if !h.auditLogin(c, "web", "success") {
+		redirectToWebLoginError(c, webLoginAuditUnavailable)
+		return
+	}
 
 	// Capture and validate returnTo parameter
 	returnTo := strings.TrimSpace(c.Query("returnTo"))
@@ -134,7 +135,12 @@ func (h *AuthHandler) WebLoginCallback(c *gin.Context) {
 	}
 	h.fillUserName(userRecord, resp.Name)
 
+	if !h.recordAuthAttempt(c, audit.ActionSessionCreate, "web", userRecord.Email, userRecord.Name) {
+		redirectToWebLoginError(c, webLoginAuditUnavailable)
+		return
+	}
 	session, err := h.createLoginSession(c, userRecord, "web")
+	h.recordAuthResult(c, audit.ActionSessionCreate, "web", userRecord.Email, userRecord.Name, auditStatus(err))
 	if err != nil {
 		redirectToWebLoginError(c, webLoginSessionFailed)
 		return
@@ -176,8 +182,15 @@ func (h *AuthHandler) WebLoginCallback(c *gin.Context) {
 func (h *AuthHandler) WebLogout(c *gin.Context) {
 	h.clearWebOAuthStateCookie(c)
 	sessionToken := extractSessionToken(c)
+	email, name := h.sessionUser(c, sessionToken)
+	if !h.recordAuthAttempt(c, audit.ActionScopeLogout, "web", email, name) {
+		c.String(http.StatusServiceUnavailable, audit.RefusalMessage(audit.ActionScopeLogout))
+		return
+	}
+
+	var revokeErr error
 	if sessionToken != "" && h.sessions != nil {
-		_, _ = h.sessions.RevokeByToken(sessionToken, nil)
+		_, revokeErr = h.sessions.RevokeByToken(sessionToken, nil)
 	}
 	secure := h.cookieSecure()
 	c.SetSameSite(http.SameSiteLaxMode)
@@ -192,24 +205,21 @@ func (h *AuthHandler) WebLogout(c *gin.Context) {
 	)
 	c.SetSameSite(http.SameSiteDefaultMode)
 
-	// Audit logout
-	if h.database != nil {
-		if err := h.auditLogger.LogDBEntry(&db.AuditLog{
-			ActionType:   audit.ActionTypeAuth,
-			Action:       audit.ActionScopeLogout,
-			ResourceType: rbac.ResourceAuth.String(),
-			Resource:     "web",
-			Status:       audit.StatusSuccess,
-		}); err != nil {
-			log.Printf(
-				`{"level":"error","event":"audit_log_failed","action":%q,"error":%q}`,
-				audit.ActionScopeLogout,
-				err,
-			)
-		}
-	}
-
+	h.recordAuthResult(c, audit.ActionScopeLogout, "web", email, name, auditStatus(revokeErr))
 	c.Redirect(http.StatusFound, "/app/login")
+}
+
+// sessionUser names the user a session token belongs to, for the logout's audit entries. A token that isn't a
+// valid session names nobody.
+func (h *AuthHandler) sessionUser(c *gin.Context, sessionToken string) (email, name string) {
+	if sessionToken == "" || h.sessions == nil {
+		return "", ""
+	}
+	result, err := h.sessions.ValidateSession(sessionToken, c.ClientIP(), c.GetHeader("User-Agent"))
+	if err != nil || result == nil || result.User == nil {
+		return "", ""
+	}
+	return result.User.Email, result.User.Name
 }
 
 func (h *AuthHandler) validateWebOAuthState(c *gin.Context, state string) bool {

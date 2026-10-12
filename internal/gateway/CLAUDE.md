@@ -121,10 +121,26 @@ Structured logging:
   `Details` verbatim. Env change entries get their details from `envutil.AuditVisibleKeys.AuditDetails`
   (every value `[REDACTED]` unless the app's `audit_visible_env_vars` lists the key and it is neither secret
   nor protected); rack param changes log key names only; sensitive query parameters go through `RedactQuery`
+- Everything fails closed, with no exceptions (reads, logins, MFA and logouts included): nothing may act unless its
+  audit entry was written first. `middleware.AuditBeforeActing` (every gateway API route) and the proxy's
+  `recordAttempt` (every rack request) write an `attempted` entry first and refuse with 503 when it can't be
+  written; the auth handlers do the same around session creation, CLI login MFA and logout
+  (`handlers/auth_audit.go`). Write a request's other entries with `LogRequestEntry(ctx, ...)` so they get its
+  request ID (its results). Route names come from `rbac/audit_names.go`. A background job that changes state
+  appends its audit events in the same transaction as the change (`db.ExpireDeployApprovalRequests`), and passes
+  them to `audit.RecordedInTransaction`. Any failed write fails the health check for a minute (`audit/health.go`)
+- Never change how a released version writes audit events (`audit.append_audit_event`'s signature, the audit
+  roles' grants) in one migration: the previous release keeps serving requests between `migrate` and the promote,
+  and it refuses every request it can't record, the promote included. Add the new function alongside the old one,
+  and drop the old one in a later release
+- Denials (gateway `Authorize`, proxy RBAC/approval/destructive refusals) go through `RecordDenial`: throttled per
+  principal + action per minute in memory (one gateway per rack). The request is refused either way; a denial that
+  can't be written is logged and sent to Sentry
 
 Key files:
 
 - `audit/logger.go` - Audit log creation
+- `audit/attempt.go`, `audit/denials.go` - Attempt/result pairing, throttled denials
 - `audit/redaction.go` - Query string redaction
 - `envutil/audit.go` - Env change audit details
 - `db/audit_append.go`, `db/audit_hash.go`, `db/audit_normalize.go` - Hash-chained append (hash v2). The row is

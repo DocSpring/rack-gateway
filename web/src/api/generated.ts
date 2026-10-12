@@ -1079,7 +1079,8 @@ export const getRackGatewayAPI = () => {
   };
 
   /**
-   * Returns service health information.
+   * Returns service health information. The gateway is unhealthy for a minute after an audit write
+   * fails: it refuses every request it can't record.
    * @summary Health check
    */
   const getHealth = (

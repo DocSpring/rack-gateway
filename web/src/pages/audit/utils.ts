@@ -26,6 +26,9 @@ export const STATUS_TYPES = {
   all: 'All Statuses',
   success: 'Success',
   failed: 'Failed',
+  denied: 'Denied',
+  // A change recorded before it was made, with no recorded outcome (its result replaces it once written).
+  attempted: 'Attempted (no outcome)',
   blocked: 'Blocked',
 } as const
 

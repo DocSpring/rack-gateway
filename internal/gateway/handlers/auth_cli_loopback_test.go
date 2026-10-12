@@ -61,6 +61,7 @@ type loopbackEnv struct {
 	database *db.Database
 	oauth    *loopbackOAuth
 	sessions *auth.SessionManager
+	auditLog *audit.Logger
 }
 
 func newLoopbackEnv(t *testing.T, requireMFA bool) *loopbackEnv {
@@ -77,8 +78,9 @@ func newLoopbackEnv(t *testing.T, requireMFA bool) *loopbackEnv {
 	settingsService := settings.NewService(database)
 	require.NoError(t, settingsService.SetMFASettings(&db.MFASettings{RequireAllUsers: requireMFA}, nil))
 	oauth := &loopbackOAuth{email: "user@example.com"}
+	auditLog := audit.NewLogger(database)
 	handler := NewAuthHandler(oauth, database, &config.Config{DevMode: true}, sessions, mfaService,
-		settingsService, nil, audit.NewLogger(database))
+		settingsService, nil, auditLog)
 
 	router := gin.New()
 	router.POST("/api/v1/auth/cli/start", handler.CLILoginStart)
@@ -89,7 +91,7 @@ func newLoopbackEnv(t *testing.T, requireMFA bool) *loopbackEnv {
 	router.POST("/api/v1/auth/cli/cancel", handler.CLILoginCancel)
 	router.GET("/api/v1/auth/cli/initiator", handler.CLILoginInitiator)
 	router.POST("/api/v1/auth/cli/complete", handler.CLILoginComplete)
-	return &loopbackEnv{router: router, database: database, oauth: oauth, sessions: sessions}
+	return &loopbackEnv{router: router, database: database, oauth: oauth, sessions: sessions, auditLog: auditLog}
 }
 
 func s256(verifier string) string {

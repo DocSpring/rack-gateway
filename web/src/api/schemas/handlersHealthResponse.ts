@@ -7,6 +7,7 @@
  */
 
 export interface HandlersHealthResponse {
+  error?: string;
   service: string;
   status: string;
 }

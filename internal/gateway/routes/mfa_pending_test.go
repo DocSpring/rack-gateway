@@ -362,14 +362,19 @@ func TestMFAChangesAreAudited(t *testing.T) {
 	headers := withTOTP(s.headers, e.currentCode(t))
 	assertStatus(t, e.do("DELETE", deletePath, "", headers), http.StatusOK, "delete MFA method")
 
+	// Each change is recorded as attempted before it's made (they fail closed), then as done.
 	for _, action := range []string{"mfa_backup_codes.generate", "mfa_method.delete"} {
-		var count int
-		row := e.database.DB().QueryRow(`SELECT COUNT(*) FROM audit.audit_event WHERE action = $1`, action)
-		if err := row.Scan(&count); err != nil {
-			t.Fatal(err)
-		}
-		if count != 1 {
-			t.Fatalf("expected one %s audit event, got %d", action, count)
+		for _, status := range []string{"attempted", "success"} {
+			var count int
+			row := e.database.DB().QueryRow(
+				`SELECT COUNT(*) FROM audit.audit_event WHERE action = $1 AND status = $2`, action, status,
+			)
+			if err := row.Scan(&count); err != nil {
+				t.Fatal(err)
+			}
+			if count != 1 {
+				t.Fatalf("expected one %s %s audit event, got %d", status, action, count)
+			}
 		}
 	}
 }

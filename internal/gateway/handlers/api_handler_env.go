@@ -52,7 +52,7 @@ func (h *APIHandler) logEnvUpdateDiffs(
 			}
 		}
 
-		_ = h.auditLogger.LogDBEntry(&db.AuditLog{
+		_ = h.auditLogger.LogRequestEntry(c.Request.Context(), &db.AuditLog{
 			UserEmail:      email,
 			UserName:       name,
 			ActionType:     "convox",
@@ -169,7 +169,7 @@ func (h *APIHandler) logSecretAccessDenied(
 		details["key"] = key
 	}
 	detailsJSON, _ := json.Marshal(details)
-	_ = h.auditLogger.LogDBEntry(&db.AuditLog{
+	_ = h.auditLogger.LogRequestEntry(c.Request.Context(), &db.AuditLog{
 		UserEmail:      email,
 		UserName:       name,
 		ActionType:     "convox",
@@ -221,7 +221,7 @@ func (h *APIHandler) logEnvRead(
 		action = audit.BuildAction(rbac.ResourceSecret.String(), rbac.ActionRead.String())
 		resourceType = "secret"
 	}
-	_ = h.auditLogger.LogDBEntry(&db.AuditLog{
+	_ = h.auditLogger.LogRequestEntry(c.Request.Context(), &db.AuditLog{
 		UserEmail:      email,
 		UserName:       name,
 		ActionType:     "convox",
@@ -400,7 +400,7 @@ func (h *APIHandler) respondNoEnvChanges(c *gin.Context, ctx *envUpdateContext, 
 	ip := c.ClientIP()
 	ua := c.GetHeader("User-Agent")
 
-	_ = h.auditLogger.LogDBEntry(&db.AuditLog{
+	_ = h.auditLogger.LogRequestEntry(c.Request.Context(), &db.AuditLog{
 		UserEmail:      ctx.email,
 		UserName:       ctx.name,
 		ActionType:     "convox",

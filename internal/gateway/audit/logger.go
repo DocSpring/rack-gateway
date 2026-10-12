@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
@@ -28,8 +27,10 @@ const (
 // Callers redact sensitive values before they reach an entry: see envutil.AuditVisibleKeys for env changes.
 type Logger struct {
 	database           *db.Database
+	writer             ChainWriter
 	slackNotifier      SlackNotifier
 	auditEventEnqueuer EventEnqueuer
+	denials            *denialThrottle
 }
 
 // SlackNotifier sends audit event notifications to Slack.
@@ -57,12 +58,17 @@ type LogEntry struct {
 	ResponseError string `json:"response_error,omitempty"`
 }
 
-// NewLogger creates a new audit logger.
+// NewLogger creates a new audit logger that appends entries to database's hash chain.
 func NewLogger(database *db.Database) *Logger {
-	return &Logger{
+	l := &Logger{
 		database:      database,
 		slackNotifier: nil, // Set externally via SetSlackNotifier if needed
 	}
+	if database != nil {
+		l.writer = database
+	}
+	l.denials = newDenialThrottle(l.writeDenial)
+	return l
 }
 
 // SetSlackNotifier configures the Slack notification integration for audit events.
@@ -75,24 +81,14 @@ func (l *Logger) SetAuditEventEnqueuer(enqueuer EventEnqueuer) {
 	l.auditEventEnqueuer = enqueuer
 }
 
-// LogDBEntry persists a DB-style audit log entry using this logger's database.
+// LogDBEntry persists a DB-style audit log entry using this logger's database, and queues its Slack
+// notification. A failure is logged and sent to Sentry as well as returned.
 func (l *Logger) LogDBEntry(al *db.AuditLog) error {
-	err := LogDB(l.database, al)
-	if err == nil {
-		l.notifySlackAsync(al)
+	if err := l.write(al); err != nil {
+		return err
 	}
-	return err
-}
-
-// LogDBEntryWithContext persists a DB-style audit log entry and marks the context as having an audit log.
-// Returns the updated context.
-func (l *Logger) LogDBEntryWithContext(ctx context.Context, al *db.AuditLog) (context.Context, error) {
-	err := LogDB(l.database, al)
-	if err == nil {
-		ctx = MarkAuditLogCreated(ctx)
-		l.notifySlackAsync(al)
-	}
-	return ctx, err
+	l.notifySlackAsync(al)
+	return nil
 }
 
 // Log writes a structured audit log entry to stdout for CloudWatch ingestion.
@@ -102,74 +98,7 @@ func (_ *Logger) Log(entry *LogEntry) {
 		gtwlog.Errorf("audit: failed to marshal audit log entry: %v", err)
 		return
 	}
-
-	// Output structured JSON to stdout for CloudWatch ingestion
-	if len(data) == 0 {
-		data = []byte("{}")
-	}
-	buf := make([]byte, len(data)+1)
-	copy(buf, data)
-	buf[len(data)] = '\n'
-	if _, err := os.Stdout.Write(buf); err != nil {
-		gtwlog.Errorf("audit: failed to write audit log line: %v", err)
-	}
-}
-
-// LogDB writes a DB-style audit entry to stdout as structured JSON and persists it.
-// Use this helper anywhere an audit log would otherwise be written directly to the DB.
-// This marks the request context as having created an audit log.
-func LogDB(database *db.Database, al *db.AuditLog) error {
-	// Mirror fields into a structured line suitable for CloudWatch ingestion
-	count := al.EventCount
-	if count <= 0 {
-		count = 1
-	}
-	payload := map[string]interface{}{
-		"ts":             time.Now().UTC().Format(time.RFC3339),
-		"user_email":     al.UserEmail,
-		"user_name":      al.UserName,
-		"api_token_name": strings.TrimSpace(al.APITokenName),
-		"action_type":    al.ActionType,
-		"action":         al.Action,
-		"resource":       al.Resource,
-		"resource_type":  al.ResourceType,
-		"command":        al.Command,
-		"status":         al.Status,
-		"rbac_decision":  al.RBACDecision,
-		"http_status":    al.HTTPStatus,
-		"latency_ms":     al.ResponseTimeMs,
-		"ip_address":     al.IPAddress,
-		"user_agent":     al.UserAgent,
-		"event_count":    count,
-	}
-	if al.APITokenID != nil {
-		payload["api_token_id"] = *al.APITokenID
-	}
-	if strings.TrimSpace(al.APITokenName) == "" {
-		delete(payload, "api_token_name")
-	}
-	// Omit verbose request details; method/path are already logged separately
-	if data, err := json.Marshal(payload); err == nil {
-		if len(data) == 0 {
-			data = []byte("{}")
-		}
-		buf := make([]byte, len(data)+1)
-		copy(buf, data)
-		buf[len(data)] = '\n'
-		if _, writeErr := os.Stdout.Write(buf); writeErr != nil {
-			gtwlog.Errorf("audit: failed to write audit log line: %v", writeErr)
-		}
-	} else {
-		gtwlog.Errorf("audit: failed to marshal audit db log: %v", err)
-	}
-	if database == nil {
-		return nil
-	}
-	// Set timestamp if not already set
-	if al.Timestamp.IsZero() {
-		al.Timestamp = time.Now().UTC()
-	}
-	return database.CreateAuditLog(al)
+	WriteAuditLine(data)
 }
 
 func (l *Logger) notifySlackAsync(al *db.AuditLog) {
@@ -230,7 +159,7 @@ func (l *Logger) LogRequest(
 		Status:       status,
 		LatencyMs:    latency.Milliseconds(),
 		RBACDecision: rbacDecision,
-		RequestID:    getRequestID(r),
+		RequestID:    RequestID(r),
 		ClientIP:     netutil.ClientIP(r),
 	}
 
@@ -242,10 +171,18 @@ func (l *Logger) LogRequest(
 	markRequestLogged(r)
 }
 
-func getRequestID(r *http.Request) string {
+// RequestID returns r's request ID. The gateway generates one for every request (clients can't choose it, see
+// middleware.StripInternalHeaders), so every audit entry written for a request carries the same unique ID: that's
+// how a request's attempt entry and its result entries are paired. A request that arrived some other way (tests)
+// gets one here, kept on the request so later entries agree.
+func RequestID(r *http.Request) string {
 	requestID := r.Header.Get("X-Request-ID")
 	if requestID == "" {
 		requestID = uuid.New().String()
+		if r.Header == nil {
+			r.Header = make(http.Header)
+		}
+		r.Header.Set("X-Request-ID", requestID)
 	}
 	return requestID
 }
@@ -365,7 +302,7 @@ func (_ *Logger) BuildDetailsJSON(r *http.Request) string {
 	}
 
 	// Add request ID if available
-	if requestID := getRequestID(r); requestID != "" {
+	if requestID := RequestID(r); requestID != "" {
 		details["request_id"] = requestID
 	}
 

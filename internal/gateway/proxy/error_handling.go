@@ -99,11 +99,17 @@ func refuse(status int, err error) error {
 }
 
 // handleRefusal answers a request the gateway refused with the refusal's status, and audits it as a deny. It
-// reports whether err was a refusal; any other error is left to the caller.
-func (h *Handler) handleRefusal(w http.ResponseWriter, r *http.Request, err error, rack string, start time.Time) bool {
+// returns that status and whether err was a refusal; any other error is left to the caller.
+func (h *Handler) handleRefusal(
+	w http.ResponseWriter,
+	r *http.Request,
+	err error,
+	rack string,
+	start time.Time,
+) (int, bool) {
 	var refusal *refusalError
 	if !errors.As(err, &refusal) {
-		return false
+		return 0, false
 	}
 	userEmail := "anonymous"
 	if authUser, ok := auth.GetAuthUser(r.Context()); ok {
@@ -111,5 +117,5 @@ func (h *Handler) handleRefusal(w http.ResponseWriter, r *http.Request, err erro
 	}
 	h.auditLogger.LogRequest(r, userEmail, rack, "deny", refusal.status, time.Since(start), err)
 	writeJSONError(w, err.Error(), refusal.status)
-	return true
+	return refusal.status, true
 }

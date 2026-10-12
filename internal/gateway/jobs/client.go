@@ -17,7 +17,6 @@ import (
 	"github.com/riverqueue/river/riverdriver/riverpgxv5"
 	"github.com/riverqueue/river/rivertype"
 
-	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	"github.com/DocSpring/rack-gateway/internal/gateway/email"
 	jobaudit "github.com/DocSpring/rack-gateway/internal/gateway/jobs/audit"
@@ -121,10 +120,7 @@ func setupPeriodicJobs(
 	auditAnchorConfig *AuditAnchorConfig,
 ) ([]*river.PeriodicJob, error) {
 	// Approvals past their window are marked expired, so they stop counting as open requests.
-	river.AddWorker(workers, jobdeployapprovals.NewExpireWorker(
-		deps.Database, deps.DeployApprovalPendingMaxAge,
-		func(al *db.AuditLog) error { return audit.LogDB(deps.Database, al) },
-	))
+	river.AddWorker(workers, jobdeployapprovals.NewExpireWorker(deps.Database, deps.DeployApprovalPendingMaxAge))
 	periodicJobs := []*river.PeriodicJob{river.NewPeriodicJob(
 		river.PeriodicInterval(jobdeployapprovals.ExpireInterval),
 		func() (river.JobArgs, *river.InsertOpts) { return jobdeployapprovals.ExpireArgs{}, nil },

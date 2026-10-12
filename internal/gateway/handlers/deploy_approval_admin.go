@@ -418,6 +418,7 @@ func (h *AdminHandler) finishApprovalAction(
 	}
 
 	logDeployApprovalAudit(
+		c.Request.Context(),
 		h.auditLogger,
 		input.userEmail,
 		input.approver.Name,

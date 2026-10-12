@@ -150,8 +150,9 @@ type WebAuthnEnrollmentResponse struct {
 
 // HealthResponse represents the health check payload.
 type HealthResponse struct {
-	Status  string `json:"status"  validate:"required"`
-	Service string `json:"service" validate:"required"`
+	Status  string `json:"status"          validate:"required"`
+	Service string `json:"service"         validate:"required"`
+	Error   string `json:"error,omitempty"`
 }
 
 // RackSummary describes the default rack available to the current user.

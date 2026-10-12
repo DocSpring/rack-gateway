@@ -11,6 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
+	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 )
@@ -69,7 +70,12 @@ func (h *AuthHandler) CLILoginComplete(c *gin.Context) {
 		return
 	}
 
+	if !h.recordAuthAttempt(c, audit.ActionSessionCreate, "cli", userRecord.Email, userRecord.Name) {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": audit.RefusalMessage(audit.ActionSessionCreate)})
+		return
+	}
 	sessionToken, session, err := h.createCLISession(c, userRecord, req)
+	h.recordAuthResult(c, audit.ActionSessionCreate, "cli", userRecord.Email, userRecord.Name, auditStatus(err))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create session"})
 		return

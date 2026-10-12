@@ -297,7 +297,7 @@ func (h *AdminHandler) auditAdminAction(
 		RBACDecision:   mapStatusToRBAC(status),
 	}
 
-	_ = h.auditLogger.LogDBEntry(entry)
+	_ = h.auditLogger.LogRequestEntry(c.Request.Context(), entry)
 }
 
 func extractAuditUserInfo(c *gin.Context) (string, string) {
