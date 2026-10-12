@@ -98,10 +98,13 @@ Every approval is tied to a specific full (40-character) git commit SHA. An API 
 
 - Build the archive it uploaded under that approval (one upload and one build per approval)
 - Send no `git-sha`, or one equal to the approved commit (the gateway always uses the approved commit, never the client's)
-- Reference only pre-built images, each tagged with the approved commit (`<sha>` or `<sha>-<suffix>`, e.g. `<sha>-amd64`) and matching the app's `service_image_patterns`
+- Reference only pre-built images, each tagged with the approved commit (`<sha>` or `<sha>-<suffix>`, e.g. `<sha>-amd64`) and matching the app's `service_image_patterns`. Every image a service runs is checked (its `image` and its `initContainer.image`); resource image overrides and any other `image` key are refused, and `${...}` can't change an image or the manifest's structure (see [What the Manifest Check Covers](/integrations/deploy-approvals/workflow/#what-the-manifest-check-covers))
 - Run only commands listed in `approved_deploy_commands` (an empty list allows none)
 
 `service_image_patterns` is required for approval-bound builds: the commit tag alone does not pin the image repository.
+
+External builds (`convox build --external`) are refused for everyone: the rack would answer with its own API
+password. The gateway never returns a build's `repository` field.
 
 An archive upload doesn't say which commit it's for, so it binds to the token's newest open approval for the app.
 The gateway refuses it (409) when that approval already has its archive (an upload is most likely a retry, and

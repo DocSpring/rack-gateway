@@ -15,8 +15,12 @@ const defaultManifestPath = "convox.yml"
 // validateBuildManifestForAllUsers validates build manifests against the app's configured image patterns.
 // It applies to every build that is not bound to a deploy approval (users and API tokens with direct
 // build permission). Approval-bound token builds are validated by validateTokenBuildBinding instead.
-func (h *Handler) validateBuildManifestForAllUsers(r *http.Request, vals url.Values) error {
-	app := extractAppFromPath(r.URL.Path)
+// app comes from the rack path the build is forwarded to.
+func (h *Handler) validateBuildManifestForAllUsers(r *http.Request, app string, vals url.Values) error {
+	// Without the app, its patterns can't be looked up: refuse the build rather than let it through unchecked.
+	if app == "" {
+		return fmt.Errorf("could not determine the app for this build")
+	}
 	patterns, err := h.settingsService.GetServiceImagePatterns(app)
 	if err != nil {
 		return fmt.Errorf("failed to get service image patterns: %w", err)

@@ -93,7 +93,7 @@ func TestValidateServiceImages(t *testing.T) {
 			name: "pattern requires image, but build is used",
 			manifest: &convoxManifest{
 				Services: map[string]convoxService{
-					"web": {Image: "", Build: "."},
+					"web": {Image: ""},
 				},
 			},
 			servicePatterns: map[string]string{
@@ -106,7 +106,7 @@ func TestValidateServiceImages(t *testing.T) {
 			name: "wildcard pattern requires image, but build is used",
 			manifest: &convoxManifest{
 				Services: map[string]convoxService{
-					"web": {Image: "", Build: "."},
+					"web": {Image: ""},
 				},
 			},
 			servicePatterns: map[string]string{
@@ -132,15 +132,15 @@ func TestValidateServiceImages(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := validateServiceImages(tt.manifest, tt.servicePatterns)
+			err := newImagePolicy(tt.servicePatterns, "", false).validate(tt.manifest)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("validateServiceImages() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("validate() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			if err != nil && tt.errContains != "" {
 				if !contains(tt.errContains, err.Error()) {
 					t.Errorf(
-						"validateServiceImages() error = %v, want error containing %q",
+						"validate() error = %v, want error containing %q",
 						err,
 						tt.errContains,
 					)
