@@ -20,8 +20,8 @@ type revealRoute struct {
 }
 
 // auditActions names the audit entries of gateway routes that share their permission with other routes, so the
-// permission doesn't say what they do. Every other route is named after its permission: a route needing
-// gateway:user:create is user.create.
+// permission doesn't say what they do. A route without a permission names them itself (RouteSpec.AuditAction). Every
+// other route is named after its permission: a route needing gateway:user:create is user.create.
 var auditActions = map[string]string{
 	"POST /api/v1/users/:email/lock":                       "user.lock",
 	"POST /api/v1/users/:email/unlock":                     "user.unlock",
@@ -57,12 +57,12 @@ func (r *RouteSpec) AuditName(query url.Values) AuditName {
 	switch {
 	case r.revealRequested(query):
 		action = revealRoutes[key].action
+	case r.AuditAction != "":
+		action = r.AuditAction
 	case auditActions[key] != "":
 		action = auditActions[key]
 	case resource == "setting" || resource == "setting_group":
 		action = "setting." + methodVerb(r.Method)
-	case resource == "":
-		action = "http." + strings.ToLower(r.Method)
 	}
 	if scope == "" {
 		scope = ScopeGateway.String()

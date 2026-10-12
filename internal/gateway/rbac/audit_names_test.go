@@ -2,6 +2,7 @@ package rbac
 
 import (
 	"net/url"
+	"regexp"
 	"testing"
 )
 
@@ -66,7 +67,8 @@ func TestAuditNames(t *testing.T) {
 		{"POST", "/api/v1/auth/mfa/webauthn/assertion/verify", AuditName{"auth", "mfa.verify", "mfa"}},
 		{"POST", "/api/v1/auth/mfa/webauthn/assertion/start", AuditName{"auth", "mfa.challenge", "mfa"}},
 		{"PUT", "/api/v1/apps/:app/env", AuditName{"convox", "env.set", "env"}},
-		{"GET", "/api/v1/info", AuditName{"gateway", "http.get", "http"}},
+		{"GET", "/api/v1/info", AuditName{"gateway", "info.read", "info"}},
+		{"GET", "/api/v1/auth/mfa/status", AuditName{"gateway", "mfa_status.read", "mfa_status"}},
 		{"GET", "/api/v1/users", AuditName{"gateway", "user.list", "user"}},
 	}
 	for _, tc := range cases {
@@ -76,6 +78,19 @@ func TestAuditNames(t *testing.T) {
 		}
 		if got := spec.AuditName(nil); got != tc.want {
 			t.Errorf("%s %s: AuditName = %+v, want %+v", tc.method, tc.pattern, got, tc.want)
+		}
+	}
+}
+
+// Every route's audit entries need a name that says what it does: its permission's, or its own AuditAction for a
+// route without a permission. Nothing falls back to the HTTP method.
+func TestEveryRouteHasAnAuditName(t *testing.T) {
+	name := regexp.MustCompile(`^[a-z][a-z_]*\.[a-z][a-z_.]*$`)
+	for _, spec := range HTTPRouteSpecs() {
+		got := spec.AuditName(nil)
+		if !name.MatchString(got.Action) || got.ResourceType == "" {
+			t.Errorf("%s %s has no audit name (got %+v): give it a permission or an AuditAction (newSelfRead)",
+				spec.Method, spec.Pattern, got)
 		}
 	}
 }
