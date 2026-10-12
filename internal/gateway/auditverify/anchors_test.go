@@ -5,10 +5,13 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/riverqueue/river"
 	"github.com/riverqueue/river/rivertype"
 	"github.com/stretchr/testify/assert"
@@ -214,4 +217,47 @@ func TestVerifyToleratesStaleLinksInLegacyAnchors(t *testing.T) {
 	report := verifyWithAnchors(t, database, bucket, firstHour.Add(4*time.Hour))
 	requireOK(t, report)
 	assert.Equal(t, 2, report.LegacyAnchorLinkMismatches)
+}
+
+// barrierStore holds each anchor read until width reads are in flight at once, so the reads only finish when they
+// run concurrently.
+type barrierStore struct {
+	*fakes3.Bucket
+	width   int64
+	started atomic.Int64
+	release chan struct{}
+}
+
+func (s *barrierStore) GetObject(
+	ctx context.Context,
+	params *s3.GetObjectInput,
+	optFns ...func(*s3.Options),
+) (*s3.GetObjectOutput, error) {
+	if s.started.Add(1) == s.width {
+		close(s.release)
+	}
+	select {
+	case <-s.release:
+		return s.Bucket.GetObject(ctx, params, optFns...)
+	case <-time.After(10 * time.Second):
+		return nil, errors.New("anchor reads didn't run concurrently")
+	}
+}
+
+func TestVerifyReadsAnchorsConcurrently(t *testing.T) {
+	database := newAuditDatabase(t)
+	bucket := fakes3.New(firstHour)
+	const anchors = 4
+	for hour := range anchors {
+		writeEvents(t, database, 1)
+		writeAnchor(t, database, bucket, firstHour.Add(time.Duration(hour)*time.Hour))
+	}
+
+	store := &barrierStore{Bucket: bucket, width: anchors, release: make(chan struct{})}
+	report := verify(t, database, auditverify.Options{
+		Anchors: &auditverify.AnchorOptions{Store: store, Bucket: testBucket, ChainID: testChainID},
+		Now:     firstHour.Add(anchors * time.Hour),
+	})
+	requireOK(t, report)
+	assert.Equal(t, anchors, report.AnchorsChecked)
 }

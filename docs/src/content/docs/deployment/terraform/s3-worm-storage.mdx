@@ -415,8 +415,8 @@ It prints a summary and exits non-zero if it finds any integrity failure. Warnin
 - On a gateway that was upgraded from a version before hash v2: `AUDIT_HASH_V2_FROM` (or `--hash-v2-from`), see
   below.
 
-The anchor checks read every anchor, one request per hour of history, so a full run gets slower as the bucket
-grows. `--from` only limits the database checks.
+The anchor checks read every anchor, one request per hour of history (16 at a time), so a full run gets slower as
+the bucket grows: about a minute for a year of anchors. `--from` only limits the database checks.
 
 ### What It Checks
 

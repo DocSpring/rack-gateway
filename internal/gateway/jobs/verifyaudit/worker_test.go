@@ -247,16 +247,16 @@ func TestRunFetchesEachAnchorVersionOnce(t *testing.T) {
 
 	status := h.runAt(firstRun)
 	assert.Equal(t, db.AuditVerificationPassed, status.Result, status.Summary)
-	assert.Equal(t, 3, store.gets)
+	assert.EqualValues(t, 3, store.gets.Load())
 
 	status = h.runAt(firstRun.Add(time.Hour))
 	assert.Equal(t, db.AuditVerificationPassed, status.Result, status.Summary)
-	assert.Equal(t, 3, store.gets, "anchors read before aren't fetched again")
+	assert.EqualValues(t, 3, store.gets.Load(), "anchors read before aren't fetched again")
 
 	h.bucket.PutAt(jobaudit.AnchorKey(testChainID, firstRun), []byte(`{"chain_id":"production"}`),
 		firstRun.Add(61*time.Minute))
 	status = h.runAt(firstRun.Add(2 * time.Hour))
-	assert.Equal(t, 4, store.gets)
+	assert.EqualValues(t, 4, store.gets.Load())
 	assert.Contains(t, status.Summary, "has 2 versions")
 }
 
