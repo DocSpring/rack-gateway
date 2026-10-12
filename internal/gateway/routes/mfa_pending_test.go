@@ -193,12 +193,13 @@ func (e *mfaRouteEnv) do(method, path, body string, headers map[string]string) *
 	return recorder
 }
 
-func withHeader(headers map[string]string, key, value string) map[string]string {
+// withTOTP is headers with code as the inline TOTP code.
+func withTOTP(headers map[string]string, code string) map[string]string {
 	out := make(map[string]string, len(headers)+1)
 	for k, v := range headers {
 		out[k] = v
 	}
-	out[key] = value
+	out["X-MFA-TOTP"] = code
 	return out
 }
 
@@ -265,7 +266,7 @@ func TestPendingMFASessionCanCompleteChallengeInline(t *testing.T) {
 	e := newMFARouteEnv(t, "inline@example.com")
 	s := e.newSession(t, e.user)
 
-	headers := withHeader(s.headers, "X-MFA-TOTP", e.currentCode(t))
+	headers := withTOTP(s.headers, e.currentCode(t))
 	assertStatus(t, e.do("GET", "/api/v1/users", "", headers), http.StatusOK, "GET users with inline TOTP")
 
 	result, err := e.sessions.ValidateSession(s.token, "10.1.2.3", "mfa-route-test")
@@ -358,7 +359,7 @@ func TestMFAChangesAreAudited(t *testing.T) {
 		t.Fatalf("expected an MFA method, err=%v", err)
 	}
 	deletePath := fmt.Sprintf("/api/v1/auth/mfa/methods/%d", methods[0].ID)
-	headers := withHeader(s.headers, "X-MFA-TOTP", e.currentCode(t))
+	headers := withTOTP(s.headers, e.currentCode(t))
 	assertStatus(t, e.do("DELETE", deletePath, "", headers), http.StatusOK, "delete MFA method")
 
 	for _, action := range []string{"mfa_backup_codes.generate", "mfa_method.delete"} {

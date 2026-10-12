@@ -152,7 +152,7 @@ func TestBackupCodeCompletesPendingSessionInline(t *testing.T) {
 	codes := e.backupCodes(t)
 	s := e.newSession(t, e.user)
 
-	headers := withHeader(s.headers, "X-MFA-TOTP", typedBackupCode(codes[0]))
+	headers := withTOTP(s.headers, typedBackupCode(codes[0]))
 	assertStatus(t, e.do("GET", "/api/v1/users", "", headers), http.StatusOK, "inline backup code")
 	if !e.sessionVerified(t, s) {
 		t.Fatal("expected the inline backup code to verify the session")

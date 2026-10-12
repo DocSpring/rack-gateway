@@ -44,3 +44,25 @@ func TestMFASettingsChangesApplyAtOnce(t *testing.T) {
 	assertStatus(t, e.do("GET", "/api/v1/users", "", s.headers), http.StatusOK, "MFA no longer required")
 	assertStatus(t, e.do("GET", "/api/v1/rack-proxy/apps", "", bearer(s)), http.StatusOK, "rack-proxy")
 }
+
+// Revealing secret env values needs a recent step-up; reading the masked values doesn't.
+func TestRevealingSecretsNeedsAStepUp(t *testing.T) {
+	e := newMFARouteEnv(t, "reveal@example.com")
+	s := e.newSession(t, e.user)
+	e.markVerified(t, s, false)
+
+	w := e.do("GET", "/api/v1/apps/web/env?secrets=true", "", s.headers)
+	assertStatus(t, w, http.StatusUnauthorized, "reveal without a step-up")
+	if !strings.Contains(w.Body.String(), "mfa_step_up_required") {
+		t.Fatalf("reveal: expected mfa_step_up_required, got %s", w.Body.String())
+	}
+
+	if w := e.do("GET", "/api/v1/apps/web/env", "", s.headers); w.Code == http.StatusUnauthorized {
+		t.Fatalf("masked read: expected no MFA prompt, got %s", w.Body.String())
+	}
+
+	headers := withTOTP(s.headers, e.currentCode(t))
+	if w := e.do("GET", "/api/v1/apps/web/env?secrets=true", "", headers); w.Code == http.StatusUnauthorized {
+		t.Fatalf("reveal with an inline code: expected no MFA prompt, got %s", w.Body.String())
+	}
+}

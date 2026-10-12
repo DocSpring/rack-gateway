@@ -97,6 +97,9 @@ var MFARequirements = map[string]MFALevel{
 	// Security Settings - Modifying security configuration
 	Security(ResourceSecret, ActionUpdate): MFAAlways,
 
+	// Revealing secret env values (GET /apps/:app/env?secrets=true; middleware.RequireMFAToRevealSecrets)
+	Convox(ResourceSecret, ActionRead): MFAStepUp,
+
 	// Deploy Approvals - Creating request is safe (just asking for approval)
 	Gateway(ResourceDeployApprovalRequest, ActionCreate): MFANone,
 

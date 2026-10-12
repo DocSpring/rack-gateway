@@ -64,7 +64,8 @@ func registerAPIRoutes(authenticated *gin.RouterGroup, cfg *Config, h *handlerSe
 	authenticated.GET("/rack", h.api.GetRackInfo)
 
 	apps := authenticated.Group("/apps/:app")
-	apps.GET("/env", h.api.GetEnvValues)
+	apps.GET("/env",
+		middleware.RequireMFAToRevealSecrets(cfg.MFAService, cfg.Database, cfg.SettingsService), h.api.GetEnvValues)
 
 	envMutations := apps.Group("")
 	if cfg.SessionManager != nil {
