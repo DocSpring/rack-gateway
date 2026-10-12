@@ -556,54 +556,50 @@ func TestAppSettingsVCSCIDeploy_MFA(t *testing.T) {
 	})
 }
 
-func TestAppSettingProtectedEnvVars_MFA(t *testing.T) {
-	env := newSettingsTestEnv(t)
+// Changing an app's protected or secret env var list needs MFA on that request, even within the step-up window:
+// otherwise a var could be unprotected, changed and protected again with step-up MFA alone, though changing a
+// protected var needs MFA on the request.
+func TestAppSettingEnvVarListsRequireMFAOnTheRequest(t *testing.T) {
+	routes := []struct {
+		method  string
+		setting string
+		handler func(*SettingsHandler, *gin.Context)
+	}{
+		{http.MethodPut, "protected-env-vars", (*SettingsHandler).UpdateAppProtectedEnvVars},
+		{http.MethodDelete, "protected-env-vars", (*SettingsHandler).DeleteAppProtectedEnvVars},
+		{http.MethodPut, "secret-env-vars", (*SettingsHandler).UpdateAppSecretEnvVars},
+		{http.MethodDelete, "secret-env-vars", (*SettingsHandler).DeleteAppSecretEnvVars},
+	}
+	for _, route := range routes {
+		t.Run(route.method+" "+route.setting, func(t *testing.T) {
+			env := newSettingsTestEnv(t) // each env's TOTP code verifies once
+			var payload interface{}
+			if route.method == http.MethodPut {
+				payload = []string{"DATABASE_URL"}
+			}
+			send := func(authUser *auth.User, modify func(*http.Request)) *httptest.ResponseRecorder {
+				return env.performSettingsRequest(
+					t, route.method,
+					"/api/v1/apps/:app/settings/"+route.setting, "/api/v1/apps/test-app/settings/"+route.setting,
+					func(c *gin.Context) { route.handler(env.handler, c) },
+					authUser, payload, gin.Params{{Key: "app", Value: "test-app"}}, nil, modify,
+				)
+			}
 
-	t.Run("requires recent step-up", func(t *testing.T) {
-		authUser, _ := env.newWebAuthUser(t)
+			authUser, session := env.newWebAuthUser(t)
+			env.markRecentStepUp(t, session, time.Now())
+			w := send(authUser, nil)
+			require.Equal(t, http.StatusUnauthorized, w.Code, "a fresh step-up isn't enough")
+			require.Equal(t, "always", w.Header().Get("X-MFA-Required"))
 
-		payload := []string{"DATABASE_URL"}
-		w := env.performSettingsRequest(
-			t,
-			http.MethodPut,
-			"/api/v1/apps/:app/settings/protected-env-vars",
-			"/api/v1/apps/test-app/settings/protected-env-vars",
-			env.handler.UpdateAppProtectedEnvVars,
-			authUser,
-			payload,
-			gin.Params{{Key: "app", Value: "test-app"}},
-			nil,
-			nil,
-		)
-
-		require.Equal(t, http.StatusUnauthorized, w.Code)
-		require.Equal(t, "step-up", w.Header().Get("X-MFA-Required"))
-	})
-
-	t.Run("succeeds after inline step-up verification", func(t *testing.T) {
-		authUser, _ := env.newWebAuthUser(t)
-		code := env.totpCode(t)
-		authUser.MFAType = "totp"
-		authUser.MFAValue = code
-
-		payload := []string{"DATABASE_URL"}
-		w := env.performSettingsRequest(
-			t,
-			http.MethodPut,
-			"/api/v1/apps/:app/settings/protected-env-vars",
-			"/api/v1/apps/test-app/settings/protected-env-vars",
-			env.handler.UpdateAppProtectedEnvVars,
-			authUser,
-			payload,
-			gin.Params{{Key: "app", Value: "test-app"}},
-			nil,
-			func(req *http.Request) {
-				req.Header.Set("X-MFA-TOTP", code)
-			},
-		)
-
-		require.Equal(t, http.StatusOK, w.Code)
-	})
+			authUser, _ = env.newWebAuthUser(t)
+			code := env.totpCode(t)
+			authUser.MFAType = "totp"
+			authUser.MFAValue = code
+			w = send(authUser, func(req *http.Request) { req.Header.Set("X-MFA-TOTP", code) })
+			require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+		})
+	}
 }
 
 func TestUpdateGlobalSettings_Boolean(t *testing.T) {

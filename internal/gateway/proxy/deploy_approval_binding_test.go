@@ -62,7 +62,7 @@ func newBindingFixture(t *testing.T) *bindingFixture {
 	require.NoError(t, err)
 	_, err = database.ApproveDeployApprovalRequest(approval.ID, owner.ID, time.Now().Add(time.Hour), "ok")
 	require.NoError(t, err)
-	require.NoError(t, database.UpdateDeployApprovalRequestObjectURL(approval.ID, approvedObjectURL))
+	bindApprovalArchive(t, database, approval.ID, approvedObjectURL)
 	f.approval = approval
 	f.setImagePatterns(t, map[string]string{"*": `docker\.io/docspringcom/app:{{GIT_COMMIT}}(-amd64)?`})
 	return f

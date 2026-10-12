@@ -145,8 +145,7 @@ func TestApprovalExpiredDuringPromoteIsMarkedDeployed(t *testing.T) {
 	require.NoError(t, err)
 	_, err = database.ApproveDeployApprovalRequest(approval.ID, userID, time.Now().Add(time.Hour), "")
 	require.NoError(t, err)
-	require.NoError(t, database.UpdateDeployApprovalRequestObjectURL(approval.ID, "object://docspring/a.tgz"))
-	require.NoError(t, database.MarkDeployApprovalRequestBuildStarted(approval.ID, "B1", ""))
+	bindArchiveAndBuild(t, database, approval.ID, "object://docspring/tmp/a.tgz", "B1")
 	require.NoError(t, database.MarkDeployApprovalRequestBuildStarted(approval.ID, "B1", "R1"))
 
 	// The window lapses while the promote runs.

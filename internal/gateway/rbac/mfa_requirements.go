@@ -21,7 +21,8 @@ const (
 // MFARequirements is the EXHAUSTIVE list of write/mutating operations and their MFA level
 // Read/list operations default to MFANone and don't need to be listed
 // This is shared between the gateway (for API enforcement) and the CLI (for pre-emptive step-up)
-// CRITICAL: All write operations must be listed. GetMFALevel will panic for unlisted write operations.
+// CRITICAL: All write operations must be listed. An unlisted write operation fails closed to MFAAlways, and a test
+// checks that every write permission in the route tables and the CLI command table is listed.
 var MFARequirements = map[string]MFALevel{
 	// ========================================================================
 	// CONVOX RESOURCES - Operations on the Convox rack
@@ -30,6 +31,12 @@ var MFARequirements = map[string]MFALevel{
 	// DESTRUCTIVE OPERATIONS - Always require fresh MFA, no time window
 	Convox(ResourceApp, ActionDelete):         MFAAlways,
 	Convox(ResourceInstance, ActionTerminate): MFAAlways,
+	Convox(ResourceInstance, ActionKeyroll):   MFAAlways, // Replaces every instance's SSH key pair
+	Convox(ResourceCert, ActionDelete):        MFAAlways,
+
+	// Importing a build skips the manifest and image checks a build gets: its manifest and images come straight
+	// from the archive. Admins only (convox:*:*), and rare.
+	Convox(ResourceBuild, ActionImport): MFAAlways,
 
 	// SENSITIVE OPERATIONS - Step-up within time window
 
@@ -40,6 +47,7 @@ var MFARequirements = map[string]MFALevel{
 
 	// Deployments and builds
 	Convox(ResourceBuild, ActionCreate):    MFAStepUp,
+	Convox(ResourceBuild, ActionUpdate):    MFAStepUp, // Changes a build's manifest, release or status
 	Convox(ResourceRelease, ActionCreate):  MFAStepUp,
 	Convox(ResourceRelease, ActionPromote): MFAStepUp,
 
@@ -55,6 +63,13 @@ var MFARequirements = map[string]MFALevel{
 
 	// Rack operations
 	Convox(ResourceRack, ActionUpdate): MFAStepUp,
+
+	// TLS certificates and private registries (what serves the apps' traffic, and where their images come from)
+	Convox(ResourceCert, ActionUpdate):     MFAStepUp,
+	Convox(ResourceCert, ActionGenerate):   MFAStepUp,
+	Convox(ResourceCert, ActionImport):     MFAStepUp,
+	Convox(ResourceRegistry, ActionAdd):    MFAStepUp,
+	Convox(ResourceRegistry, ActionRemove): MFAStepUp,
 
 	// Object uploads for builds (write operation but low risk)
 	Convox(ResourceObject, ActionCreate): MFANone,
@@ -124,6 +139,8 @@ var MFARequirements = map[string]MFALevel{
 	GatewayGlobalSettingGroup(settings.GlobalSettingGroupVCSAndCIDefaults):     MFAStepUp, // Repo/CI defaults
 
 	// App Settings - Security controls
+	// Changing the protected or secret list needs MFA on that request, as changing a protected var does. Within a
+	// step-up window, a var could otherwise be unprotected (or unmarked as secret), changed and protected again.
 	GatewayAppSettingGroup(settings.AppSettingGroupVCSCIDeploy):         MFAAlways, // GitHub verify/PR reqs
 	GatewayAppSetting(settings.AppSettingAllowDeployFromDefaultBranch):  MFAStepUp, // Allowing more deploys
 	GatewayAppSetting(settings.AppSettingApprovedDeployCommands):        MFAStepUp, // Defining allowed commands
@@ -134,39 +151,37 @@ var MFARequirements = map[string]MFALevel{
 	GatewayAppSetting(settings.AppSettingDefaultBranch):                 MFANone,   // Just configuration
 	GatewayAppSetting(settings.AppSettingGitHubPostPRComment):           MFANone,   // Just notification preference
 	GatewayAppSetting(settings.AppSettingGitHubVerification):            MFAAlways, // Disabling GitHub verification
-	GatewayAppSetting(settings.AppSettingProtectedEnvVars):              MFAStepUp, // Marking vars as protected
+	GatewayAppSetting(settings.AppSettingProtectedEnvVars):              MFAAlways, // Protecting vars
 	GatewayAppSetting(settings.AppSettingRequirePRForBranch):            MFAAlways, // Disabling PR requirement
-	GatewayAppSetting(settings.AppSettingSecretEnvVars):                 MFAStepUp, // Marking vars as secret
+	GatewayAppSetting(settings.AppSettingSecretEnvVars):                 MFAAlways, // Masking secret values
 	GatewayAppSetting(settings.AppSettingServiceImagePatterns):          MFAStepUp, // Restricting images
 	GatewayAppSetting(settings.AppSettingVCSProvider):                   MFANone,   // Just configuration
 	GatewayAppSetting(settings.AppSettingVCSRepo):                       MFANone,   // Just configuration
 	GatewayAppSetting(settings.AppSettingVerifyGitCommitMode):           MFAStepUp, // Changing verification level
 }
 
-// GetMFALevel returns the highest MFA level required by any of the given permissions
-// ONLY allows unlisted permissions if they are read/list actions - panics otherwise
+// GetMFALevel returns the highest MFA level required by any of the given permissions.
 func GetMFALevel(permissions []string) MFALevel {
 	highest := MFANone
 	for _, perm := range permissions {
-		level, ok := MFARequirements[perm]
-		if !ok {
-			// ONLY allow read/list actions to default to MFANone
-			// Everything else MUST be explicitly listed
-			if !isReadOnlyAction(perm) {
-				panic(
-					fmt.Sprintf(
-						"CRITICAL: Permission %q not in MFARequirements - write ops must be listed",
-						perm,
-					),
-				)
-			}
-			level = MFANone
-		}
-		if level > highest {
+		if level := MFALevelForPermission(perm); level > highest {
 			highest = level
 		}
 	}
 	return highest
+}
+
+// MFALevelForPermission returns the MFA level a permission requires. An unlisted read or list permission needs
+// none. Any other unlisted permission fails closed to MFAAlways, so a write that was never classified can't run
+// without MFA.
+func MFALevelForPermission(perm string) MFALevel {
+	if level, ok := MFARequirements[perm]; ok {
+		return level
+	}
+	if isReadOnlyAction(perm) {
+		return MFANone
+	}
+	return MFAAlways
 }
 
 // isReadOnlyAction checks if a permission string ends with :list or :read
@@ -207,6 +222,6 @@ func (m MFALevel) String() string {
 	case MFAAlways:
 		return "always"
 	default:
-		panic(fmt.Sprintf("CRITICAL: Unknown MFALevel %d", m))
+		return fmt.Sprintf("unknown(%d)", int(m))
 	}
 }

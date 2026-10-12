@@ -216,6 +216,8 @@ rack-gateway env unset LEGACY_API_URL --allow-protected -a myapp
 - The gateway writes one audit log entry per protected key changed (`env.set_protected` or
   `env.unset_protected`) and never logs the values.
 - The web UI's env editor still refuses protected keys.
+- Changing the list of protected (or secret) env vars also needs MFA on that request, even within the step-up
+  window. Otherwise a key could be unprotected, changed and protected again with one step-up.
 
 ### exec
 

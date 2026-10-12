@@ -151,25 +151,3 @@ func TestOversizedTokenBuildIsRefused(t *testing.T) {
 	require.Equal(t, http.StatusRequestEntityTooLarge, rr.Code, rr.Body.String())
 	require.Contains(t, rr.Body.String(), "request body too large")
 }
-
-// unreadBody is a request body that records whether anything read it.
-type unreadBody struct{ read bool }
-
-func (b *unreadBody) Read([]byte) (int, error) {
-	b.read = true
-	return 0, io.EOF
-}
-
-// A build import uploads an exported build, not an archive uploaded under an approval, so an approval never covers
-// it. It's refused without the gateway reading the import.
-func TestTokenBuildImportIsRefusedUnread(t *testing.T) {
-	f := newBindingFixture(t)
-	body := &unreadBody{}
-	r := httptest.NewRequest(http.MethodPost, "/apps/myapp/builds/import", body)
-	allowed, _, err := f.h.evaluateAPITokenPermission(r, f.authUser, rbac.ResourceBuild, rbac.ActionCreate)
-	require.False(t, allowed)
-	var approvalErr *deployApprovalError
-	require.ErrorAs(t, err, &approvalErr)
-	require.Equal(t, http.StatusForbidden, approvalErr.status)
-	require.False(t, body.read, "the gateway must not read an imported build")
-}

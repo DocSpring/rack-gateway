@@ -28,6 +28,9 @@ const (
 	auditRBACDecisionMax = 16
 )
 
+// AuditDetailsMaxChars is how many characters of an audit entry's details are kept; longer details are cut.
+const AuditDetailsMaxChars = auditDetailsMax
+
 // newAuditChainRow converts an audit log into the exact values its row will hold. Every value is normalized
 // before hashing, so the stored row hashes to the stored event_hash, and nothing can make the insert fail: text
 // is made valid UTF-8 without NUL bytes and cut to its column's limit (with a visible marker), numbers are

@@ -16,6 +16,7 @@ import (
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
+	"github.com/DocSpring/rack-gateway/internal/gateway/rackcert"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 )
 
@@ -42,18 +43,12 @@ func TestSuccessfulPromoteMarksApprovalDeployed(t *testing.T) {
 			approval, err = database.ApproveDeployApprovalRequest(approval.ID, user.ID, time.Now().Add(time.Hour), "")
 			require.NoError(t, err)
 
-			tracker := &deployApprovalTracker{request: approval, tokenID: token.ID, app: "test-app"}
-			withTracker := func(req *http.Request) *http.Request {
-				return req.WithContext(context.WithValue(req.Context(), deployApprovalContextKey, tracker))
-			}
-			upload := withTracker(httptest.NewRequest(http.MethodPost, "/apps/test-app/objects/tmp/a.tgz", nil))
-			require.NoError(t, h.updateObjectURLApprovalTracking(upload, "object://test-app/tmp/a.tgz"))
-			// As in production: build creation records the build, build completion the release.
-			require.NoError(t, database.MarkDeployApprovalRequestBuildStarted(approval.ID, "BUILD1", ""))
-			require.NoError(t, database.MarkDeployApprovalRequestBuildStarted(approval.ID, "BUILD1", "RELEASE1"))
+			bindApprovalRelease(t, database, approval.ID, "object://test-app/tmp/a.tgz", "BUILD1", "RELEASE1")
 
+			tracker := &deployApprovalTracker{request: approval, tokenID: token.ID, app: "test-app"}
 			const promotePath = "/apps/test-app/releases/RELEASE1/promote"
-			promote := withTracker(httptest.NewRequest(http.MethodPost, promotePath, nil))
+			promote := httptest.NewRequest(http.MethodPost, promotePath, nil)
+			promote = promote.WithContext(context.WithValue(promote.Context(), deployApprovalContextKey, tracker))
 			resp := &http.Response{
 				StatusCode: tc.statusCode,
 				Header:     http.Header{"Content-Type": []string{"text/plain"}},
@@ -97,11 +92,12 @@ func TestPromoteClaimThroughTheProxy(t *testing.T) {
 	approval, err := database.CreateDeployApprovalRequest("Deploy", "test-app",
 		"abc123def4567890abc123def4567890abc123de", "main", "", nil, deployer.ID, nil, token.ID)
 	require.NoError(t, err)
-	approval, err = database.ApproveDeployApprovalRequest(approval.ID, deployer.ID, time.Now().Add(-time.Minute), "")
+	approval, err = database.ApproveDeployApprovalRequest(approval.ID, deployer.ID, time.Now().Add(time.Hour), "")
 	require.NoError(t, err)
-	require.NoError(t, database.UpdateDeployApprovalRequestObjectURL(approval.ID, "object://test-app/tmp/a.tgz"))
-	require.NoError(t, database.MarkDeployApprovalRequestBuildStarted(approval.ID, "BUILD1", ""))
-	require.NoError(t, database.MarkDeployApprovalRequestBuildStarted(approval.ID, "BUILD1", "RELEASE1"))
+	bindApprovalRelease(t, database, approval.ID, "object://test-app/tmp/a.tgz", "BUILD1", "RELEASE1")
+	_, err = database.DB().Exec("UPDATE deploy_approval_requests SET approval_expires_at = $1 WHERE id = $2",
+		time.Now().Add(-time.Minute), approval.ID)
+	require.NoError(t, err)
 
 	rr := promoteThroughProxy(h, deployer, token.ID)
 	require.Equal(t, http.StatusForbidden, rr.Code, "the approval window has passed: %s", rr.Body.String())
@@ -132,14 +128,19 @@ func TestPromoteClaimThroughTheProxy(t *testing.T) {
 	require.Equal(t, 2, rackCalls)
 }
 
-// A promote the rack may still be applying (sent, then no response) keeps its claim; one that never reached the
-// rack, or that the rack refused, releases it.
+// A promote the rack may still be applying keeps its claim: it was sent and got no answer, or its response broke
+// off after a 2xx status. One that never reached the rack, or that the rack refused, releases it.
 func TestPromoteMayHaveApplied(t *testing.T) {
 	sent := fmt.Errorf("%w: %w", errRackRequestFailed, context.DeadlineExceeded)
 	notSent := fmt.Errorf("%w: %w", errRackRequestFailed, &net.OpError{Op: "dial", Err: errors.New("refused")})
+	brokeOff := fmt.Errorf("failed to read response body: %w", io.ErrUnexpectedEOF)
+	mismatch := &rackcert.FingerprintMismatchError{Expected: "aa", Actual: "bb"}
 	require.True(t, promoteMayHaveApplied(http.StatusOK, nil))
 	require.False(t, promoteMayHaveApplied(http.StatusInternalServerError, nil))
 	require.True(t, promoteMayHaveApplied(0, sent))
+	require.True(t, promoteMayHaveApplied(0, brokeOff), "the rack answered 2xx, then the body broke off")
+	require.True(t, promoteMayHaveApplied(0, errors.New("an unrecognized failure")))
 	require.False(t, promoteMayHaveApplied(0, notSent))
-	require.False(t, promoteMayHaveApplied(0, errors.New("failed to read request body")))
+	require.False(t, promoteMayHaveApplied(0, mismatch), "the TLS handshake failed, so nothing was sent")
+	require.False(t, promoteMayHaveApplied(0, errBodyTooLarge), "the gateway refused the body before sending it")
 }

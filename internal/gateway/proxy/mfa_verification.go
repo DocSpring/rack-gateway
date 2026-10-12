@@ -81,13 +81,10 @@ func (h *Handler) sessionAwaitingMFA(authUser *auth.User) bool {
 	return db.SessionAwaitingMFA(settings, authUser.DBUser, authUser.Session)
 }
 
+// determineMFALevel returns the MFA level of a rack route's permission. Like the gateway's own routes and the CLI,
+// it fails closed for a write permission missing from rbac.MFARequirements.
 func determineMFALevel(resource rbac.Resource, action rbac.Action) rbac.MFALevel {
-	permission := fmt.Sprintf("convox:%s:%s", resource.String(), action.String())
-	mfaLevel, ok := rbac.MFARequirements[permission]
-	if !ok {
-		return rbac.MFANone
-	}
-	return mfaLevel
+	return rbac.MFALevelForPermission(rbac.Convox(resource, action))
 }
 
 func (h *Handler) verifyInlineMFA(
