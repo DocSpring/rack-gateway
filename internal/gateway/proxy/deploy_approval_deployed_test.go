@@ -81,11 +81,19 @@ func promoteThroughProxy(h *Handler, owner *db.User, tokenID int64) *httptest.Re
 // releases it for a retry, a promote in flight blocks a second one, and a refused promote never holds it.
 func TestPromoteClaimThroughTheProxy(t *testing.T) {
 	rackStatus, rackCalls := http.StatusInternalServerError, 0
-	h, database, _, cleanup := newProxyWithRackServer(t, func(w http.ResponseWriter, _ *http.Request) {
+	reads := &rackReads{}
+	reads.addRelease(rackRelease{ID: "RELEASE1", Build: "BUILD1"})
+	h, database, _, cleanup := newProxyWithRackServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if reads.serve(w, r) {
+			return // the gateway reads the release to check its images
+		}
 		rackCalls++
 		w.WriteHeader(rackStatus)
 	})
 	defer cleanup()
+	app := "test-app"
+	require.NoError(t, database.UpsertSetting(&app, "service_image_patterns",
+		map[string]string{"*": `docker\.io/org/app:{{GIT_COMMIT}}`}, nil))
 	deployer := createUserWithRole(t, database, "deployer@example.com", "deployer")
 	token, err := database.CreateAPIToken(strings.Repeat("e", 64), "ci", deployer.ID, nil, nil, nil)
 	require.NoError(t, err)

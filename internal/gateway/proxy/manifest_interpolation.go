@@ -24,8 +24,9 @@ var (
 	interpolationRef = regexp.MustCompile(`\$\{[A-Za-z_][A-Za-z0-9_]*\}`)
 
 	// interpolatedLine is a line that may hold references: indentation, any sequence dashes and an optional plain
-	// key, then the value (group 1) and an optional comment (group 2).
-	interpolatedLine = regexp.MustCompile(`^ *(?:- +)*(?:[A-Za-z0-9_.-]+: +)?("[^"\\]*"|'[^']*'|[^ "'#]+)( +#.*| *)$`)
+	// key (Kubernetes annotation and label keys have a "/"), then the value (group 1) and an optional comment
+	// (group 2).
+	interpolatedLine = regexp.MustCompile(`^ *(?:- +)*(?:[A-Za-z0-9_./-]+: +)?("[^"\\]*"|'[^']*'|[^ "'#]+)( +#.*| *)$`)
 
 	// interpolatedPlainValue is an unquoted value of references and characters that can't form YAML structure:
 	// no spaces, colons, quotes, brackets, braces, anchors, aliases, tags, block indicators or comments.

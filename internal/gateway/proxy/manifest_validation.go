@@ -28,32 +28,55 @@ const (
 	maxManifestSize = 128 * 1024
 )
 
-// validateBuildManifest fetches the tarball from the Convox API and validates the manifest's
-// service images against the policy.
-func (h *Handler) validateBuildManifest(
-	ctx context.Context,
-	app, objectURL, manifestPath string,
-	policy imagePolicy,
-) error {
+// validateBuildManifest fetches the build's archive from the rack and checks its manifest's images against the
+// policy twice: as written (parseManifest, which also refuses what the rack's parser could read differently), and as
+// the rack will load it, with the app's env and the build's arguments substituted (loadManifestAsRack). A refusal is
+// a 403; a failure to read from the rack a 502.
+func (h *Handler) validateBuildManifest(ctx context.Context, app string, vals url.Values, policy imagePolicy) error {
+	objectURL := vals.Get("url")
+	if objectURL == "" {
+		return refuse(http.StatusBadRequest, errors.New("build request missing object URL"))
+	}
 	objectKey, err := objectKeyForApp(objectURL, app)
 	if err != nil {
-		return err
+		return refuse(http.StatusBadRequest, err)
 	}
 
-	// Fetch the tarball from Convox API
 	tarball, err := h.fetchObject(ctx, app, objectKey)
 	if err != nil {
-		return fmt.Errorf("failed to fetch tarball: %w", err)
+		return refuse(http.StatusBadGateway, fmt.Errorf("failed to fetch tarball: %w", err))
 	}
 	defer func() { _ = tarball.Close() }()
 
-	// Extract and parse the manifest
-	manifest, err := parseManifestFromTarball(tarball, manifestPath)
+	data, err := readArchiveManifest(tarball, manifestPathFrom(vals), maxTarballSize)
 	if err != nil {
-		return fmt.Errorf("failed to extract manifest: %w", err)
+		return refuseManifest(fmt.Errorf("failed to extract manifest: %w", err))
+	}
+	manifest, err := parseManifest(data)
+	if err != nil {
+		return refuseManifest(err)
+	}
+	if err := policy.validate(manifest); err != nil {
+		return refuseManifest(err)
 	}
 
-	return policy.validate(manifest)
+	appEnv, err := h.fetchLatestReleaseEnv(ctx, app)
+	if err != nil {
+		return refuse(http.StatusBadGateway, fmt.Errorf("failed to read the app's env to check the manifest: %w", err))
+	}
+	asRack, err := loadManifestAsRack(data, buildManifestEnv(appEnv, vals.Get("build-args")))
+	if err != nil {
+		return refuseManifest(err)
+	}
+	if err := policy.validate(asRack); err != nil {
+		return refuseManifest(fmt.Errorf("with the app's env and build arguments substituted, %w", err))
+	}
+	return nil
+}
+
+// refuseManifest refuses a build whose manifest failed a check.
+func refuseManifest(err error) error {
+	return refuse(http.StatusForbidden, fmt.Errorf("manifest validation failed: %w", err))
 }
 
 // objectKeyForApp returns the key of the app's object that a build's url names. The rack builds from the app and
@@ -189,16 +212,11 @@ func sanitizeObjectFetchPath(value string) (string, error) {
 	return cleanValue, nil
 }
 
-// parseManifestFromTarball reads the manifest at manifestPath from a gzipped tarball as it streams in, holding no
-// more than the manifest in memory, and parses it.
-func parseManifestFromTarball(r io.Reader, manifestPath string) (*convoxManifest, error) {
-	return parseManifestFromTarballWithin(r, manifestPath, maxTarballSize)
-}
-
-// parseManifestFromTarballWithin is parseManifestFromTarball with a size limit. An archive that reaches the limit
-// is refused even when the scan ended cleanly: the limit can fall exactly between two gzip members, where gzip and
-// tar both see a normal end, and the rack would still extract the rest (which could hold another manifest).
-func parseManifestFromTarballWithin(r io.Reader, manifestPath string, limit int64) (*convoxManifest, error) {
+// readArchiveManifest returns the manifest at manifestPath in a gzipped tarball, reading the archive as it streams
+// in and holding no more than the manifest in memory. An archive that reaches limit is refused even when the scan
+// ended cleanly: the limit can fall exactly between two gzip members, where gzip and tar both see a normal end, and
+// the rack would still extract the rest (which could hold another manifest).
+func readArchiveManifest(r io.Reader, manifestPath string, limit int64) ([]byte, error) {
 	limited := &io.LimitedReader{R: r, N: limit}
 	manifestData, err := readManifestFromTarball(limited, manifestPath)
 	if limited.N <= 0 {
@@ -207,8 +225,7 @@ func parseManifestFromTarballWithin(r io.Reader, manifestPath string, limit int6
 	if err != nil {
 		return nil, err
 	}
-
-	return parseManifest(manifestData)
+	return manifestData, nil
 }
 
 // readManifestFromTarball returns the contents of the manifest at manifestPath in a gzipped tarball. It reads the

@@ -67,7 +67,9 @@ func TestManifestAcceptsInterpolatedValues(t *testing.T) {
 		"      - PORT=${PORT}\n" +
 		"      - 'GREETING=hello ${NAME}'\n" +
 		"    scale:\n" +
-		"      count: ${COUNT} # replicas\n"
+		"      count: ${COUNT} # replicas\n" +
+		"    annotations:\n" +
+		"      - tailscale.com/hostname: app-web-${RACK}\n"
 	require.NoError(t, checkManifest(manifest))
 }
 

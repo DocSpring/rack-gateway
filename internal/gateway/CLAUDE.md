@@ -72,6 +72,12 @@ Request forwarding with WebSocket support:
 - Forwards only the query parameters the Convox SDK sends (`proxy/forward_query.go`) and refuses
   requests with any other: the rack reads options such as the exec command, release env and build
   manifest from the query string too, which would bypass the gateway's checks
+- Build manifests are checked twice: as written (`proxy/manifest_parse.go`, `manifest_structure.go`,
+  `manifest_interpolation.go`) and as the rack will load them (`loadManifestAsRack`: Convox's own `manifest.Load`
+  with the app's env and the build args substituted). Promotes are checked with the release's env
+  (`proxy/promote_images.go`). Keep the `github.com/convox/convox` module in step with the racks' Convox version
+- Refuse a request after looking at the rack with `refuse(status, err)` (`proxy/error_handling.go`), so the client
+  gets that status and the audit log a deny, never a 500
 - Sets `X-Convox-Actor` (user email or `token:<name>`); internal identity headers sent by clients are
   stripped by `middleware/internal_headers.go`
 - Protected env vars (the app's `protected_env_vars`) are refused on release
