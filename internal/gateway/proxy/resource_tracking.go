@@ -209,9 +209,10 @@ func (h *Handler) captureBuildDetails(
 			r.Header.Add("X-Release-Created", releaseID)
 		}
 
-		// Update deploy approval with release_id if it was set after build completion
+		// Record the approval's release once its build has one. Every later read of the build skips this: the
+		// release is never replaced.
 		tracker := getDeployApprovalTracker(r.Context())
-		if tracker != nil && buildID != "" {
+		if hasApproval(tracker) && tracker.request.ReleaseID == "" && buildID != "" {
 			gtwlog.Infof(
 				"captureBuildDetails: updating approval with releaseID=%s for buildID=%s",
 				releaseID,

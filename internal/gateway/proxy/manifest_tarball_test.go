@@ -54,6 +54,16 @@ func writeGzippedTar(w io.Writer, endArchive bool, entries ...tarEntry) error {
 	return gz.Close()
 }
 
+// flowSequenceManifest returns a valid manifest of size bytes, padded with a flow sequence of one-character scalars:
+// the most YAML nodes per byte.
+func flowSequenceManifest(size int) []byte {
+	manifest := []byte(webManifest + "x: [1")
+	for len(manifest) < size-1 {
+		manifest = append(manifest, ",1"...)
+	}
+	return append(manifest, ']')
+}
+
 func gzippedTarball(t *testing.T, entries ...tarEntry) []byte {
 	t.Helper()
 	var buf bytes.Buffer
@@ -131,6 +141,13 @@ func TestParseManifestFromTarball(t *testing.T) {
 		{
 			name:    "refuses an oversized manifest",
 			archive: gzippedTarball(t, tarEntry{name: "convox.yml", body: make([]byte, maxManifestSize+1)}),
+			wantErr: "manifest too large",
+		},
+		{
+			// Parsing builds a node per scalar before anything is checked, so a manifest is capped well below the
+			// size at which a flow sequence of one-character scalars would exhaust the gateway's memory.
+			name:    "refuses a 200 KB manifest",
+			archive: gzippedTarball(t, tarEntry{name: "convox.yml", body: flowSequenceManifest(200 * 1024)}),
 			wantErr: "manifest too large",
 		},
 		{

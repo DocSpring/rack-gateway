@@ -307,8 +307,7 @@ func (h *APIHandler) logApprovalCreation(
 	fields["token_uuid"] = tokenUUID
 	fields["git_commit_hash"] = record.GitCommitHash
 	fields["git_branch"] = record.GitBranch
-	fields["message"] = record.Message
-	details := auditDetails(fields)
+	details := auditDetailsWithMessage(fields, record.Message)
 
 	_ = h.auditLogger.LogDBEntry(&db.AuditLog{
 		UserEmail:    userEmail,

@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"sort"
 	"strings"
 	"time"
 
@@ -44,6 +43,8 @@ func runAPITokenList(cmd *cobra.Command, outputJSON bool) error {
 	return renderTokenTable(cmd, tokens)
 }
 
+// renderTokenTable lists tokens one per line. Names and owners are chosen by other users, so they go through
+// displayText.
 func renderTokenTable(cmd *cobra.Command, tokens []apiToken) error {
 	headerFmt := "%-36s %-25s %-25s %-19s %-19s\n"
 	if err := writef(cmd.OutOrStdout(), headerFmt, "UUID", "NAME", "OWNER", "CREATED", "LAST USED"); err != nil {
@@ -51,7 +52,7 @@ func renderTokenTable(cmd *cobra.Command, tokens []apiToken) error {
 	}
 	rowFmt := "%-36s %-25s %-25s %-19s %-19s\n"
 	for _, token := range tokens {
-		owner := token.CreatedByEmail
+		owner := displayText(token.CreatedByEmail)
 		if owner == "" {
 			owner = fmt.Sprintf("user:%d", token.UserID)
 		}
@@ -60,7 +61,8 @@ func renderTokenTable(cmd *cobra.Command, tokens []apiToken) error {
 			lastUsed = token.LastUsedAt.Format(time.RFC3339)
 		}
 		created := token.CreatedAt.Format(time.RFC3339)
-		if err := writef(cmd.OutOrStdout(), rowFmt, token.PublicID, token.Name, owner, created, lastUsed); err != nil {
+		row := []interface{}{displayText(token.PublicID), displayText(token.Name), owner, created, lastUsed}
+		if err := writef(cmd.OutOrStdout(), rowFmt, row...); err != nil {
 			return err
 		}
 	}
@@ -98,22 +100,24 @@ func runAPITokenGet(cmd *cobra.Command, tokenID string, outputJSON bool) error {
 	return writeTokenDetails(cmd, token)
 }
 
+// writeTokenDetails prints every field of a token, with the gateway's strings made safe by displayText.
 func writeTokenDetails(cmd *cobra.Command, token *apiToken) error {
 	out := cmd.OutOrStdout()
-	if err := writef(out, "Public ID: %s\n", token.PublicID); err != nil {
+	if err := writef(out, "Public ID: %s\n", displayText(token.PublicID)); err != nil {
 		return err
 	}
 	if err := writef(out, "Internal ID: %d\n", token.ID); err != nil {
 		return err
 	}
-	if err := writef(out, "Name: %s\n", token.Name); err != nil {
+	if err := writef(out, "Name: %s\n", displayText(token.Name)); err != nil {
 		return err
 	}
 	if err := writef(out, "Owner User ID: %d\n", token.UserID); err != nil {
 		return err
 	}
 	if token.CreatedByEmail != "" {
-		if err := writef(out, "Created By: %s (%s)\n", token.CreatedByName, token.CreatedByEmail); err != nil {
+		createdBy := displayText(token.CreatedByName) + " (" + displayText(token.CreatedByEmail) + ")"
+		if err := writef(out, "Created By: %s\n", createdBy); err != nil {
 			return err
 		}
 	}
@@ -133,7 +137,6 @@ func writeTokenDetails(cmd *cobra.Command, token *apiToken) error {
 			return err
 		}
 	}
-	sort.Strings(token.Permissions)
 	return writef(out, "Permissions:%s\n", formatList(token.Permissions))
 }
 
@@ -279,7 +282,8 @@ func executeAPITokenCreate(cmd *cobra.Command, cfg createAPITokenConfig) error {
 		return writeLine(cmd.OutOrStdout(), resp.Token)
 	case "", "text", "table":
 		out := cmd.OutOrStdout()
-		if err := writef(out, "Created token %q (id %s)\n", resp.APIToken.Name, resp.APIToken.PublicID); err != nil {
+		name, id := resp.APIToken.Name, displayText(resp.APIToken.PublicID)
+		if err := writef(out, "Created token %q (id %s)\n", name, id); err != nil {
 			return err
 		}
 		return writef(out, "Token: %s\n", resp.Token)

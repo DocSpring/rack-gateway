@@ -51,16 +51,46 @@ func TestProxyForwardsSDKQueryParameters(t *testing.T) {
 }
 
 func TestDisallowedQueryParams(t *testing.T) {
-	got, err := disallowedQueryParams("limit=5&command=x&Command=y&env=z")
+	values, err := url.ParseQuery("limit=5&command=x&Command=y&env=z")
 	require.NoError(t, err)
-	require.Equal(t, []string{"Command", "command", "env"}, got)
+	require.Equal(t, []string{"Command", "command", "env"}, disallowedQueryParams(values))
+	require.Empty(t, disallowedQueryParams(url.Values{}))
+}
 
-	got, err = disallowedQueryParams("")
-	require.NoError(t, err)
-	require.Empty(t, got)
+func TestProxyRefusesAnUnparseableQueryString(t *testing.T) {
+	h, database, rack := newRecordingProxy(t)
+	req := withPath(requestAs(t, database, "admin@test.com"), http.MethodGet, "/apps/myapp/releases")
+	req = withQuery(req, "limit=%zz")
+	rr := httptest.NewRecorder()
+	h.ProxyToRack(rr, req)
+	require.Equal(t, http.StatusBadRequest, rr.Code, rr.Body.String())
+	require.Contains(t, rr.Body.String(), "invalid query string")
+	require.Zero(t, rack.count())
+}
 
-	_, err = disallowedQueryParams("limit=%zz")
-	require.Error(t, err)
+// The gateway holds a whole release list in memory to mask secrets, and each release carries the app's env, so a
+// list limit is capped. One within the cap is forwarded unchanged.
+func TestProxyRefusesAListLimitOverTheCap(t *testing.T) {
+	h, database, rack := newRecordingProxy(t)
+	refused := []string{"limit=101", "limit=100000", "limit=0", "limit=-1", "limit=ten", "limit=5&limit=500"}
+	for _, path := range []string{"/apps/myapp/releases", "/apps/myapp/builds"} {
+		for _, query := range refused {
+			req := withQuery(withPath(requestAs(t, database, "admin@test.com"), http.MethodGet, path), query)
+			rr := httptest.NewRecorder()
+			h.ProxyToRack(rr, req)
+			require.Equalf(t, http.StatusBadRequest, rr.Code, "%s?%s: %s", path, query, rr.Body.String())
+			require.Contains(t, rr.Body.String(), "limit must be a whole number from 1 to 100")
+		}
+	}
+	require.Zero(t, rack.count(), "refused requests must not reach the rack")
+
+	for _, path := range []string{"/apps/myapp/releases", "/apps/myapp/builds"} {
+		req := withQuery(withPath(requestAs(t, database, "admin@test.com"), http.MethodGet, path), "limit=100")
+		rr := httptest.NewRecorder()
+		h.ProxyToRack(rr, req)
+		require.Equalf(t, http.StatusOK, rr.Code, "%s: %s", path, rr.Body.String())
+		require.Equal(t, url.Values{"limit": {"100"}}, rack.last(t).URL.Query())
+	}
 }
 
 func TestBuildWebSocketHeadersForwardsOnlyAllowlistedHeaders(t *testing.T) {

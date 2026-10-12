@@ -19,17 +19,8 @@ func (h *Handler) processProxyResponse(
 	path string,
 	authUserEmail string,
 ) (int, error) {
-	ct := strings.ToLower(resp.Header.Get("Content-Type"))
-	isJSON := strings.Contains(ct, "application/json")
-
-	filterRelease := isJSON &&
-		(rbac.KeyMatch3(path, "/apps/{app}/releases") || rbac.KeyMatch3(path, "/apps/{app}/releases/{id}"))
-
-	// GET /apps/{app}/environment returns a flat JSON map that needs secret masking
-	filterEnvironment := isJSON && r.Method == http.MethodGet && rbac.KeyMatch3(path, "/apps/{app}/environment")
-
-	shouldCapture, captureProcess := h.shouldCaptureResponse(r, path, isJSON)
-	needsBuffer := filterRelease || filterEnvironment || shouldCapture || captureProcess
+	handling := h.responseHandlingFor(r, resp, path)
+	needsBuffer := handling.needsBuffer()
 
 	logProxy := gtwlog.TopicEnabled(gtwlog.TopicProxy)
 	logResponse := gtwlog.TopicEnabled(gtwlog.TopicHTTPResponse)
@@ -41,16 +32,7 @@ func (h *Handler) processProxyResponse(
 	var err error
 
 	if needsBuffer {
-		body, err = h.processBufferedResponse(
-			r,
-			resp,
-			path,
-			authUserEmail,
-			filterRelease,
-			filterEnvironment,
-			shouldCapture,
-			captureProcess,
-		)
+		body, err = h.processBufferedResponse(r, resp, path, authUserEmail, handling)
 		if err != nil {
 			return 0, err
 		}
@@ -95,6 +77,34 @@ func (h *Handler) processProxyResponse(
 	)
 
 	return resp.StatusCode, nil
+}
+
+// responseHandling is what the gateway does with a rack response before passing it on. Any of it needs the
+// response read into memory first.
+type responseHandling struct {
+	filterRelease     bool // mask secret env values in releases
+	filterEnvironment bool // mask secret env values in GET /apps/{app}/environment
+	filterBuild       bool // strip build repository URLs (see stripBuildRepository)
+	capture           bool // record who created the resource
+	captureProcess    bool // track a process started under a deploy approval
+}
+
+func (rh responseHandling) needsBuffer() bool {
+	return rh.filterRelease || rh.filterEnvironment || rh.filterBuild || rh.capture || rh.captureProcess
+}
+
+func (h *Handler) responseHandlingFor(r *http.Request, resp *http.Response, path string) responseHandling {
+	isJSON := strings.Contains(strings.ToLower(resp.Header.Get("Content-Type")), "application/json")
+	handling := responseHandling{
+		filterRelease: isJSON &&
+			(rbac.KeyMatch3(path, "/apps/{app}/releases") || rbac.KeyMatch3(path, "/apps/{app}/releases/{id}")),
+		filterEnvironment: isJSON && r.Method == http.MethodGet && rbac.KeyMatch3(path, "/apps/{app}/environment"),
+		// Build create, import, update, get and list all answer with builds.
+		filterBuild: isJSON &&
+			(rbac.KeyMatch3(path, "/apps/{app}/builds") || rbac.KeyMatch3(path, "/apps/{app}/builds/{id}")),
+	}
+	handling.capture, handling.captureProcess = h.shouldCaptureResponse(r, path, isJSON)
+	return handling
 }
 
 // shouldCaptureResponse determines if the response should be captured.

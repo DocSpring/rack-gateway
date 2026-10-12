@@ -23,9 +23,11 @@ func newDeployApprovalWaitCommand() *cobra.Command {
 Without --loop, waits until every listed app has an approved (or deployed) request on every rack, then prints
 what was approved. Each request is shown (rack, app, commit, message, branch, token) before it is approved.
 
-Without a terminal (e.g. an AI agent), --approve needs an explicit --app list and a full --commit SHA; the macOS
-PIN dialog lists every approval the run can make. In a terminal, --approve with --branch and no --commit approves
-the newest request for the branch whatever its commit, so it asks you to confirm each one (y/N).
+The commit defaults to the full SHA of the current git commit. Without a terminal (e.g. an AI agent), --approve
+needs an explicit --app list and a full --commit SHA; the macOS PIN dialog lists every approval the run can make.
+In a terminal, --approve asks you to confirm (y/N) each request whose commit isn't exactly the full --commit: with
+--branch and no --commit it finds the newest request for the branch whatever its commit, and a short --commit
+matches any commit that starts with it.
 
 Examples:
   # Approve two apps' requests for a commit on staging (one PIN, one touch per approval)
@@ -184,7 +186,7 @@ func (w *deployApprovalWaiter) pollNextRack() (bool, error) {
 			}
 			w.markHandled(rack, request)
 			_ = writef(w.cmd.OutOrStdout(), "✓ Already %s on rack %s: %s (%s)\n",
-				status, rack, request.PublicID, approvalTarget(&request))
+				status, rack, displayText(request.PublicID), approvalTarget(&request))
 		}
 	}
 	return w.shouldExit(), nil
@@ -281,7 +283,7 @@ func (w *deployApprovalWaiter) printSummary() error {
 		for _, app := range apps {
 			request := w.handled[rack][app]
 			err := writef(out, "  %s  %s  %s  commit %s\n",
-				rack, displayText(app), request.PublicID, shortCommit(request.GitCommitHash))
+				rack, displayText(app), displayText(request.PublicID), shortCommit(request.GitCommitHash))
 			if err != nil {
 				return err
 			}

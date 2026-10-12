@@ -171,6 +171,8 @@ Mark sensitive environment variables in each app's settings (or pin them with `R
   `TOKEN`, or ending in `_KEY`, are secrets already; `CONVOX_SECRET_ENV_VARS` adds names for every app.
 - **`protected_env_vars`**: values masked, and changed only by an admin with `--allow-protected` and MFA.
 
+Changing either list needs MFA on that request, even within the step-up window, as changing a protected value does.
+
 Audit log entries (and so Slack) never show env var values unless the app lists the key in
 `audit_visible_env_vars`; secret and protected keys stay hidden even then.
 

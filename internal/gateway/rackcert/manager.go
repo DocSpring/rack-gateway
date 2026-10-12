@@ -81,6 +81,10 @@ func (m *Manager) CurrentCertificate(context.Context) (*db.RackTLSCert, bool, er
 }
 
 // TLSConfig returns a TLS configuration that validates the pinned certificate, fetching it if necessary.
+//
+// Every caller gets the same *tls.Config until the pinned certificate changes, so httpclient can keep one pool of
+// connections for it (a new pointer tells it the certificate changed). Callers must not modify it; net/http and
+// gorilla/websocket clone it before each handshake.
 func (m *Manager) TLSConfig(ctx context.Context) (*tls.Config, error) {
 	rck, ok := m.rackConfig()
 	if !ok {
@@ -90,31 +94,25 @@ func (m *Manager) TLSConfig(ctx context.Context) (*tls.Config, error) {
 		return nil, nil
 	}
 
-	m.mu.RLock()
-	if m.tlsConf != nil {
-		clone := m.tlsConf.Clone()
-		m.mu.RUnlock()
-		return clone, nil
+	if cfg := m.currentTLSConfig(); cfg != nil {
+		return cfg, nil
 	}
-	m.mu.RUnlock()
 
 	if err := m.loadFromDB(); err != nil {
 		return nil, err
 	}
 
-	m.mu.RLock()
-	if m.tlsConf != nil {
-		clone := m.tlsConf.Clone()
-		m.mu.RUnlock()
-		return clone, nil
+	if cfg := m.currentTLSConfig(); cfg != nil {
+		return cfg, nil
 	}
-	m.mu.RUnlock()
 
-	cfg, err := m.fetchAndStore(ctx, rck, nil)
-	if err != nil {
-		return nil, err
-	}
-	return cfg.Clone(), nil
+	return m.fetchAndStore(ctx, rck, nil)
+}
+
+func (m *Manager) currentTLSConfig() *tls.Config {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.tlsConf
 }
 
 // Refresh forces a re-fetch of the rack certificate, replacing the stored value.
