@@ -14,7 +14,7 @@ jobs:
   # The image and the CLI are built while CI and E2E finish on the tagged commit. Each job waits for those
   # checks before it publishes anything (image push, attestations).
   verify_tag:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     outputs:
@@ -23,7 +23,7 @@ jobs:
       short_sha: ${{ steps.version.outputs.short_sha }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
@@ -51,7 +51,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
   docker_build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: verify_tag
     permissions:
       contents: read
@@ -66,17 +66,17 @@ jobs:
       SHORT_SHA: ${{ needs.verify_tag.outputs.short_sha }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
       # No build cache: release images are built from scratch so a cache written by
       # another workflow run can't influence what gets published.
       - name: Build Docker image
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           platforms: linux/amd64
@@ -96,7 +96,7 @@ jobs:
           grep -qx 'test bypasses: compiled out' <<<"$info"
 
       - name: Wait for CI and E2E checks on the tagged commit
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
             const script = require('./.github/wait-for-checks.js');
@@ -111,7 +111,7 @@ jobs:
       # The same build again, served from this job's builder, which only holds the from-scratch build above.
       - name: Push Docker image
         id: push
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           platforms: linux/amd64
@@ -132,7 +132,7 @@ jobs:
           push-to-registry: true
 
   release_build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: verify_tag
     permissions:
       contents: read
@@ -143,7 +143,7 @@ jobs:
       VERSION: ${{ needs.verify_tag.outputs.version }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
@@ -180,7 +180,7 @@ jobs:
           (cd dist && sha256sum rack-gateway-linux-amd64.tar.gz > rack-gateway-linux-amd64.tar.gz.sha256)
 
       - name: Wait for CI and E2E checks on the tagged commit
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
             const script = require('./.github/wait-for-checks.js');
@@ -191,13 +191,13 @@ jobs:
         with:
           subject-path: dist/rack-gateway-linux-amd64.tar.gz
 
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: rack-gateway-linux-amd64
           path: dist/
 
   release_create:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs:
       - verify_tag
       - docker_build
@@ -210,7 +210,7 @@ jobs:
       REPOSITORY: ${{ github.repository }}
       IMAGE_DIGEST: ${{ needs.docker_build.outputs.digest }}
     steps:
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: rack-gateway-linux-amd64
           path: dist
@@ -248,7 +248,7 @@ jobs:
             echo '```'
           } > changelog.md
 
-      - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
+      - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           files: |
             dist/rack-gateway-linux-amd64.tar.gz
