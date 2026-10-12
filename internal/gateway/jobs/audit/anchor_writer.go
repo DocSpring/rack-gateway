@@ -78,33 +78,43 @@ func AnchorKey(chainID string, ts time.Time) string {
 	return fmt.Sprintf("%s/%s/anchor-%s.json", chainID, ts.Format("2006/01/02/15"), ts.Format("20060102T15"))
 }
 
-// anchorExists reports whether the anchor for key has been written. Any error other than "not found" fails the
-// job: writing again would add a second version of the anchor, which verification reports as a replacement.
-func (w *AnchorWriterWorker) anchorExists(ctx context.Context, key string) (bool, error) {
-	_, err := w.s3Client.HeadObject(ctx, &s3.HeadObjectInput{
+// anchorWrittenAt reports whether the anchor for key has been written, and when S3 stored it. Any error other
+// than "not found" fails the job: writing again would add a second version of the anchor, which verification
+// reports as a replacement.
+func (w *AnchorWriterWorker) anchorWrittenAt(ctx context.Context, key string) (time.Time, bool, error) {
+	head, err := w.s3Client.HeadObject(ctx, &s3.HeadObjectInput{
 		Bucket: aws.String(w.bucket),
 		Key:    aws.String(key),
 	})
 	if err == nil {
-		return true, nil
+		return aws.ToTime(head.LastModified), true, nil
 	}
 	var notFound *types.NotFound
 	if errors.As(err, &notFound) {
-		return false, nil
+		return time.Time{}, false, nil
 	}
-	return false, fmt.Errorf("failed to check for anchor %s: %w", key, err)
+	return time.Time{}, false, fmt.Errorf("failed to check for anchor %s: %w", key, err)
 }
 
 // anchorBusySnooze is how long the job waits before trying again when another anchor write holds the lock.
 const anchorBusySnooze = time.Minute
 
 // Work writes the anchor for the hour the job was created in. When another anchor write is running, the job is
-// snoozed and tries again later.
+// snoozed and tries again later. A retry that starts after the hour's write window gives up, and so does a job
+// that finds its hour's key created before the hour began; both are canceled, since retrying can't help.
 func (w *AnchorWriterWorker) Work(ctx context.Context, job *river.Job[AnchorWriterArgs]) error {
+	if delay, late := pastWriteWindow(job.JobRow); late {
+		return cancelAnchorJob(fmt.Errorf("gave up on anchor %s: this attempt started %s after the job was "+
+			"created, past the %s anchor write window (later hours' anchors cover its events)",
+			AnchorKey(w.chainID, job.CreatedAt), delay.Truncate(time.Minute), AnchorWriteWindow))
+	}
 	// The job's creation time names the anchor, so retries of a job write the same key.
 	err := w.WriteAnchor(ctx, job.CreatedAt)
-	if errors.Is(err, db.ErrAuditAnchorLockBusy) {
+	switch {
+	case errors.Is(err, db.ErrAuditAnchorLockBusy):
 		return river.JobSnooze(anchorBusySnooze)
+	case errors.Is(err, ErrUnexpectedAnchor):
+		return cancelAnchorJob(err)
 	}
 	return err
 }
@@ -112,7 +122,14 @@ func (w *AnchorWriterWorker) Work(ctx context.Context, job *river.Job[AnchorWrit
 // WriteAnchor writes the anchor for the hour of ts unless it's already written. It holds the audit anchor lock
 // from the existence check through the write, so concurrent writes can't add a second version of a key or link
 // two anchors to the same predecessor, which verification would report as failures that Object Lock keeps
-// forever. It returns db.ErrAuditAnchorLockBusy when another anchor write holds the lock.
+// forever. It returns db.ErrAuditAnchorLockBusy when another anchor write holds the lock, and
+// ErrUnexpectedAnchor when the hour's key holds an object stored before the hour began.
+//
+// The lock is a transaction-scoped Postgres advisory lock, so the write holds one pooled database connection
+// across its S3 calls: releasing it before the PutObject would let a second writer find the key missing and write
+// it too. In the gateway the job writes at most one anchor an hour and River's job timeout (a minute) bounds it,
+// so it holds the connection for well under a second normally and never longer than that. `write-anchor` runs in
+// its own process, with its own pool.
 func (w *AnchorWriterWorker) WriteAnchor(ctx context.Context, ts time.Time) error {
 	timestamp := ts.UTC()
 	return w.db.WithAuditAnchorLock(ctx, func(ctx context.Context, lock *db.AuditAnchorTx) error {
@@ -123,13 +140,13 @@ func (w *AnchorWriterWorker) WriteAnchor(ctx context.Context, ts time.Time) erro
 func (w *AnchorWriterWorker) writeAnchorLocked(ctx context.Context, lock *db.AuditAnchorTx, timestamp time.Time) error {
 	key := AnchorKey(w.chainID, timestamp) // Hour precision only - no minutes/seconds
 
-	exists, err := w.anchorExists(ctx, key)
+	written, exists, err := w.anchorWrittenAt(ctx, key)
 	if err != nil {
 		return err
 	}
 	if exists {
-		// File exists - job already completed successfully
-		return nil
+		// An earlier run wrote this hour's anchor, unless the object was created before the hour began.
+		return checkExistingAnchor(key, timestamp, written)
 	}
 
 	head, err := lock.AuditChainHead(ctx)
@@ -212,7 +229,7 @@ func (w *AnchorWriterWorker) putObjectWithRetention(
 		}
 	}
 
-	_, err := w.s3Client.PutObject(ctx, putInput)
+	_, err := w.s3Client.PutObject(ctx, putInput, putAnchorOnce)
 	if err != nil {
 		// Log detailed error information for debugging 400 errors
 		return fmt.Errorf(
@@ -222,3 +239,10 @@ func (w *AnchorWriterWorker) putObjectWithRetention(
 	}
 	return nil
 }
+
+// putAnchorOnce stops the SDK from retrying the anchor's PutObject. After a 5xx or a dropped connection the SDK
+// resends the object, but S3 may have stored the first attempt and only the response was lost: the resend then
+// adds a second version of the key, which verification reports as an overwritten anchor and Object Lock keeps for
+// the whole retention period. A failed attempt fails the job instead, and River's retry checks whether the anchor
+// exists (under the anchor lock) before writing it.
+func putAnchorOnce(o *s3.Options) { o.RetryMaxAttempts = 1 }

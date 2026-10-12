@@ -143,10 +143,10 @@ See [S3_WORM_STORE.md](S3_WORM_STORE.md) for detailed documentation on the WORM 
 
 ### Connection Pool Configuration
 
-- `DB_MAX_OPEN_CONNS` (default: `25`)
-  - Maximum number of concurrent database connections. Limits connection usage under load to prevent exhausting PostgreSQL server resources.
-- `DB_MAX_IDLE_CONNS` (default: `5`)
-  - Maximum number of idle connections to keep in the pool. Maintains warm connections for reuse without wasting resources.
+- `DB_MAX_OPEN_CONNS` (default: `10`)
+  - Maximum number of connections per pool. Each process has two pools (requests and audit writes, and the job queue), so it can open twice this many.
+- `DB_MAX_IDLE_CONNS` (default: `3`)
+  - Maximum number of idle connections to keep in each pool. The job queue's pool keeps this many open.
 - `DB_CONN_MAX_LIFETIME` (default: `30m`)
   - Maximum lifetime of a database connection before recycling. Prevents stale connections. Accepts Go duration strings (e.g., `30m`, `1h`).
 - `DB_CONN_MAX_IDLE_TIME` (default: `10m`)

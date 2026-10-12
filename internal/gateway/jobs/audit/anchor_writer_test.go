@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/riverqueue/river"
@@ -116,8 +117,8 @@ func TestAnchorWriterWorker_Work_BothFilesExist(t *testing.T) {
 			_ *s3.HeadObjectInput,
 			_ ...func(*s3.Options),
 		) (*s3.HeadObjectOutput, error) {
-			// Both files exist
-			return &s3.HeadObjectOutput{}, nil
+			// Both files exist, written during the hour by an earlier run
+			return &s3.HeadObjectOutput{LastModified: aws.Time(time.Date(2025, 11, 1, 12, 0, 5, 0, time.UTC))}, nil
 		},
 	}
 
@@ -165,9 +166,9 @@ func TestAnchorWriterWorker_Work_JSONExistsSHA256Missing(t *testing.T) {
 			params *s3.HeadObjectInput,
 			_ ...func(*s3.Options),
 		) (*s3.HeadObjectOutput, error) {
-			// JSON file already exists
+			// JSON file already exists, written during the hour by an earlier run
 			if *params.Key == key {
-				return &s3.HeadObjectOutput{}, nil
+				return &s3.HeadObjectOutput{LastModified: aws.Time(time.Date(2025, 11, 1, 12, 0, 5, 0, time.UTC))}, nil
 			}
 			return nil, &types.NotFound{}
 		},

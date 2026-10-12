@@ -106,7 +106,8 @@ func (w *anchorWalker) checkLinkToPrevious(record *anchorRecord) {
 	}
 }
 
-// checkIdentity checks the anchor belongs to this chain and sits under the key for its own timestamp.
+// checkIdentity checks the anchor belongs to this chain, sits under the key for its own timestamp and was stored
+// when the anchor writer could have written it.
 func (w *anchorWalker) checkIdentity(record *anchorRecord) {
 	if record.payload.ChainID != w.chainID {
 		w.report.fail("anchor %s: chain_id is %q, expected %q", record.key, record.payload.ChainID, w.chainID)
@@ -119,7 +120,34 @@ func (w *anchorWalker) checkIdentity(record *anchorRecord) {
 	if expected := jobaudit.AnchorKey(w.chainID, ts); expected != record.key {
 		w.report.fail("anchor %s: its ts_utc (%s) belongs under %s", record.key, record.payload.TimestampUTC, expected)
 	}
+	w.checkWriteTime(record, ts)
 	w.anchoredHour[ts.UTC().Truncate(time.Hour)] = true
+}
+
+// checkWriteTime compares when S3 stored the anchor with its ts_utc, when its job was created. The writer only
+// writes after that, and gives up jobaudit.AnchorWriteWindow later (give or take jobaudit.AnchorClockSkew). An
+// anchor stored before its ts_utc was created ahead of time by someone with write access to the bucket, which
+// also stops the writer from anchoring that hour; one stored long after it was backfilled. Earlier versions
+// retried a failing job for weeks, so a late anchor without a format is only a warning.
+func (w *anchorWalker) checkWriteTime(record *anchorRecord, ts time.Time) {
+	written := record.lastModified
+	if written.Before(ts.Add(-jobaudit.AnchorClockSkew)) {
+		w.report.fail("anchor %s was stored at %s, before its ts_utc (%s): it was created ahead of time, not by the "+
+			"anchor writer", record.key, written.UTC().Format(time.RFC3339), record.payload.TimestampUTC)
+		return
+	}
+	late := written.Sub(ts)
+	if late <= jobaudit.AnchorWriteWindow+jobaudit.AnchorClockSkew {
+		return
+	}
+	message := fmt.Sprintf("anchor %s was stored %s after its ts_utc (%s), later than the anchor writer writes "+
+		"(%s)", record.key, late.Truncate(time.Minute), record.payload.TimestampUTC, jobaudit.AnchorWriteWindow)
+	if record.payload.Format >= jobaudit.AnchorFormat {
+		w.report.fail("%s: it was backfilled", message)
+		return
+	}
+	w.report.warn("%s; versions before anchor format %d retried a failing anchor job for weeks",
+		message, jobaudit.AnchorFormat)
 }
 
 // checkSequence checks the chain only grows: an anchor never records fewer events than an earlier one.

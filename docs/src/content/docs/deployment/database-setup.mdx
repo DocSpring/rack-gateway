@@ -14,7 +14,7 @@ Rack Gateway requires PostgreSQL 14+ for storing users, API tokens, audit logs, 
 | **PostgreSQL version** | 14 | 16 |
 | **Storage** | 10GB | 50GB+ (scales with audit logs) |
 | **Memory** | 256MB | 1GB+ |
-| **Connections** | 25 | 50+ |
+| **Connections** (`max_connections`) | 50 | 100+ |
 
 ## Connection Configuration
 
@@ -44,12 +44,14 @@ The gateway checks variables in order: `RGW_DATABASE_URL`, `GATEWAY_DATABASE_URL
 
 ## Connection Pool
 
-Configure the connection pool for your workload:
+Each gateway process has two connection pools, both sized by these variables: one for requests, audit writes and
+the audit anchor lock, and one for the background job queue. A process can therefore open up to twice
+`DB_MAX_OPEN_CONNS` connections, and the job queue's pool keeps `DB_MAX_IDLE_CONNS` open.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `DB_MAX_OPEN_CONNS` | `25` | Maximum concurrent connections |
-| `DB_MAX_IDLE_CONNS` | `5` | Idle connections to keep warm |
+| `DB_MAX_OPEN_CONNS` | `10` | Maximum connections per pool |
+| `DB_MAX_IDLE_CONNS` | `3` | Idle connections to keep warm, per pool |
 | `DB_CONN_MAX_LIFETIME` | `30m` | Connection lifetime before recycling |
 | `DB_CONN_MAX_IDLE_TIME` | `10m` | Idle time before closing |
 
@@ -57,12 +59,18 @@ Configure the connection pool for your workload:
 
 | Workload | Max Open | Max Idle | Notes |
 |----------|----------|----------|-------|
-| Small (&lt;100 users) | 10 | 3 | Conservative for shared DB |
-| Medium (&lt;1000 users) | 25 | 5 | Default settings |
+| Small (&lt;100 users) | 10 | 3 | Default settings |
+| Medium (&lt;1000 users) | 25 | 5 | |
 | Large (&gt;1000 users) | 50 | 10 | Increase with load |
 
+A request holds a connection for milliseconds. The hourly audit anchor write holds one for the length of its S3
+calls (at most a minute), and an audit write gives up after 10 seconds, including the wait for a connection, so
+don't go below the default.
+
 <Aside type="tip">
-Monitor PostgreSQL `max_connections` - ensure it exceeds the sum of all application pools.
+PostgreSQL's `max_connections` must exceed the sum of all pools: two per gateway process, times the processes
+running at once (both releases during a rolling deploy), plus one-off commands such as `migrate` and
+`verify-audit`. Small RDS instances allow fewer than 100 connections.
 </Aside>
 
 ## Database Provisioning

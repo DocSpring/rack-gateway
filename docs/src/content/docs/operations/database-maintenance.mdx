@@ -209,11 +209,12 @@ For RDS, this happens automatically. For self-managed PostgreSQL, schedule regul
 
 ### Connection Pool Settings
 
-Configure connection pooling:
+Configure connection pooling (the defaults are shown; see
+[Connection Pool](/deployment/database-setup/#connection-pool) for sizing):
 
 ```bash
-DB_MAX_OPEN_CONNS=25    # Maximum concurrent connections
-DB_MAX_IDLE_CONNS=5     # Idle connections to keep warm
+DB_MAX_OPEN_CONNS=10     # Maximum connections per pool (each process has two)
+DB_MAX_IDLE_CONNS=3      # Idle connections to keep warm, per pool
 DB_CONN_MAX_LIFETIME=30m # Connection lifetime
 DB_CONN_MAX_IDLE_TIME=10m # Idle timeout
 ```

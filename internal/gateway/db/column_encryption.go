@@ -5,11 +5,11 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"fmt"
-	"log"
 	"strconv"
 	"strings"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/colcrypt"
+	gtwlog "github.com/DocSpring/rack-gateway/internal/gateway/logging"
 )
 
 // Two columns hold secrets and are encrypted with COLUMN_ENCRYPTION_KEY (see package colcrypt):
@@ -17,8 +17,11 @@ import (
 //   - mfa_methods.secret (TOTP seeds, YubiKey public IDs, WebAuthn enrollment placeholders), bound to user_id
 //   - slack_integration.bot_token_encrypted, bound to workspace_id
 //
-// Reads are strict: a stored value without the envelope prefix is an error, never a usable secret, so
-// someone who can write to the database can't plant a seed they know.
+// Reads are strict: a stored value without the envelope prefix is an error, never a usable secret. But
+// UpgradePlaintextColumns, which the server runs at startup and again 10 minutes later for the upgrade to column
+// encryption (v0.1.7), encrypts every plaintext value it finds. Until it is removed, someone who can write to
+// the database can plant a seed they know and have it encrypted, so each value it encrypts is logged (row IDs,
+// never values), and the server reports the repeat run encrypting anything to Sentry.
 
 // decryptMFASecret fills method.Secret, or method.SecretErr when the stored value can't be decrypted. A
 // failure makes only this method unusable; it never turns into an empty secret silently. NULL means the
@@ -51,6 +54,8 @@ type legacyColumn struct {
 	updateSQL string
 	plaintext func(stored string) (string, error)
 	scope     func(binding string) (colcrypt.Scope, error)
+	// owner names whose value a row holds, for the log (never the value).
+	owner func(binding string) string
 }
 
 var legacyColumns = []legacyColumn{
@@ -64,6 +69,10 @@ var legacyColumns = []legacyColumn{
 			user, methodType, _ := strings.Cut(binding, ":")
 			userID, err := strconv.ParseInt(user, 10, 64)
 			return colcrypt.MFASecretScope(userID, methodType), err
+		},
+		owner: func(binding string) string {
+			user, methodType, _ := strings.Cut(binding, ":")
+			return fmt.Sprintf("user %s, %s method", user, methodType)
 		},
 	},
 	{
@@ -79,6 +88,7 @@ var legacyColumns = []legacyColumn{
 		scope: func(binding string) (colcrypt.Scope, error) {
 			return colcrypt.SlackBotTokenScope(binding), nil
 		},
+		owner: func(binding string) string { return "Slack workspace " + binding },
 	},
 }
 
@@ -95,7 +105,9 @@ type legacyRow struct {
 //
 // It is safe to run repeatedly and from several instances at once: each update only applies if the row
 // still holds the value that was read. Values encrypted under another key are counted and left alone.
-// It logs counts, never values. Remove it once no deployment has rows from before encryption.
+// It encrypts any plaintext value, including one written straight into the database after the upgrade, so it
+// logs each row it encrypts at warn level, with the row's IDs and never its value. Remove it in a later
+// release, once deployments have upgraded past v0.1.7.
 func (d *Database) UpgradePlaintextColumns(ctx context.Context) (map[string]ColumnUpgradeCounts, error) {
 	upgraded := make(map[string]ColumnUpgradeCounts, len(legacyColumns))
 	for _, column := range legacyColumns {
@@ -104,7 +116,7 @@ func (d *Database) UpgradePlaintextColumns(ctx context.Context) (map[string]Colu
 			return nil, fmt.Errorf("encrypt existing %s values: %w", column.name, err)
 		}
 		if counts != (ColumnUpgradeCounts{}) {
-			log.Printf("Column encryption: %s: encrypted %d existing values, %d under another key, %d unreadable",
+			gtwlog.Infof("Column encryption: %s: encrypted %d existing values, %d under another key, %d unreadable",
 				column.name, counts.Encrypted, counts.OtherKey, counts.Unreadable)
 		}
 		upgraded[column.name] = counts
@@ -156,13 +168,14 @@ func (d *Database) upgradeRow(
 	counts *ColumnUpgradeCounts,
 ) error {
 	if colcrypt.IsEncrypted(row.value) {
-		log.Printf("WARN: %s row %d is encrypted with another column key or format; leaving it", column.name, row.id)
+		gtwlog.Warnf("Column encryption: %s row %d is encrypted with another column key or format; leaving it",
+			column.name, row.id)
 		counts.OtherKey++
 		return nil
 	}
 	plaintext, err := column.plaintext(row.value)
 	if err != nil {
-		log.Printf("WARN: %s row %d can't be decoded; leaving it", column.name, row.id)
+		gtwlog.Warnf("Column encryption: %s row %d can't be decoded; leaving it", column.name, row.id)
 		counts.Unreadable++
 		return nil
 	}
@@ -183,6 +196,8 @@ func (d *Database) upgradeRow(
 		return err
 	}
 	if affected > 0 { // 0 when another instance upgraded the row first
+		gtwlog.Warnf("Column encryption: encrypted a plaintext %s value: row %d (%s)",
+			column.name, row.id, column.owner(row.binding))
 		counts.Encrypted++
 	}
 	return nil
