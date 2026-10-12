@@ -23,7 +23,10 @@ import type {
   SlackChannel,
   SlackIntegration,
 } from '@/pages/integrations/slack-types'
-import { getErrorMessage, hasStatus } from '@/pages/integrations/utils'
+
+type ChannelActions = Record<string, ChannelConfig>
+
+import { hasStatus } from '@/pages/integrations/utils'
 
 export function IntegrationsPage() {
   const [isConnecting, setIsConnecting] = useState(false)
@@ -66,9 +69,7 @@ export function IntegrationsPage() {
     onSuccess: (authUrl) => {
       window.location.href = authUrl
     },
-    onError: (error: unknown) => {
-      const message = getErrorMessage(error, 'Failed to start Slack authorization')
-      toast.error(message)
+    onError: () => {
       setIsConnecting(false)
     },
   })
@@ -81,25 +82,26 @@ export function IntegrationsPage() {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.SLACK_INTEGRATION })
       toast.success('Disconnected from Slack')
     },
-    onError: (error: unknown) => {
-      const message = getErrorMessage(error, 'Failed to disconnect')
-      toast.error(message)
-    },
   })
 
+  // Each save sends the configuration the change was made to, and the gateway refuses it (409) if that has changed
+  // since, so an edit can't undo one saved from another tab. Returning the refetch keeps the controls disabled until
+  // the saved configuration is on screen, so the next edit is made to it.
   const updateChannelsMutation = useMutation({
-    mutationFn: async (channelActions: Record<string, ChannelConfig>) => {
+    mutationFn: async ({ previous, next }: { previous: ChannelActions; next: ChannelActions }) => {
       await api.put('/api/v1/integrations/slack/channels', {
-        channel_actions: channelActions,
+        channel_actions: next,
+        previous_channel_actions: previous,
       })
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.SLACK_INTEGRATION })
       toast.success('Channel configuration updated')
+      return queryClient.invalidateQueries({ queryKey: QUERY_KEYS.SLACK_INTEGRATION })
     },
     onError: (error: unknown) => {
-      const message = getErrorMessage(error, 'Failed to update channels')
-      toast.error(message)
+      if (hasStatus(error, 409)) {
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.SLACK_INTEGRATION })
+      }
     },
   })
 
@@ -111,10 +113,6 @@ export function IntegrationsPage() {
     },
     onSuccess: () => {
       toast.success('Test notification sent')
-    },
-    onError: (error: unknown) => {
-      const message = getErrorMessage(error, 'Failed to send test notification')
-      toast.error(message)
     },
   })
 
@@ -128,10 +126,6 @@ export function IntegrationsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.SLACK_INTEGRATION })
       toast.success('Alert settings updated')
-    },
-    onError: (error: unknown) => {
-      const message = getErrorMessage(error, 'Failed to update alert settings')
-      toast.error(message)
     },
   })
 
@@ -153,80 +147,57 @@ export function IntegrationsPage() {
     setShowDisconnectDialog(false)
   }, [])
 
-  const handleUpdateChannel = (key: string, channelId: string, channelName: string) => {
+  // saveChannels saves change applied to the configuration on screen.
+  const saveChannels = (change: (current: ChannelActions) => ChannelActions) => {
     if (!integration?.channel_actions) {
       return
     }
+    const previous = integration.channel_actions as ChannelActions
+    updateChannelsMutation.mutate({ previous, next: change(previous) })
+  }
 
-    const channelActions = integration.channel_actions as Record<string, ChannelConfig>
-    updateChannelsMutation.mutate({
-      ...channelActions,
-      [key]: {
-        ...channelActions[key],
-        id: channelId,
-        name: channelName,
-      },
-    })
+  const handleUpdateChannel = (key: string, channelId: string, channelName: string) => {
+    saveChannels((current) => ({
+      ...current,
+      [key]: { ...current[key], id: channelId, name: channelName },
+    }))
   }
 
   const handleAddAction = (key: string, action: string) => {
-    if (!(integration?.channel_actions && action.trim())) {
+    const pattern = action.trim()
+    if (!pattern) {
       return
     }
-
-    const channelActions = integration.channel_actions as Record<string, ChannelConfig>
-    const currentConfig = channelActions[key]
-    updateChannelsMutation.mutate({
-      ...channelActions,
-      [key]: {
-        ...currentConfig,
-        actions: [...currentConfig.actions, action.trim()],
-      },
-    })
+    saveChannels((current) => ({
+      ...current,
+      [key]: { ...current[key], actions: [...current[key].actions, pattern] },
+    }))
   }
 
-  const handleRemoveAction = (key: string, actionIndex: number) => {
-    if (!integration?.channel_actions) {
-      return
-    }
-
-    const channelActions = integration.channel_actions as Record<string, ChannelConfig>
-    const currentConfig = channelActions[key]
-    updateChannelsMutation.mutate({
-      ...channelActions,
+  const handleRemoveAction = (key: string, action: string) => {
+    saveChannels((current) => ({
+      ...current,
       [key]: {
-        ...currentConfig,
-        actions: currentConfig.actions.filter((_, index) => index !== actionIndex),
+        ...current[key],
+        actions: current[key].actions.filter((pattern) => pattern !== action),
       },
-    })
+    }))
   }
 
   const handleAddChannel = (channelName: string) => {
-    if (!(integration?.channel_actions && channelName.trim())) {
+    if (!channelName.trim()) {
       return
     }
-
     const key = channelName.toLowerCase().replace(/[^a-z0-9]/g, '-')
-    const channelActions = integration.channel_actions as Record<string, ChannelConfig>
-    updateChannelsMutation.mutate({
-      ...channelActions,
-      [key]: {
-        id: null,
-        name: channelName,
-        actions: [],
-      },
-    })
+    saveChannels((current) => ({ ...current, [key]: { id: null, name: channelName, actions: [] } }))
   }
 
   const handleRemoveChannel = (key: string) => {
-    if (!integration?.channel_actions) {
-      return
-    }
-
-    const channelActions = integration.channel_actions as Record<string, ChannelConfig>
-    const remaining = { ...channelActions }
-    delete remaining[key]
-    updateChannelsMutation.mutate(remaining)
+    saveChannels((current) => {
+      const remaining = { ...current }
+      delete remaining[key]
+      return remaining
+    })
   }
 
   const handleTestNotification = (channelId: string) => {

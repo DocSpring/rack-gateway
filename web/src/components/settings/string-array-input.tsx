@@ -41,6 +41,7 @@ export function StringArrayInput({
         <div className="flex items-center gap-2" key={item}>
           <code className="flex-1 rounded bg-muted px-3 py-2 font-mono text-sm">{item}</code>
           <Button
+            aria-label={`Remove ${item}`}
             disabled={disabled}
             onClick={() => handleRemoveItem(index)}
             size="sm"
@@ -66,7 +67,12 @@ export function StringArrayInput({
           type="text"
           value={newItem}
         />
-        <Button disabled={disabled || !newItem.trim()} onClick={handleAddItem} type="button">
+        <Button
+          aria-label="Add"
+          disabled={disabled || !newItem.trim()}
+          onClick={handleAddItem}
+          type="button"
+        >
           <Plus className="size-4" />
         </Button>
       </div>
