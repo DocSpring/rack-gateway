@@ -133,8 +133,9 @@ Structured logging:
   written; the auth handlers do the same around session creation, CLI login MFA and logout
   (`handlers/auth_audit.go`). Write a request's other entries with `LogRequestEntry(ctx, ...)` so they get its
   request ID (its results). Route names come from `rbac/audit_names.go` (a route's permission, `auditActions`,
-  or the route's `AuditAction`). A background job that changes state appends its audit events in the same transaction as the change (`db.ExpireDeployApprovalRequests`), and passes
-  them to `audit.RecordedInTransaction`. Any failed write fails the health check for a minute (`audit/health.go`)
+  or the route's `AuditAction`). A background job that changes state appends its audit events in the same
+  transaction as the change (`db.ExpireDeployApprovalRequests`), and passes them to `audit.RecordedInTransaction`.
+  Any failed write fails the health check for a minute (`audit/health.go`)
 - Never change how a released version writes audit events (`audit.append_audit_event`'s signature, the audit
   roles' grants) in one migration: the previous release keeps serving requests between `migrate` and the promote,
   and it refuses every request it can't record, the promote included. Add the new function alongside the old one,
