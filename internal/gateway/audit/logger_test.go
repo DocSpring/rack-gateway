@@ -31,22 +31,22 @@ func TestParseConvoxAction(t *testing.T) {
 	}
 }
 
-func TestMapHttpStatusToStatus(t *testing.T) {
+func TestMapHTTPStatusToStatus(t *testing.T) {
 	database := dbtest.NewDatabase(t)
 	logger := NewLogger(database)
 
 	t.Run("Status101IsSuccess", func(t *testing.T) {
-		st := logger.MapHttpStatusToStatus(101)
+		st := logger.MapHTTPStatusToStatus(101)
 		assert.Equal(t, "success", st)
 	})
 
 	t.Run("Status302IsSuccess", func(t *testing.T) {
-		st := logger.MapHttpStatusToStatus(302)
+		st := logger.MapHTTPStatusToStatus(302)
 		assert.Equal(t, "success", st)
 	})
 
 	t.Run("UnknownStatusTreatedAsError", func(t *testing.T) {
-		st := logger.MapHttpStatusToStatus(-1)
+		st := logger.MapHTTPStatusToStatus(-1)
 		assert.Equal(t, "error", st)
 	})
 }

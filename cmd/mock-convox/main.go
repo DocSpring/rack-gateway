@@ -28,7 +28,7 @@
 // 2. RACK_URL format: https://convox:token@api.domain.com (NO /v1/proxy suffix)
 // 3. Main endpoints used by 'convox ps': GET /apps/{app}/processes
 // 4. Main endpoint used by 'convox rack': GET /system
-// 5. Process struct has specific field names (Id not ID, capitalized fields)
+// 5. Process JSON keys are lowercase ("id", "cpu"); the mock's Go fields follow Go naming (ID, CPU)
 // 6. All responses are JSON arrays or objects
 //
 // Authentication:
@@ -87,7 +87,7 @@ func runServer() error {
 	port := resolvePort()
 
 	mclog.Infof("Mock Convox API server starting on port %s", port)
-	auth := base64.StdEncoding.EncodeToString([]byte(mockUsername + ":" + mockPassword))
+	auth := base64.StdEncoding.EncodeToString([]byte(mockUsername + ":" + mockRackToken))
 	mclog.DebugTopicf(mclog.TopicAuth, "expected auth: Basic %s", auth)
 
 	srv := &http.Server{

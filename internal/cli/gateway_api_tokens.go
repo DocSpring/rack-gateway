@@ -348,7 +348,7 @@ func doGatewayRequest(gatewayURL, bearer, method, path string, body interface{})
 	if err != nil {
 		return 0, nil, err
 	}
-	defer resp.Body.Close() //nolint:errcheck // response cleanup
+	defer func() { _ = resp.Body.Close() }()
 
 	responseBody, err := io.ReadAll(resp.Body)
 	if err != nil {

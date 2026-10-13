@@ -130,7 +130,7 @@ func (d *Database) queryAuditLogs(query string, args []interface{}) ([]*AuditLog
 	if err != nil {
 		return nil, fmt.Errorf("failed to query audit logs: %w", err)
 	}
-	defer rows.Close() //nolint:errcheck // best-effort close
+	defer func() { _ = rows.Close() }()
 
 	return scanAuditLogs(rows)
 }
@@ -166,7 +166,7 @@ func (d *Database) GetAuditLogsByDeployApprovalRequestID(
 	if err != nil {
 		return nil, fmt.Errorf("failed to query audit logs by deploy approval request ID: %w", err)
 	}
-	defer rows.Close() //nolint:errcheck // best-effort close
+	defer func() { _ = rows.Close() }()
 
 	return scanAuditLogs(rows)
 }
@@ -273,7 +273,7 @@ func (d *Database) queryAggregatedAuditLogs(query string, args []interface{}) ([
 	if err != nil {
 		return nil, fmt.Errorf("failed to query aggregated audit logs: %w", err)
 	}
-	defer rows.Close() //nolint:errcheck // best-effort close
+	defer func() { _ = rows.Close() }()
 
 	var logs []*AuditLogAggregated
 	for rows.Next() {

@@ -148,7 +148,7 @@ func (d *Database) ListDeployApprovalRequests(opts DeployApprovalRequestListOpti
 	if err != nil {
 		return nil, fmt.Errorf("failed to list deploy approval requests: %w", err)
 	}
-	defer rows.Close() //nolint:errcheck
+	defer func() { _ = rows.Close() }()
 
 	var out []*DeployApprovalRequest
 	for rows.Next() {

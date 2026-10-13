@@ -314,10 +314,8 @@ func (_ *Logger) BuildDetailsJSON(r *http.Request) string {
 	return string(data)
 }
 
-// MapHttpStatusToStatus converts HTTP status code to audit status string
-//
-//nolint:staticcheck // Http is part of the function name convention
-func (_ *Logger) MapHttpStatusToStatus(httpStatus int) string {
+// MapHTTPStatusToStatus converts HTTP status code to audit status string
+func (_ *Logger) MapHTTPStatusToStatus(httpStatus int) string {
 	switch {
 	case httpStatus == 101: // WebSocket Switching Protocols treated as success
 		return "success"

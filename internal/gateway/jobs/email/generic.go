@@ -13,7 +13,7 @@ type SendSingleArgs struct {
 	To      string `json:"to"`
 	Subject string `json:"subject"`
 	Text    string `json:"text"`
-	Html    string `json:"html"` //nolint:staticcheck // JSON field name matches email API
+	HTML    string `json:"html"`
 }
 
 // Kind returns the job kind identifier for single email sending
@@ -36,7 +36,7 @@ func (w *SendSingleWorker) Work(_ context.Context, job *river.Job[SendSingleArgs
 	if args.To == "" {
 		return nil
 	}
-	return w.delivery.Send(args.To, args.Subject, args.Text, args.Html)
+	return w.delivery.Send(args.To, args.Subject, args.Text, args.HTML)
 }
 
 // SendManyArgs encapsulates a multi-recipient email
@@ -44,7 +44,7 @@ type SendManyArgs struct {
 	To      []string `json:"to"`
 	Subject string   `json:"subject"`
 	Text    string   `json:"text"`
-	Html    string   `json:"html"` //nolint:staticcheck // JSON field name matches email API
+	HTML    string   `json:"html"`
 }
 
 // Kind returns the job kind identifier for multi-recipient email sending
@@ -67,5 +67,5 @@ func (w *SendManyWorker) Work(_ context.Context, job *river.Job[SendManyArgs]) e
 	if len(args.To) == 0 {
 		return nil
 	}
-	return w.delivery.SendMany(args.To, args.Subject, args.Text, args.Html)
+	return w.delivery.SendMany(args.To, args.Subject, args.Text, args.HTML)
 }

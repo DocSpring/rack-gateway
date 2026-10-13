@@ -110,7 +110,7 @@ func (h *SettingsHandler) DeleteAppProtectedEnvVars(c *gin.Context) {
 // @Security CSRFToken
 // @Router /apps/{app}/settings/secret-env-vars [put]
 func (h *SettingsHandler) UpdateAppSecretEnvVars(c *gin.Context) {
-	h.updateAppSettingValue(c, settings.KeySecretEnvVars)
+	h.updateAppSettingValue(c, settings.AppSettingSecretEnvVars.String())
 }
 
 // DeleteAppSecretEnvVars godoc
@@ -126,7 +126,7 @@ func (h *SettingsHandler) UpdateAppSecretEnvVars(c *gin.Context) {
 // @Security CSRFToken
 // @Router /apps/{app}/settings/secret-env-vars [delete]
 func (h *SettingsHandler) DeleteAppSecretEnvVars(c *gin.Context) {
-	h.deleteAppSettingValue(c, settings.KeySecretEnvVars)
+	h.deleteAppSettingValue(c, settings.AppSettingSecretEnvVars.String())
 }
 
 // UpdateAppAuditVisibleEnvVars godoc

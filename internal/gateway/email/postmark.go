@@ -97,7 +97,7 @@ func (p *PostmarkSender) sendEmail(to, bcc, subject, textBody, htmlBody string) 
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close() //nolint:errcheck,gosec // G104: cleanup // ignore close error
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("postmark send failed: %s", resp.Status)
 	}
@@ -173,7 +173,7 @@ type DevEmail struct {
 	To      []string  `json:"to"`
 	Subject string    `json:"subject"`
 	Text    string    `json:"text"`
-	Html    string    `json:"html"` //nolint:staticcheck // JSON field name from external API
+	HTML    string    `json:"html"`
 	TS      time.Time `json:"ts"`
 }
 
@@ -186,7 +186,7 @@ var (
 func appendDevEmail(to []string, subject, text, html string) {
 	devMu.Lock()
 	defer devMu.Unlock()
-	devOutbox = append(devOutbox, DevEmail{To: to, Subject: subject, Text: text, Html: html, TS: time.Now().UTC()})
+	devOutbox = append(devOutbox, DevEmail{To: to, Subject: subject, Text: text, HTML: html, TS: time.Now().UTC()})
 	if len(devOutbox) > devMax {
 		devOutbox = devOutbox[len(devOutbox)-devMax:]
 	}

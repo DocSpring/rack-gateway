@@ -4,11 +4,21 @@ import (
 	"testing"
 	"time"
 
+	"github.com/casbin/casbin/v2/model"
 	"github.com/stretchr/testify/require"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	"github.com/DocSpring/rack-gateway/internal/gateway/testutil/dbtest"
 )
+
+func TestModelMatcherIsOneExpression(t *testing.T) {
+	m, err := model.NewModelFromString(modelConf)
+	require.NoError(t, err)
+	require.Equal(t,
+		`g(r_sub, p_sub) && (p_obj == "convox:*:*" || p_obj == r_obj || keyMatch3(r_obj, p_obj)) && `+
+			`(p_act == "*" || r_act == p_act)`,
+		m["m"]["m"].Value)
+}
 
 func newTestManager(t *testing.T) (*DBManager, *db.Database) {
 	t.Helper()

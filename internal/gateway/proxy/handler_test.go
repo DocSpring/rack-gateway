@@ -254,7 +254,7 @@ func TestProxyToRackLogsReleaseAuditAndUserResource(t *testing.T) {
 		require.Equal(t, "/apps/my-app/builds", r.URL.Path)
 		require.Equal(t, "Basic Y29udm94OnRva2Vu", r.Header.Get("Authorization"))
 		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprint(w, `{"id":"B321","release":"R654","status":"created"}`) //nolint:errcheck
+		_, _ = fmt.Fprint(w, `{"id":"B321","release":"R654","status":"created"}`)
 	})
 	h, database, mgr, cleanup := newProxyWithRackServer(t, rackHandler)
 	defer cleanup()
@@ -346,7 +346,7 @@ func TestForwardRequestRecordsBuildCreator(t *testing.T) {
 		receivedAuth = r.Header.Get("Authorization")
 		require.Equal(t, "/apps/my-app/builds", r.URL.Path)
 		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprint(w, `{"id":"B999","status":"created"}`) //nolint:errcheck
+		_, _ = fmt.Fprint(w, `{"id":"B999","status":"created"}`)
 	})
 
 	h, database, mgr, cleanup := newProxyWithRackServer(t, rackHandler)

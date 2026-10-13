@@ -18,7 +18,7 @@ func getProcesses(w http.ResponseWriter, r *http.Request) {
 	processes := listProcessState(vars["app"])
 	slices.SortFunc(processes, func(a, b Process) int {
 		if a.Name == b.Name {
-			return strings.Compare(a.Id, b.Id)
+			return strings.Compare(a.ID, b.ID)
 		}
 		return strings.Compare(a.Name, b.Name)
 	})
@@ -30,10 +30,10 @@ func getProcesses(w http.ResponseWriter, r *http.Request) {
 func getProcess(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	process := Process{
-		Id:       vars["id"],
+		ID:       vars["id"],
 		App:      vars["app"],
 		Command:  "bundle exec rails server",
-		Cpu:      25.5,
+		CPU:      25.5,
 		Host:     "10.0.1.10",
 		Image:    "registry.example.com/app:latest",
 		Instance: "i-1234567890abcdef0",

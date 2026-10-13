@@ -29,7 +29,7 @@ func (s *Service) GetMFASettings() (*db.MFASettings, error) {
 	if err != nil {
 		return nil, err
 	}
-	stepUpMinutes, err := resolve(KeyStepUpWindowMinutes)
+	stepUpMinutes, err := resolve(GlobalSettingStepUpWindowMinutes.String())
 	if err != nil {
 		return nil, err
 	}
@@ -74,7 +74,7 @@ func (s *Service) SetMFASettings(settings *db.MFASettings, updatedByUserID *int6
 	updates := []db.SettingUpdate{
 		{Key: KeyMFARequireAllUsers, Value: settings.RequireAllUsers},
 		{Key: KeyTrustedDeviceTTLDays, Value: settings.TrustedDeviceTTLDays},
-		{Key: KeyStepUpWindowMinutes, Value: settings.StepUpWindowMinutes},
+		{Key: GlobalSettingStepUpWindowMinutes.String(), Value: settings.StepUpWindowMinutes},
 	}
 
 	return s.SetGlobalSettingsInTx(updates, updatedByUserID)

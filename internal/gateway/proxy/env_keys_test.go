@@ -13,7 +13,8 @@ import (
 func TestAppEnvKeysClassifyAgainstTheAppSettings(t *testing.T) {
 	h, database, _ := newProxyForEnvTest(t)
 	app := "app"
-	require.NoError(t, database.UpsertSetting(&app, settings.KeySecretEnvVars, []string{"BILLING_ID"}, nil))
+	secretEnvVars := settings.AppSettingSecretEnvVars.String()
+	require.NoError(t, database.UpsertSetting(&app, secretEnvVars, []string{"BILLING_ID"}, nil))
 	require.NoError(t, database.UpsertSetting(&app, settings.KeyProtectedEnvVars, []string{"database_url"}, nil))
 
 	keys := h.loadAppEnvKeys(app)
@@ -71,7 +72,7 @@ func TestAppEnvKeysFailClosedOnMalformedStoredLists(t *testing.T) {
 	h, database, _ := newProxyForEnvTest(t)
 	app := "app"
 	malformed := map[string]bool{"BILLING_ID": true}
-	require.NoError(t, database.UpsertSetting(&app, settings.KeySecretEnvVars, malformed, nil))
+	require.NoError(t, database.UpsertSetting(&app, settings.AppSettingSecretEnvVars.String(), malformed, nil))
 	require.NoError(t, database.UpsertSetting(&app, settings.KeyProtectedEnvVars, "DATABASE_URL", nil))
 
 	keys := h.loadAppEnvKeys(app)

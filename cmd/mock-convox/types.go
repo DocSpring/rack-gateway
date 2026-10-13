@@ -8,7 +8,8 @@ import (
 
 const (
 	mockUsername = "convox"
-	mockPassword = "mock-rack-token-12345" //nolint:gosec // G101: Mock credential for testing only
+	// #nosec G101 -- the mock rack's published test token (mise.toml, docker-compose.yml).
+	mockRackToken = "mock-rack-token-12345"
 )
 
 type App struct {
@@ -36,10 +37,10 @@ type ServicePort struct {
 }
 
 type Process struct {
-	Id       string    `json:"id"` //nolint:staticcheck // Convox API contract
+	ID       string    `json:"id"`
 	App      string    `json:"app"`
 	Command  string    `json:"command"`
-	Cpu      float64   `json:"cpu"` //nolint:staticcheck // Convox API contract
+	CPU      float64   `json:"cpu"`
 	Host     string    `json:"host"`
 	Image    string    `json:"image"`
 	Instance string    `json:"instance"`

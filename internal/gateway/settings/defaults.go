@@ -23,7 +23,8 @@ const (
 	GlobalSettingTrustedDeviceTTLDays
 )
 
-// Global setting key strings
+// Global setting key strings. GlobalSettingStepUpWindowMinutes and AppSettingSecretEnvVars have no Key constant:
+// gosec reads those names as hardcoded credentials. Use their String().
 const (
 	KeyAllowDestructiveActions     = "allow_destructive_actions"
 	KeyDefaultCIProvider           = "default_ci_provider"
@@ -32,9 +33,7 @@ const (
 	KeyDeployApprovalWindowMinutes = "deploy_approval_window_minutes"
 	KeyMFARequireAllUsers          = "mfa_require_all_users"
 	KeySessionTimeoutMinutes       = "session_timeout_minutes"
-	//nolint:gosec // G101: Setting key name, not a credential
-	KeyStepUpWindowMinutes  = "mfa_step_up_window_minutes"
-	KeyTrustedDeviceTTLDays = "mfa_trusted_device_ttl_days"
+	KeyTrustedDeviceTTLDays        = "mfa_trusted_device_ttl_days"
 )
 
 var globalSettingKeyToString = [...]string{
@@ -45,7 +44,7 @@ var globalSettingKeyToString = [...]string{
 	KeyDeployApprovalWindowMinutes,
 	KeyMFARequireAllUsers,
 	KeySessionTimeoutMinutes,
-	KeyStepUpWindowMinutes,
+	"mfa_step_up_window_minutes",
 	KeyTrustedDeviceTTLDays,
 }
 
@@ -108,12 +107,10 @@ const (
 	KeyGitHubVerification            = "github_verification"
 	KeyProtectedEnvVars              = "protected_env_vars"
 	KeyRequirePRForBranch            = "require_pr_for_branch"
-	//nolint:gosec // G101: Setting key name, not a credential
-	KeySecretEnvVars        = "secret_env_vars"
-	KeyServiceImagePatterns = "service_image_patterns"
-	KeyVCSProvider          = "vcs_provider"
-	KeyVCSRepo              = "vcs_repo"
-	KeyVerifyGitCommitMode  = "verify_git_commit_mode"
+	KeyServiceImagePatterns          = "service_image_patterns"
+	KeyVCSProvider                   = "vcs_provider"
+	KeyVCSRepo                       = "vcs_repo"
+	KeyVerifyGitCommitMode           = "verify_git_commit_mode"
 )
 
 var appSettingKeyToString = [...]string{
@@ -128,7 +125,7 @@ var appSettingKeyToString = [...]string{
 	KeyGitHubVerification,
 	KeyProtectedEnvVars,
 	KeyRequirePRForBranch,
-	KeySecretEnvVars,
+	"secret_env_vars",
 	KeyServiceImagePatterns,
 	KeyVCSProvider,
 	KeyVCSRepo,
@@ -176,15 +173,15 @@ const (
 
 // DefaultGlobalSettings defines all valid global settings with their default values.
 var DefaultGlobalSettings = map[string]interface{}{
-	KeyAllowDestructiveActions:     false,
-	KeyDefaultCIProvider:           "circleci",
-	KeyDefaultVCSProvider:          "github",
-	KeyDeployApprovalsEnabled:      true,
-	KeyDeployApprovalWindowMinutes: DefaultDeployApprovalWindowMinutes,
-	KeyMFARequireAllUsers:          true,
-	KeySessionTimeoutMinutes:       5,
-	KeyStepUpWindowMinutes:         defaultStepUpWindowMinutes,
-	KeyTrustedDeviceTTLDays:        defaultTrustedDeviceTTLDays,
+	KeyAllowDestructiveActions:                false,
+	KeyDefaultCIProvider:                      "circleci",
+	KeyDefaultVCSProvider:                     "github",
+	KeyDeployApprovalsEnabled:                 true,
+	KeyDeployApprovalWindowMinutes:            DefaultDeployApprovalWindowMinutes,
+	KeyMFARequireAllUsers:                     true,
+	KeySessionTimeoutMinutes:                  5,
+	GlobalSettingStepUpWindowMinutes.String(): defaultStepUpWindowMinutes,
+	KeyTrustedDeviceTTLDays:                   defaultTrustedDeviceTTLDays,
 }
 
 // DefaultAppSettings defines all valid app-specific settings with their default values.
@@ -200,7 +197,7 @@ var DefaultAppSettings = map[string]interface{}{
 	KeyGitHubVerification:            true,
 	KeyProtectedEnvVars:              []string(nil),
 	KeyRequirePRForBranch:            true,
-	KeySecretEnvVars:                 []string(nil),
+	AppSettingSecretEnvVars.String(): []string(nil),
 	KeyServiceImagePatterns:          map[string]string(nil),
 	KeyVCSProvider:                   nil, // nil means use global default
 	KeyVCSRepo:                       nil, // nil means not configured

@@ -32,7 +32,7 @@ func ResourcesCommand() *cobra.Command {
 
 	// Add subcommands
 	cmd.AddCommand(resourcesInfoCommand())
-	cmd.AddCommand(resourcesUrlCommand())
+	cmd.AddCommand(resourcesURLCommand())
 	cmd.AddCommand(resourcesExportCommand())
 
 	return cmd
@@ -93,8 +93,7 @@ func resourcesInfoCommand() *cobra.Command {
 	return cmd
 }
 
-//nolint:staticcheck // URL is the correct term here
-func resourcesUrlCommand() *cobra.Command {
+func resourcesURLCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "url <name>",
 		Short: "get resource URL",

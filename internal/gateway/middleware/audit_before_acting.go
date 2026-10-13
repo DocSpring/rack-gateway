@@ -61,7 +61,7 @@ func recordOutcomeIfMissing(
 	}
 	status := c.Writer.Status()
 	result := routeAuditEntry(c, spec, authUser)
-	result.Status = logger.MapHttpStatusToStatus(status)
+	result.Status = logger.MapHTTPStatusToStatus(status)
 	result.HTTPStatus = status
 	result.ResponseTimeMs = int(time.Since(start).Milliseconds())
 	_ = logger.LogRequestEntry(c.Request.Context(), result)

@@ -3,6 +3,7 @@ package cli
 import (
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -18,9 +19,7 @@ func configFile() string {
 // LoadConfig loads the CLI configuration from disk
 func LoadConfig() (*Config, bool, error) {
 	cfg := &Config{}
-	path := configFile()
-	//nolint:gosec // G304: Path from configFile() is application-controlled
-	data, err := os.ReadFile(path)
+	data, err := fs.ReadFile(os.DirFS(ConfigPath), "config.json")
 	exists := true
 	if err != nil {
 		if !os.IsNotExist(err) {

@@ -35,7 +35,7 @@ func (s *Sender) Send(to, subject, textBody, htmlBody string) error {
 		To:      to,
 		Subject: subject,
 		Text:    textBody,
-		Html:    htmlBody,
+		HTML:    htmlBody,
 	}, &river.InsertOpts{Queue: jobs.QueueNotifications, MaxAttempts: jobs.MaxAttemptsNotification})
 	return nil
 }
@@ -49,7 +49,7 @@ func (s *Sender) SendMany(to []string, subject, textBody, htmlBody string) error
 		To:      to,
 		Subject: subject,
 		Text:    textBody,
-		Html:    htmlBody,
+		HTML:    htmlBody,
 	}, &river.InsertOpts{Queue: jobs.QueueNotifications, MaxAttempts: jobs.MaxAttemptsNotification})
 	return nil
 }

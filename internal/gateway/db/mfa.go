@@ -240,7 +240,7 @@ func (d *Database) queryMFAMethods(userID int64, includeUnconfirmed bool) ([]*MF
 	if err != nil {
 		return nil, fmt.Errorf("failed to list MFA methods: %w", err)
 	}
-	defer rows.Close() //nolint:errcheck
+	defer func() { _ = rows.Close() }()
 
 	var methods []*MFAMethod
 	for rows.Next() {
@@ -375,7 +375,7 @@ func (d *Database) ListBackupCodes(userID int64) ([]*MFABackupCode, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to list backup codes: %w", err)
 	}
-	defer rows.Close() //nolint:errcheck
+	defer func() { _ = rows.Close() }()
 
 	var codes []*MFABackupCode
 	for rows.Next() {
