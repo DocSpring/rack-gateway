@@ -173,6 +173,9 @@ export const lockUser = (email: string, reason: string): Promise<StatusResponse>
 export const unlockUser = (email: string): Promise<StatusResponse> =>
   unwrap(gateway.postUsersEmailUnlock(pathSegment(email))) as Promise<StatusResponse>
 
+export const resetUserMFA = (email: string): Promise<StatusResponse> =>
+  unwrap(gateway.postUsersEmailMfaReset(pathSegment(email))) as Promise<StatusResponse>
+
 export const listDeployApprovalRequests = (
   params?: GetDeployApprovalRequestsParams
 ): Promise<DeployApprovalRequestList> => unwrap(gateway.getDeployApprovalRequests(params))
@@ -459,6 +462,7 @@ export const api = {
   revokeAllUserSessions,
   lockUser,
   unlockUser,
+  resetUserMFA,
   listAuditLogs,
   listUserAuditLogs,
   exportAuditLogs,

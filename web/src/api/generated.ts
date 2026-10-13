@@ -1433,6 +1433,23 @@ export const getRackGatewayAPI = () => {
   };
 
   /**
+   * Removes a user's MFA methods, backup codes and trusted devices and signs them out, so they can enroll
+   * a new method at their next sign-in. Their API tokens are kept. An admin can't reset their own MFA.
+   * @summary Reset a user's MFA
+   */
+  const postUsersEmailMfaReset = (
+    email: string,
+    options?: SecondParameter<
+      typeof createGatewayClient<HandlersStatusResponse>
+    >,
+  ) => {
+    return createGatewayClient<HandlersStatusResponse>(
+      { url: `/users/${email}/mfa/reset`, method: "POST" },
+      options,
+    );
+  };
+
+  /**
    * Updates only a user's display name.
    * @summary Update user name
    */
@@ -1595,6 +1612,7 @@ export const getRackGatewayAPI = () => {
     deleteUsersEmail,
     getUsersEmailAuditLogs,
     postUsersEmailLock,
+    postUsersEmailMfaReset,
     putUsersEmailName,
     getUsersEmailSessions,
     postUsersEmailSessionsRevokeAll,
@@ -1999,6 +2017,11 @@ export type GetUsersEmailAuditLogsResult = NonNullable<
 export type PostUsersEmailLockResult = NonNullable<
   Awaited<
     ReturnType<ReturnType<typeof getRackGatewayAPI>["postUsersEmailLock"]>
+  >
+>;
+export type PostUsersEmailMfaResetResult = NonNullable<
+  Awaited<
+    ReturnType<ReturnType<typeof getRackGatewayAPI>["postUsersEmailMfaReset"]>
   >
 >;
 export type PutUsersEmailNameResult = NonNullable<

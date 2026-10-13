@@ -125,21 +125,21 @@ func (h *AdminHandler) getDeployApprovalExpiry() time.Time {
 // @Param id path string true "Deploy approval request public ID"
 // @Param body body UpdateDeployApprovalRequestStatusRequest false "Approval notes"
 // @Success 200 {object} DeployApprovalRequestResponse
+// @Failure 403 {object} ErrorResponse
 // @Failure 404 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
 // @Security SessionCookie
 // @Router /deploy-approval-requests/{id}/approve [post]
 func (h *AdminHandler) ApproveDeployApprovalRequest(c *gin.Context) {
-	input, ok := h.parseDeployApprovalStatusUpdateRequest(c)
+	input, ok := h.parseApprovalWindowRequest(c)
 	if !ok {
 		return
 	}
 
-	expiresAt := h.getDeployApprovalExpiry()
 	record, err := h.database.ApproveDeployApprovalRequestByPublicID(
 		input.publicID,
 		input.approver.ID,
-		expiresAt,
+		input.expiresAt,
 		input.notes,
 	)
 	if err != nil {
@@ -152,13 +152,7 @@ func (h *AdminHandler) ApproveDeployApprovalRequest(c *gin.Context) {
 	}
 
 	h.triggerCircleCIApprovalIfEnabled(c, record)
-	h.finishApprovalAction(
-		c,
-		record,
-		input,
-		rbac.ActionApprove.String(),
-		map[string]string{"expires_at": expiresAt.UTC().Format(time.RFC3339)},
-	)
+	h.finishApprovalAction(c, record, input.deployApprovalStatusInput, rbac.ActionApprove.String(), input.auditDetails)
 }
 
 // RejectDeployApprovalRequest godoc
@@ -208,19 +202,19 @@ func (h *AdminHandler) RejectDeployApprovalRequest(c *gin.Context) {
 // @Param id path string true "Deploy approval request public ID"
 // @Param body body UpdateDeployApprovalRequestStatusRequest false "Extension notes"
 // @Success 200 {object} DeployApprovalRequestResponse
+// @Failure 403 {object} ErrorResponse
 // @Failure 404 {object} ErrorResponse
 // @Failure 409 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
 // @Security SessionCookie
 // @Router /deploy-approval-requests/{id}/extend [post]
 func (h *AdminHandler) ExtendDeployApprovalRequest(c *gin.Context) {
-	input, ok := h.parseDeployApprovalStatusUpdateRequest(c)
+	input, ok := h.parseApprovalWindowRequest(c)
 	if !ok {
 		return
 	}
 
-	expiresAt := h.getDeployApprovalExpiry()
-	record, err := h.database.ExtendDeployApprovalRequestExpiry(input.publicID, expiresAt)
+	record, err := h.database.ExtendDeployApprovalRequestExpiry(input.publicID, input.expiresAt)
 	if err != nil {
 		if errors.Is(err, db.ErrDeployApprovalRequestNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "deploy approval request not found or not approved"})
@@ -236,13 +230,7 @@ func (h *AdminHandler) ExtendDeployApprovalRequest(c *gin.Context) {
 		return
 	}
 
-	h.finishApprovalAction(
-		c,
-		record,
-		input,
-		"extend",
-		map[string]string{"expires_at": expiresAt.UTC().Format(time.RFC3339)},
-	)
+	h.finishApprovalAction(c, record, input.deployApprovalStatusInput, "extend", input.auditDetails)
 }
 
 func (h *AdminHandler) triggerCircleCIApprovalIfEnabled(c *gin.Context, record *db.DeployApprovalRequest) {

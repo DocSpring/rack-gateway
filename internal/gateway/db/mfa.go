@@ -66,9 +66,10 @@ func (d *Database) SetUserMFAEnrolled(userID int64, enrolled bool) error {
 	return nil
 }
 
-// ResetUserMFA completely removes all MFA configuration for a user.
-// This includes methods, backup codes, trusted devices, and active sessions.
-func (d *Database) ResetUserMFA(userID int64) error {
+// ResetUserMFA removes a user's MFA for an admin (resetBy): their methods, backup codes and trusted devices, and
+// it revokes their sessions, all in one transaction. Their API tokens are kept. They enroll a new method when they
+// next sign in.
+func (d *Database) ResetUserMFA(userID, resetBy int64) error {
 	tx, err := d.db.Begin()
 	if err != nil {
 		return fmt.Errorf("failed to begin MFA reset: %w", err)
@@ -84,7 +85,7 @@ func (d *Database) ResetUserMFA(userID int64) error {
 
 	revokeDevicesQuery := `
 		UPDATE trusted_devices
-		SET revoked_at = NOW(), revoked_reason = 'reset', updated_at = NOW()
+		SET revoked_at = NOW(), revoked_reason = 'admin_mfa_reset', updated_at = NOW()
 		WHERE user_id = ? AND revoked_at IS NULL
 	`
 	if _, err := d.execTx(tx, revokeDevicesQuery, userID); err != nil {
@@ -93,14 +94,15 @@ func (d *Database) ResetUserMFA(userID int64) error {
 
 	revokeSessionsQuery := `
 		UPDATE user_sessions
-		SET revoked_at = NOW(), updated_at = NOW()
+		SET revoked_at = NOW(), revoked_by_user_id = ?, updated_at = NOW()
 		WHERE user_id = ? AND revoked_at IS NULL
 	`
-	if _, err := d.execTx(tx, revokeSessionsQuery, userID); err != nil {
+	if _, err := d.execTx(tx, revokeSessionsQuery, resetBy, userID); err != nil {
 		return fmt.Errorf("failed to revoke active sessions: %w", err)
 	}
 
-	if _, err := d.execTx(tx, "UPDATE users SET mfa_enrolled = FALSE WHERE id = ?", userID); err != nil {
+	clearEnrolled := "UPDATE users SET mfa_enrolled = FALSE, updated_at = NOW() WHERE id = ?"
+	if _, err := d.execTx(tx, clearEnrolled, userID); err != nil {
 		return fmt.Errorf("failed to update user MFA flag: %w", err)
 	}
 

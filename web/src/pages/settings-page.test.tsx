@@ -277,6 +277,31 @@ describe('SettingsPage', () => {
       })
     })
 
+    it('saves the different approver requirement for deploy approvals', async () => {
+      vi.mocked(api.get).mockResolvedValue({
+        deploy_approval_require_different_approver: {
+          key: 'deploy_approval_require_different_approver',
+          value: false,
+          source: 'default',
+          env_var: 'RGW_SETTING_DEPLOY_APPROVAL_REQUIRE_DIFFERENT_APPROVER',
+        } as SettingsSetting,
+      })
+      vi.mocked(api.put).mockResolvedValue({})
+
+      renderSettingsPage()
+
+      const checkbox = await screen.findByLabelText(/require a different approver/i)
+      await waitFor(() => expect(checkbox).not.toBeChecked())
+      fireEvent.click(checkbox)
+      fireEvent.click(await screen.findByRole('button', { name: /save/i }))
+
+      await waitFor(() => {
+        expect(api.put).toHaveBeenCalledWith('/api/v1/settings/deploy-approvals', {
+          deploy_approval_require_different_approver: true,
+        })
+      })
+    })
+
     it('discards changes when Cancel is clicked', async () => {
       vi.mocked(api.get).mockResolvedValue({
         mfa_require_all_users: {

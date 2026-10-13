@@ -54,6 +54,7 @@ const (
 	ActionVerbExport             = "export"
 	ActionVerbFailed             = "failed"
 	ActionVerbLock               = "lock"
+	ActionVerbMFAReset           = "mfa_reset"
 	ActionVerbOAuthFailed        = "oauth_failed"
 	ActionVerbParamsSet          = "params.set"
 	ActionVerbReject             = "reject"

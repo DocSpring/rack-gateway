@@ -30,6 +30,7 @@ var globalSettingGroupKeys = map[GlobalSettingGroup][]GlobalSettingKey{
 	GlobalSettingGroupDeployApprovals: {
 		GlobalSettingDeployApprovalsEnabled,
 		GlobalSettingDeployApprovalWindowMinutes,
+		GlobalSettingDeployApprovalRequireDifferentApprover,
 	},
 	GlobalSettingGroupSessionConfiguration: {
 		GlobalSettingSessionTimeoutMinutes,

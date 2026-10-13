@@ -138,6 +138,15 @@ Approving, rejecting and extending a request ask for MFA every time, even within
 - Auditable proof of human authorization
 - API tokens can't approve
 
+### Different Approver (Optional)
+
+For segregation of duties, turn on **Require a different approver** (Settings > Deploy Approvals, or
+`RGW_SETTING_DEPLOY_APPROVAL_REQUIRE_DIFFERENT_APPROVER=true`). Nobody can then approve or extend a deploy they
+asked for: the user who created the request, or the owner of the API token it's for. They get a 403 that says
+which. The approval's audit entry records `different_approver_required: true`.
+
+It's off by default, so a team with one admin can still deploy.
+
 ### Time-Limited Approvals
 
 Approvals expire after a configurable window (default 15 minutes):
@@ -203,6 +212,7 @@ The `deploy_approval_requests` table tracks the complete lifecycle:
 |---------|---------|-------------|
 | `RGW_SETTING_DEPLOY_APPROVALS_ENABLED` | `true` | Enable/disable approval checks |
 | `RGW_SETTING_DEPLOY_APPROVAL_WINDOW_MINUTES` | `15` | How long approvals remain valid |
+| `RGW_SETTING_DEPLOY_APPROVAL_REQUIRE_DIFFERENT_APPROVER` | `false` | Refuse approvals and extensions by the request's creator or its token's owner |
 
 ### Per-App Settings
 

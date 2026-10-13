@@ -141,9 +141,11 @@ graph LR
 - CI/CD deployments require human approval
 - Only users with the approve permission (admins) can approve, with MFA on the request
 - Full audit trail of approvals
+- Optionally, a different approver: with `deploy_approval_require_different_approver` on, nobody can approve or
+  extend a deploy they requested (they created the request, or own its API token), and each approval's audit
+  entry records that the rule applied
 
-The gateway doesn't stop a token's owner approving their own pipeline's request. If your controls require a
-different approver, give CI tokens to a user who isn't an approver, or check it in your review process.
+The setting is off by default. Turn it on if your controls require segregation of duties.
 
 ### CC9: Risk Mitigation
 
@@ -240,7 +242,7 @@ curl -b "session_token=TOKEN" \
 ### Change Management (CC8)
 
 - [ ] Deploy approvals enabled
-- [ ] Approvers are not the owners of the CI tokens they approve
+- [ ] Different approver required (`RGW_SETTING_DEPLOY_APPROVAL_REQUIRE_DIFFERENT_APPROVER=true`)
 - [ ] CI/CD uses dedicated tokens
 - [ ] Change log maintained
 

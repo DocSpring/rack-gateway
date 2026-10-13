@@ -37,6 +37,7 @@ export function useUserDangerZone({
   const [userToDelete, setUserToDelete] = useState<GatewayUser | null>(null)
   const [isLockDialogOpen, setIsLockDialogOpen] = useState(false)
   const [userToLock, setUserToLock] = useState<GatewayUser | null>(null)
+  const [isResetMFAOpen, setIsResetMFAOpen] = useState(false)
 
   const unlockUserMutation = useUnlockUser()
 
@@ -128,5 +129,9 @@ export function useUserDangerZone({
     handleRequestLockUser,
     handleUnlockUser,
     unlockUserMutation,
+    // Admins reset another user's MFA; their own is managed on the Account Security page.
+    canResetMFA: Boolean(user?.mfa_enrolled) && currentUserEmail !== decodedEmail,
+    isResetMFAOpen,
+    setIsResetMFAOpen,
   }
 }
