@@ -147,5 +147,5 @@ verify_rgw_command_failure() {
 
 logout_cli() {
     echo -e "${YELLOW}Logging out...${NC}"
-    verify_rgw_command "logout" "Logged out from e2e"
+    verify_rgw_command "logout" "Logged out from e2e" "the session is ended on the gateway"
 }

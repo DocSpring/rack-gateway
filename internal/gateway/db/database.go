@@ -384,15 +384,8 @@ func (d *Database) ResetDatabase() error {
 		return fmt.Errorf("failed to re-run migrations: %w", err)
 	}
 
-	if err := d.SetEnvironment(devMode); err != nil {
-		return err
-	}
-
-	if err := d.SeedDatabase(nil); err != nil {
-		return fmt.Errorf("failed to seed database: %w", err)
-	}
-
-	return nil
+	// The gateway seeds its users (audit-logged) when it next starts.
+	return d.SetEnvironment(devMode)
 }
 
 func (d *Database) validateEnvironmentForReset(devMode, disableEnvCheck bool) error {

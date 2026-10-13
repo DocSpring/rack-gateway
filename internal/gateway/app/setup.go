@@ -105,13 +105,20 @@ func (a *App) ensureAuditSecret() error {
 	return nil
 }
 
+// seedInitialUsers creates the seed lists' missing users, audit-logged in the same transaction. The gateway doesn't
+// start if they can't be recorded.
 func (a *App) seedInitialUsers() error {
-	return a.Database.SeedDatabase(&db.SeedConfig{
+	events, err := a.Database.SeedDatabase(&db.SeedConfig{
 		AdminUsers:      a.Config.AdminUsers,
 		ViewerUsers:     a.Config.ViewerUsers,
 		DeployerUsers:   a.Config.DeployerUsers,
 		OperationsUsers: a.Config.OperationsUsers,
-	})
+	}, audit.SeededUserEntry)
+	audit.RecordedInTransaction(events, err)
+	if err != nil {
+		return fmt.Errorf("failed to seed users: %w", err)
+	}
+	return nil
 }
 
 // initSettingsService refuses to start on an invalid setting environment variable, and logs stored settings that
@@ -398,15 +405,14 @@ func (a *App) initProxyHandler(auditLogger *audit.Logger, rackName, rackAlias st
 }
 
 // setupRouter configures the Gin router with all routes and middleware
-func (a *App) setupRouter() {
+func (a *App) setupRouter() error {
 	// Always use release mode to suppress route list printing
 	gin.SetMode(gin.ReleaseMode)
 
 	// Create router without default middleware (we'll add our own)
 	router := gin.New()
 	if err := router.SetTrustedProxies(a.Config.TrustedProxies); err != nil {
-		log.Printf("failed to configure trusted proxies: %v", err)
-		panic(fmt.Sprintf("failed to configure trusted proxies: %v", err))
+		return fmt.Errorf("failed to configure trusted proxies: %w", err)
 	}
 	// Only X-Forwarded-For, and only from TRUSTED_PROXY_CIDRS (see middleware.ClientIP).
 	router.RemoteIPHeaders = []string{"X-Forwarded-For"}
@@ -422,4 +428,5 @@ func (a *App) setupRouter() {
 	})
 
 	a.router = router
+	return nil
 }

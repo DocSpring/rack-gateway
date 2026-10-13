@@ -1625,6 +1625,44 @@
                 }
             }
         },
+        "/auth/cli/logout": {
+            "post": {
+                "description": "Revokes the session whose token is sent as `Authorization: Bearer \u003ctoken\u003e`. `rack-gateway logout`\ncalls it before removing the rack from its config. Cookies are ignored, so a browser can't be made\nto call it, and API tokens get 401: they're revoked on the API Tokens page.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Log out a CLI session",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.CLILogoutResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/auth/cli/mfa": {
             "get": {
                 "description": "Sends the bound browser to MFA (or MFA enrollment), or back to the CLI when MFA is satisfied.",
@@ -4897,6 +4935,14 @@
             "properties": {
                 "auth_url": {
                     "type": "string"
+                }
+            }
+        },
+        "handlers.CLILogoutResponse": {
+            "type": "object",
+            "properties": {
+                "revoked": {
+                    "type": "boolean"
                 }
             }
         },

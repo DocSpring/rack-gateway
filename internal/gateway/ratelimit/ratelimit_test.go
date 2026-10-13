@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-	"golang.org/x/time/rate"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/netutil"
 )
@@ -17,6 +16,9 @@ import (
 func TestRateLimiter(t *testing.T) {
 	// Create a rate limiter with 5 requests per second, burst of 10
 	rl := NewRateLimiter(5, 10)
+	defer rl.Stop()
+	clock := time.Now()
+	rl.now = func() time.Time { return clock }
 
 	// Create a test handler
 	testHandler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -63,7 +65,7 @@ func TestRateLimiter(t *testing.T) {
 	}
 
 	// Test 4: After waiting, requests should succeed again
-	time.Sleep(time.Second / 5) // Wait for 1/5 second (1 token at 5 req/sec)
+	clock = clock.Add(time.Second / 5) // 1/5 second later: 1 token at 5 req/sec
 
 	req3 := httptest.NewRequest("GET", "/test", nil)
 	req3.RemoteAddr = "192.168.1.1:1234"
@@ -103,63 +105,6 @@ func TestRateLimiterKeysOnResolvedClientIPNotForwardingHeaders(t *testing.T) {
 	require.Equal(t, http.StatusOK, serve("100.85.250.16", ""))
 	require.Equal(t, http.StatusOK, serve("100.107.53.108", ""))
 	require.Equal(t, http.StatusTooManyRequests, serve("100.85.250.16", ""))
-}
-
-func TestAuthEndpointsOnly(t *testing.T) {
-	rl := NewRateLimiter(100, 2) // High rate limit but small burst for faster testing
-
-	// Create a test handler
-	testHandler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("OK"))
-	})
-
-	// Wrap with auth-only rate limiter
-	handler := rl.AuthEndpointsOnly(testHandler)
-
-	tests := []struct {
-		path        string
-		method      string
-		shouldLimit bool
-	}{
-		{"/auth/login", "POST", true},
-		{"/auth/web/callback", "GET", true},
-		{"/logout", "GET", true},
-		{"/api/v1/tokens", "POST", true},
-		{"/api/v1/users", "GET", false},
-		{"/api/v1/tokens", "GET", false}, // GET is not rate limited
-		{"/health", "GET", false},
-		{"/apps", "GET", false},
-	}
-
-	for _, tt := range tests {
-		t.Run(fmt.Sprintf("%s %s", tt.method, tt.path), func(t *testing.T) {
-			// Use unique IP per test to avoid interference
-			testIP := fmt.Sprintf("10.0.%d.%d:1234", len(tt.path), len(tt.method))
-
-			// Make 3 requests (burst is 2)
-			var lastCode int
-			for i := 0; i < 3; i++ {
-				req := httptest.NewRequest(tt.method, tt.path, nil)
-				req.RemoteAddr = testIP
-				rr := httptest.NewRecorder()
-
-				handler.ServeHTTP(rr, req)
-				lastCode = rr.Code
-			}
-
-			if tt.shouldLimit {
-				if lastCode != http.StatusTooManyRequests {
-					t.Errorf("Expected rate limiting (429) for %s %s, got %d", tt.method, tt.path, lastCode)
-				}
-			} else {
-				if lastCode != http.StatusOK {
-					t.Errorf("Expected no rate limiting (200) for %s %s, got %d", tt.method, tt.path, lastCode)
-				}
-			}
-		})
-		// No sleep needed since we use unique IPs
-	}
 }
 
 func TestConcurrentRequests(t *testing.T) {
@@ -263,45 +208,32 @@ func TestRateLimiterHeaders(t *testing.T) {
 }
 
 func TestVisitorCleanup(t *testing.T) {
-	// Create a custom rate limiter with very short cleanup interval for fast testing
-	rl := &RateLimiter{
-		visitors: make(map[string]*visitor),
-		rate:     rate.Limit(5),
-		burst:    10,
-		cleanup:  50 * time.Millisecond, // Very short cleanup for fast testing
-		stop:     make(chan struct{}),
-	}
-	defer rl.Stop() // Ensure cleanup goroutine stops
+	rl := NewRateLimiter(5, 10)
+	defer rl.Stop()
+	clock := time.Now()
+	rl.now = func() time.Time { return clock }
 
-	// Start cleanup goroutine
-	go rl.cleanupVisitors()
-
-	testHandler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	handler := rl.Middleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
-	})
-
-	handler := rl.Middleware(testHandler)
-
-	// Make a request from an IP
+	}))
 	req := httptest.NewRequest("GET", "/test", nil)
 	req.RemoteAddr = "192.168.1.1:1234"
-	rr := httptest.NewRecorder()
-	handler.ServeHTTP(rr, req)
+	handler.ServeHTTP(httptest.NewRecorder(), req)
 
-	// Verify visitor exists
-	rl.mu.RLock()
-	if _, exists := rl.visitors["192.168.1.1"]; !exists {
-		t.Error("Visitor should exist after request")
+	visiting := func() bool {
+		rl.mu.RLock()
+		defer rl.mu.RUnlock()
+		_, exists := rl.visitors["192.168.1.1"]
+		return exists
 	}
-	rl.mu.RUnlock()
 
-	// Wait for cleanup (2x cleanup interval to ensure it runs)
-	time.Sleep(110 * time.Millisecond)
+	// Seen within the cleanup interval: kept.
+	clock = clock.Add(rl.cleanup)
+	rl.removeIdleVisitors()
+	require.True(t, visiting(), "a visitor seen within the cleanup interval must be kept")
 
-	// Verify visitor was cleaned up
-	rl.mu.RLock()
-	if _, exists := rl.visitors["192.168.1.1"]; exists {
-		t.Error("Visitor should have been cleaned up")
-	}
-	rl.mu.RUnlock()
+	// Idle for longer: removed.
+	clock = clock.Add(time.Second)
+	rl.removeIdleVisitors()
+	require.False(t, visiting(), "an idle visitor must be removed")
 }

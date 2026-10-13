@@ -34,6 +34,14 @@ func extractSessionToken(c *gin.Context) string {
 			return trimmed
 		}
 	}
+	return extractBearerToken(c)
+}
+
+// extractBearerToken returns the token from an "Authorization: Bearer" header, or "" without one.
+func extractBearerToken(c *gin.Context) string {
+	if c == nil {
+		return ""
+	}
 	authHeader := strings.TrimSpace(c.GetHeader("Authorization"))
 	if authHeader != "" {
 		const bearerPrefix = "Bearer "
@@ -318,9 +326,6 @@ func extractTrustedDeviceUserAgent(device *db.TrustedDevice) string {
 
 func shortDeviceID(id string) string {
 	id = strings.TrimSpace(id)
-	if id == "" {
-		panic("CRITICAL: Empty device ID")
-	}
 	if len(id) <= 8 {
 		return id
 	}

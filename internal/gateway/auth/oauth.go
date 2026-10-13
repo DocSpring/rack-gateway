@@ -7,7 +7,6 @@ import (
 	"encoding/base64"
 	"fmt"
 	"log"
-	"math"
 	"net/url"
 	"strings"
 	"time"
@@ -55,37 +54,9 @@ type LoginResponse struct {
 func NewOAuthHandler(
 	clientID, clientSecret, redirectURLOrBase, allowedDomain, issuerURL string,
 ) (*OAuthHandler, error) {
-	ctx := context.Background()
-
-	// Use vetted OIDC provider discovery with exponential backoff retry
-	var provider *oidc.Provider
-	var err error
-
-	maxDuration := 20 * time.Second
-	startTime := time.Now()
-	backoff := 100 * time.Millisecond
-	attempt := 1
-
-	for {
-		provider, err = oidc.NewProvider(ctx, issuerURL)
-		if err == nil {
-			if attempt > 1 {
-				log.Printf("Successfully connected to OIDC provider after %d attempts", attempt)
-			}
-			break
-		}
-
-		elapsed := time.Since(startTime)
-		if elapsed >= maxDuration {
-			return nil, fmt.Errorf("failed to create OIDC provider after %v: %w", elapsed, err)
-		}
-
-		log.Printf("OIDC provider not ready (attempt %d), retrying in %v: %v", attempt, backoff, err)
-		time.Sleep(backoff)
-
-		// Exponential backoff with max 2 second delay
-		backoff = time.Duration(math.Min(float64(backoff*2), float64(2*time.Second)))
-		attempt++
+	provider, err := discoverProvider(issuerURL)
+	if err != nil {
+		return nil, err
 	}
 
 	// Derive redirects from provided value (accept base or full web callback)
@@ -136,8 +107,8 @@ func (h *OAuthHandler) StartLogin() (*LoginStartResponse, error) {
 		return nil, fmt.Errorf("oauth handler not configured for CLI login")
 	}
 
-	// Generate PKCE parameters using secure methods
-	codeVerifier := generateSecureRandomString(128)
+	// PKCE: 32 random bytes make the 43-character verifier RFC 7636 recommends (verifiers are 43 to 128 characters).
+	codeVerifier := generateSecureRandomString(32)
 	codeChallenge := generatePKCEChallenge(codeVerifier)
 	state := generateSecureRandomString(32)
 
@@ -256,12 +227,40 @@ func (c identityClaims) validate(allowedDomain string) error {
 	return nil
 }
 
-// generateSecureRandomString generates a cryptographically secure random string
+// discoverProvider runs OIDC discovery, retrying with exponential backoff (at most 2 seconds apart) for up to 20
+// seconds while the identity provider starts.
+func discoverProvider(issuerURL string) (*oidc.Provider, error) {
+	deadline, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	backoff := 100 * time.Millisecond
+	for attempt := 1; ; attempt++ {
+		provider, err := oidc.NewProvider(context.Background(), issuerURL)
+		if err == nil {
+			if attempt > 1 {
+				log.Printf("Successfully connected to OIDC provider after %d attempts", attempt)
+			}
+			return provider, nil
+		}
+		if deadline.Err() != nil {
+			return nil, fmt.Errorf("failed to create OIDC provider after %d attempts: %w", attempt, err)
+		}
+
+		log.Printf("OIDC provider not ready (attempt %d), retrying in %v: %v", attempt, backoff, err)
+		timer := time.NewTimer(backoff)
+		select {
+		case <-deadline.Done():
+		case <-timer.C:
+		}
+		timer.Stop()
+		backoff = min(backoff*2, 2*time.Second)
+	}
+}
+
+// generateSecureRandomString base64url-encodes length random bytes. crypto/rand.Read never returns an error: it
+// crashes the program if the system can't supply randomness.
 func generateSecureRandomString(length int) string {
 	bytes := make([]byte, length)
-	if _, err := rand.Read(bytes); err != nil {
-		panic(fmt.Sprintf("failed to generate secure random string: %v", err))
-	}
+	_, _ = rand.Read(bytes)
 	return base64.URLEncoding.WithPadding(base64.NoPadding).EncodeToString(bytes)
 }
 

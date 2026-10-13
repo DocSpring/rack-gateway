@@ -360,6 +360,8 @@ the Rack Gateway API are exposed to the public internet.**
 5. **Audit Logs**: Monitor for anomalies and denied requests
 6. **Session Management**: All sessions stored in database and revocable
 
+To report a vulnerability, see [SECURITY.md](./SECURITY.md). Please don't open a public issue.
+
 ## Testing
 
 ```bash

@@ -269,8 +269,8 @@ Wildcards appear only in the admin role; see [Permissions](/security/rbac/permis
 
 Roles are assigned through:
 
-1. **Seed lists**: users in `ADMIN_USERS`, `DEPLOYER_USERS`, `OPERATIONS_USERS` and `VIEWER_USERS` are created
-   with that role at startup
+1. **Seed lists**: users in `ADMIN_USERS`, `DEPLOYER_USERS`, `OPERATIONS_USERS` and `VIEWER_USERS` that don't exist
+   yet are created with that role at startup (audit-logged; existing users are left alone)
 2. **Web UI**: Admins add users and assign their roles
 3. **API tokens**: Tokens get individual permissions (role shortcuts fill them in), and can only use the ones their
    owner's current role allows

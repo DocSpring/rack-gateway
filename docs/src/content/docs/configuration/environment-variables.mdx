@@ -102,8 +102,10 @@ but the upgrade sweep encrypts any it finds (see **Existing data is upgraded at 
 | `DEPLOYER_USERS` | Comma-separated deployer emails |
 | `OPERATIONS_USERS` | Comma-separated ops emails |
 
-Every start creates the listed users that don't exist yet, and resets each listed user's roles to that list's role,
-so a role you change in the web UI for a seeded user reverts at the next start. Seeding writes no audit entries.
+Every start creates the listed users that don't exist yet, with the role of each list that names them. Existing
+users are never changed, so a role you change in the web UI stays changed; to take a seeded user's access away, lock
+or delete them in the web UI and remove them from the list. Each user it creates is recorded in the audit log as
+`user.create` by `system`, in the same transaction, and the gateway doesn't start if that record can't be written.
 
 ## Convox Rack
 

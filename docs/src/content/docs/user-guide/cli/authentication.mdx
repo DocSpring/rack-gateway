@@ -138,9 +138,10 @@ When your session has expired or been revoked, commands fail with an authenticat
 rack-gateway logout
 ```
 
-This removes the rack, with its URL and session token, from your local config. It doesn't revoke the session on
-the gateway: to end it there, revoke it under your account's sessions in the web UI. To use the rack again, run
-`rack-gateway login <rack> <gateway-url>`.
+This ends the session on the gateway (a copy of the token stops working), then removes the rack, with its URL and
+session token, from your local config. If the gateway can't be reached, nothing is removed and the command fails;
+`rack-gateway logout --local` removes the rack anyway, and you can revoke the session later under your account's
+sessions in the web UI. To use the rack again, run `rack-gateway login <rack> <gateway-url>`.
 
 ## Using API Tokens
 

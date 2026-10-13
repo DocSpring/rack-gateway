@@ -19,7 +19,6 @@ func appLogs(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	_ = c.WriteMessage(websocket.TextMessage, []byte("Promoting release...\n"))
-	time.Sleep(100 * time.Millisecond)
 	_ = c.WriteMessage(websocket.TextMessage, []byte("Release promoted successfully.\n"))
 
 	ping := time.NewTicker(30 * time.Second)
@@ -57,9 +56,7 @@ func buildLogs(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	_ = c.WriteMessage(websocket.TextMessage, []byte("Building app...\n"))
-	time.Sleep(100 * time.Millisecond)
 	_ = c.WriteMessage(websocket.TextMessage, []byte("Step 1/1: mock build step\n"))
-	time.Sleep(100 * time.Millisecond)
 	_ = c.WriteMessage(websocket.TextMessage, []byte("Build complete\n"))
 	_ = c.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
 }

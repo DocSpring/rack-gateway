@@ -154,9 +154,9 @@ Sessions can be revoked through multiple mechanisms:
 
 ### User-Initiated Logout
 
-**Logout** in the web UI's sidebar revokes the web session. `rack-gateway logout` only removes the rack and its
-token from the CLI's config; it doesn't revoke the CLI session on the gateway, so revoke that from your sessions
-(below).
+**Logout** in the web UI's sidebar revokes the web session. `rack-gateway logout` revokes the CLI session
+(`POST /api/v1/auth/cli/logout` with the session token), then removes the rack and its token from the CLI's config.
+Both are audited before the session is revoked, and refused if the audit log can't record them.
 
 ### Revoking Sessions
 

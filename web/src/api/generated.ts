@@ -48,6 +48,7 @@ import type {
   HandlersCLILoginResponse,
   HandlersCLILoginStartRequest,
   HandlersCLILoginStartResponse,
+  HandlersCLILogoutResponse,
   HandlersConfirmTOTPEnrollmentRequest,
   HandlersConfirmWebAuthnEnrollmentRequest,
   HandlersCreateAPITokenRequest,
@@ -613,6 +614,23 @@ export const getRackGatewayAPI = () => {
   ) => {
     return createGatewayClient<HandlersCLILoginInitiatorResponse>(
       { url: `/auth/cli/initiator`, method: "GET", params },
+      options,
+    );
+  };
+
+  /**
+   * Revokes the session whose token is sent as `Authorization: Bearer <token>`. `rack-gateway logout`
+   * calls it before removing the rack from its config. Cookies are ignored, so a browser can't be made
+   * to call it, and API tokens get 401: they're revoked on the API Tokens page.
+   * @summary Log out a CLI session
+   */
+  const postAuthCliLogout = (
+    options?: SecondParameter<
+      typeof createGatewayClient<HandlersCLILogoutResponse>
+    >,
+  ) => {
+    return createGatewayClient<HandlersCLILogoutResponse>(
+      { url: `/auth/cli/logout`, method: "POST" },
       options,
     );
   };
@@ -1528,6 +1546,7 @@ export const getRackGatewayAPI = () => {
     postAuthCliCancel,
     postAuthCliComplete,
     getAuthCliInitiator,
+    postAuthCliLogout,
     getAuthCliMfa,
     getAuthCliReturn,
     postAuthCliStart,
@@ -1744,6 +1763,9 @@ export type GetAuthCliInitiatorResult = NonNullable<
   Awaited<
     ReturnType<ReturnType<typeof getRackGatewayAPI>["getAuthCliInitiator"]>
   >
+>;
+export type PostAuthCliLogoutResult = NonNullable<
+  Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>["postAuthCliLogout"]>>
 >;
 export type GetAuthCliMfaResult = NonNullable<
   Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>["getAuthCliMfa"]>>

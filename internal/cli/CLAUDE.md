@@ -135,7 +135,8 @@ Opens browser for OAuth flow, stores session token in config.
 rack-gateway logout
 ```
 
-Removes current rack from config.
+Ends the session on the gateway (`POST /api/v1/auth/cli/logout`), then removes the rack from config.
+`--local` skips the gateway call.
 
 ### Convox Commands
 

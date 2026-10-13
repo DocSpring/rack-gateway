@@ -65,6 +65,7 @@ export * from "./handlersCLILoginRedirectResponse";
 export * from "./handlersCLILoginResponse";
 export * from "./handlersCLILoginStartRequest";
 export * from "./handlersCLILoginStartResponse";
+export * from "./handlersCLILogoutResponse";
 export * from "./handlersConfirmTOTPEnrollmentRequest";
 export * from "./handlersConfirmWebAuthnEnrollmentRequest";
 export * from "./handlersCreateAPITokenRequest";

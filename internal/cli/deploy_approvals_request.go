@@ -290,18 +290,26 @@ func waitForDeployApproval(
 			return &result, nil
 		}
 
-		if statusLower != lastStatus {
-			err := writef(cmd.OutOrStdout(), "Waiting for approval (status: %s)\n", displayText(result.Status))
-			if err != nil {
-				return nil, err
-			}
-			lastStatus = statusLower
+		if err := reportApprovalStatus(cmd, &lastStatus, result.Status); err != nil {
+			return nil, err
 		}
 
 		if timeout > 0 && time.Since(start) > timeout {
 			return nil, fmt.Errorf("timed out waiting for approval")
 		}
 
-		time.Sleep(interval)
+		if err := pause(cmd, interval); err != nil {
+			return nil, err
+		}
 	}
+}
+
+// reportApprovalStatus prints the request's status when it isn't the last one printed.
+func reportApprovalStatus(cmd *cobra.Command, last *string, status string) error {
+	lower := strings.ToLower(status)
+	if lower == *last {
+		return nil
+	}
+	*last = lower
+	return writef(cmd.OutOrStdout(), "Waiting for approval (status: %s)\n", displayText(status))
 }

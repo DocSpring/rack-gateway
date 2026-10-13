@@ -141,7 +141,9 @@ to be redirected there with a single-use login code.
 
 ### Account Locked After Failed MFA
 
-Five failed MFA attempts in five minutes lock the account. An admin unlocks it on the Users page.
+Five failed MFA attempts in five minutes lock the account. The admins are emailed, and the lock is in the audit log
+as `user.lock` by `system`. An admin unlocks it on the Users page once they've confirmed the attempts were the
+user's.
 
 ### Lost MFA Device
 

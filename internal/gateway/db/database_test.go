@@ -15,30 +15,6 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/testutil/dbtest"
 )
 
-func TestDatabaseInitializeAdmin(t *testing.T) {
-	db := dbtest.NewDatabase(t)
-
-	// First initialization should succeed
-	err := db.InitializeAdmin("admin@example.com", "Admin User")
-	assert.NoError(t, err)
-
-	// Second initialization should be a no-op (users exist)
-	err = db.InitializeAdmin("other@example.com", "Other User")
-	assert.NoError(t, err)
-
-	// Admin user should exist
-	user, err := db.GetUser("admin@example.com")
-	require.NoError(t, err)
-	assert.Equal(t, "admin@example.com", user.Email)
-	assert.Equal(t, "Admin User", user.Name)
-	assert.Equal(t, []string{"admin"}, user.Roles)
-
-	// Other user should not exist
-	user, err = db.GetUser("other@example.com")
-	assert.NoError(t, err)
-	assert.Nil(t, user)
-}
-
 func TestDatabaseUserCRUD(t *testing.T) {
 	db := dbtest.NewDatabase(t)
 
@@ -81,8 +57,10 @@ func TestDatabaseUserCRUD(t *testing.T) {
 func TestDatabaseAuditLogs(t *testing.T) {
 	db := dbtest.NewDatabase(t)
 
-	// Create audit logs
+	// Create audit logs, a little apart
+	first := time.Now().UTC()
 	log1 := &gwdb.AuditLog{
+		Timestamp:      first,
 		UserEmail:      "user1@example.com",
 		UserName:       "User One",
 		ActionType:     "convox",
@@ -96,6 +74,7 @@ func TestDatabaseAuditLogs(t *testing.T) {
 	}
 
 	log2 := &gwdb.AuditLog{
+		Timestamp:      first.Add(10 * time.Millisecond),
 		UserEmail:      "user2@example.com",
 		UserName:       "User Two",
 		ActionType:     "users",
@@ -106,6 +85,7 @@ func TestDatabaseAuditLogs(t *testing.T) {
 	}
 
 	log3 := &gwdb.AuditLog{
+		Timestamp:      first.Add(20 * time.Millisecond),
 		UserEmail:      "attacker@evil.com",
 		ActionType:     "auth",
 		Action:         audit.BuildAction(audit.ActionScopeLogin, audit.ActionVerbOAuthFailed),
@@ -122,11 +102,9 @@ func TestDatabaseAuditLogs(t *testing.T) {
 	require.NoError(t, err)
 	t.Logf("After log1: %d audit logs in database", count)
 
-	time.Sleep(10 * time.Millisecond) // Ensure different timestamps
 	err = db.CreateAuditLog(log2)
 	require.NoError(t, err, "Failed to create log2: %v", err)
 
-	time.Sleep(10 * time.Millisecond)
 	err = db.CreateAuditLog(log3)
 	require.NoError(t, err, "Failed to create log3: %v", err)
 
@@ -505,7 +483,7 @@ func TestDatabaseInitialization(t *testing.T) {
 	// NewFromEnv must see the same data, so point it at this test's database.
 	t.Setenv("DATABASE_URL", os.Getenv("TEST_DATABASE_URL"))
 
-	err := db1.InitializeAdmin("admin@example.com", "Admin")
+	_, err := db1.CreateUser("admin@example.com", "Admin", []string{"admin"})
 	require.NoError(t, err)
 	_, err = db1.CreateUser("user@example.com", "User", []string{"viewer"})
 	require.NoError(t, err)

@@ -16,7 +16,7 @@ API tokens provide authentication for automated systems like CI/CD pipelines, sc
 | **Lifetime** | Until deleted or the optional `expires_at` | Web: idle timeout; CLI: 90 days from last use |
 | **MFA** | Not applicable | Supported |
 | **CSRF** | Not required | Required |
-| **Revocation** | Manual delete | Web logout, or revoking it from the user's sessions |
+| **Revocation** | Manual delete | Logout (web or `rack-gateway logout`), or revoking it from the user's sessions |
 
 ## Token Anatomy
 

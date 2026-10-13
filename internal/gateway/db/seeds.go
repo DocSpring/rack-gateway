@@ -1,7 +1,10 @@
 package db
 
 import (
+	"context"
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"sort"
@@ -17,95 +20,99 @@ type SeedConfig struct {
 	OperationsUsers []string
 }
 
-// SeedDatabase ensures the gateway database contains the expected bootstrap
-// data (admin users, seeded role users, protected env vars). When cfg is nil or
-// any slice within is nil, the method falls back to reading the equivalent
-// environment variable (e.g., ADMIN_USERS).
-func (d *Database) SeedDatabase(cfg *SeedConfig) error {
-	seed := buildSeedInputs(cfg)
-
-	// Seeded users have no name until they first sign in, when it's filled from the identity provider.
-	if len(seed.adminUsers) > 0 {
-		if err := d.InitializeAdmin(seed.adminUsers[0], ""); err != nil {
-			return fmt.Errorf("failed to initialize admin user: %w", err)
-		}
-	}
-
-	roleSeeds := []struct {
-		emails []string
-		roles  []string
-	}{
-		{seed.adminUsers, []string{"admin"}},
-		{seed.viewerUsers, []string{"viewer"}},
-		{seed.deployerUsers, []string{"deployer"}},
-		{seed.operationsUsers, []string{"ops"}},
-	}
-
-	for _, rs := range roleSeeds {
-		for _, email := range rs.emails {
-			if err := d.ensureUserWithRoles(email, rs.roles); err != nil {
-				return err
-			}
-		}
-	}
-
-	// Settings are no longer pre-seeded into the database.
-	// They are read from environment variables by the settings service on demand.
-
-	return nil
+// SeededUser is a user the startup seed created, with the roles of every seed list that names it.
+type SeededUser struct {
+	Email string
+	Roles []string
 }
 
-// InitializeAdmin creates the initial admin user if no users exist
-func (d *Database) InitializeAdmin(email, name string) error {
-	// Check if any users exist
-	var count int
-	err := d.db.QueryRow("SELECT COUNT(*) FROM users").Scan(&count)
+// SeedDatabase creates the users in the seed lists that don't exist yet, each with the roles of the lists that name
+// it. It never changes an existing user, so a role an admin has changed since stays changed, and seeded users have
+// no name until they first sign in, when it's filled from the identity provider. When cfg is nil or any slice
+// within is nil, that list is read from its environment variable (e.g., ADMIN_USERS).
+//
+// Each user's audit event, entry(u), is appended in the same transaction, so a user is never created without its
+// event: when an append fails, nothing is created and the error wraps ErrAuditAppend. It returns the stored events.
+func (d *Database) SeedDatabase(cfg *SeedConfig, entry func(SeededUser) *AuditLog) ([]*AuditLog, error) {
+	users := seedUsers(buildSeedInputs(cfg))
+	if len(users) == 0 {
+		return nil, nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), auditWriteTimeout)
+	defer cancel()
+	tx, err := d.beginAuditTx(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to count users: %w", err)
+		return nil, err
 	}
+	defer func() { _ = tx.Rollback() }()
 
-	// If users exist, don't create admin
-	if count > 0 {
-		return nil
+	// The chain lock first, as every audit append takes it before touching the rows its event references.
+	if _, err := tx.ExecContext(ctx, "SELECT pg_advisory_xact_lock($1)", AdvisoryLockAuditChain); err != nil {
+		return nil, fmt.Errorf("failed to acquire audit chain lock: %w", err)
 	}
+	var events []*AuditLog
+	for _, user := range users {
+		created, err := d.insertSeededUser(ctx, tx, user)
+		if err != nil {
+			return nil, err
+		}
+		if !created {
+			continue
+		}
+		event := entry(user)
+		if err := appendAuditLogTx(ctx, tx, event); err != nil {
+			return nil, fmt.Errorf("%w for seeded user %s: %w", ErrAuditAppend, user.Email, err)
+		}
+		events = append(events, event)
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("failed to commit seeded users: %w", err)
+	}
+	return events, nil
+}
 
-	// Create admin user
-	roles := []string{"admin"}
-	rolesJSON, _ := json.Marshal(roles)
-
+// insertSeededUser creates the user unless one with that email exists, and reports whether it did.
+func (d *Database) insertSeededUser(ctx context.Context, tx *sql.Tx, user SeededUser) (bool, error) {
+	rolesJSON, err := json.Marshal(user.Roles)
+	if err != nil {
+		return false, fmt.Errorf("failed to marshal roles: %w", err)
+	}
 	var id int64
-	query := "INSERT INTO users (email, name, roles) VALUES (?, ?, ?) RETURNING id"
-	if err := d.queryRow(query, email, name, string(rolesJSON)).Scan(&id); err != nil {
-		return fmt.Errorf("failed to create admin user: %w", err)
+	err = tx.QueryRowContext(ctx, d.rebind(
+		"INSERT INTO users (email, name, roles) VALUES (?, '', ?) ON CONFLICT (email) DO NOTHING RETURNING id"),
+		user.Email, string(rolesJSON)).Scan(&id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
 	}
-	return nil
+	if err != nil {
+		return false, fmt.Errorf("failed to create seeded user %s: %w", user.Email, err)
+	}
+	return true, nil
 }
 
-// ensureUserWithRoles creates the user, or sets their roles. It never changes an existing user's name.
-func (d *Database) ensureUserWithRoles(email string, roles []string) error {
-	if email == "" {
-		return nil
+// seedUsers merges the seed lists into one user per email, sorted by email.
+func seedUsers(inputs seedInputs) []SeededUser {
+	lists := []struct {
+		emails []string
+		role   string
+	}{
+		{inputs.adminUsers, "admin"},
+		{inputs.viewerUsers, "viewer"},
+		{inputs.deployerUsers, "deployer"},
+		{inputs.operationsUsers, "ops"},
 	}
-
-	roles = normalizeRoles(roles)
-	existing, err := d.GetUser(email)
-	if err != nil {
-		return fmt.Errorf("failed to load user %s: %w", email, err)
-	}
-
-	if existing == nil {
-		if _, err := d.CreateUser(email, "", roles); err != nil {
-			return fmt.Errorf("failed to create user %s: %w", email, err)
-		}
-		return nil
-	}
-
-	if !equalStringSlices(normalizeRoles(existing.Roles), roles) {
-		if err := d.UpdateUserRoles(email, roles); err != nil {
-			return fmt.Errorf("failed to update roles for %s: %w", email, err)
+	roles := map[string][]string{}
+	for _, list := range lists {
+		for _, email := range list.emails {
+			roles[email] = append(roles[email], list.role)
 		}
 	}
-	return nil
+	users := make([]SeededUser, 0, len(roles))
+	for email, userRoles := range roles {
+		users = append(users, SeededUser{Email: email, Roles: normalizeRoles(userRoles)})
+	}
+	sort.Slice(users, func(i, j int) bool { return users[i].Email < users[j].Email })
+	return users
 }
 
 type seedInputs struct {
@@ -187,16 +194,4 @@ func normalizeRoles(roles []string) []string {
 	}
 	sort.Strings(out)
 	return out
-}
-
-func equalStringSlices(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
 }
