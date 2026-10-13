@@ -1,11 +1,7 @@
 package circleci
 
 import (
-	"encoding/json"
-	"net/http"
-	"net/http/httptest"
 	"strings"
-	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -22,49 +18,23 @@ type fakePipeline struct {
 	revision, targetRepo, originRepo, slug string
 }
 
-// newFakeCircleCI serves the workflow/pipeline/job endpoints ApproveJob uses and counts approvals.
-func newFakeCircleCI(t *testing.T, pipeline fakePipeline) (*Client, *int32) {
+// newFakeCircleCI serves one workflow, testWorkflowID, whose hold job is on hold and which the pipeline's workflow
+// listing includes.
+func newFakeCircleCI(t *testing.T, pipeline fakePipeline) (*Client, *fakeCircleCI) {
 	t.Helper()
-	var approvals int32
-	write := func(w http.ResponseWriter, v interface{}) { _ = json.NewEncoder(w).Encode(v) }
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case r.Method == http.MethodPost && strings.Contains(r.URL.Path, "/approve/"):
-			atomic.AddInt32(&approvals, 1)
-			write(w, map[string]string{"message": "Accepted."})
-		case r.URL.Path == "/workflow/"+testWorkflowID:
-			write(w, map[string]string{"id": testWorkflowID, "name": "deploy", "pipeline_id": testPipelineID})
-		case r.URL.Path == "/pipeline/"+testPipelineID:
-			vcs := map[string]string{
-				"revision":              pipeline.revision,
-				"target_repository_url": pipeline.targetRepo,
-				"origin_repository_url": pipeline.originRepo,
-			}
-			write(w, map[string]interface{}{"id": testPipelineID, "project_slug": pipeline.slug, "vcs": vcs})
-		case r.URL.Path == "/pipeline/"+testPipelineID+"/workflow":
-			write(w, map[string]interface{}{"items": []map[string]string{{"id": testWorkflowID, "name": "deploy"}}})
-		case r.URL.Path == "/workflow/"+testWorkflowID+"/job":
-			write(w, map[string]interface{}{"items": []map[string]string{
-				{"id": "job-1", "name": "approve_deploy_us", "type": "approval"},
-			}})
-		default:
-			w.WriteHeader(http.StatusNotFound)
-		}
-	}))
-	t.Cleanup(server.Close)
-	client := NewClient("token")
-	client.BaseURL = server.URL
-	return client, &approvals
+	original := fakeWorkflow{id: testWorkflowID, name: "deploy", createdAt: "2026-10-13T03:00:00Z", hold: "on_hold"}
+	fake := &fakeCircleCI{pipeline: pipeline, workflows: []fakeWorkflow{original}, listing: []string{testWorkflowID}}
+	return fake.client(t), fake
 }
 
 func TestApproveJobApprovesMatchingPipeline(t *testing.T) {
-	client, approvals := newFakeCircleCI(t, fakePipeline{
+	client, fake := newFakeCircleCI(t, fakePipeline{
 		revision: approvedSHA, targetRepo: docspringRepo, originRepo: docspringRepo, slug: "gh/DocSpring/docspring",
 	})
 	err := client.ApproveJob(testWorkflowID, "100", "approve_deploy_us",
 		ApprovalExpectation{Revision: approvedSHA, Repo: "DocSpring/docspring"})
 	require.NoError(t, err)
-	require.EqualValues(t, 1, *approvals)
+	require.Equal(t, []string{testWorkflowID + "/hold-" + testWorkflowID}, fake.approved())
 }
 
 func TestApproveJobRefusesMismatchedPipelines(t *testing.T) {
@@ -86,22 +56,22 @@ func TestApproveJobRefusesMismatchedPipelines(t *testing.T) {
 	}
 	for name, pipeline := range cases {
 		t.Run(name, func(t *testing.T) {
-			client, approvals := newFakeCircleCI(t, pipeline)
+			client, fake := newFakeCircleCI(t, pipeline)
 			err := client.ApproveJob(testWorkflowID, "100", "approve_deploy_us",
 				ApprovalExpectation{Revision: approvedSHA, Repo: "DocSpring/docspring"})
 			require.ErrorIs(t, err, ErrPipelineMismatch)
-			require.EqualValues(t, 0, *approvals, "nothing may be approved on a mismatch")
+			require.Empty(t, fake.approved(), "nothing may be approved on a mismatch")
 		})
 	}
 }
 
 func TestApproveJobRejectsNonUUIDWorkflowID(t *testing.T) {
-	client, approvals := newFakeCircleCI(t, fakePipeline{revision: approvedSHA})
+	client, fake := newFakeCircleCI(t, fakePipeline{revision: approvedSHA})
 	for _, id := range []string{"test-workflow-1", "../pipeline/x", ""} {
 		err := client.ApproveJob(id, "100", "approve_deploy_us", ApprovalExpectation{Revision: approvedSHA})
 		require.ErrorIs(t, err, ErrInvalidWorkflowID)
 	}
-	require.EqualValues(t, 0, *approvals)
+	require.Empty(t, fake.approved())
 }
 
 func TestParseMetadataRequiresUUIDWorkflowID(t *testing.T) {

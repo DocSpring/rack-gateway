@@ -62,10 +62,10 @@ type ApprovalMetadata struct {
 	ApprovalJobName string `json:"approval_job_name"`
 }
 
-// ApproveJob approves a pending approval job in a CircleCI workflow.
+// ApproveJob approves the hold job named jobName in a CircleCI workflow.
 // The workflow's pipeline must be building the approved revision of the expected repository;
 // otherwise ErrPipelineMismatch is returned and nothing is approved.
-// It handles workflow reruns by finding the latest workflow with the same name in the pipeline.
+// If the workflow was rerun, the hold job in the newest rerun is approved instead (see approvalTarget).
 func (c *Client) ApproveJob(workflowID, pipelineNumber, jobName string, expect ApprovalExpectation) error {
 	if err := ValidateWorkflowID(workflowID); err != nil {
 		return err
@@ -77,13 +77,12 @@ func (c *Client) ApproveJob(workflowID, pipelineNumber, jobName string, expect A
 		return fmt.Errorf("job_name is required")
 	}
 
-	// Get the workflow details to find its name and pipeline ID
-	originalWorkflow, err := c.getWorkflowDetails(workflowID)
+	original, err := c.getWorkflowDetails(workflowID)
 	if err != nil {
 		return fmt.Errorf("failed to get workflow details: %w", err)
 	}
 
-	pipeline, err := c.getPipeline(originalWorkflow.PipelineID)
+	pipeline, err := c.getPipeline(original.PipelineID)
 	if err != nil {
 		return fmt.Errorf("failed to get pipeline: %w", err)
 	}
@@ -91,27 +90,12 @@ func (c *Client) ApproveJob(workflowID, pipelineNumber, jobName string, expect A
 		return err
 	}
 
-	// Find the latest workflow with the same name in the pipeline
-	// Use the pipeline ID (UUID) from the workflow, not the pipeline number
-	latestWorkflowID, err := c.findLatestWorkflowByName(originalWorkflow.PipelineID, originalWorkflow.Name)
+	targetWorkflowID, jobID, err := c.approvalTarget(original, jobName)
 	if err != nil {
-		return fmt.Errorf("failed to find latest workflow: %w", err)
+		return err
 	}
 
-	// Get the workflow jobs to find the approval job ID
-	workflow, err := c.getWorkflow(latestWorkflowID)
-	if err != nil {
-		return fmt.Errorf("failed to get workflow: %w", err)
-	}
-
-	// Find the approval job by name
-	jobID, err := findApprovalJobID(workflow, jobName)
-	if err != nil {
-		return fmt.Errorf("failed to find approval job: %w", err)
-	}
-
-	// Approve the job
-	url := fmt.Sprintf("%s/workflow/%s/approve/%s", c.BaseURL, latestWorkflowID, jobID)
+	url := fmt.Sprintf("%s/workflow/%s/approve/%s", c.BaseURL, targetWorkflowID, jobID)
 	if _, err := c.doRequest(http.MethodPost, url); err != nil {
 		return err
 	}
@@ -119,74 +103,71 @@ func (c *Client) ApproveJob(workflowID, pipelineNumber, jobName string, expect A
 	return nil
 }
 
-type workflowResponse struct {
-	ID   string `json:"id"`
-	Jobs []struct {
-		ID              string  `json:"id"`
-		Name            string  `json:"name"`
-		Type            string  `json:"type"`
-		ApprovalRequest *string `json:"approval_request_id,omitempty"`
-		Status          string  `json:"status"`
-	} `json:"jobs"`
+// approvalTarget returns the workflow and hold job to approve. While the original workflow's hold job is on hold,
+// that's the one: CircleCI's pipeline workflow listing sometimes leaves a pipeline's workflows out for a while, so
+// the usual case doesn't depend on it. Otherwise the listing is checked for a rerun (a newer workflow with the same
+// name), and without one the original's hold job is approved anyway, leaving CircleCI to say why it can't be (for
+// example, because it's already approved).
+func (c *Client) approvalTarget(original *workflowDetails, jobName string) (workflowID, jobID string, err error) {
+	job, err := c.findApprovalJob(original.ID, jobName)
+	if err != nil {
+		return "", "", err
+	}
+	if job.Status == jobStatusOnHold {
+		return original.ID, job.ID, nil
+	}
+
+	rerunID, err := c.findRerun(original)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to look for a rerun of workflow %s: %w", original.ID, err)
+	}
+	if rerunID == "" {
+		return original.ID, job.ID, nil
+	}
+	rerunJob, err := c.findApprovalJob(rerunID, jobName)
+	if err != nil {
+		return "", "", err
+	}
+	return rerunID, rerunJob.ID, nil
 }
 
-func (c *Client) getWorkflow(workflowID string) (*workflowResponse, error) {
+// jobStatusOnHold is the status of an approval job that is waiting to be approved.
+const jobStatusOnHold = "on_hold"
+
+type workflowJob struct {
+	ID     string `json:"id"`
+	Name   string `json:"name"`
+	Type   string `json:"type"`
+	Status string `json:"status"`
+}
+
+// findApprovalJob returns the approval job named jobName in a workflow.
+func (c *Client) findApprovalJob(workflowID, jobName string) (*workflowJob, error) {
 	url := fmt.Sprintf("%s/workflow/%s/job", c.BaseURL, workflowID)
 	body, err := c.doRequest(http.MethodGet, url)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get workflow jobs: %w", err)
 	}
 
 	var result struct {
-		Items []struct {
-			ID              string  `json:"id"`
-			Name            string  `json:"name"`
-			Type            string  `json:"type"`
-			ApprovalRequest *string `json:"approval_request_id,omitempty"`
-			Status          string  `json:"status"`
-		} `json:"items"`
+		Items []workflowJob `json:"items"`
 	}
-
 	if err := json.Unmarshal(body, &result); err != nil {
-		return nil, fmt.Errorf("failed to parse workflow response: %w", err)
+		return nil, fmt.Errorf("failed to parse workflow jobs: %w", err)
 	}
 
-	workflow := &workflowResponse{
-		ID: workflowID,
-		Jobs: make([]struct {
-			ID              string  `json:"id"`
-			Name            string  `json:"name"`
-			Type            string  `json:"type"`
-			ApprovalRequest *string `json:"approval_request_id,omitempty"`
-			Status          string  `json:"status"`
-		}, len(result.Items)),
-	}
-
-	for i, item := range result.Items {
-		workflow.Jobs[i] = struct {
-			ID              string  `json:"id"`
-			Name            string  `json:"name"`
-			Type            string  `json:"type"`
-			ApprovalRequest *string `json:"approval_request_id,omitempty"`
-			Status          string  `json:"status"`
-		}{
-			ID:              item.ID,
-			Name:            item.Name,
-			Type:            item.Type,
-			ApprovalRequest: item.ApprovalRequest,
-			Status:          item.Status,
+	for i := range result.Items {
+		if result.Items[i].Name == jobName && result.Items[i].Type == "approval" {
+			return &result.Items[i], nil
 		}
 	}
-
-	return workflow, nil
+	return nil, fmt.Errorf("approval job %q not found in workflow %s", jobName, workflowID)
 }
 
 type workflowDetails struct {
 	ID         string `json:"id"`
 	Name       string `json:"name"`
-	ProjectID  string `json:"project_id"`
 	PipelineID string `json:"pipeline_id"`
-	Status     string `json:"status"`
 	CreatedAt  string `json:"created_at"`
 }
 
@@ -206,46 +187,40 @@ func (c *Client) getWorkflowDetails(workflowID string) (*workflowDetails, error)
 	return &details, nil
 }
 
-type pipelineWorkflow struct {
-	ID        string `json:"id"`
-	Name      string `json:"name"`
-	Status    string `json:"status"`
-	CreatedAt string `json:"created_at"`
-}
+// findRerun returns the newest workflow in the original's pipeline that has its name and was created after it, or
+// "" when there is none.
+func (c *Client) findRerun(original *workflowDetails) (string, error) {
+	originalCreated, err := time.Parse(time.RFC3339, original.CreatedAt)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse the workflow's created_at %q: %w", original.CreatedAt, err)
+	}
 
-// findLatestWorkflowByName finds the most recent workflow with the given name in a pipeline.
-// pipelineID must be the UUID pipeline ID, not the pipeline number.
-func (c *Client) findLatestWorkflowByName(pipelineID, workflowName string) (string, error) {
-	url := fmt.Sprintf("%s/pipeline/%s/workflow", c.BaseURL, pipelineID)
+	url := fmt.Sprintf("%s/pipeline/%s/workflow", c.BaseURL, original.PipelineID)
 	body, err := c.doRequest(http.MethodGet, url)
 	if err != nil {
 		return "", err
 	}
 
 	var result struct {
-		Items []pipelineWorkflow `json:"items"`
+		Items []struct {
+			ID        string `json:"id"`
+			Name      string `json:"name"`
+			CreatedAt string `json:"created_at"`
+		} `json:"items"`
 	}
 	if err := json.Unmarshal(body, &result); err != nil {
 		return "", fmt.Errorf("failed to parse pipeline workflows: %w", err)
 	}
 
-	// Find the latest workflow with matching name (workflows are ordered by created_at descending)
+	rerunID, newest := "", originalCreated
 	for _, wf := range result.Items {
-		if wf.Name == workflowName {
-			return wf.ID, nil
+		created, err := time.Parse(time.RFC3339, wf.CreatedAt)
+		if wf.Name != original.Name || wf.ID == original.ID || err != nil || !created.After(newest) {
+			continue
 		}
+		rerunID, newest = wf.ID, created
 	}
-
-	return "", fmt.Errorf("no workflow found with name %q in pipeline %s", workflowName, pipelineID)
-}
-
-func findApprovalJobID(workflow *workflowResponse, jobName string) (string, error) {
-	for _, job := range workflow.Jobs {
-		if job.Name == jobName && job.Type == "approval" {
-			return job.ID, nil
-		}
-	}
-	return "", fmt.Errorf("approval job %q not found in workflow", jobName)
+	return rerunID, nil
 }
 
 // ValidateMetadata validates that the metadata contains required CircleCI fields.
