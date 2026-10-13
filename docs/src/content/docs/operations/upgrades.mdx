@@ -207,7 +207,7 @@ A restore to before the upgrade loses the audit events written since; see
 
 ## Release Notes That Need Action
 
-### Anchor bucket retention checked at startup
+### Anchor bucket retention checked at startup (v0.1.11)
 
 `AUDIT_ANCHOR_RETENTION_DAYS` is now checked: the gateway reads the anchor bucket's Object Lock configuration at
 startup and in every audit verification, and refuses to start (verification fails and alerts) unless the bucket's
