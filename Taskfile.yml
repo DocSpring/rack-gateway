@@ -21,6 +21,7 @@ tasks:
       - task: duplication
       - task: file-length
       - task: shellcheck
+      - task: sec:js
       - task: web:check-ignores
       - task: build
       - task: generate:test
@@ -38,6 +39,11 @@ tasks:
     desc: Check all shell scripts with shellcheck
     cmds:
       - git ls-files "*.sh" | xargs shellcheck
+
+  sec:js:
+    desc: Fail on high or critical advisories in the web, docs and mock OAuth packages
+    cmds:
+      - scripts/check_js_audit.sh
 
   format:
     desc: Format Go, web, and mock OAuth code

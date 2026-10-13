@@ -208,6 +208,9 @@ jobs:
       - name: Install Task
         uses: ./.github/actions/install-task
 
+      - name: Audit JavaScript dependencies (high and critical)
+        run: task sec:js
+
       - name: Web lint (Typecheck, Biome, and knip)
         run: task web:lint
 

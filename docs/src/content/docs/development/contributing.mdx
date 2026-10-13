@@ -286,7 +286,8 @@ on GitHub, or email [security@docspring.com](mailto:security@docspring.com). See
 3. **Dependencies**
    - Keep dependencies updated
    - Review security advisories
-   - Run `govulncheck` and `npm audit`
+   - Run `task go:sec:vuln` (govulncheck) and `task sec:js` (`bun audit` of the web, docs and mock OAuth
+     packages); CI fails on any high or critical advisory
 
 ## Testing Requirements
 

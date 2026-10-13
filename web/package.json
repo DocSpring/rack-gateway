@@ -69,7 +69,7 @@
     "@vitest/ui": "^4.1.11",
     "autoprefixer": "^10.6.1",
     "jsdom": "^27.4.0",
-    "knip": "^5.88.1",
+    "knip": "^6.39.0",
     "openapi-typescript": "^7.13.0",
     "orval": "^8.39.0",
     "otplib": "^12.0.1",
