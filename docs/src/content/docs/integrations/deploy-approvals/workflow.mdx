@@ -409,14 +409,15 @@ or the app's `vcs_repo` is missing. No request or `create` entry exists for a re
 <TabItem label="No Valid Approval">
 
 ```
-Error: You don't have permission to promote releases.
+Error: You don't have permission to promote releases: this API token has no usable deploy approval for myapp:
+its newest request, 3f2b9c1e-8d4a-4b6e-9f1a-2c7d5e8a1b0f (commit 0123456), was approved, but its approval
+window ended at 2026-10-13T11:59:00Z
 ```
 
-A token that relies on `deploy_with_approval` gets the same 403 as any other missing permission when it has no
-approved, unexpired request for the app (`permission denied` for uploads and builds). The gateway doesn't say
-which, so it can't be used to probe approvals. With `LOG_LEVEL=debug` and `DEBUG_TOPICS=deploy.approval`, the
-gateway logs the reason (`deploy approval expired`, `deploy approval status check failed: expected=approved
-actual=pending`, or not found).
+A token that relies on `deploy_with_approval` gets a 403 that says why, from its own newest request for the app:
+it has none, or that request is waiting for approval, was rejected, has already been deployed, expired, or is
+approved but doesn't cover this upload, build, release or command. The token can already read its own requests, so
+the message reveals nothing new.
 
 **Causes:**
 - No request was created for this app and token, or it was rejected

@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import type { MFAStatusResponse } from '@/lib/api'
+import { trustLabel } from '@/lib/time'
 import type { EnrollmentState, MFAMethodType } from './types'
 
 type EnrollmentDialogProps = {
@@ -197,7 +198,7 @@ export function EnrollmentDialog({
                   onChange={(event) => onTrustEnrollmentDeviceChange(event.target.checked)}
                   type="checkbox"
                 />
-                Trust this browser for 30 days
+                {trustLabel('browser', status?.trusted_device_ttl_days)}
               </label>
             </div>
             <DialogFooter>

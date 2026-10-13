@@ -56,9 +56,9 @@ Resources that map to Convox API operations:
 | `secret` | Secret env var values (`convox:secret:read` reveals them) |
 
 The gateway forwards only the rack API routes it has a permission for (see
-[Rack API Routes](#rack-api-routes)). Requests to any other route are refused with `404` and logged as denied, so
-`certs`, `registries`, `resources`, `instances keyroll`, `instances terminate` and `apps cancel` don't work
-through the gateway, whatever the caller's role.
+[Rack API Routes](#rack-api-routes)). Requests to any other route are refused with `404` and logged as denied,
+whatever the caller's role, so Convox's certificates, registries, resources, instance keyroll and terminate, and
+canceling an app update aren't available through the gateway (the `rack-gateway` CLI has no commands for them).
 
 ### Gateway Resources
 

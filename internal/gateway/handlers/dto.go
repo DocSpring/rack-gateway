@@ -135,6 +135,8 @@ type MFAStatusResponse struct {
 	RecentStepUpExpiresAt *time.Time              `json:"recent_step_up_expires_at,omitempty"`
 	PreferredMethod       *string                 `json:"preferred_method,omitempty"`
 	WebAuthnAvailable     bool                    `json:"webauthn_available"                  validate:"required"`
+	// TrustedDeviceTTLDays is how long a trusted device skips the login MFA challenge.
+	TrustedDeviceTTLDays int `json:"trusted_device_ttl_days" validate:"required"`
 }
 
 // StatusResponse is returned for simple acknowledgment payloads.

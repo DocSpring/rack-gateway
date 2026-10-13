@@ -12,9 +12,10 @@ import (
 func RackCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "rack",
-		Short: "Show current rack configuration",
-		Long:  "Display the current rack name, gateway URL, and login status from local configuration (no API call)",
-		Args:  cobra.NoArgs,
+		Short: "Show the selected rack's configuration",
+		Long: "Display the selected rack's name, gateway URL, and login status from local configuration (no API " +
+			"call). That's the current rack unless --rack or RACK_GATEWAY_RACK selects another.",
+		Args: cobra.NoArgs,
 		RunE: SilenceOnError(func(_ *cobra.Command, _ []string) error {
 			status, err := ResolveRackStatus(time.Now())
 			if err != nil {

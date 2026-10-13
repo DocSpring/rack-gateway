@@ -21,3 +21,12 @@ export function formatElapsed(start?: string | null, end?: string | null): strin
   }
   return `${seconds}s`
 }
+
+// trustLabel is the "trust this device" checkbox's label: how long a trusted device skips the login MFA challenge
+// (the gateway's trusted device TTL), once it's known.
+export function trustLabel(subject: 'browser' | 'device', days?: number): string {
+  if (!days || days <= 0) {
+    return `Trust this ${subject}`
+  }
+  return `Trust this ${subject} for ${days} ${days === 1 ? 'day' : 'days'}`
+}

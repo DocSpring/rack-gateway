@@ -20,8 +20,12 @@ function mfaStatus(unusedBackupCodes: number) {
     trusted_devices: [],
     backup_codes: { total: 10, unused: unusedBackupCodes },
     webauthn_available: false,
+    trusted_device_ttl_days: 14,
   }
 }
+
+// The label shows the gateway's trusted device TTL.
+const TRUST_LABEL = 'Trust this device for 14 days'
 
 function renderForm() {
   const onVerify = vi.fn(() => Promise.resolve())
@@ -50,7 +54,7 @@ describe('MFAVerificationForm backup codes', () => {
     await waitForMethodsToLoad()
 
     await user.click(screen.getByRole('button', { name: 'Use a backup code' }))
-    expect(screen.queryByText('Trust this device for 30 days')).not.toBeInTheDocument()
+    expect(screen.queryByText(TRUST_LABEL)).not.toBeInTheDocument()
 
     const verifyButton = screen.getByRole('button', { name: 'Verify backup code' })
     await user.type(screen.getByLabelText('Backup code'), 'abcdef-01234')
@@ -78,7 +82,7 @@ describe('MFAVerificationForm backup codes', () => {
     await user.click(screen.getByRole('button', { name: 'Back to authenticator app' }))
 
     expect(screen.queryByLabelText('Backup code')).not.toBeInTheDocument()
-    expect(screen.getByText('Trust this device for 30 days')).toBeInTheDocument()
+    expect(screen.getByText(TRUST_LABEL)).toBeInTheDocument()
   })
 
   it('hides the option when no backup codes are left', async () => {

@@ -211,6 +211,7 @@ func TestSetCurrentRackCreatesDirectory(t *testing.T) {
 func TestResolveRackStatusPrefersConfig(t *testing.T) {
 	tmpDir := t.TempDir()
 	ConfigPath = tmpDir
+	t.Setenv("RACK_GATEWAY_RACK", "")
 	t.Setenv("RACK_GATEWAY_URL", "")
 	t.Setenv("RACK_GATEWAY_API_TOKEN", "")
 
@@ -231,6 +232,42 @@ func TestResolveRackStatusPrefersConfig(t *testing.T) {
 	assert.Equal(t, "staging", status.Rack)
 	assert.Equal(t, "https://gateway-staging.example.com", status.GatewayURL)
 	assert.Contains(t, strings.Join(status.StatusLines, " "), "Logged in as user@example.com")
+}
+
+// `rack` shows the rack commands would use: --rack, then RACK_GATEWAY_RACK, then the current rack.
+func TestResolveRackStatusFollowsTheSelectedRack(t *testing.T) {
+	gateway := func(host string) GatewayConfig {
+		return GatewayConfig{
+			URL:       "https://" + host,
+			Token:     "abc123",
+			Email:     "user@example.com",
+			ExpiresAt: time.Now().Add(time.Hour),
+		}
+	}
+	withCLIConfig(t, Config{Current: "production", Gateways: map[string]GatewayConfig{
+		"production": gateway("gateway-production.example.com"),
+		"staging":    gateway("gateway-staging.example.com"),
+	}})
+	t.Setenv("RACK_GATEWAY_RACK", "")
+
+	status, err := ResolveRackStatus(time.Now())
+	require.NoError(t, err)
+	assert.Equal(t, "production", status.Rack)
+
+	t.Setenv("RACK_GATEWAY_RACK", "staging")
+	status, err = ResolveRackStatus(time.Now())
+	require.NoError(t, err)
+	assert.Equal(t, "staging", status.Rack)
+	assert.Equal(t, "https://gateway-staging.example.com", status.GatewayURL)
+
+	RackFlag = "production"
+	status, err = ResolveRackStatus(time.Now())
+	require.NoError(t, err)
+	assert.Equal(t, "production", status.Rack)
+
+	RackFlag = "eu"
+	_, err = ResolveRackStatus(time.Now())
+	require.ErrorContains(t, err, "rack eu not configured")
 }
 
 func TestResolveRackStatusFallsBackToEnv(t *testing.T) {

@@ -24,7 +24,6 @@ type Notifier struct {
 	emailSender   email.Sender
 	auditLogger   *audit.Logger
 	database      *db.Database
-	adminEmails   []string
 	emailsEnabled bool
 	jobsClient    *jobs.Client
 
@@ -41,7 +40,6 @@ func NewNotifier(
 	emailSender email.Sender,
 	auditLogger *audit.Logger,
 	database *db.Database,
-	adminEmails []string,
 	jobsClient *jobs.Client,
 ) *Notifier {
 	// Check if email sender is actually configured (not noop)
@@ -57,7 +55,6 @@ func NewNotifier(
 		emailSender:     emailSender,
 		auditLogger:     auditLogger,
 		database:        database,
-		adminEmails:     adminEmails,
 		emailsEnabled:   emailsEnabled,
 		jobsClient:      jobsClient,
 		recentEmails:    make(map[string]time.Time),
@@ -101,6 +98,19 @@ func (n *Notifier) cleanupRecentEmails() {
 
 // shouldSendEmail checks if we should send this email based on deduplication window
 // enqueueSecurityNotification enqueues a security notification if deduplication allows
+// admins returns the admins to alert, looked up now so admins added or removed since startup are respected.
+func (n *Notifier) admins() []string {
+	if n.database == nil {
+		return nil
+	}
+	emails, err := n.database.UnlockedAdminEmails()
+	if err != nil {
+		log.Printf(`{"level":"error","event":"admin_lookup_failed","error":%q}`, err)
+		return nil
+	}
+	return emails
+}
+
 func (n *Notifier) enqueueSecurityNotification(recipient, subject, eventType string, args river.JobArgs) {
 	if recipient == "" && !strings.HasPrefix(eventType, "admin") {
 		return
@@ -283,9 +293,13 @@ func (n *Notifier) RateLimitExceeded(userEmail, userName, path, ipAddress, userA
 
 	// Also notify admins about rate limit violations (potential attack) - with deduplication
 	// Use IP address in the hash so we deduplicate per-IP, not globally
+	admins := n.admins()
+	if len(admins) == 0 {
+		return
+	}
 	adminKey := fmt.Sprintf("admins-%s", ipAddress)
 	n.enqueueSecurityNotification(adminKey, "Rate Limit Exceeded", "rate_limit_admin", jobemail.RateLimitAdminArgs{
-		AdminEmails: n.adminEmails,
+		AdminEmails: admins,
 		UserEmail:   userEmail,
 		UserName:    userName,
 		Path:        path,
@@ -336,13 +350,17 @@ func (n *Notifier) SuspiciousActivity(
 	)
 
 	// Notify admins about suspicious activity (with deduplication per user+reason)
+	admins := n.admins()
+	if len(admins) == 0 {
+		return
+	}
 	adminKey := fmt.Sprintf("admins-%s-%s", userEmail, reason)
 	n.enqueueSecurityNotification(
 		adminKey,
 		"Suspicious Activity",
 		"suspicious_activity_admin",
 		jobemail.SuspiciousActivityAdminArgs{
-			AdminEmails: n.adminEmails,
+			AdminEmails: admins,
 			UserEmail:   userEmail,
 			UserName:    userName,
 			Reason:      reason,

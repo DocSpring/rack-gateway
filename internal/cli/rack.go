@@ -7,6 +7,9 @@ import (
 	"time"
 )
 
+// rackFromEnvironment is the selected rack when RACK_GATEWAY_URL names the gateway and no rack is named.
+const rackFromEnvironment = "(from environment)"
+
 // SelectedRack determines which rack to use based on flags, env vars, or config
 func SelectedRack() (string, error) {
 	if RackFlag != "" {
@@ -19,7 +22,7 @@ func SelectedRack() (string, error) {
 		if label := strings.TrimSpace(os.Getenv("RACK_GATEWAY_RACK")); label != "" {
 			return label, nil
 		}
-		return "(from environment)", nil
+		return rackFromEnvironment, nil
 	}
 	rack, err := GetCurrentRack()
 	if err != nil {
@@ -49,23 +52,27 @@ func NormalizeGatewayURL(raw string) (string, error) {
 	return trimmed, nil
 }
 
-// ResolveRackStatus returns detailed status information about the current rack
+// ResolveRackStatus describes, from local configuration, the rack and gateway commands would use: RACK_GATEWAY_URL
+// with RACK_GATEWAY_API_TOKEN, or else the selected rack (--rack, RACK_GATEWAY_RACK or the current rack).
 func ResolveRackStatus(now time.Time) (*RackStatus, error) {
-	if status, err := resolveStatusFromConfig(now); status != nil || err != nil {
-		return status, err
+	if strings.TrimSpace(os.Getenv("RACK_GATEWAY_URL")) != "" &&
+		strings.TrimSpace(os.Getenv("RACK_GATEWAY_API_TOKEN")) != "" {
+		return resolveStatusFromEnv()
 	}
-	return resolveStatusFromEnv()
-}
-
-func resolveStatusFromConfig(now time.Time) (*RackStatus, error) {
-	cfg, exists, err := LoadConfig()
-	if err != nil || !exists {
+	rack, err := SelectedRack()
+	if err != nil {
 		return nil, err
 	}
+	if rack == rackFromEnvironment {
+		return resolveStatusFromEnv()
+	}
+	return resolveStatusFromConfig(rack, now)
+}
 
-	rack := strings.TrimSpace(cfg.Current)
-	if rack == "" {
-		return nil, nil
+func resolveStatusFromConfig(rack string, now time.Time) (*RackStatus, error) {
+	cfg, _, err := LoadConfig()
+	if err != nil {
+		return nil, err
 	}
 
 	gateway, ok := cfg.Gateways[rack]

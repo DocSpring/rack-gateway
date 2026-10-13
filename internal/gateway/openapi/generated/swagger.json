@@ -5422,6 +5422,7 @@
                 "enrolled",
                 "methods",
                 "required",
+                "trusted_device_ttl_days",
                 "trusted_devices",
                 "webauthn_available"
             ],
@@ -5446,6 +5447,10 @@
                 },
                 "required": {
                     "type": "boolean"
+                },
+                "trusted_device_ttl_days": {
+                    "description": "TrustedDeviceTTLDays is how long a trusted device skips the login MFA challenge.",
+                    "type": "integer"
                 },
                 "trusted_devices": {
                     "type": "array",

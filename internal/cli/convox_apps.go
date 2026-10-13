@@ -30,7 +30,6 @@ func AppsCommand() *cobra.Command {
 	cmd.AddCommand(appsCreateCommand())
 	cmd.AddCommand(appsDeleteCommand())
 	cmd.AddCommand(appsInfoCommand())
-	cmd.AddCommand(appsCancelCommand())
 	cmd.AddCommand(appsLockCommand())
 	cmd.AddCommand(appsUnlockCommand())
 	cmd.AddCommand(appsParamsCommand())
@@ -108,28 +107,6 @@ func appsInfoCommand() *cobra.Command {
 	}
 
 	cmd.Flags().StringP("app", "a", "", appFlagHelp)
-
-	return cmd
-}
-
-func appsCancelCommand() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "cancel <name>",
-		Short: "cancel an app update",
-		Args:  cobra.ExactArgs(1),
-		RunE: SilenceOnError(func(cobraCmd *cobra.Command, args []string) error {
-			mfaAuth, err := checkMFAAndGetAuth(cobraCmd, "apps cancel")
-			if err != nil {
-				return err
-			}
-
-			client, ctx, err := SetupConvoxCommandWithMFA(cobraCmd, args, mfaAuth)
-			if err != nil {
-				return err
-			}
-			return cli.AppsCancel(client, ctx)
-		}),
-	}
 
 	return cmd
 }
