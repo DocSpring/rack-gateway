@@ -240,8 +240,11 @@ sequenceDiagram
     CircleCI-->>Gateway: 202 Accepted
 ```
 
-The approval runs as a background job a moment after the admin approves. If the workflow was rerun, the gateway
-approves the hold job in the newest workflow with the same name in that pipeline.
+The approval runs as a background job a moment after the admin approves. It approves the hold job in the workflow
+that requested the approval while that job is on hold. If it isn't, and the workflow was rerun, the gateway
+approves the hold job in the newest rerun: the newest workflow in that pipeline with the same name, created after
+the original. The gateway only looks at the pipeline's workflow list to find a rerun, because CircleCI sometimes
+leaves workflows out of that list for a while.
 
 The `ci_metadata` comes from the CI job that requested the approval, so the gateway doesn't trust it on its
 own: the hold job is only approved when the workflow's pipeline is building the approved commit of the app's
