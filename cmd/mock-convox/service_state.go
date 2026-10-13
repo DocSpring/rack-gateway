@@ -104,7 +104,7 @@ func stopProcessState(app, processID string) bool {
 
 	processes := ensureAppProcessesLocked(app)
 	index := slices.IndexFunc(processes, func(process Process) bool {
-		return process.Id == processID
+		return process.ID == processID
 	})
 	if index == -1 {
 		return false
@@ -165,7 +165,7 @@ func resizeServiceProcesses(app string, processes []Process, serviceName string,
 	for _, process := range processes {
 		if process.Name == serviceName {
 			matching = append(matching, process)
-			maxIndex = max(maxIndex, processOrdinal(process.Id))
+			maxIndex = max(maxIndex, processOrdinal(process.ID))
 			continue
 		}
 		remaining = append(remaining, process)
@@ -192,10 +192,10 @@ func buildProcess(app, serviceName string, ordinal int) Process {
 	}
 
 	return Process{
-		Id:       fmt.Sprintf("p-%s-%d", sanitizeServiceName(serviceName), ordinal),
+		ID:       fmt.Sprintf("p-%s-%d", sanitizeServiceName(serviceName), ordinal),
 		App:      app,
 		Command:  command,
-		Cpu:      15.0,
+		CPU:      15.0,
 		Host:     fmt.Sprintf("10.0.1.%02d", 10+ordinal),
 		Image:    "registry.example.com/app:latest",
 		Instance: fmt.Sprintf("i-%012d", ordinal),

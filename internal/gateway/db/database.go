@@ -3,7 +3,9 @@ package db
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
+	"math"
 	"net/url"
 	"os"
 	"strconv"
@@ -96,33 +98,13 @@ func openDatabase(
 	applyPoolConfig(db, poolConfig)
 
 	if err := db.Ping(); err != nil {
-		return nil, fmt.Errorf("failed to ping postgres: %w", err)
+		return nil, errors.Join(fmt.Errorf("failed to ping postgres: %w", err), db.Close())
 	}
 
 	// Create pgxpool connection (for River and pgx-native operations)
-	ctx := context.Background()
-	pgxConfig, err := pgxpool.ParseConfig(source)
+	pool, err := openPgxPool(source, poolConfig)
 	if err != nil {
-		db.Close() //nolint:errcheck,gosec // G104: cleanup on init failure
-		return nil, fmt.Errorf("failed to parse pgxpool config: %w", err)
-	}
-
-	// Apply compatible pool settings to pgxpool
-	pgxConfig.MaxConns = int32(poolConfig.MaxOpenConns) //nolint:gosec // trusted config
-	pgxConfig.MinConns = int32(poolConfig.MaxIdleConns) //nolint:gosec // trusted config
-	pgxConfig.MaxConnLifetime = poolConfig.ConnMaxLifetime
-	pgxConfig.MaxConnIdleTime = poolConfig.ConnMaxIdleTime
-
-	pool, err := pgxpool.NewWithConfig(ctx, pgxConfig)
-	if err != nil {
-		db.Close() //nolint:errcheck,gosec // G104: cleanup on init failure
-		return nil, fmt.Errorf("failed to create pgxpool: %w", err)
-	}
-
-	if err := pool.Ping(ctx); err != nil {
-		pool.Close()
-		db.Close() //nolint:errcheck,gosec // G104: cleanup on init failure
-		return nil, fmt.Errorf("failed to ping pgxpool: %w", err)
+		return nil, errors.Join(err, db.Close())
 	}
 
 	// Extract database name from DSN for unique migration locks
@@ -131,12 +113,44 @@ func openDatabase(
 	d := &Database{db: db, pool: pool, driver: "pgx", dbName: dbName, cipher: columnCipher}
 	if autoMigrate {
 		if err := d.migrateAll(); err != nil {
-			pool.Close()
-			db.Close() //nolint:errcheck,gosec // G104: cleanup on init failure
-			return nil, fmt.Errorf("failed to initialize schema: %w", err)
+			return nil, errors.Join(fmt.Errorf("failed to initialize schema: %w", err), d.Close())
 		}
 	}
 	return d, nil
+}
+
+// openPgxPool opens a pgx pool with the same limits as the database/sql pool.
+func openPgxPool(source string, poolConfig *PoolConfig) (*pgxpool.Pool, error) {
+	pgxConfig, err := pgxpool.ParseConfig(source)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse pgxpool config: %w", err)
+	}
+	if pgxConfig.MaxConns, err = pgxPoolSize("DB_MAX_OPEN_CONNS", poolConfig.MaxOpenConns); err != nil {
+		return nil, err
+	}
+	if pgxConfig.MinConns, err = pgxPoolSize("DB_MAX_IDLE_CONNS", poolConfig.MaxIdleConns); err != nil {
+		return nil, err
+	}
+	pgxConfig.MaxConnLifetime = poolConfig.ConnMaxLifetime
+	pgxConfig.MaxConnIdleTime = poolConfig.ConnMaxIdleTime
+
+	ctx := context.Background()
+	pool, err := pgxpool.NewWithConfig(ctx, pgxConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create pgxpool: %w", err)
+	}
+	if err := pool.Ping(ctx); err != nil {
+		pool.Close()
+		return nil, fmt.Errorf("failed to ping pgxpool: %w", err)
+	}
+	return pool, nil
+}
+
+func pgxPoolSize(name string, size int) (int32, error) {
+	if size < 0 || size > math.MaxInt32 {
+		return 0, fmt.Errorf("%s must be between 0 and %d, got %d", name, math.MaxInt32, size)
+	}
+	return int32(size), nil
 }
 
 // applyPoolConfig applies connection pool settings to the database connection.

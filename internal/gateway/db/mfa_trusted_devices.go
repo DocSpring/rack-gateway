@@ -141,7 +141,7 @@ func (d *Database) ListTrustedDevices(userID int64) ([]*TrustedDevice, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to query trusted devices: %w", err)
 	}
-	defer rows.Close() //nolint:errcheck
+	defer func() { _ = rows.Close() }()
 
 	var devices []*TrustedDevice
 	for rows.Next() {

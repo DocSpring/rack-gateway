@@ -56,13 +56,13 @@ func (h *Handler) proxyWebSocket(
 	if err != nil {
 		return h.handleDialError(w, resp, err)
 	}
-	defer upstreamConn.Close() //nolint:errcheck
+	defer func() { _ = upstreamConn.Close() }()
 
 	clientConn, err := h.upgradeClientConnection(w, r, upstreamConn)
 	if err != nil {
 		return 0, fmt.Errorf("failed to upgrade client connection: %w", err)
 	}
-	defer clientConn.Close() //nolint:errcheck
+	defer func() { _ = clientConn.Close() }()
 
 	proxyWebSocketMessages(clientConn, upstreamConn, defaultClientKeepalive)
 	return http.StatusSwitchingProtocols, nil

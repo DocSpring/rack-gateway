@@ -99,7 +99,7 @@ func TestSlackOAuthAuthorizeHandler(t *testing.T) {
 	handler.SlackOAuthAuthorizeHandler(c)
 
 	resp := w.Result()
-	defer resp.Body.Close() //nolint:errcheck,gosec // G104: cleanup
+	defer func() { _ = resp.Body.Close() }()
 
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -114,7 +114,7 @@ func TestSlackOAuthAuthorizeHandler(t *testing.T) {
 func TestGetSlackIntegration_NotFound(t *testing.T) {
 	env := setupSlackTestEnv(t)
 	resp := env.callGetSlackIntegration()
-	defer resp.Body.Close() //nolint:errcheck,gosec // G104: cleanup
+	defer func() { _ = resp.Body.Close() }()
 	require.Equal(t, http.StatusNotFound, resp.StatusCode)
 }
 
@@ -165,7 +165,7 @@ func TestGetSlackIntegration_Found(t *testing.T) {
 	handler.GetSlackIntegrationHandler(c)
 
 	resp := w.Result()
-	defer resp.Body.Close() //nolint:errcheck,gosec // G104: cleanup
+	defer func() { _ = resp.Body.Close() }()
 
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -292,7 +292,7 @@ func TestDeleteSlackIntegration(t *testing.T) {
 	handler.DeleteSlackIntegrationHandler(c)
 
 	resp := w.Result()
-	defer resp.Body.Close() //nolint:errcheck,gosec // G104: cleanup
+	defer func() { _ = resp.Body.Close() }()
 
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -410,7 +410,7 @@ func TestEnforceIntegrationPermission_Unauthorized(t *testing.T) {
 	require.False(t, allowed)
 
 	resp := w.Result()
-	defer resp.Body.Close() //nolint:errcheck,gosec // G104: cleanup
+	defer func() { _ = resp.Body.Close() }()
 
 	require.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 
@@ -448,7 +448,7 @@ func TestEnforceIntegrationPermission_Forbidden(t *testing.T) {
 	require.False(t, allowed)
 
 	resp := w.Result()
-	defer resp.Body.Close() //nolint:errcheck,gosec // G104: cleanup
+	defer func() { _ = resp.Body.Close() }()
 
 	require.Equal(t, http.StatusForbidden, resp.StatusCode)
 
@@ -476,7 +476,7 @@ func TestLoadSlackIntegration_NotFound(t *testing.T) {
 	require.Nil(t, integration)
 
 	resp := w.Result()
-	defer resp.Body.Close() //nolint:errcheck,gosec // G104: cleanup
+	defer func() { _ = resp.Body.Close() }()
 
 	require.Equal(t, http.StatusNotFound, resp.StatusCode)
 
@@ -520,7 +520,7 @@ func TestCreateSlackClient_InvalidToken(t *testing.T) {
 	require.Nil(t, client)
 
 	resp := w.Result()
-	defer resp.Body.Close() //nolint:errcheck,gosec // G104: cleanup
+	defer func() { _ = resp.Body.Close() }()
 
 	require.Equal(t, http.StatusInternalServerError, resp.StatusCode)
 

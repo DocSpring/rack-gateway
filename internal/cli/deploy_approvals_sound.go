@@ -98,7 +98,6 @@ func createTemporarySoundFile() (string, func(), error) {
 func selectAudioPlayer(soundFile string, volume float64) (*exec.Cmd, error) {
 	switch runtime.GOOS {
 	case "darwin":
-		//nolint:gosec // G204: Command hardcoded, file path controlled
 		return exec.Command("afplay", "-v", fmt.Sprintf("%.2f", volume), soundFile), nil
 	case "linux":
 		return linuxAudioPlayer(soundFile, volume)
@@ -110,7 +109,6 @@ func selectAudioPlayer(soundFile string, volume float64) (*exec.Cmd, error) {
 func linuxAudioPlayer(soundFile string, volume float64) (*exec.Cmd, error) {
 	for _, candidate := range []string{"paplay", "aplay", "ffplay", "mpg123"} {
 		if _, err := exec.LookPath(candidate); err == nil {
-			//nolint:gosec // G204: Command hardcoded, file path controlled
 			switch candidate {
 			case "paplay":
 				return exec.Command(candidate, "--volume", fmt.Sprintf("%.0f", volume*65536), soundFile), nil

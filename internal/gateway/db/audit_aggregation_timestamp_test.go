@@ -14,7 +14,7 @@ import (
 // TestAuditAggregationTimestamps verifies that aggregated logs have valid timestamps.
 func TestAuditAggregationTimestamps(t *testing.T) {
 	db := dbtest.NewDatabase(t)
-	defer db.Close() //nolint:errcheck,gosec // G104: test cleanup
+	defer func() { _ = db.Close() }()
 
 	// Create a log entry
 	log1 := &gwdb.AuditLog{

@@ -199,7 +199,7 @@ func applyFlagKind(flag *stdcli.Flag, kind string) {
 	flagValue := reflect.ValueOf(flag).Elem()
 	kindField := flagValue.FieldByName("kind")
 	if kindField.IsValid() {
-		//nolint:gosec // G103: Required to modify private field in Convox CLI
+		// #nosec G103 -- stdcli.Flag has no setter for its unexported kind, which the Convox CLI code reads.
 		reflect.NewAt(kindField.Type(), unsafe.Pointer(kindField.UnsafeAddr())).
 			Elem().
 			SetString(kind)
@@ -218,7 +218,7 @@ func injectStdCLIEngine(ctx *stdcli.Context, engine *stdcli.Engine) {
 	ctxValue := reflect.ValueOf(ctx).Elem()
 	engineField := ctxValue.FieldByName("engine")
 	if engineField.IsValid() {
-		//nolint:gosec // G103: Required to modify private field in Convox CLI
+		// #nosec G103 -- stdcli.Context has no setter for its unexported engine, which the Convox CLI code reads.
 		reflect.NewAt(engineField.Type(), unsafe.Pointer(engineField.UnsafeAddr())).
 			Elem().
 			Set(reflect.ValueOf(engine))

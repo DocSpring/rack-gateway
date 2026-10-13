@@ -104,7 +104,7 @@ func TestLogEnvDiffsKeepsListedSecretAndProtectedValuesRedacted(t *testing.T) {
 	h.secretNames["REDIS_URL"] = struct{}{}
 	setEnvAuditAppSetting(t, database, settings.KeyAuditVisibleEnvVars,
 		[]string{"PORT", "STRIPE_SECRET", "BILLING_ID", "REDIS_URL", "ADMIN_EMAIL"})
-	setEnvAuditAppSetting(t, database, settings.KeySecretEnvVars, []string{"BILLING_ID"})
+	setEnvAuditAppSetting(t, database, settings.AppSettingSecretEnvVars.String(), []string{"BILLING_ID"})
 	setEnvAuditAppSetting(t, database, settings.KeyProtectedEnvVars, []string{"ADMIN_EMAIL"})
 
 	details := logEnvAuditDetails(t, h, database, []envutil.EnvDiff{

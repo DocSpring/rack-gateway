@@ -69,6 +69,10 @@ pre-commit:
       glob: "**/*.{ts,tsx}"
       run: task check-ignores
 
+    go-nolint:
+      glob: "**/*.go"
+      run: scripts/check_go_nolint.sh
+
     shellcheck:
       glob: "{*.sh,**/*.sh}"
       run: shellcheck {staged_files}

@@ -151,7 +151,7 @@ func authMiddleware(next http.Handler) http.Handler {
 		}
 
 		parts := strings.SplitN(string(decoded), ":", 2)
-		if len(parts) != 2 || parts[0] != mockUsername || parts[1] != mockPassword {
+		if len(parts) != 2 || parts[0] != mockUsername || parts[1] != mockRackToken {
 			http.Error(w, "Invalid credentials", http.StatusUnauthorized)
 			return
 		}

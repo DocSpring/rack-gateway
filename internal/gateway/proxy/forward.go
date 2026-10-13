@@ -339,7 +339,7 @@ func (h *Handler) forwardRequest(
 		}
 		return 0, fmt.Errorf("%w: %w", errRackRequestFailed, err)
 	}
-	defer resp.Body.Close() //nolint:errcheck,gosec // G104: cleanup
+	defer func() { _ = resp.Body.Close() }()
 
 	return h.processProxyResponse(w, r, resp, path, authUser.Email)
 }

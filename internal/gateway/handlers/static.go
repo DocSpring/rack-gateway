@@ -9,7 +9,6 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -105,16 +104,14 @@ func (h *StaticHandler) serveIndex(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	indexPath := filepath.Join(h.distRoot, "index.html")
-	//nolint:gosec // G304: Path is app-controlled distRoot + hardcoded filename
-	file, err := os.Open(indexPath)
+	file, err := os.DirFS(h.distRoot).Open("index.html")
 	if err != nil {
 		http.NotFound(w, r)
 		return
 	}
 	defer func() {
 		if err := file.Close(); err != nil {
-			log.Printf("static: failed to close %s: %v", indexPath, err)
+			log.Printf("static: failed to close index.html: %v", err)
 		}
 	}()
 

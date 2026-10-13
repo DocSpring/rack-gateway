@@ -256,7 +256,7 @@ func (d *Database) listAPITokens(query string, args ...interface{}) ([]*APIToken
 	if err != nil {
 		return nil, fmt.Errorf("failed to list API tokens: %w", err)
 	}
-	defer rows.Close() //nolint:errcheck // best-effort close
+	defer func() { _ = rows.Close() }()
 
 	var tokens []*APIToken
 	for rows.Next() {

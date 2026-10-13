@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"crypto/tls"
-	"crypto/x509"
 	"encoding/hex"
 	"encoding/pem"
 	"errors"
@@ -226,10 +225,11 @@ func fetchRackCertificate(ctx context.Context, rck config.RackConfig) (*db.RackT
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	//nolint:gosec // G402: Initial cert fetch for fingerprint pinning
 	dialer := &tls.Dialer{
 		NetDialer: &net.Dialer{Timeout: 5 * time.Second},
-		Config:    &tls.Config{InsecureSkipVerify: true, ServerName: host},
+		// #nosec G402 -- this fetch reads the rack's self-signed certificate so its fingerprint can be pinned; no
+		// request is sent over the connection.
+		Config: &tls.Config{InsecureSkipVerify: true, ServerName: host},
 	}
 	conn, err := dialer.DialContext(ctx, "tcp", address)
 	if err != nil {
@@ -242,7 +242,7 @@ func fetchRackCertificate(ctx context.Context, rck config.RackConfig) (*db.RackT
 		}
 		return nil, fmt.Errorf("rack TLS manager: expected TLS connection, got %T", conn)
 	}
-	defer tlsConn.Close() //nolint:errcheck // best-effort TLS close
+	defer func() { _ = tlsConn.Close() }()
 	state := tlsConn.ConnectionState()
 	if len(state.PeerCertificates) == 0 {
 		return nil, fmt.Errorf("rack TLS manager: rack presented no certificate")
@@ -268,16 +268,19 @@ func buildTLSConfig(cert *db.RackTLSCert, host string) (*tls.Config, error) {
 	expected := make([]byte, len(decoded))
 	copy(expected, decoded)
 
-	//nolint:gosec // G402: Required for custom cert pinning via VerifyPeerCertificate
+	// The rack's certificate is self-signed, so the standard chain verification is off and VerifyConnection checks
+	// the pinned fingerprint instead. VerifyConnection runs on every handshake, resumed sessions included
+	// (VerifyPeerCertificate doesn't run on a resumed one).
 	return &tls.Config{
-		MinVersion:         tls.VersionTLS12,
-		ServerName:         host,
+		MinVersion: tls.VersionTLS12,
+		ServerName: host,
+		// #nosec G402 -- VerifyConnection pins the rack's certificate.
 		InsecureSkipVerify: true,
-		VerifyPeerCertificate: func(rawCerts [][]byte, _ [][]*x509.Certificate) error {
-			if len(rawCerts) == 0 {
+		VerifyConnection: func(state tls.ConnectionState) error {
+			if len(state.PeerCertificates) == 0 {
 				return fmt.Errorf("rack TLS manager: rack presented no certificate")
 			}
-			sum := sha256.Sum256(rawCerts[0])
+			sum := sha256.Sum256(state.PeerCertificates[0].Raw)
 			if !equalBytes(sum[:], expected) {
 				return &FingerprintMismatchError{
 					Expected: cert.Fingerprint,
