@@ -36,10 +36,13 @@ Use the filter panel to narrow results:
 Filter by user, resource, or action text.
 
 ### Action Type
-- Convox API
-- Authentication
-- User Management (results of user changes)
-- Token Management (results of API token changes)
+
+The scope of the permission the action needs. A request's attempt and result entries have the same type.
+
+- Convox API (`convox`): requests to the rack
+- Gateway (`gateway`): users, API tokens, deploy approvals, settings and the gateway's other features
+- Authentication (`auth`): login, logout and MFA
+- Security (`security`): secrets, rate limits and audit log verification
 
 ### Status
 - Success

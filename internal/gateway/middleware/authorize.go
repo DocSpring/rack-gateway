@@ -84,13 +84,13 @@ func routeAllowed(manager rbac.Manager, spec rbac.RouteSpec, principal rbac.Prin
 
 // isOwnAccount reports whether a human caller is using a self-service route for their own account.
 // The path parameter must match the caller's email exactly (handlers look users up by exact email).
-// API tokens, and suspended or locked users (whom RBAC also denies), never qualify.
+// API tokens, and locked users (whom RBAC also denies), never qualify.
 func isOwnAccount(c *gin.Context, spec rbac.RouteSpec, authUser *auth.User) bool {
 	if spec.SelfParam == "" || authUser.IsAPIToken {
 		return false
 	}
 	user := authUser.DBUser
-	if user == nil || user.Suspended || user.LockedAt != nil {
+	if user == nil || user.LockedAt != nil {
 		return false
 	}
 	target := strings.TrimSpace(c.Param(spec.SelfParam))

@@ -7,7 +7,6 @@ export type User = {
   roles: string[]
   created_at: string
   updated_at: string
-  suspended: boolean
   created_by_email?: string
   created_by_name?: string
   locked_at?: string

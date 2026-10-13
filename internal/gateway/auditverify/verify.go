@@ -31,9 +31,10 @@ type ChainSource interface {
 	AuditChainStats(ctx context.Context, toIndex int64) (db.AuditChainStats, error)
 }
 
-// AnchorStore reads anchors and their versions. *s3.Client implements it. GetObject is called from several
-// goroutines at once.
+// AnchorStore reads anchors, their versions and the bucket's Object Lock configuration. *s3.Client implements it.
+// GetObject is called from several goroutines at once.
 type AnchorStore interface {
+	BucketLockReader
 	ListObjectVersions(
 		ctx context.Context,
 		params *s3.ListObjectVersionsInput,
@@ -52,6 +53,9 @@ type AnchorOptions struct {
 	// MaxAge is how old the latest anchor may be (default DefaultMaxAnchorAge). An older one means anchors have
 	// stopped being written, which leaves every new event unprotected.
 	MaxAge time.Duration
+	// MinRetentionDays is AUDIT_ANCHOR_RETENTION_DAYS: the bucket must lock new objects in COMPLIANCE mode for at
+	// least this long by default (CheckBucketRetention). Zero skips the check.
+	MinRetentionDays int
 }
 
 // Options configures a verification run.
@@ -147,11 +151,18 @@ func (o *Options) validate() error {
 	if o.Anchors == nil {
 		return nil
 	}
-	if o.Anchors.Store == nil || o.Anchors.Bucket == "" || o.Anchors.ChainID == "" {
+	return o.Anchors.validate()
+}
+
+func (a *AnchorOptions) validate() error {
+	if a.Store == nil || a.Bucket == "" || a.ChainID == "" {
 		return errors.New("anchor verification needs an S3 client, a bucket and a chain ID")
 	}
-	if o.Anchors.MaxAge < 0 {
-		return fmt.Errorf("the maximum anchor age must not be negative (got %s)", o.Anchors.MaxAge)
+	if a.MaxAge < 0 {
+		return fmt.Errorf("the maximum anchor age must not be negative (got %s)", a.MaxAge)
+	}
+	if a.MinRetentionDays < 0 {
+		return fmt.Errorf("the minimum anchor retention must not be negative (got %d)", a.MinRetentionDays)
 	}
 	return nil
 }

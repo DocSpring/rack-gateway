@@ -98,14 +98,12 @@ func TestNewAnchorWriterWorker(t *testing.T) {
 	s3Client := &mockS3Client{}
 	bucket := "test-bucket"
 	chainID := "staging"
-	retentionDays := 400
 
-	worker := NewAnchorWriterWorker(nil, s3Client, bucket, chainID, retentionDays)
+	worker := NewAnchorWriterWorker(nil, s3Client, bucket, chainID)
 
 	require.NotNil(t, worker)
 	assert.Equal(t, bucket, worker.bucket)
 	assert.Equal(t, chainID, worker.chainID)
-	assert.Equal(t, retentionDays, worker.retentionDays)
 }
 
 func TestAnchorWriterWorker_Work_BothFilesMissing_EmptyChain(t *testing.T) {
@@ -156,11 +154,10 @@ func TestAnchorWriterWorker_Work_BothFilesMissing_EmptyChain(t *testing.T) {
 	}
 
 	worker := &AnchorWriterWorker{
-		db:            database,
-		s3Client:      s3Client,
-		bucket:        "test-bucket",
-		chainID:       "staging",
-		retentionDays: 7,
+		db:       database,
+		s3Client: s3Client,
+		bucket:   "test-bucket",
+		chainID:  "staging",
 	}
 
 	job := &river.Job[AnchorWriterArgs]{
@@ -224,11 +221,10 @@ func TestAnchorWriterWorker_Work_PutJSONFails(t *testing.T) {
 	}
 
 	worker := &AnchorWriterWorker{
-		db:            database,
-		s3Client:      s3Client,
-		bucket:        "test-bucket",
-		chainID:       "staging",
-		retentionDays: 7,
+		db:       database,
+		s3Client: s3Client,
+		bucket:   "test-bucket",
+		chainID:  "staging",
 	}
 
 	job := &river.Job[AnchorWriterArgs]{
@@ -453,41 +449,6 @@ func TestAnchorWriterWorker_getLatestAnchor_GetObjectError(t *testing.T) {
 	assert.Equal(t, "", hash)
 }
 
-func TestAnchorWriterWorker_RetentionDateCalculation(t *testing.T) {
-	testCases := []struct {
-		name          string
-		retentionDays int
-		timestamp     time.Time
-		expected      time.Time
-	}{
-		{
-			name:          "7 days retention",
-			retentionDays: 7,
-			timestamp:     time.Date(2025, 11, 1, 0, 0, 0, 0, time.UTC),
-			expected:      time.Date(2025, 11, 8, 0, 0, 0, 0, time.UTC),
-		},
-		{
-			name:          "400 days retention",
-			retentionDays: 400,
-			timestamp:     time.Date(2025, 11, 1, 0, 0, 0, 0, time.UTC),
-			expected:      time.Date(2026, 12, 6, 0, 0, 0, 0, time.UTC),
-		},
-		{
-			name:          "1 day retention",
-			retentionDays: 1,
-			timestamp:     time.Date(2025, 11, 1, 12, 0, 0, 0, time.UTC),
-			expected:      time.Date(2025, 11, 2, 12, 0, 0, 0, time.UTC),
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			retainUntil := tc.timestamp.Add(time.Duration(tc.retentionDays) * 24 * time.Hour)
-			assert.Equal(t, tc.expected, retainUntil)
-		})
-	}
-}
-
 func TestAnchorWriterWorker_S3KeyPrefix(t *testing.T) {
 	testCases := []struct {
 		name      string
@@ -583,11 +544,10 @@ func TestAnchorWriterWorker_ObjectLockParameters(t *testing.T) {
 	}
 
 	worker := &AnchorWriterWorker{
-		db:            database,
-		s3Client:      s3Client,
-		bucket:        "test-bucket",
-		chainID:       "staging",
-		retentionDays: 7,
+		db:       database,
+		s3Client: s3Client,
+		bucket:   "test-bucket",
+		chainID:  "staging",
 	}
 
 	job := &river.Job[AnchorWriterArgs]{
@@ -659,11 +619,10 @@ func TestAnchorWriterWorker_NoIfNoneMatch(t *testing.T) {
 	}
 
 	worker := &AnchorWriterWorker{
-		db:            database,
-		s3Client:      s3Client,
-		bucket:        "test-bucket",
-		chainID:       "staging",
-		retentionDays: 7,
+		db:       database,
+		s3Client: s3Client,
+		bucket:   "test-bucket",
+		chainID:  "staging",
 	}
 
 	job := &river.Job[AnchorWriterArgs]{

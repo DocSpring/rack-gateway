@@ -13,7 +13,7 @@ type userScanner interface {
 }
 
 // scanUserBasicFields scans the basic user fields that are present in all user queries.
-// This includes ID, email, name, roles, timestamps, suspended state, and MFA fields.
+// This includes ID, email, name, roles, timestamps, and MFA and lock fields.
 // Returns the user struct and any nullable fields that need additional processing.
 func scanUserBasicFields(scanner userScanner) (*User, *userNullableFields, error) {
 	var user User
@@ -26,7 +26,6 @@ func scanUserBasicFields(scanner userScanner) (*User, *userNullableFields, error
 		&fields.rolesJSON,
 		&user.CreatedAt,
 		&user.UpdatedAt,
-		&user.Suspended,
 		&user.MFAEnrolled,
 		&user.MFAEnforcedAt,
 		&user.PreferredMFAMethod,
@@ -55,7 +54,6 @@ func scanUserWithLockedBy(scanner userScanner) (*User, error) {
 		&rolesJSON,
 		&user.CreatedAt,
 		&user.UpdatedAt,
-		&user.Suspended,
 		&user.MFAEnrolled,
 		&user.MFAEnforcedAt,
 		&user.PreferredMFAMethod,
@@ -99,7 +97,6 @@ func scanUserWithCreator(scanner userScanner) (*User, error) {
 		&rolesJSON,
 		&user.CreatedAt,
 		&user.UpdatedAt,
-		&user.Suspended,
 		&user.LockedAt,
 		&lockedReason,
 		&user.LockedByUserID,

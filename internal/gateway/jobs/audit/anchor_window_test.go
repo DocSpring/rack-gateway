@@ -52,8 +52,8 @@ func TestAnchorPutIsSentOnce(t *testing.T) {
 		Credentials:  aws.AnonymousCredentials{},
 	})
 
-	err := newTestWorker(nil, client).putObjectWithRetention(
-		context.Background(), AnchorKey(testChainID, firstAnchorHour), []byte(`{}`), firstAnchorHour, nil,
+	err := newTestWorker(nil, client).putAnchorObject(
+		context.Background(), AnchorKey(testChainID, firstAnchorHour), []byte(`{}`), nil,
 	)
 	require.Error(t, err)
 	assert.Equal(t, int32(1), puts.Load(), "the SDK must not resend the anchor; the job's retry checks for it first")

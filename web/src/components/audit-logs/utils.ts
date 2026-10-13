@@ -36,11 +36,10 @@ export function getAPITokenInfo(log: AuditLogRecord): {
 export function resourceLabelForLog(log: AuditLogRecord): string {
   const details = safeParseDetails(log.details)
   let label = ''
-  const actionType = log.action_type ?? ''
   const actionName = log.action ?? ''
-  if (actionType === 'users' || actionName.startsWith('user.')) {
+  if (actionName.startsWith('user.')) {
     label = (details.email as string) || ''
-  } else if (actionType === 'tokens' || actionName.startsWith('api_token.')) {
+  } else if (actionName.startsWith('api_token.')) {
     label = (details.name as string) || ''
   }
   if (!label) {

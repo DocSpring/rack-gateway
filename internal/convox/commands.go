@@ -51,12 +51,6 @@ var Commands = []Command{
 		Description:  "Get information about an app",
 	},
 	{
-		Command:      "apps cancel",
-		Permissions:  []string{rbac.Convox(rbac.ResourceApp, rbac.ActionUpdate)},
-		AllowedFlags: []string{},
-		Description:  "Cancel an app update",
-	},
-	{
 		Command:      "apps lock",
 		Permissions:  []string{rbac.Convox(rbac.ResourceApp, rbac.ActionUpdate)},
 		AllowedFlags: []string{},
@@ -145,12 +139,6 @@ var Commands = []Command{
 		Permissions:  []string{rbac.Convox(rbac.ResourceRelease, rbac.ActionRead)},
 		AllowedFlags: []string{},
 		Description:  "Get information about a release",
-	},
-	{
-		Command:      "releases manifest",
-		Permissions:  []string{rbac.Convox(rbac.ResourceRelease, rbac.ActionRead)},
-		AllowedFlags: []string{},
-		Description:  "Get manifest for a release",
 	},
 	{
 		Command:      "releases promote",
@@ -262,43 +250,12 @@ var Commands = []Command{
 		AllowedFlags: []string{"count", "cpu", "memory"},
 		Description:  "Scale a service",
 	},
-	// Services
-	{
-		Command:      "services",
-		Permissions:  []string{rbac.Convox(rbac.ResourceApp, rbac.ActionRead)},
-		AllowedFlags: []string{},
-		Description:  "List services for an app",
-	},
-	{
-		Command:      "services restart",
-		Permissions:  []string{rbac.Convox(rbac.ResourceProcess, rbac.ActionStart)},
-		AllowedFlags: []string{},
-		Description:  "Restart a service",
-	},
 	// Instances
 	{
 		Command:      "instances",
 		Permissions:  []string{rbac.Convox(rbac.ResourceInstance, rbac.ActionList)},
 		AllowedFlags: []string{},
 		Description:  "List instances",
-	},
-	{
-		Command:      "instances ssh",
-		Permissions:  []string{rbac.Convox(rbac.ResourceInstance, rbac.ActionRead)},
-		AllowedFlags: []string{},
-		Description:  "Run a shell on an instance",
-	},
-	{
-		Command:      "instances terminate",
-		Permissions:  []string{rbac.Convox(rbac.ResourceInstance, rbac.ActionTerminate)},
-		AllowedFlags: []string{},
-		Description:  "Terminate an instance",
-	},
-	{
-		Command:      "instances keyroll",
-		Permissions:  []string{rbac.Convox(rbac.ResourceInstance, rbac.ActionKeyroll)},
-		AllowedFlags: []string{},
-		Description:  "Roll SSH key on instances",
 	},
 	// Rack
 	{
@@ -336,89 +293,6 @@ var Commands = []Command{
 		Permissions:  []string{rbac.Convox(rbac.ResourceRack, rbac.ActionUpdate)},
 		AllowedFlags: []string{"version"},
 		Description:  "Update the rack",
-	},
-	// Resources
-	{
-		Command:      "resources",
-		Permissions:  []string{rbac.Convox(rbac.ResourceResource, rbac.ActionList)},
-		AllowedFlags: []string{},
-		Description:  "List resources",
-	},
-	{
-		Command:      "resources info",
-		Permissions:  []string{rbac.Convox(rbac.ResourceResource, rbac.ActionRead)},
-		AllowedFlags: []string{},
-		Description:  "Get information about a resource",
-	},
-	{
-		Command:      "resources url",
-		Permissions:  []string{rbac.Convox(rbac.ResourceResource, rbac.ActionRead)},
-		AllowedFlags: []string{},
-		Description:  "Get URL for a resource",
-	},
-	// Balancers
-	{
-		Command:      "balancers",
-		Permissions:  []string{rbac.Convox(rbac.ResourceApp, rbac.ActionRead)},
-		AllowedFlags: []string{},
-		Description:  "List balancers for an app",
-	},
-	// SSL
-	{
-		Command:      "ssl",
-		Permissions:  []string{rbac.Convox(rbac.ResourceCert, rbac.ActionList)},
-		AllowedFlags: []string{},
-		Description:  "List certificate associates for an app",
-	},
-	{
-		Command:      "ssl update",
-		Permissions:  []string{rbac.Convox(rbac.ResourceCert, rbac.ActionUpdate)},
-		AllowedFlags: []string{},
-		Description:  "Update certificate for an app",
-	},
-	// Certs
-	{
-		Command:      "certs",
-		Permissions:  []string{rbac.Convox(rbac.ResourceCert, rbac.ActionList)},
-		AllowedFlags: []string{},
-		Description:  "List certificates",
-	},
-	{
-		Command:      "certs delete",
-		Permissions:  []string{rbac.Convox(rbac.ResourceCert, rbac.ActionDelete)},
-		AllowedFlags: []string{},
-		Description:  "Delete a certificate",
-	},
-	{
-		Command:      "certs generate",
-		Permissions:  []string{rbac.Convox(rbac.ResourceCert, rbac.ActionGenerate)},
-		AllowedFlags: []string{"domains"},
-		Description:  "Generate a certificate",
-	},
-	{
-		Command:      "certs import",
-		Permissions:  []string{rbac.Convox(rbac.ResourceCert, rbac.ActionImport)},
-		AllowedFlags: []string{"chain", "public", "private"},
-		Description:  "Import a certificate",
-	},
-	// Registries
-	{
-		Command:      "registries",
-		Permissions:  []string{rbac.Convox(rbac.ResourceRegistry, rbac.ActionList)},
-		AllowedFlags: []string{},
-		Description:  "List private registries",
-	},
-	{
-		Command:      "registries add",
-		Permissions:  []string{rbac.Convox(rbac.ResourceRegistry, rbac.ActionAdd)},
-		AllowedFlags: []string{"username", "password"},
-		Description:  "Add a private registry",
-	},
-	{
-		Command:      "registries remove",
-		Permissions:  []string{rbac.Convox(rbac.ResourceRegistry, rbac.ActionRemove)},
-		AllowedFlags: []string{},
-		Description:  "Remove private registry",
 	},
 }
 

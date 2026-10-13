@@ -6,6 +6,8 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+
+	"github.com/DocSpring/rack-gateway/internal/cli/webauthn"
 )
 
 // TestAuthCommand returns the cobra command for testing authentication and MFA flows.
@@ -235,8 +237,7 @@ func testOTPAuth(cmd *cobra.Command, baseURL, bearer string, status *MFAStatusRe
 }
 
 func testWebAuthnAuth(baseURL, bearer string, status *MFAStatusResponse) error {
-	// Check WebAuthn availability
-	if !checkWebAuthnAvailability() {
+	if !webauthn.CheckAvailability() {
 		return fmt.Errorf("no WebAuthn device detected")
 	}
 

@@ -1,25 +1,32 @@
 import { DEFAULT_PER_PAGE } from '@/lib/constants'
 
+// An entry's resource type is its action's resource (user for user.lock).
 export const RESOURCE_TYPES = {
   all: 'All Resources',
   app: 'App',
-  rack: 'Rack',
+  build: 'Build',
+  release: 'Release',
+  process: 'Process',
   env: 'Env',
   secret: 'Secret',
-  process: 'Process',
+  rack: 'Rack',
   system: 'System',
+  deploy_approval_request: 'Deploy Approval',
   api_token: 'API Token',
   user: 'User',
+  setting: 'Setting',
+  integration: 'Integration',
   auth: 'Auth',
-  admin: 'Admin',
+  mfa_method: 'MFA Method',
 } as const
 
+// An entry's action type is the scope of the permission its action needs.
 export const ACTION_TYPES = {
   all: 'All Actions',
   convox: 'Convox API',
+  gateway: 'Gateway',
   auth: 'Authentication',
-  users: 'User Management',
-  tokens: 'Token Management',
+  security: 'Security',
 } as const
 
 export const STATUS_TYPES = {

@@ -42,7 +42,6 @@ type User struct {
 	Session            *db.UserSession `json:"-"`
 	MFAType            string          `json:"-"` // "totp" or "webauthn" - inline MFA provided with request
 	MFAValue           string          `json:"-"` // The MFA verification data (TOTP code or WebAuthn assertion)
-	Suspended          bool            `json:"-"`
 	MFAEnrolled        bool            `json:"-"`
 	PreferredMFAMethod *string         `json:"-"`
 	LockedAt           *time.Time      `json:"-"`
@@ -235,7 +234,7 @@ func (a *Service) validateAPIToken(tokenString string, r *http.Request) (*User, 
 			_ = audit.LogDB(a.database, &db.AuditLog{
 				UserEmail:      "",
 				UserName:       "",
-				ActionType:     "auth",
+				ActionType:     audit.ActionTypeAuth,
 				Action:         "token.validate",
 				ResourceType:   "auth",
 				Resource:       "api_token",
@@ -257,9 +256,6 @@ func (a *Service) validateAPIToken(tokenString string, r *http.Request) (*User, 
 	if user == nil {
 		return nil, fmt.Errorf("token owner not found")
 	}
-	if user.Suspended {
-		return nil, fmt.Errorf("token owner is suspended")
-	}
 	if user.LockedAt != nil {
 		return nil, fmt.Errorf("token owner is locked")
 	}
@@ -271,7 +267,6 @@ func (a *Service) validateAPIToken(tokenString string, r *http.Request) (*User, 
 		IsAPIToken:         true,
 		TokenID:            &apiToken.ID,
 		TokenName:          apiToken.Name,
-		Suspended:          user.Suspended,
 		MFAEnrolled:        user.MFAEnrolled,
 		PreferredMFAMethod: user.PreferredMFAMethod,
 		LockedAt:           user.LockedAt,
@@ -384,7 +379,6 @@ func newAuthUserFromSessionResult(result *SessionValidationResult) *User {
 		Roles:              append([]string(nil), result.User.Roles...),
 		IsAPIToken:         false,
 		Session:            result.Session,
-		Suspended:          result.User.Suspended,
 		MFAEnrolled:        result.User.MFAEnrolled,
 		PreferredMFAMethod: result.User.PreferredMFAMethod,
 		LockedAt:           result.User.LockedAt,

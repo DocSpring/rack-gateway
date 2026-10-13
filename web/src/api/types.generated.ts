@@ -5186,7 +5186,7 @@ export interface components {
         "db.AuditLog": {
             /** @description e.g., "env.read", "user.create", "login.oauth_failed" */
             action?: string;
-            /** @description "convox", "users", "auth" */
+            /** @description permission scope: auth, convox, gateway, security */
             action_type?: string;
             api_token_id?: number;
             api_token_name?: string;
@@ -5309,7 +5309,6 @@ export interface components {
             name?: string;
             preferred_mfa_method?: string;
             roles?: string[];
-            suspended?: boolean;
             updated_at?: string;
         };
         "handlers.AuditLogsResponse": {

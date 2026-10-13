@@ -30,7 +30,7 @@ func (h *Handler) logDeniedRBACAction(
 	_ = h.logAudit(r, &db.AuditLog{
 		UserEmail:      email,
 		UserName:       r.Header.Get("X-User-Name"),
-		ActionType:     "convox",
+		ActionType:     audit.ActionTypeConvox,
 		Action:         audit.BuildAction(resource.String(), action.String()),
 		ResourceType:   resource.String(),
 		Resource:       resourceName,
@@ -337,7 +337,7 @@ func (h *Handler) logEnvDiffs(r *http.Request, email, _ string, diffs []envutil.
 		_ = h.logAudit(r, &db.AuditLog{
 			UserEmail:      email,
 			UserName:       userName,
-			ActionType:     "convox",
+			ActionType:     audit.ActionTypeConvox,
 			Action:         action,
 			ResourceType:   rtype,
 			Resource:       fmt.Sprintf("%s/%s", app, d.Key),

@@ -71,7 +71,7 @@ See [Roles](/security/rbac/roles/) for detailed permission lists.
 A token is always limited by the person who owns it:
 
 - **Capped by the owner's current role.** Every request needs the permission in the token's own list *and* in the owner's current role. Demote the owner and their tokens lose the extra access on the next request.
-- **Stops working with its owner.** Tokens of a locked, suspended or deleted user are rejected.
+- **Stops working with its owner.** Tokens of a locked or deleted user are rejected.
 - **Created within the owner's role.** When a token is created or edited, each permission must be one the owner's role grants. Deployers can create tokens for themselves; only admins can create tokens for other users.
 - **Rack access only, plus a few gateway endpoints.** Tokens can use the rack proxy (`/api/v1/rack-proxy/*`) and only these gateway endpoints: `GET /api/v1/info`, `GET /api/v1/rack`, `POST /api/v1/deploy-approval-requests` and `GET /api/v1/deploy-approval-requests/:id`. User, token, settings, audit-log and approval endpoints refuse tokens, even admin-owned ones.
 - **No privileged runs.** Tokens can never start a process with a custom image, host volumes, privileged mode or node placement options.

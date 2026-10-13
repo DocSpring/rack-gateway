@@ -5,14 +5,13 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/DocSpring/rack-gateway/internal/gateway/email"
 	"github.com/DocSpring/rack-gateway/internal/gateway/testutil/dbtest"
 )
 
 // Alerts go to the admins at the time of the alert: one added after startup gets them, and a locked one doesn't.
 func TestNotifierLooksUpAdminsWhenAlerting(t *testing.T) {
 	database := dbtest.NewDatabase(t)
-	n := NewNotifier(email.NoopSender{}, nil, database, nil)
+	n := NewNotifier(nil, database, nil)
 	t.Cleanup(n.Stop)
 	require.Empty(t, n.admins())
 

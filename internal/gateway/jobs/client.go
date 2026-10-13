@@ -57,8 +57,6 @@ func NewClient(pool *pgxpool.Pool, deps *Dependencies, auditAnchorConfig *AuditA
 	river.AddWorker(workers, jobemail.NewNewCLISessionWorker(deps.EmailSender))
 	river.AddWorker(workers, jobemail.NewRateLimitUserWorker(deps.EmailSender))
 	river.AddWorker(workers, jobemail.NewRateLimitAdminWorker(deps.EmailSender))
-	river.AddWorker(workers, jobemail.NewSuspiciousActivityUserWorker(deps.EmailSender))
-	river.AddWorker(workers, jobemail.NewSuspiciousActivityAdminWorker(deps.EmailSender))
 
 	// Email workers - user management
 	river.AddWorker(workers, jobemail.NewWelcomeWorker(deps.EmailSender))

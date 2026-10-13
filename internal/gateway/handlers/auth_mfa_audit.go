@@ -29,7 +29,7 @@ func (h *AuthHandler) auditMFAEvent(c *gin.Context, user *db.User, event mfaAudi
 	entry := &db.AuditLog{
 		UserEmail:    user.Email,
 		UserName:     user.Name,
-		ActionType:   "auth",
+		ActionType:   audit.ActionTypeAuth,
 		Action:       action,
 		ResourceType: event.resourceType,
 		Resource:     event.resource,

@@ -9,7 +9,7 @@
 export interface DbAuditLog {
   /** e.g., "env.read", "user.create", "login.oauth_failed" */
   action?: string;
-  /** "convox", "users", "auth" */
+  /** permission scope: auth, convox, gateway, security */
   action_type?: string;
   api_token_id?: number;
   api_token_name?: string;

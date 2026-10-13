@@ -267,10 +267,7 @@ flowchart LR
 
 - **TOTP seeds and YubiKey public IDs** are encrypted with AES-256-GCM under `COLUMN_ENCRYPTION_KEY` and
   bound to their user, so a copy of the database alone doesn't reveal them, and a value copied to another
-  user's row is rejected. A plaintext seed is never used as it is, but while the upgrade sweep for column
-  encryption exists (it will be removed in a later release), a plaintext seed written into the database is
-  encrypted by the next sweep, at startup or 10 minutes after it, and then works. Each value the sweep encrypts
-  is logged as a warning, and the sweep 10 minutes after startup reports any to Sentry. See
+  user's row is rejected. A plaintext seed written into the database is never used. See
   [Column Encryption](/configuration/environment-variables/#column-encryption).
 - **Backup codes** are stored only as keyed hashes.
 - **WebAuthn** stores only each credential's public key.

@@ -61,7 +61,6 @@ const mockUsers = [
     roles: ['admin'],
     created_at: '2024-01-01T00:00:00Z',
     updated_at: '2024-01-01T00:00:00Z',
-    suspended: false,
   },
   {
     email: 'viewer@example.com',
@@ -69,7 +68,6 @@ const mockUsers = [
     roles: ['viewer'],
     created_at: '2024-01-01T00:00:00Z',
     updated_at: '2024-01-01T00:00:00Z',
-    suspended: false,
   },
 ]
 
@@ -327,7 +325,6 @@ describe('UsersPage', () => {
           // created_at and updated_at intentionally empty to simulate missing
           created_at: '',
           updated_at: '',
-          suspended: false,
         },
       ]
       vi.mocked(api.get).mockResolvedValue(users)
@@ -351,7 +348,6 @@ describe('UsersPage', () => {
           roles: ['viewer'],
           created_at: '2024-01-01T00:00:00Z',
           updated_at: '2024-01-01T00:00:00Z',
-          suspended: false,
         },
       ]
       vi.mocked(api.get).mockResolvedValue(users)

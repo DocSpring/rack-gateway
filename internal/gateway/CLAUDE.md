@@ -153,7 +153,9 @@ Key files:
 - `db/audit_append.go`, `db/audit_hash.go`, `db/audit_normalize.go` - Hash-chained append (hash v2). The row is
   normalized to its stored form, hashed, then stored, so the stored row always re-hashes to `event_hash`. Never
   change the v2 encoding (existing rows would stop verifying); a new audit column needs a new hash version
-- `jobs/audit/anchor_writer.go` - Hourly S3 Object Lock anchors. Every write (job or `write-anchor`) holds the
+- `jobs/audit/anchor_writer.go` - Hourly S3 Object Lock anchors. The writer sets no retention: the bucket's default
+  COMPLIANCE rule locks them, and the gateway refuses to start (verification fails) unless that rule keeps them for
+  `AUDIT_ANCHOR_RETENTION_DAYS` (`auditverify.CheckBucketRetention`). Every write (job or `write-anchor`) holds the
   audit anchor advisory lock (`db.WithAuditAnchorLock`) from the existence check through the Put: anchors are
   permanent, so an overlapping write would be a permanent verification failure. `write-anchor` uses
   `WriteCurrentAnchor` (the database's clock, never the host's). The Put is sent once (`putAnchorOnce`: an SDK

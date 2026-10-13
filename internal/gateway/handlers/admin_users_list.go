@@ -51,7 +51,6 @@ func directoryEntry(user *db.User) *db.User {
 		Roles:           user.Roles,
 		CreatedAt:       user.CreatedAt,
 		UpdatedAt:       user.UpdatedAt,
-		Suspended:       user.Suspended,
 		MFAEnrolled:     user.MFAEnrolled,
 		LockedAt:        user.LockedAt,
 		CreatedByUserID: user.CreatedByUserID,

@@ -27,6 +27,11 @@ func verifyAnchors(
 	now time.Time,
 	report *Report,
 ) error {
+	if opts.MinRetentionDays > 0 {
+		if err := CheckBucketRetention(ctx, opts.Store, opts.Bucket, opts.MinRetentionDays); err != nil {
+			report.fail("%v", err)
+		}
+	}
 	records, err := loadAnchors(ctx, opts, report)
 	if err != nil {
 		return err

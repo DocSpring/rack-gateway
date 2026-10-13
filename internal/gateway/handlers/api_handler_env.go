@@ -55,7 +55,7 @@ func (h *APIHandler) logEnvUpdateDiffs(
 		_ = h.auditLogger.LogRequestEntry(c.Request.Context(), &db.AuditLog{
 			UserEmail:      email,
 			UserName:       name,
-			ActionType:     "convox",
+			ActionType:     audit.ActionTypeConvox,
 			Action:         action,
 			ResourceType:   resourceType,
 			Resource:       fmt.Sprintf("%s/%s", app, diff.Key),
@@ -172,7 +172,7 @@ func (h *APIHandler) logSecretAccessDenied(
 	_ = h.auditLogger.LogRequestEntry(c.Request.Context(), &db.AuditLog{
 		UserEmail:      email,
 		UserName:       name,
-		ActionType:     "convox",
+		ActionType:     audit.ActionTypeConvox,
 		Action:         audit.BuildAction(rbac.ResourceSecret.String(), rbac.ActionRead.String()),
 		ResourceType:   "secret",
 		Resource:       res,
@@ -224,7 +224,7 @@ func (h *APIHandler) logEnvRead(
 	_ = h.auditLogger.LogRequestEntry(c.Request.Context(), &db.AuditLog{
 		UserEmail:      email,
 		UserName:       name,
-		ActionType:     "convox",
+		ActionType:     audit.ActionTypeConvox,
 		Action:         action,
 		ResourceType:   resourceType,
 		Resource:       resource,
@@ -403,7 +403,7 @@ func (h *APIHandler) respondNoEnvChanges(c *gin.Context, ctx *envUpdateContext, 
 	_ = h.auditLogger.LogRequestEntry(c.Request.Context(), &db.AuditLog{
 		UserEmail:      ctx.email,
 		UserName:       ctx.name,
-		ActionType:     "convox",
+		ActionType:     audit.ActionTypeConvox,
 		Action:         audit.BuildAction(rbac.ResourceEnv.String(), rbac.ActionUpdate.String()),
 		ResourceType:   "env",
 		Resource:       ctx.app,

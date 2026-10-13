@@ -108,7 +108,7 @@ func (h *AuthHandler) auditLogin(c *gin.Context, resource, status string) bool {
 		return true
 	}
 	err := h.auditLogger.LogDBEntry(&db.AuditLog{
-		ActionType:   "auth",
+		ActionType:   audit.ActionTypeAuth,
 		Action:       audit.BuildAction(audit.ActionScopeLogin, rbac.ActionStart.String()),
 		ResourceType: "auth",
 		Resource:     resource,
@@ -426,7 +426,7 @@ func (h *AuthHandler) auditMFAUpdate(c *gin.Context, user *db.User, methodID int
 	if err := h.auditLogger.LogDBEntry(&db.AuditLog{
 		UserEmail:    user.Email,
 		UserName:     user.Name,
-		ActionType:   "auth",
+		ActionType:   audit.ActionTypeAuth,
 		Action:       audit.BuildAction(audit.ActionScopeMFAPreferences, rbac.ActionUpdate.String()),
 		ResourceType: "mfa_method",
 		Resource:     fmt.Sprintf("%d", methodID),

@@ -13,6 +13,7 @@ import (
 
 	"github.com/gorilla/websocket"
 
+	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
 	"github.com/DocSpring/rack-gateway/internal/gateway/config"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
@@ -395,7 +396,7 @@ func (h *Handler) logExecStart(r *http.Request, authUser *auth.User, path string
 		UserName:       r.Header.Get("X-User-Name"),
 		APITokenID:     tokenID,
 		APITokenName:   strings.TrimSpace(r.Header.Get("X-API-Token-Name")),
-		ActionType:     "convox",
+		ActionType:     audit.ActionTypeConvox,
 		Action:         "process.exec.start",
 		Resource:       resource,
 		ResourceType:   resourceType,

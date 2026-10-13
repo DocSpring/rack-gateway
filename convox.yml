@@ -23,7 +23,7 @@ environment:
   - AUDIT_HMAC_SECRET # Secret key used for HMAC-SHA256 cryptographic chain of audit logs
   - AUDIT_ANCHOR_BUCKET # S3 bucket name for WORM audit anchors
   - AUDIT_ANCHOR_CHAIN_ID # Chain identifier (typically rack alias, e.g., staging, eu, us)
-  - AUDIT_ANCHOR_RETENTION_DAYS # Object Lock retention in days (default: 400)
+  - AUDIT_ANCHOR_RETENTION_DAYS # Least default COMPLIANCE retention the bucket must have, in days (default: 400)
 
 services:
   gateway:

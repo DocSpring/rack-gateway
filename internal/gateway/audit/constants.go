@@ -25,7 +25,6 @@ var (
 	ActionScopeMFAPreferences        = rbac.ResourceMFAPreferences.String()
 	ActionScopeRateLimit             = "rate_limit"
 	ActionScopeRelease               = rbac.ResourceRelease.String()
-	ActionScopeSuspiciousActivity    = "suspicious_activity"
 	ActionScopeTrustedDevice         = rbac.ResourceTrustedDevice.String()
 )
 

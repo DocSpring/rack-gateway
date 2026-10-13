@@ -368,8 +368,9 @@ test('audit logs: view and filter', async ({ page }) => {
   const table = page.getByRole('table')
   await expect(table).toBeVisible()
 
-  // Filter by Action Type: Token Management
-  await page.selectOption('#action-type', 'tokens')
+  // Token changes are gateway actions on the api_token resource
+  await page.selectOption('#action-type', 'gateway')
+  await page.selectOption('#resource-type', 'api_token')
 
   // Filter by Status: Success
   await page.selectOption('#status', 'success')

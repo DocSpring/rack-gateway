@@ -129,7 +129,7 @@ func (h *harness) head() int64 {
 func (h *harness) writeAnchor() {
 	h.t.Helper()
 	h.bucket.AdvanceTo(h.now)
-	writer := jobaudit.NewAnchorWriterWorker(h.database, h.bucket, testBucket, testChainID, 7)
+	writer := jobaudit.NewAnchorWriterWorker(h.database, h.bucket, testBucket, testChainID)
 	require.NoError(h.t, writer.WriteAnchor(context.Background(), h.now))
 }
 
