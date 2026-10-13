@@ -33,6 +33,7 @@ func registerAuthRoutes(api *gin.RouterGroup, cfg *Config, h *handlerSet) {
 	authGroup.HEAD("/auth/web/login", h.auth.WebLoginStart)
 	authGroup.GET("/auth/web/callback", h.auth.WebLoginCallback)
 	authGroup.GET("/auth/web/logout", h.auth.WebLogout)
+	authGroup.POST("/auth/cli/logout", h.auth.CLILogout)
 }
 
 func registerMFARoutes(authenticated *gin.RouterGroup, cfg *Config, h *handlerSet) {

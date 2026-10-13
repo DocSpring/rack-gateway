@@ -441,7 +441,7 @@ Each gateway has its own users: signing in never creates one. Either:
 1. **Add them on each gateway** - an admin adds users and roles on its **Users** page
 2. **Seed them from configuration** - set the same `ADMIN_USERS`, `DEPLOYER_USERS`, `OPERATIONS_USERS` and
    `VIEWER_USERS` on every gateway (for example from one Terraform variable). Each start creates missing users
-   and resets listed users' roles to the list's role
+   with the list's role, and leaves existing users alone
 
 ## Disaster Recovery Runbook
 

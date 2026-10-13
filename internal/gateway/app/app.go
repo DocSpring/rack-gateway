@@ -65,8 +65,10 @@ func New() (*App, error) {
 		return nil, errors.Join(err, database.Close())
 	}
 
-	// Set up router
-	app.setupRouter()
+	if err := app.setupRouter(); err != nil {
+		app.Cleanup()
+		return nil, err
+	}
 
 	return app, nil
 }

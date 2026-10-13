@@ -47,6 +47,9 @@ export DEV_MODE=true # development (testbypass) builds only
 rack-gateway-api reset-db
 ```
 
+It drops every table and re-runs the migrations. The gateway creates the
+[seed users](/configuration/environment-variables/#seed-users) again when it next starts.
+
 <Aside type="danger">
 This command **drops all tables and data**. It requires explicit environment variable guards to prevent accidental execution.
 </Aside>

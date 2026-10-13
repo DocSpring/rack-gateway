@@ -18,7 +18,9 @@ func TestAuditAggregationMergeProcessExec(t *testing.T) {
 	defer func() { _ = db.Close() }()
 
 	// 1. Log process.exec.start (Visibility)
+	started := time.Now().UTC()
 	startLog := &gwdb.AuditLog{
+		Timestamp:      started,
 		UserEmail:      "dev@example.com",
 		ActionType:     "convox",
 		Action:         "process.exec.start",
@@ -40,12 +42,10 @@ func TestAuditAggregationMergeProcessExec(t *testing.T) {
 	assert.Equal(t, "process.exec.start", aggs[0].Action)
 	assert.Equal(t, 0, aggs[0].AvgResponseTimeMs)
 
-	// Simulate time passing
-	time.Sleep(100 * time.Millisecond)
-
 	// 2. Log process.exec (Completion)
 	// Must match key fields (resource, command, ip, user agent)
 	execLog := &gwdb.AuditLog{
+		Timestamp:      started.Add(100 * time.Millisecond),
 		UserEmail:      "dev@example.com",
 		ActionType:     "convox",
 		Action:         "process.exec",

@@ -1708,6 +1708,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/cli/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Log out a CLI session
+         * @description Revokes the session whose token is sent as `Authorization: Bearer <token>`. `rack-gateway logout`
+         *     calls it before removing the rack from its config. Cookies are ignored, so a browser can't be made
+         *     to call it, and API tokens get 401: they're revoked on the API Tokens page.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.CLILogoutResponse"];
+                    };
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+                /** @description Internal Server Error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+                /** @description Service Unavailable */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/cli/mfa": {
         parameters: {
             query?: never;
@@ -5208,6 +5276,9 @@ export interface components {
         };
         "handlers.CLILoginStartResponse": {
             auth_url: string;
+        };
+        "handlers.CLILogoutResponse": {
+            revoked?: boolean;
         };
         "handlers.ConfirmTOTPEnrollmentRequest": {
             code: string;

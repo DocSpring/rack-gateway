@@ -186,13 +186,17 @@ Sent when a user account is locked.
 
 #### MFA Auto-Lock
 
-Sent when an account is locked automatically after 5 failed MFA attempts in 5 minutes.
+Sent when an account is locked automatically after 5 failed MFA attempts in 5 minutes. The lock is recorded in
+the audit log as `user.lock` by `system`.
 
 | Field | Content |
 |-------|---------|
 | Subject | Account Locked - Multiple Failed Login Attempts |
 | To | Locked user email |
 | Content | Reason, contact instructions |
+
+Every admin who isn't locked also gets **User locked: \{email\}**, asking them to check with the user before
+unlocking the account.
 
 ### API Tokens
 

@@ -122,13 +122,14 @@ Your rack configurations are stored in `~/.config/rack-gateway/config.json`:
 
 ## Removing a Rack
 
-`logout` removes a rack, with its URL and session token, from your config:
+`logout` ends your session on that rack's gateway, then removes the rack, with its URL and session token, from your
+config:
 
 ```bash
 rack-gateway logout -r staging
 ```
 
-It doesn't revoke the session on that gateway; revoke it under your sessions in the web UI.
+If the gateway is gone for good, `rack-gateway logout -r staging --local` removes the rack without contacting it.
 
 ## Updating a Gateway URL
 

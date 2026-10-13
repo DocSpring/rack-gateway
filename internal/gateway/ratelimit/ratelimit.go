@@ -3,7 +3,6 @@ package ratelimit
 import (
 	"fmt"
 	"net/http"
-	"strings"
 	"sync"
 	"time"
 
@@ -20,6 +19,7 @@ type RateLimiter struct {
 	burst    int        // max burst size
 	cleanup  time.Duration
 	stop     chan struct{} // channel to stop cleanup goroutine
+	now      func() time.Time
 }
 
 type visitor struct {
@@ -43,6 +43,7 @@ func NewRateLimiter(requestsPerSecond float64, burst int) *RateLimiter {
 		burst:    burst,
 		cleanup:  5 * time.Minute,
 		stop:     make(chan struct{}),
+		now:      time.Now,
 	}
 
 	// Start cleanup goroutine to remove old visitors
@@ -51,26 +52,22 @@ func NewRateLimiter(requestsPerSecond float64, burst int) *RateLimiter {
 	return rl
 }
 
-// getVisitor retrieves or creates a rate limiter for the given IP
-func (rl *RateLimiter) getVisitor(ip string) *rate.Limiter {
+// allow reports whether the IP may make a request now, and takes a token if so.
+func (rl *RateLimiter) allow(ip string) bool {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
 
+	now := rl.now()
 	v, exists := rl.visitors[ip]
 	if !exists {
-		limiter := rate.NewLimiter(rl.rate, rl.burst)
-		rl.visitors[ip] = &visitor{
-			limiter:  limiter,
-			lastSeen: time.Now(),
-		}
-		return limiter
+		v = &visitor{limiter: rate.NewLimiter(rl.rate, rl.burst)}
+		rl.visitors[ip] = v
 	}
-
-	v.lastSeen = time.Now()
-	return v.limiter
+	v.lastSeen = now
+	return v.limiter.AllowN(now, 1)
 }
 
-// cleanupVisitors removes old entries from the visitors map
+// cleanupVisitors removes idle visitors every cleanup interval until Stop.
 func (rl *RateLimiter) cleanupVisitors() {
 	ticker := time.NewTicker(rl.cleanup)
 	defer ticker.Stop()
@@ -78,15 +75,21 @@ func (rl *RateLimiter) cleanupVisitors() {
 	for {
 		select {
 		case <-ticker.C:
-			rl.mu.Lock()
-			for ip, v := range rl.visitors {
-				if time.Since(v.lastSeen) > rl.cleanup {
-					delete(rl.visitors, ip)
-				}
-			}
-			rl.mu.Unlock()
+			rl.removeIdleVisitors()
 		case <-rl.stop:
 			return
+		}
+	}
+}
+
+// removeIdleVisitors forgets the IPs that haven't made a request for the cleanup interval.
+func (rl *RateLimiter) removeIdleVisitors() {
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+	now := rl.now()
+	for ip, v := range rl.visitors {
+		if now.Sub(v.lastSeen) > rl.cleanup {
+			delete(rl.visitors, ip)
 		}
 	}
 }
@@ -99,16 +102,13 @@ func (rl *RateLimiter) Stop() {
 // Middleware returns an HTTP middleware that enforces rate limiting
 func (rl *RateLimiter) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ip := netutil.ClientIP(r)
-
-		limiter := rl.getVisitor(ip)
-		if !limiter.Allow() {
+		if !rl.allow(netutil.ClientIP(r)) {
 			// Return 429 Too Many Requests
 			w.Header().Set("Content-Type", "application/json")
 			w.Header().Set("Retry-After", fmt.Sprintf("%d", int(1/float64(rl.rate))))
 			w.Header().Set("X-RateLimit-Limit", fmt.Sprintf("%d", int(rl.rate)))
 			w.Header().Set("X-RateLimit-Remaining", "0")
-			w.Header().Set("X-RateLimit-Reset", fmt.Sprintf("%d", time.Now().Add(time.Second).Unix()))
+			w.Header().Set("X-RateLimit-Reset", fmt.Sprintf("%d", rl.now().Add(time.Second).Unix()))
 
 			w.WriteHeader(http.StatusTooManyRequests)
 			errorMsg := `{"error":"rate limit exceeded",` +
@@ -119,37 +119,6 @@ func (rl *RateLimiter) Middleware(next http.Handler) http.Handler {
 			return
 		}
 
-		next.ServeHTTP(w, r)
-	})
-}
-
-// AuthEndpointsOnly wraps the middleware to only apply to auth-related endpoints
-func (rl *RateLimiter) AuthEndpointsOnly(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Only rate limit auth-related endpoints
-		path := r.URL.Path
-		if strings.Contains(path, "/auth/") ||
-			strings.Contains(path, "/login") ||
-			strings.Contains(path, "/logout") ||
-			strings.Contains(path, "/callback") ||
-			strings.Contains(path, "/tokens") && r.Method == "POST" {
-			// Apply rate limiting
-			ip := netutil.ClientIP(r)
-			limiter := rl.getVisitor(ip)
-			if !limiter.Allow() {
-				w.Header().Set("Content-Type", "application/json")
-				w.Header().Set("Retry-After", fmt.Sprintf("%d", int(1/float64(rl.rate))))
-				w.WriteHeader(http.StatusTooManyRequests)
-				errorMsg := `{"error":"rate limit exceeded",` +
-					`"message":"too many authentication attempts, please try again later"}`
-				if _, err := w.Write([]byte(errorMsg)); err != nil {
-					return
-				}
-				return
-			}
-		}
-
-		// Pass through for non-auth endpoints
 		next.ServeHTTP(w, r)
 	})
 }

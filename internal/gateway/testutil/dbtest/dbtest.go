@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"net/url"
 	"os"
@@ -88,9 +89,7 @@ func setupAdminConnection(t *testing.T, baseDSN string) (*sql.DB, func()) {
 
 func generateTestDBName() string {
 	var b [8]byte
-	if _, err := rand.Read(b[:]); err != nil {
-		panic(fmt.Sprintf("failed to generate random bytes: %v", err))
-	}
+	_, _ = rand.Read(b[:]) // never returns an error (crashes the program instead)
 	// Mask to ensure we stay within int64 positive range (0 to MaxInt64)
 	// G115: Masked to prevent overflow
 	randomNum := int64(binary.LittleEndian.Uint64(b[:]) & 0x7FFFFFFFFFFFFFFF)
@@ -109,22 +108,20 @@ func buildTestDSN(t *testing.T, baseDSN, dbName string) string {
 
 func waitForDatabaseReady(t *testing.T, dsn string) {
 	t.Helper()
-	for i := 0; i < 300; i++ {
-		testConn, err := sql.Open("pgx", dsn)
-		if err == nil {
-			if err = testConn.Ping(); err == nil {
-				if cerr := testConn.Close(); cerr != nil {
-					t.Fatalf("close test connection: %v", cerr)
-				}
-				return
-			}
-			if cerr := testConn.Close(); cerr != nil {
-				t.Fatalf("close test connection: %v", cerr)
-			}
-		}
-		time.Sleep(50 * time.Millisecond)
+	err := retry(15*time.Second, 50*time.Millisecond, func() (bool, error) {
+		return true, pingDatabase(dsn)
+	})
+	if err != nil {
+		t.Fatalf("database did not become ready in time: %v", err)
 	}
-	t.Fatal("database did not become ready in time")
+}
+
+func pingDatabase(dsn string) error {
+	conn, err := sql.Open("pgx", dsn)
+	if err != nil {
+		return err
+	}
+	return errors.Join(conn.Ping(), conn.Close())
 }
 
 // testPoolConfig is the connection pool of each test database.

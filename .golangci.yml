@@ -41,6 +41,11 @@ linters:
           - gocognit
           - funlen
           - goconst
+      # Command-line programs print their output.
+      - path: '^(cmd|internal/cli)/'
+        linters:
+          - forbidigo
+        text: 'fmt\.Print'
   settings:
     gosec:
       # Exclude rules that produce false positives on manually-verified secure code:
@@ -96,13 +101,15 @@ linters:
       line-length: 120
       tab-width: 4
     forbidigo:
+      # Patterns match the called identifier (e.g. `time.Sleep`), not source text, so they're anchored and have no
+      # parentheses.
       forbid:
-        - pattern: 'panic\('
+        - pattern: '^panic$'
           msg: "panic is forbidden; return errors instead"
-        - pattern: 'fmt\.Print(f|ln)?\('
+        - pattern: '^fmt\.Print(f|ln)?$'
           msg: "use structured logging instead of fmt.Print*"
-        - pattern: 'time\.Sleep\('
-          msg: "avoid time.Sleep; use context with timeout"
+        - pattern: '^time\.Sleep$'
+          msg: "avoid time.Sleep; wait on a timer or ticker with a context"
     misspell:
       locale: US
 

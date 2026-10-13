@@ -48,12 +48,16 @@ rack-gateway login            # sign in again to the current rack
 
 ### logout
 
-Remove the rack, with its URL and session token, from your local config. This doesn't revoke the session on the
-gateway: revoke it under your sessions in the web UI.
+End the rack's session on the gateway, then remove the rack, with its URL and session token, from your local
+config. If the gateway can't be reached or doesn't end the session, the rack stays configured and the command fails.
 
 ```bash
 rack-gateway logout [flags]
 ```
+
+**Flags:**
+- `--local` - Only remove the rack from this machine. The session stays valid on the gateway until it expires or
+  you revoke it under your sessions in the web UI.
 
 Use the global `--rack` flag to log out of another rack.
 

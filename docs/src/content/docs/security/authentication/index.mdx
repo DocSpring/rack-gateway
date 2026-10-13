@@ -164,7 +164,7 @@ See [MFA Overview](/user-guide/mfa/) for setup details.
 |---------------|-----------------|------------------------|
 | **Creation** | OAuth flow | Created in the web UI or with `rack-gateway api-token create` (deployers for themselves, admins for anyone) |
 | **Lifetime** | Web: idle timeout; CLI: 90 days from last use | Until deleted or its optional expiry |
-| **Revocation** | Web logout, or revoking it from the user's sessions | Delete token |
+| **Revocation** | Logout (web or `rack-gateway logout`), or revoking it from the user's sessions | Delete token |
 | **MFA** | Required | N/A (limited by permissions instead) |
 | **CSRF** | Required (web) | Not required |
 | **Use Case** | Interactive access | CI/CD, scripts |

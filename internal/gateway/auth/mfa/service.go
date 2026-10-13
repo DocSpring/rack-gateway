@@ -123,41 +123,6 @@ func NewService(
 	}, nil
 }
 
-// checkAndLockAccount checks failed MFA attempts and locks account if threshold exceeded.
-func (s *Service) checkAndLockAccount(userID int64) error {
-	failedAttempts, err := s.db.CountRecentFailedMFAAttempts(userID, 5)
-	if err != nil {
-		return fmt.Errorf("failed to count failed attempts: %w", err)
-	}
-	if failedAttempts < 5 {
-		return nil
-	}
-
-	user, err := s.db.GetUserByID(userID)
-	if err != nil {
-		return fmt.Errorf("failed to get user: %w", err)
-	}
-
-	if err := s.db.LockUser(userID, "Automatic lock: 5 failed MFA attempts in 5 minutes", nil); err != nil {
-		return fmt.Errorf("failed to lock account: %w", err)
-	}
-
-	if s.emailSender != nil && user != nil {
-		subject := "Account Locked - Multiple Failed Login Attempts"
-		textBody := "Your account has been automatically locked due to multiple failed authentication " +
-			"attempts.\n\nReason: 5 failed MFA attempts in 5 minutes\n\nIf this was not you, please contact " +
-			"your administrator immediately.\n\nFor assistance, please contact your system administrator."
-		htmlBody := `<p><strong>Your account has been automatically locked</strong> due to multiple ` +
-			`failed authentication attempts.</p>
-<p><strong>Reason:</strong> 5 failed MFA attempts in 5 minutes</p>
-<p><strong style="color: #d9534f;">If this was not you, please contact your administrator immediately.</strong></p>
-<p>For assistance, please contact your system administrator.</p>`
-		_ = s.emailSender.Send(user.Email, subject, textBody, htmlBody)
-	}
-
-	return fmt.Errorf("account locked due to multiple failed attempts - contact administrator")
-}
-
 // touchMFAMethod confirms a method if needed or updates its last-used timestamp.
 func (s *Service) touchMFAMethod(method *db.MFAMethod) error {
 	if method == nil {

@@ -134,7 +134,9 @@ func runDeployApprovalWait(cmd *cobra.Command, cfg deployApprovalWaitConfig) err
 		if done {
 			return waiter.printSummary()
 		}
-		waiter.sleep()
+		if err := pause(waiter.cmd, waiter.pollInterval); err != nil {
+			return err
+		}
 	}
 }
 
@@ -395,8 +397,4 @@ func (w *deployApprovalWaiter) writeRequestSummary(rack string, request deployAp
 		return err
 	}
 	return printDeployApprovalDetails(out, &request, rack, true)
-}
-
-func (w *deployApprovalWaiter) sleep() {
-	time.Sleep(w.pollInterval)
 }

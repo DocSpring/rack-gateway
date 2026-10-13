@@ -93,16 +93,16 @@ func ensureTemplate(t *testing.T, admin *sql.DB, baseDSN string) string {
 // Postgres container restarts once after initializing (e.g. the first test run in CI).
 func adminConn(ctx context.Context, t *testing.T, admin *sql.DB) *sql.Conn {
 	t.Helper()
-	var err error
-	for attempt := 0; attempt < 100; attempt++ {
-		var conn *sql.Conn
-		if conn, err = admin.Conn(ctx); err == nil {
-			return conn
-		}
-		time.Sleep(100 * time.Millisecond)
+	var conn *sql.Conn
+	err := retry(10*time.Second, 100*time.Millisecond, func() (bool, error) {
+		var err error
+		conn, err = admin.Conn(ctx)
+		return true, err
+	})
+	if err != nil {
+		t.Fatalf("template connection: %v", err)
 	}
-	t.Fatalf("template connection: %v", err)
-	return nil
+	return conn
 }
 
 // migrateTemplate runs every migration in the template and closes all its connections, so it can be copied.
@@ -133,15 +133,11 @@ func migrateTemplate(t *testing.T, dsn string) {
 func cloneTemplate(t *testing.T, admin *sql.DB, name, template string) {
 	t.Helper()
 	query := strings.Join([]string{"CREATE DATABASE", pqQuoteIdent(name), "TEMPLATE", pqQuoteIdent(template)}, " ")
-	var err error
-	for attempt := 0; attempt < 50; attempt++ {
-		if _, err = admin.Exec(query); err == nil {
-			return
-		}
-		if !strings.Contains(err.Error(), "is being accessed by other users") {
-			break
-		}
-		time.Sleep(100 * time.Millisecond)
+	err := retry(5*time.Second, 100*time.Millisecond, func() (bool, error) {
+		_, err := admin.Exec(query)
+		return err != nil && strings.Contains(err.Error(), "is being accessed by other users"), err
+	})
+	if err != nil {
+		t.Fatalf("create database %s from template %s: %v", name, template, err)
 	}
-	t.Fatalf("create database %s from template %s: %v", name, template, err)
 }
