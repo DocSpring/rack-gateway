@@ -92,7 +92,12 @@ tests, web and CLI E2E, builds) is too slow to run locally on every push. CI run
 
 - `govulncheck` - Check for known Go vulnerabilities
 - `shellcheck` - Validate all shell scripts
-- `npm audit` - Check for npm package vulnerabilities
+- `task sec:js` - `bun audit` of the web, docs and mock OAuth packages; fails on any high or critical advisory
+
+CI runs all three on every push. The nightly Security Scan workflow (`.github/workflows/security-scan.yml`) runs
+`govulncheck` and the JavaScript audit again, and scans the published Docker image with Trivy, so new advisories
+show up when nobody pushes. Fix a failing scan by upgrading the package (refresh its `bun.lock` entry if it's a
+transitive dependency).
 
 ### 7. DeepSource Static Analysis
 

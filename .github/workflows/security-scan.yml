@@ -35,7 +35,7 @@ jobs:
       - name: Check Go vulnerabilities
         run: govulncheck ./...
 
-  web-audit:
+  js-audit:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -47,17 +47,19 @@ jobs:
         with:
           bun-version: "1.4.2"
 
-      - name: Install web packages
-        working-directory: web
-        run: bun install --frozen-lockfile
-
-      - name: Audit web dependencies (high and critical)
-        working-directory: web
-        run: bun audit --audit-level=high
+      - name: Audit web, docs and mock OAuth dependencies (high and critical)
+        run: scripts/check_js_audit.sh
 
   image-scan:
     runs-on: ubuntu-24.04
     steps:
+      # The image repository needs a login to pull.
+      - name: Log in to Docker Hub
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_TOKEN }}
+
       - name: Scan the published gateway image
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:

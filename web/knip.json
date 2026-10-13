@@ -1,19 +1,13 @@
 {
-  "$schema": "https://unpkg.com/knip@5/schema-jsonc.json",
+  "$schema": "https://unpkg.com/knip@6/schema-jsonc.json",
   "ignore": [
     "src/api/generated.ts",
     "src/lib/generated/**",
     "src/contexts/step-up-debug.ts",
     "src/lib/api.ts",
     "src/api/schemas/**",
-    "orval.config.ts",
     "src/api/types.generated.ts",
     "src/components/ui/**"
   ],
-  "ignoreDependencies": [
-    "@radix-ui/react-tabs",
-    "tailwindcss",
-    "tw-animate-css",
-    "@biomejs/biome"
-  ]
+  "ignoreDependencies": ["@radix-ui/react-tabs"]
 }
