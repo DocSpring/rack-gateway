@@ -28,7 +28,8 @@ Multi-factor authentication (MFA) adds a second factor to your Rack Gateway acco
 </CardGrid>
 
 <Aside type="note">
-YubiKey OTP support exists at the API level when Yubico credentials are configured, but the current web UI only exposes TOTP and WebAuthn enrollment.
+YubiKey OTP support exists at the API level when Yubico credentials are configured, but the web UI only offers TOTP
+and WebAuthn enrollment. See [YubiKey](/user-guide/mfa/yubikey/).
 </Aside>
 
 ## MFA Enrollment
@@ -41,22 +42,32 @@ If MFA is required by your organization, you will be redirected to **Account Sec
 
 1. Open the web UI
 2. Go to **Account Security**
-3. Click **Enable MFA**
-4. Choose **Authenticator app** or **Passkey/security key**
+3. Click **Enable MFA** (or, once you have a method, **Add Method** under **Registered MFA Methods**)
+4. Choose **Authenticator app** or **Passkey or security key**
+
+With both an authenticator app and a security key, **Preferred sign-in method** picks the one you're asked for
+first, on the web and in the CLI.
+
+### Disable MFA
+
+**Disable MFA** on Account Security removes every method (type `DISABLE` to confirm). Each removal needs MFA. If
+your gateway requires MFA for all users, you must enroll again before you can use anything else.
 
 ## Step-Up Authentication
 
 Some sensitive actions require MFA verification even with an active session. Examples include:
 
-- Creating or editing API tokens
-- Approving deploy requests
-- Updating user roles
-- Changing security-related settings
 - Revealing a secret env value in the web UI
+- Changing env vars, deploying, restarting or scaling an app
+- Trusting a device, regenerating backup codes, or editing an MFA method
 - Adding another MFA method (your first one needs no verification)
 
 Verifying a factor opens a step-up window, 10 minutes by default and configurable by admins. Only a verified factor
 opens one: signing in on a trusted device, or without an MFA prompt, doesn't.
+
+A few actions ask for MFA every time, even inside the window: creating, editing or deleting API tokens, approving
+deploy requests, adding, changing or deleting users, removing an MFA method, and most security settings. See
+[MFA Requirements](/security/rbac/permissions/#mfa-requirements) for the full list.
 
 ## Trusted Devices
 

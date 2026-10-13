@@ -40,7 +40,7 @@ sequenceDiagram
 
 3. **Admin approves**
 
-   Approval requires MFA step-up authentication
+   Approving asks for MFA every time (a recent step-up doesn't cover it)
 
 4. **CI auto-approved**
 
@@ -129,13 +129,14 @@ the request and create a new one.
 `convox builds import` is never covered by an approval: an imported build brings its own manifest and images, which
 the gateway doesn't check. It needs `convox:build:import`, which only admins hold, and MFA.
 
-### MFA Step-Up
+### MFA on Every Approval
 
-Approvals require multi-factor authentication:
+Approving, rejecting and extending a request ask for MFA every time, even within the step-up window:
 
-- Admin must verify MFA when approving
+- Admin must verify MFA for each approval
 - Prevents approval with compromised session
 - Auditable proof of human authorization
+- API tokens can't approve
 
 ### Time-Limited Approvals
 
@@ -192,6 +193,7 @@ The `deploy_approval_requests` table tracks the complete lifecycle:
 | `target_api_token_id` | bigint | CI/CD token that will use approval |
 | `approved_by_user_id` | bigint | Admin who approved |
 | `approval_expires_at` | timestamp | When approval expires |
+| `object_url`, `build_id`, `release_id` | text | The archive, build and release made under the approval |
 
 ## Configuration
 
@@ -208,9 +210,9 @@ Configure via UI or environment variables:
 
 | Setting | Description |
 |---------|-------------|
-| `vcs_provider` | Version control (github, bitbucket) |
+| `vcs_provider` | `github` (default, from `default_vcs_provider`) or `bitbucket`; used for CircleCI links. Commit verification and PR comments are GitHub-only |
 | `vcs_repo` | Repository in org/repo format |
-| `ci_provider` | CI system (circleci) |
+| `ci_provider` | CI system: `circleci` (default, from `default_ci_provider`) |
 | `circleci_approval_job_name` | CircleCI approval job name |
 | `circleci_auto_approve_on_approval` | Enable auto-approval (the gateway first checks the workflow's pipeline builds the approved commit of `vcs_repo`) |
 | `service_image_patterns` | **Required.** Map of service name (or `*`) to an anchored regex; `{{GIT_COMMIT}}` is replaced with the approved commit, e.g. `{"*": "docker\\.io/org/app:{{GIT_COMMIT}}-amd64"}` |
@@ -244,7 +246,7 @@ rack-gateway deploy-approval approve <request-id> \
   --notes "Reviewed diff, LGTM"
 ```
 
-Requires MFA step-up authentication. The command first shows the request (rack, app, full commit, message, branch,
+Asks for MFA every time. The command first shows the request (rack, app, full commit, message, branch,
 pull request and requesting token). From a terminal it then asks you to press Enter before approving. Only a
 pending request can be approved; one that is already approved or deployed counts as done.
 
@@ -301,11 +303,16 @@ Prints the request's status, message, app, token, commit, branch, pull request (
 
 ```bash
 rack-gateway deploy-approval request \
+  --app myapp \
   --git-commit "$CIRCLE_SHA1" \
   --message "Deploy" \
   --wait \
   --timeout 20m
 ```
+
+`--wait` polls every `--poll-interval` (5s) until the request is approved or rejected, and gives up after
+`--timeout` (20 minutes by default; `0` waits indefinitely). A request made with a user session instead of an API
+token must name the token that will deploy with `--target-api-token-id`.
 
 ## Several Apps per Commit
 
@@ -331,11 +338,14 @@ or lost its connection may still be running on the rack, so a retry is refused f
 
 | Permission | Description | Roles |
 |------------|-------------|-------|
-| `gateway:deploy-approval-request:create` | Create requests | CI/CD |
-| `gateway:deploy-approval-request:approve` | Approve/reject | Admin (requires MFA) |
-| `convox:deploy:deploy_with_approval` | Deploy when approved | CI/CD |
+| `gateway:deploy_approval_request:create` | Create requests | CI/CD, Deployer, Admin |
+| `gateway:deploy_approval_request:read` | Read a request (what `--wait` polls) | CI/CD, Deployer, Admin |
+| `gateway:deploy_approval_request:approve` | Approve, reject and extend | Admin (MFA every time) |
+| `convox:deploy:deploy_with_approval` | Deploy when approved | CI/CD, Deployer, Admin |
 
-The `deploy_with_approval` permission grants access to all deployment actions when an active approval exists.
+`deploy_with_approval` lets a token upload, build and promote for an app only under an approved request for that
+app and the token, within the limits described above. Listing requests (and the web UI's list) needs
+`gateway:deploy_approval_request:list`, which only admins hold.
 
 ## Security Model
 

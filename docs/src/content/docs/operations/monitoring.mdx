@@ -1,31 +1,44 @@
 ---
 title: "Monitoring"
-description: "Health checks, metrics, and error tracking."
+description: "Health checks, heartbeats, error tracking and logs."
 ---
 
-import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
+import { Aside } from '@astrojs/starlight/components';
 
-Effective monitoring ensures Rack Gateway remains available and helps identify issues before they impact users.
+Rack Gateway gives you four signals: a health endpoint, heartbeats it sends out, errors in Sentry, and logs. It
+doesn't expose metrics; use your platform's container metrics for CPU and memory.
 
-## Health Endpoints
-
-Rack Gateway exposes health endpoints for monitoring and orchestration:
+## Health Endpoint
 
 ```bash
 curl https://gateway.example.com/api/v1/health
 ```
 
-Response:
+Healthy:
 ```json
-{
-  "status": "ok"
-}
+{"status": "ok", "service": "rack-gateway"}
 ```
 
-Use for:
-- Container/pod liveness probes
-- Basic uptime monitoring
-- Load balancer health checks
+For a minute after an audit log write fails, the gateway refuses every request it can't record, and the health
+check answers 503:
+
+```json
+{"status": "unhealthy", "service": "rack-gateway", "error": "..."}
+```
+
+It doesn't query the database, so it stays healthy while the database is unreachable until a request fails to
+write its audit entry. Use it for container health checks and load balancers.
+
+### Convox
+
+The `convox.yml` in the repository already points Convox's health check at it:
+
+```yaml
+services:
+  gateway:
+    health: /api/v1/health
+    port: 8080
+```
 
 ## Heartbeats
 
@@ -47,52 +60,7 @@ monitoring service's key, so the gateway never logs them.
 A ping that fails is logged and not retried; the next one is due on schedule. Leave both unset on a gateway that
 is stopped on purpose (for example a staging rack shut down at night), or its monitors will alert.
 
-## Kubernetes Probes
-
-Configure health checks in your Kubernetes deployment:
-
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: rack-gateway
-spec:
-  template:
-    spec:
-      containers:
-        - name: gateway
-          livenessProbe:
-            httpGet:
-              path: /api/v1/health
-              port: 8443
-            initialDelaySeconds: 10
-            periodSeconds: 15
-            failureThreshold: 3
-          readinessProbe:
-            httpGet:
-              path: /api/v1/health
-              port: 8443
-            initialDelaySeconds: 5
-            periodSeconds: 10
-            failureThreshold: 3
-```
-
-## Convox Health Checks
-
-Configure in `convox.yml`:
-
-```yaml
-services:
-  gateway:
-    health:
-      path: /api/v1/health
-      interval: 15
-      timeout: 5
-```
-
 ## Error Tracking with Sentry
-
-Rack Gateway integrates with Sentry for error tracking and performance monitoring.
 
 ### Configuration
 
@@ -107,58 +75,55 @@ SENTRY_JS_DSN=https://def456@sentry.io/789012
 SENTRY_ENVIRONMENT=production
 ```
 
+At startup the gateway logs `Sentry enabled (environment=..., release=...)`. See
+[Environment Variables](/configuration/environment-variables/) for the release and sampling settings.
+
 ### What Gets Tracked
 
 | Event Type | Details |
 |------------|---------|
-| **Panics** | Unhandled errors with stack traces |
-| **HTTP Errors** | 5xx responses with request context |
-| **Database Errors** | Connection failures, query timeouts |
-| **External Failures** | OAuth, Convox API errors |
+| **Panics** | Recovered panics with stack traces |
+| **HTTP Errors** | Every 5xx response |
+| **Background jobs** | Each failed job attempt (email, Slack, CircleCI, GitHub, audit anchors), tagged with the job kind |
+| **Audit failures** | A failed audit write, and the hourly audit verification failing |
+| **Notifications** | Slack messages that couldn't be sent |
 
-### Filtering Sensitive Data
+### Sensitive Data
 
-Sentry automatically filters sensitive fields. Additional scrubbing is configured for:
+The gateway turns off the SDK's own collection of request data and user details. Before an event leaves, it
+removes every request header except `Accept`, `Content-Type`, `User-Agent` and `X-Request-ID`, and drops cookies,
+the query string and the request body, so session tokens, API tokens and env values never reach Sentry.
 
-- Session tokens
-- API tokens
-- OAuth tokens
-- Environment variable values
-
-## Log Monitoring
+## Logs
 
 ### Log Format
 
-Rack Gateway emits two kinds of logs:
+Rack Gateway writes two kinds of lines to stdout:
 
-- **Application logs** use standard text output (Go `log` format)
-- **Audit logs** are structured JSON written to stdout for CloudWatch ingestion
-
-Example application log:
+- **Application logs** in Go's `log` format, with a level and optional topic, for example
+  `[ERROR] job email:user:welcome failed: ...`
+- **Request logs**: one JSON line per request
 
 ```
-2025/01/29 12:34:56 WebAuthn enabled: rpid=gateway.example.com origin=https://gateway.example.com
+2025/01/29 12:34:56 Sentry enabled (environment=production, release=RABCDEF)
 ```
-
-Example audit log (JSON):
 
 ```json
 {
-  "ts": "2024-01-15T10:30:00Z",
+  "ts": "2025-01-15T10:30:00Z",
   "user_email": "alice@example.com",
-  "action_type": "convox",
-  "action": "deploy.create",
-  "resource": "myapp",
-  "resource_type": "app",
-  "status": "success",
-  "rbac_decision": "allow",
-  "http_status": 200,
+  "method": "POST",
+  "path": "/apps/myapp/releases/RABC123/promote",
+  "status": 200,
   "latency_ms": 1250,
-  "ip_address": "192.168.1.100",
-  "user_agent": "rack-gateway-cli/1.0.0",
-  "event_count": 1
+  "rbac_decision": "allow",
+  "request_id": "0b6c...",
+  "client_ip": "100.64.0.12"
 }
 ```
+
+`query_params` and `response_error` are added when present. These lines are for log search; the audit log in the
+database (with its hash chain and anchors) is the record. See [Audit Logging](/concepts/audit-logging/).
 
 ### Log Levels
 
@@ -166,169 +131,32 @@ Example audit log (JSON):
 |-------|-----------|
 | `error` | Failures requiring attention |
 | `warn` | Potential issues, degraded functionality |
-| `info` | Normal operations, request logging |
-| `debug` | Detailed diagnostic information |
+| `info` | Normal operations |
+| `debug` | Detailed diagnostics, only for the topics in `DEBUG_TOPICS` |
 
-Configure with:
 ```bash
 LOG_LEVEL=info  # Options: debug, info, warn, error
 ```
 
-### Log Aggregation
+### Where Logs Go
 
-<Tabs>
-<TabItem label="CloudWatch">
+On Convox, `convox logs -a rack-gateway` follows them, and the rack ships them to CloudWatch Logs, kept for
+`LOG_RETENTION_DAYS` (the `awsLogs` setting in `convox.yml`). With Docker, use `docker logs` or your log driver.
 
-For AWS deployments, logs are automatically available in CloudWatch:
+## What to Alert On
 
-```bash
-# View logs in CloudWatch
-aws logs tail /ecs/rack-gateway --follow
-```
+| Signal | How |
+|--------|-----|
+| Gateway down or stuck | The uptime heartbeat stops |
+| Audit writes failing | Health check returns 503; Sentry error |
+| Audit chain or anchors wrong | Audit verification failure in Sentry and Slack (`audit_log.verification_*`), or its heartbeat stops |
+| Errors | New Sentry issues, 5xx responses |
+| Security events | Slack routing for `login.*_failed`, `mfa.verify_failed`, `api_token.*` and the other [default patterns](/integrations/slack/#default-channels) |
+| Capacity | Container CPU and memory from your platform (the default limit is 128 MB) |
 
-</TabItem>
-<TabItem label="Datadog">
-
-Add the Datadog agent and configure log collection:
-
-```yaml
-logs:
-  - type: docker
-    source: rack-gateway
-    service: rack-gateway
-```
-
-</TabItem>
-<TabItem label="Elasticsearch">
-
-Use Filebeat to ship logs:
-
-```yaml
-filebeat.inputs:
-  - type: container
-    paths:
-      - /var/lib/docker/containers/*/*.log
-    processors:
-      - add_kubernetes_metadata: ~
-```
-
-</TabItem>
-</Tabs>
-
-## Key Metrics
-
-Monitor these metrics for Rack Gateway health:
-
-### Application Metrics
-
-| Metric | Description | Alert Threshold |
-|--------|-------------|-----------------|
-| Request latency | p50, p95, p99 response times | p99 &gt; 2s |
-| Error rate | 5xx responses / total requests | &gt; 1% |
-| Request volume | Requests per second | Baseline deviation |
-
-### Infrastructure Metrics
-
-| Metric | Description | Alert Threshold |
-|--------|-------------|-----------------|
-| CPU usage | Container CPU utilization | &gt; 80% sustained |
-| Memory usage | Container memory utilization | &gt; 80% |
-| Database connections | Active connection count | Near max_connections |
-
-### Business Metrics
-
-| Metric | Description | Alert Threshold |
-|--------|-------------|-----------------|
-| Active sessions | Concurrent authenticated users | Capacity planning |
-| API token usage | Requests per token | Anomaly detection |
-| Failed authentications | OAuth/MFA failures | Spike detection |
-
-## Alerting
-
-### Critical Alerts (Page On-Call)
-
-- Health endpoint returns non-200
-- Error rate exceeds 5%
-- Database connection failures
-- Authentication system unavailable
-
-### Warning Alerts (Notify Team)
-
-- Error rate exceeds 1%
-- Latency p99 exceeds SLA
-- CPU/memory approaching limits
-- Unusual access patterns detected
-
-### Example Alerting Rules
-
-<Tabs>
-<TabItem label="Prometheus">
-
-```yaml
-groups:
-  - name: rack-gateway
-    rules:
-      - alert: GatewayHighErrorRate
-        expr: |
-          sum(rate(http_requests_total{job="rack-gateway",status=~"5.."}[5m]))
-          / sum(rate(http_requests_total{job="rack-gateway"}[5m])) > 0.01
-        for: 5m
-        labels:
-          severity: warning
-        annotations:
-          summary: "High error rate on Rack Gateway"
-
-      - alert: GatewayDown
-        expr: up{job="rack-gateway"} == 0
-        for: 1m
-        labels:
-          severity: critical
-        annotations:
-          summary: "Rack Gateway is down"
-```
-
-</TabItem>
-<TabItem label="CloudWatch">
-
-```bash
-aws cloudwatch put-metric-alarm \
-  --alarm-name rack-gateway-health \
-  --metric-name HealthCheckStatus \
-  --namespace AWS/Route53 \
-  --statistic Minimum \
-  --period 60 \
-  --threshold 1 \
-  --comparison-operator LessThanThreshold \
-  --evaluation-periods 2 \
-  --alarm-actions arn:aws:sns:us-east-1:123456789:alerts
-```
-
-</TabItem>
-</Tabs>
-
-## Dashboard Example
-
-Key panels for a monitoring dashboard:
-
-| Category | Metric | Value |
-|----------|--------|-------|
-| **Traffic** | Request Rate | 100 req/s |
-| | Error Rate | 0.5% |
-| | Latency (p99) | 150ms |
-| **Users** | Active Users | 50 |
-| | API Token Usage | 200 req/min |
-| | MFA Events | 10 |
-| **Resources** | Database Connections | 15/50 |
-| | CPU Usage | 45% |
-| | Memory | 60% |
-
-## Best Practices
-
-1. **Set up health check monitoring first** - Basic availability is critical
-2. **Configure error tracking early** - Catch issues before users report them
-3. **Create runbooks for alerts** - Document response procedures
-4. **Review logs regularly** - Don't just alert, understand patterns
-5. **Test alerting** - Verify alerts reach the right people
+<Aside type="tip">
+Test each alert once: stop the gateway on a staging rack and check the heartbeat monitor fires.
+</Aside>
 
 ## Further Reading
 

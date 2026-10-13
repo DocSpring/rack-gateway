@@ -23,9 +23,11 @@ Each gateway endpoint declares the permission it needs; callers without it get `
 
 ### Session Authentication
 
+The web UI's session is the `session_token` cookie; requests that change something also need the CSRF token in
+an `X-CSRF-Token` header. A CLI session token is sent as a bearer token:
+
 ```bash
-# Session cookie name is session_token
-curl -b "session_token=YOUR_SESSION_TOKEN" \
+curl -H "Authorization: Bearer YOUR_SESSION_TOKEN" \
   https://gateway.example.com/api/v1/info
 ```
 
@@ -39,12 +41,19 @@ curl -H "Authorization: Bearer YOUR_API_TOKEN" \
 ## Endpoint Summary
 
 <Aside type="note">
-For the complete, generated schema, use `GET /openapi.json`.
+For the complete, generated schema, use `GET /openapi.json` (at the gateway's root, not under `/api/v1`).
 </Aside>
+
+### Gateway Info
+
+- `GET /info` - the signed-in user, the rack, integration status and the gateway's version
+- `GET /rack` - the rack's system information (from the rack's `/system`)
+- `GET /roles` - roles and their permissions
+- `GET /created-by` - who created the given apps, builds or releases, for display
 
 ### Health
 
-- `GET /health` - Liveness check
+- `GET /health` - Health check (503 for a minute after an audit write fails)
 
 ### OAuth + CLI Login
 
@@ -57,6 +66,7 @@ CLI login uses the RFC 8252 loopback flow (see [OAuth Flow](/security/authentica
 - `GET /auth/cli/return` - issues the single-use login code and redirects the browser to the CLI's loopback listener
 - `POST /auth/cli/cancel` - cancels the login from the bound browser; returns the loopback URL that tells the CLI
 - `POST /auth/cli/complete` - redeems the login code with the CLI's code verifier for a session token
+- `GET /auth/cli/initiator` - the device name and IP that started the login, shown on the approval page
 - `GET /auth/web/login` (also supports `HEAD`)
 - `GET /auth/web/callback`
 - `GET /auth/web/logout`
@@ -83,15 +93,16 @@ All under `/auth/mfa`:
 
 ### Admin & Settings
 
-- `GET /users`, `POST /users`, `PUT /users/:email`, `DELETE /users/:email`
-- `GET /users/:email/sessions`
+- `GET /users`, `POST /users`, `GET /users/:email`, `PUT /users/:email`, `DELETE /users/:email`
+- `PUT /users/:email/name`
+- `GET /users/:email/sessions`, `GET /users/:email/audit-logs`
 - `POST /users/:email/sessions/:sessionID/revoke`
 - `POST /users/:email/sessions/revoke_all`
 - `POST /users/:email/lock`, `POST /users/:email/unlock`
 - `GET /api-tokens`, `GET /api-tokens/:tokenID`, `POST /api-tokens`
 - `PUT /api-tokens/:tokenID`, `DELETE /api-tokens/:tokenID`
 - `GET /api-tokens/permissions`
-- `GET /audit-logs`, `GET /audit-logs/export`
+- `GET /audit-logs`, `GET /audit-logs/export`, `GET /audit-logs/verification` (the latest hourly verification)
 - `GET /jobs`, `GET /jobs/:id`, `DELETE /jobs/:id`, `POST /jobs/:id/retry`
 - `GET /settings`
 - `PUT /settings/mfa-configuration`, `DELETE /settings/mfa-configuration`
@@ -101,7 +112,16 @@ All under `/auth/mfa`:
 - `PUT /settings/session-configuration`, `DELETE /settings/session-configuration`
 - `POST /settings/rack-tls-cert/refresh`
 - `POST /diagnostics/sentry`
-- Slack integration under `/integrations/slack/*`
+- Slack integration: `GET /integrations/slack`, `POST /integrations/slack/oauth/authorize`,
+  `GET /integrations/slack/oauth/callback`, `PUT /integrations/slack/channels`, `PUT /integrations/slack/alerts`,
+  `GET /integrations/slack/channels/list`, `POST /integrations/slack/test`, `DELETE /integrations/slack`
+
+### Apps
+
+- `GET /apps/:app/env`, `PUT /apps/:app/env` - env values for the web UI (secrets masked unless permitted)
+- `GET /apps/:app/settings`
+- `PUT` and `DELETE` on `/apps/:app/settings/vcs-ci-deploy`, `protected-env-vars`, `secret-env-vars`,
+  `audit-visible-env-vars`, `approved-deploy-commands` and `service-image-patterns`
 
 ### Deploy Approvals
 
@@ -115,8 +135,11 @@ All under `/auth/mfa`:
 
 ### Convox Proxy
 
-- `* /rack-proxy/*` (all HTTP methods; CLI-only)
-- `GET /convox/*` (limited GET-only compatibility)
+- `* /rack-proxy/*` (all HTTP methods; header authentication only, so the Convox CLI and API tokens, never the
+  browser cookie)
+- For the web UI, with a session: `GET /convox/apps`, `GET /convox/apps/*`, `GET /convox/instances`,
+  `GET /convox/system/processes`, `PUT /convox/apps/:app/services/:name` (scale) and
+  `DELETE /convox/apps/:app/processes/:pid`
 
 ## Error Responses
 

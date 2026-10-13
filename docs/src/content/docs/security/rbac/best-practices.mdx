@@ -105,12 +105,14 @@ For a team of 10 engineers:
 
 5. **Revoke when no longer needed**
 
-   Delete tokens immediately when pipelines are decommissioned.
+   Delete tokens immediately when pipelines are decommissioned. Give short-lived tokens an expiry
+   (`--expires-at`).
 
 </Steps>
 
 <Aside type="caution" title="Token Permissions">
-Remember: A token's permissions come from its assigned role, not from the user who created it. An admin can create a viewer-level token.
+A token can only do what both its own permissions and its owner's current roles allow. An admin can create a
+viewer-level token; when the owner is demoted or locked, their tokens lose that access too.
 </Aside>
 
 ### Token Best Practices
@@ -139,15 +141,18 @@ Benefits:
 - Complete isolation between environments
 - Different admin sets per environment
 - Independent audit trails
-- Separate MFA policies
+- Separate settings (session timeout, step-up window, deploy approvals)
 
 ### Role Differences by Environment
 
-| Environment | Admin Count | Deployer Scope | MFA Required |
-|-------------|-------------|----------------|--------------|
-| Production | 2-3 only | Experienced devs | Yes |
-| Staging | 3-5 | All developers | Optional |
-| Development | 5+ | All developers | No |
+| Environment | Admin Count | Deployer Scope |
+|-------------|-------------|----------------|
+| Production | 2-3 only | Experienced devs |
+| Staging | 3-5 | All developers |
+| Development | 5+ | All developers |
+
+Keep MFA required everywhere: every gateway requires it for all users by default (`mfa_require_all_users`), and
+the CLI requires every user to be enrolled whatever that setting says.
 
 ## Audit and Review Practices
 
@@ -177,43 +182,32 @@ Benefits:
 
 ### Using Audit Logs
 
-Query audit logs to identify access patterns:
+Use the **Audit Logs** page (admins) to find access patterns. It filters by user, status (for example `denied`
+for refused requests), action type, resource type, free text and time range, and exports the results as CSV. The
+same filters work on the API:
 
 ```bash
-# Find all admin actions in the last 7 days
-rack-gateway audit search --role admin --days 7
+# Requests refused in the last 30 days
+curl -b "session_token=$TOKEN" \
+  "https://gateway.example.com/api/v1/audit-logs?status=denied&range=30d"
 
-# Find failed permission checks
-rack-gateway audit search --decision deny --days 30
-
-# Find all actions by a specific user
-rack-gateway audit search --user developer@example.com --days 90
+# Everything one user did since July 1, as CSV
+curl -b "session_token=$TOKEN" \
+  "https://gateway.example.com/api/v1/audit-logs/export?user=developer@example.com&start=2026-07-01T00:00:00Z"
 ```
+
+`range` takes `15m`, `1h`, `24h` (the default), `7d`, `30d` or `all`; `start` and `end` set a custom range.
 
 <Aside type="note">
 Audit logs are essential for SOC 2 compliance. Ensure they're configured with appropriate retention and stored in immutable storage.
 </Aside>
 
-## MFA Enforcement by Role
+## MFA and Roles
 
-Configure MFA requirements based on role privileges:
-
-| Role | MFA Recommendation | Step-Up Auth |
-|------|-------------------|--------------|
-| Admin | Required always | Yes, for all actions |
-| Deployer | Required always | Yes, for env changes |
-| Ops | Recommended | Yes, for exec |
-| Viewer | Optional | No |
-| CI/CD (token) | N/A (token auth) | N/A |
-
-### Step-Up Authentication
-
-For sensitive operations, require re-authentication even within an active session:
-
-- Environment variable changes
-- Application deletion
-- User role changes
-- API token creation
+MFA requirements belong to permissions, not roles: the same action needs the same MFA whoever performs it. Writes
+such as restarts, exec and env changes need a recent step-up; deleting apps, changing users or API tokens and
+approving deploys need MFA on the request itself. See [MFA Requirements](/security/rbac/permissions/#mfa-requirements)
+for the full list. API tokens can't do MFA, so give them only the permissions their pipeline needs.
 
 ## Incident Response
 
@@ -221,13 +215,10 @@ For sensitive operations, require re-authentication even within an active sessio
 
 <Steps>
 
-1. **Immediate**: Lock the user account
+1. **Immediate**: Lock the user account (web UI: **Users** → the user → **Lock**). Locking signs them out of
+   every session, and their API tokens stop working while they're locked
 
-   ```bash
-   # In web UI: Users → Select User → Lock Account
-   ```
-
-2. **Revoke sessions**: Force logout all active sessions
+2. **Check sessions**: Confirm on the user's page that no sessions remain
 
 3. **Audit**: Review all actions by the user in last 30 days
 

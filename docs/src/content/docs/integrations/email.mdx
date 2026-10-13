@@ -9,9 +9,9 @@ Rack Gateway sends email notifications for security events, user management acti
 
 ## Features
 
-- **Security Alerts**: Failed logins, MFA failures, rate limits
-- **User Notifications**: Welcome emails, role changes, account locks
-- **Admin Alerts**: User additions, suspicious activity
+- **Security Alerts**: New CLI logins, failed logins, MFA failures, rate limits
+- **User Notifications**: Welcome emails, API tokens created for you, account locks and unlocks
+- **Admin Alerts**: Users added, API tokens created, rack parameter changes, rate limits
 - **Async Processing**: Background job queue for reliable delivery
 
 ## Architecture
@@ -51,31 +51,22 @@ graph LR
 ### 2. Configure Environment Variables
 
 ```bash
-# Required
-POSTMARK_API_KEY=your-server-api-token
-POSTMARK_FROM_EMAIL=gateway@yourdomain.com
+# Required to send email
+POSTMARK_API_TOKEN=your-server-api-token
 
 # Optional
-POSTMARK_MESSAGE_STREAM=outbound  # Default: outbound
+POSTMARK_FROM=gateway@yourdomain.com   # Default: no-reply@<GOOGLE_ALLOWED_DOMAIN>
+POSTMARK_STREAM=outbound               # Default: outbound
 ```
 
 <Aside type="note">
-The sender email domain must be verified in Postmark.
+The sender address (or its domain) must be verified in Postmark.
 </Aside>
 
 ### 3. Verify Configuration
 
-After restarting the gateway, check logs for email configuration:
-
-```
-INFO: Email sender configured (Postmark)
-```
-
-Without Postmark configured:
-
-```
-INFO: Email sender configured (Noop - emails disabled)
-```
+The gateway doesn't log which sender it chose. To check delivery, add a user (they get a welcome email) or create
+an API token, then look at Postmark's activity log. Without `POSTMARK_API_TOKEN` the gateway sends nothing.
 
 ## Email Types
 
@@ -106,22 +97,9 @@ Sent to the user when MFA verification fails.
 | To | User email |
 | Content | Time, IP address, user agent |
 
-```
-Hello Alice,
-
-We detected a failed multi-factor authentication attempt on your account.
-
-Details:
-- Time: 2024-01-15 10:30:00 UTC
-- IP Address: 192.168.1.100
-- User Agent: Mozilla/5.0...
-
-If this wasn't you, please contact your administrator immediately.
-```
-
 #### Failed Login Attempt
 
-Sent when a login attempt fails (after OAuth).
+Sent to the address that tried when a login fails after Google (for example an address that isn't a gateway user).
 
 | Field | Content |
 |-------|---------|
@@ -131,7 +109,7 @@ Sent when a login attempt fails (after OAuth).
 
 #### Rate Limit Exceeded
 
-Sent when a user exceeds rate limits.
+Sent when a request is rate limited: to the signed-in user (if any), and to every admin.
 
 **To User:**
 | Field | Content |
@@ -146,6 +124,9 @@ Sent when a user exceeds rate limits.
 | Subject | Rate Limit Exceeded - User \{email\} |
 | To | All admin users |
 | Content | User info, path, time, IP |
+
+The same security email isn't sent again to the same recipient within 15 minutes (the admin alert, per client IP),
+so a burst of failures produces one email.
 
 ### User Management
 
@@ -171,6 +152,8 @@ https://gateway.example.com
 
 Please log in with your Google Workspace account to get started.
 
+If you have any questions, please contact your administrator.
+
 Welcome aboard!
 ```
 
@@ -194,17 +177,32 @@ Sent when a user account is locked.
 | To | Locked user email |
 | Content | Reason, contact instructions |
 
-### Suspicious Activity
+#### Account Unlocked
+
+| Field | Content |
+|-------|---------|
+| Subject | Account Unlocked |
+| To | Unlocked user email |
 
 #### MFA Auto-Lock
 
-Sent when an account is auto-locked due to MFA failures.
+Sent when an account is locked automatically after 5 failed MFA attempts in 5 minutes.
 
 | Field | Content |
 |-------|---------|
 | Subject | Account Locked - Multiple Failed Login Attempts |
 | To | Locked user email |
-| Content | Contact instructions |
+| Content | Reason, contact instructions |
+
+### API Tokens
+
+When an API token is created, its owner gets **New API token created** (the token's name and who created it),
+and every other admin gets **API token created for \{email\}**.
+
+### Rack Parameters
+
+When rack parameters are changed through the gateway, every admin gets **\{email\} changed rack parameters**. It
+names the changed parameters but never their values, which can hold credentials.
 
 ## Job Queue
 
@@ -214,30 +212,26 @@ Email notifications use River for async processing:
 
 | Job Kind | Description |
 |----------|-------------|
-| `email:send:single` / `email:send:many` | Emails built by request handlers (API tokens, account locks, rack parameter changes) |
+| `email:send:single` / `email:send:many` | Emails built by request handlers (API tokens, account locks and unlocks, MFA auto-lock, rack parameter changes) |
 | `email:security:new_cli_session` | New CLI login notification |
 | `email:security:failed_mfa` | Failed MFA notification |
 | `email:security:failed_login` | Failed login notification |
 | `email:security:rate_limit_user` | Rate limit user alert |
 | `email:security:rate_limit_admin` | Rate limit admin alert |
-| `email:security:suspicious_activity_user` | Suspicious activity (user) |
-| `email:security:suspicious_activity_admin` | Suspicious activity (admins) |
 | `email:user:welcome` | Welcome email |
 | `email:user:added_admin` | Admin notification |
 
 ### Retry Behavior
 
-- Jobs retry on failure
-- Exponential backoff
-- Max retries configurable
+A failed email job is retried with River's backoff (attempt⁴ seconds: 1s, 16s, 81s, about 4 minutes, 10 minutes
+and so on), up to 11 attempts over about 7 hours, then discarded.
 
 ### Monitoring
 
-Check job status in gateway logs:
+Each failed attempt is logged with the job's kind, ID and attempt count (and reported to Sentry when configured):
 
 ```
-INFO: Email job completed: email:user:welcome
-ERROR: Email job failed: postmark send failed: 401 Unauthorized
+[ERROR] job email:user:welcome failed: postmark send failed: 401 Unauthorized (id 1234, attempt 3 of 11)
 ```
 
 ## Development Mode
@@ -250,29 +244,21 @@ DEV_EMAIL_LOG=true
 DEV_MODE=true
 ```
 
-Emails are logged to stdout:
+They're logged at debug level under the `email.summary` and `email.body` topics, so also set `LOG_LEVEL=debug` and
+`DEBUG_TOPICS=email.summary,email.body`:
 
 ```
-DEBUG [email:summary] to=alice@example.com subject="Rack Gateway (Production): Welcome"
-DEBUG [email:body] text=... html=...
-```
-
-### Dev Outbox
-
-In development, emails are stored in memory for inspection:
-
-```go
-// API endpoint for E2E tests
-GET /api/v1/dev/emails
+[DEBUG email.summary] to=alice@example.com subject="Rack Gateway (Production): Welcome"
+[DEBUG email.body] text=... html=...
 ```
 
 ## Configuration Reference
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `POSTMARK_API_KEY` | Yes | - | Postmark server API token |
-| `POSTMARK_FROM_EMAIL` | Yes | - | Verified sender email |
-| `POSTMARK_MESSAGE_STREAM` | No | `outbound` | Message stream name |
+| `POSTMARK_API_TOKEN` | To send email | - | Postmark server API token |
+| `POSTMARK_FROM` | No | `no-reply@<GOOGLE_ALLOWED_DOMAIN>` | Verified sender email |
+| `POSTMARK_STREAM` | No | `outbound` | Message stream name |
 | `DEV_EMAIL_LOG` | No | `false` | Log emails instead of sending |
 
 ## Sender Priority
@@ -281,7 +267,7 @@ The gateway selects email sender based on configuration:
 
 ```mermaid
 graph TD
-    Start[Check Config] --> Postmark{POSTMARK_API_KEY set?}
+    Start[Check Config] --> Postmark{POSTMARK_API_TOKEN set?}
     Postmark -->|Yes| PostmarkSender[Postmark Sender]
     Postmark -->|No| Dev{DEV_MODE or DEV_EMAIL_LOG?}
     Dev -->|Yes| LoggerSender[Logger Sender]
@@ -301,8 +287,8 @@ graph TD
 <Steps>
 
 1. **Verify configuration**
-   - Check `POSTMARK_API_KEY` is set
-   - Check `POSTMARK_FROM_EMAIL` is set
+   - Check `POSTMARK_API_TOKEN` is set
+   - Check `POSTMARK_FROM` (or the `no-reply@` default) is a verified sender
    - Restart gateway after changes
 
 2. **Check Postmark**
@@ -352,17 +338,11 @@ graph TD
 - Configure SPF, DKIM, and DMARC records
 - Use a dedicated subdomain for gateway emails
 
-### Content Security
+### Content
 
-- Emails contain security-sensitive information
-- Never include passwords or tokens in emails
-- Keep notification details minimal
-
-### Rate Limiting
-
-- Rate limit security emails to prevent alert fatigue
-- Aggregate repeated events where possible
-- Don't expose rate limiting in email content
+- Emails never contain tokens, secrets or env var values; rack parameter emails name the parameters only
+- Names and other user-supplied values are escaped in HTML emails
+- Repeated security emails to the same recipient are suppressed for 15 minutes
 
 ## Best Practices
 
@@ -379,13 +359,6 @@ graph TD
 - Review security email patterns
 - Test email delivery regularly
 - Archive emails for compliance if required
-
-### For Users
-
-- Use clear, actionable subject lines
-- Include relevant context in body
-- Provide next steps or contact info
-- Keep emails concise
 
 ## Next Steps
 

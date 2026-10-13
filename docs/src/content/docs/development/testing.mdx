@@ -12,7 +12,9 @@ Use `task` commands to keep codegen, containers, and test dependencies in sync.
 
 | Test Type | Location | Command |
 |-----------|----------|---------|
-| Go Unit + Integration | `internal/**` | `task go:test` |
+| Go Unit | `cmd/**`, `internal/**` (`*_test.go`) | `task go:test:unit` |
+| Go Integration | `internal/integration/` (against the built binaries) | `task go:test:integration` |
+| Go Unit + Integration | both of the above | `task go:test` |
 | Web Unit | `web/src/**/*.test.ts*` | `task web:test` |
 | Web E2E | `web/e2e/` | `task web:e2e` |
 | CLI E2E | `scripts/cli-e2e.sh` | `task go:e2e` |
@@ -35,11 +37,16 @@ cookies. It needs network access to Google for OIDC discovery.
 task ci
 ```
 
+CI runs this on every push; locally it takes about 15 minutes, so run the focused tasks below while you work.
+
 ### Go Tests
 
 ```bash
-task go:test
+task go:test:unit   # unit tests (with -race and the testbypass tag)
+task go:test        # unit and integration tests
 ```
+
+Tests that need a database use `TEST_DATABASE_URL` (`gateway_test` on the Docker Postgres, set in `mise.toml`).
 
 ### Web Tests
 
@@ -77,6 +84,19 @@ task go:e2e:viewer
 <Aside type="note">
 All task commands automatically run code generation when inputs change.
 </Aside>
+
+### Faster Playwright Runs
+
+When you've changed only test files under `web/e2e/`, run Playwright directly against the already-running E2E
+stack instead of rebuilding it:
+
+```bash
+cd web && bunx playwright test e2e/your-test.spec.ts
+```
+
+Any change to application code (Go, or TypeScript under `web/src/`) needs `task web:e2e`, which rebuilds the
+stack. Add `--headed` to watch the browser, or `--debug` for the Playwright Inspector; screenshots and videos of
+failures are in `web/test-results/`.
 
 ## Test Layout
 

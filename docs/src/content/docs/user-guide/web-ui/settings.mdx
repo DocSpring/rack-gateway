@@ -5,7 +5,8 @@ description: "Configuring gateway-wide settings in the web interface."
 
 import { Aside, Steps } from '@astrojs/starlight/components';
 
-The Settings page controls **global** gateway behavior. Only admins can edit these values; other users can view them in read-only mode.
+The Settings page controls **global** gateway behavior. It's in the sidebar for admins, and only admins can change
+it. Saving most groups needs MFA on the request (session timeout and VCS/CI defaults need a step-up).
 
 <Aside type="note">
 Settings can come from environment variables (`RGW_SETTING_*`), the database, or defaults. The UI shows the source and lets admins clear database values. A setting an environment variable defines is read-only: change it in the deployment config.
@@ -13,7 +14,8 @@ Settings can come from environment variables (`RGW_SETTING_*`), the database, or
 
 ## Session Timeout
 
-Configure the sliding inactivity timeout for browser sessions.
+Configure the sliding inactivity timeout for browser sessions (default 5 minutes). It applies to sessions created
+after the change. CLI sessions always last 90 days from their last use.
 
 <Steps>
 
@@ -27,19 +29,22 @@ Configure the sliding inactivity timeout for browser sessions.
 
 Global MFA policy for all users:
 
-- **Require MFA for all users**
-- **Trusted device TTL (days)**
-- **Step-up window (minutes)**
+- **Require MFA for all users** (default on). Off, MFA applies only to users who have enrolled a method
+- **Trusted Device TTL (days)** (default 30)
+- **Step-Up Window (minutes)** (default 10)
 
-Changes apply immediately for new logins and step-up checks.
+Changes apply at once, on every gateway instance.
 
 ## Destructive Actions
 
-Control whether destructive Convox operations (like deleting apps) are allowed at all. This is a global safety switch.
+**Allow destructive actions** (off by default) controls whether destructive rack operations are allowed at all:
+while it's off, the gateway refuses deleting an app ("Destructive rack actions are disabled by policy"), whatever
+the caller's role. Stopping a process isn't affected. This is a global safety switch.
 
 ## Deploy Approvals
 
-Enable or disable deploy approvals and set the approval window (minutes) for admin approvals.
+**Enable deploy approvals** turns the [deploy approval](/integrations/deploy-approvals/) workflow on or off, and
+**Approval Window (minutes)** (default 15) sets how long an approved request can be used to deploy.
 
 ## Default VCS & CI Providers
 

@@ -242,6 +242,10 @@ resource "aws_kms_alias" "s3" {
 
 ### Gateway Service Role
 
+On a Convox v3 rack the gateway runs on EKS, and its pods get this role through their Kubernetes service account
+(IRSA): `convox.yml` annotates the `gateway` service with `eks.amazonaws.com/role-arn: ${IAM_ROLE_ARN}`, and Convox
+names the service account after the service, in the `<rack>-rack-gateway` namespace.
+
 ```hcl
 resource "aws_iam_role" "gateway" {
   name = "rack-gateway-${var.environment}"
@@ -250,10 +254,15 @@ resource "aws_iam_role" "gateway" {
     Version = "2012-10-17"
     Statement = [
       {
-        Action = "sts:AssumeRole"
+        Action = "sts:AssumeRoleWithWebIdentity"
         Effect = "Allow"
         Principal = {
-          Service = "ecs-tasks.amazonaws.com"
+          Federated = var.eks_oidc_provider_arn
+        }
+        Condition = {
+          StringEquals = {
+            "${var.eks_oidc_provider}:sub" = "system:serviceaccount:${var.rack_name}-rack-gateway:gateway"
+          }
         }
       }
     ]
@@ -275,7 +284,10 @@ resource "aws_iam_role_policy" "gateway_s3" {
           "s3:PutObject",
           "s3:PutObjectRetention",
           "s3:GetObject",
-          "s3:ListBucket"
+          "s3:ListBucket",
+          # verify-audit reads every version of each anchor
+          "s3:GetObjectVersion",
+          "s3:ListBucketVersions"
         ]
         Resource = [
           aws_s3_bucket.audit_anchors.arn,
@@ -296,7 +308,6 @@ resource "aws_iam_role_policy" "gateway_kms" {
       {
         Effect = "Allow"
         Action = [
-          "kms:Encrypt",
           "kms:Decrypt",
           "kms:GenerateDataKey"
         ]

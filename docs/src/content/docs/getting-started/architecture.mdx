@@ -13,7 +13,8 @@ Rack Gateway consists of three main components:
 
 1. **Gateway API Server** - The core proxy that handles authentication, authorization, and request forwarding
 2. **Web Admin UI** - A React SPA for user management, token administration, and audit log viewing
-3. **CLI Client** - A wrapper around the Convox CLI that manages authentication and multi-rack configuration
+3. **CLI Client** - Runs Convox commands through the gateway (with the Convox Go SDK) and manages login, MFA and
+   multi-rack configuration
 
 ```mermaid
 flowchart TB
@@ -53,9 +54,10 @@ rack-gateway login staging https://gateway.example.com
 ```
 
 1. CLI opens browser to gateway's OAuth endpoint
-2. User authenticates with Google Workspace
-3. Gateway validates domain and creates session
-4. Session token returned to CLI
+2. User authenticates with Google Workspace (and MFA, in the browser)
+3. Gateway checks the account is a gateway user in the allowed domain, and creates a session
+4. The browser returns to the CLI's `127.0.0.1` listener with a one-time code, which the CLI redeems for the
+   session token
 5. CLI stores token in `~/.config/rack-gateway/config.json`
 
 ### 2. Command Execution
@@ -65,28 +67,35 @@ rack-gateway apps
 # or: convox apps (with RACK_URL set)
 ```
 
-1. CLI sets `RACK_URL=https://convox:<session-token>@gateway.example.com/api/v1/rack-proxy`
-2. Convox CLI sends request to gateway with Basic Auth
-3. Gateway extracts token from Basic Auth password
+1. CLI points the Convox SDK at `RACK_URL=https://convox:<session-token>@gateway.example.com/api/v1/rack-proxy`
+2. The SDK sends the request to the gateway with Basic Auth (the native `convox` CLI does the same with that
+   `RACK_URL`)
+3. Gateway extracts token from Basic Auth password (an inline MFA proof can follow it, as
+   `<token>.totp.<code>` or `<token>.webauthn.<assertion>`)
 4. Gateway validates session token
-5. Gateway checks MFA requirements (if enabled)
-6. Gateway checks RBAC permissions for `convox:app:list`
+5. Gateway checks RBAC permissions for `convox:app:list`
+6. Gateway checks the MFA the permission needs (none, a step-up, or a proof on this request)
 7. If authorized, gateway forwards to real Convox rack. Only the request headers the Convox API uses (an allowlist) are forwarded; cookies, CSRF and MFA headers and any client-supplied identity headers are dropped. The gateway authenticates to the rack with its own credential and sets `X-Convox-Actor` to the signed-in user (or `token:<name>`), so the rack's own logs name the real caller. Query parameters are limited to the ones the Convox SDK sends; a request with any other is refused, because the rack would read options such as an exec command or release env from the query string without the gateway checking them.
-8. Gateway logs the action to audit log
+   Before forwarding, the gateway writes an `attempted` audit entry, and refuses the request (503) if it can't.
+8. Gateway records the result in the audit log
 9. Response returned to user
 
 ### 3. Audit Log Entry
 
+The audit entry goes into `audit.audit_event` (see [Audit Trail](/security/compliance/audit-trail/)). Each request
+is also logged to stdout as JSON, for CloudWatch or another log pipeline:
+
 ```json
 {
-  "timestamp": "2024-01-15T10:30:00Z",
+  "ts": "2026-01-15T10:30:00Z",
   "user_email": "developer@company.com",
   "method": "GET",
-  "path": "/apps",
+  "path": "/api/v1/rack-proxy/apps",
   "status": 200,
   "latency_ms": 234,
   "rbac_decision": "allow",
-  "request_id": "550e8400-e29b-41d4-a716-446655440000"
+  "request_id": "550e8400-e29b-41d4-a716-446655440000",
+  "client_ip": "100.64.0.12"
 }
 ```
 
@@ -102,7 +111,7 @@ The gateway server is a Go application that handles:
 | **Session Manager** | Database-backed session storage, validation, expiry |
 | **RBAC Engine** | Permission checking based on user roles |
 | **Proxy** | HTTP/WebSocket forwarding to Convox rack |
-| **Audit Logger** | Structured logging with secret redaction |
+| **Audit Logger** | Hash-chained audit events, written before acting; stdout JSON logs |
 | **MFA Service** | TOTP, WebAuthn, YubiKey verification |
 | **Admin API** | User, token, and settings management |
 
@@ -110,10 +119,10 @@ The gateway server is a Go application that handles:
 
 A React single-page application served by the gateway:
 
-- **User Management**: List, create, update, and disable users
+- **User Management**: List, add, update, lock and delete users
 - **API Tokens**: Create and manage CI/CD tokens
 - **Audit Logs**: Search and filter audit trail
-- **Settings**: Configure MFA, sessions, and integrations
+- **Settings and Integrations**: Configure MFA, sessions, deploy approvals, Slack and CI
 - **Account Security**: Enroll MFA devices, manage trusted devices
 
 ### CLI Client
@@ -122,7 +131,7 @@ The `rack-gateway` CLI is recommended for interacting with Rack Gateway. It prov
 
 - **Login/Logout**: OAuth authentication flow with the gateway
 - **Multi-Rack**: Configure and switch between multiple gateways
-- **Command Wrapper**: Wraps convox commands with authentication
+- **Convox Commands**: Runs Convox commands through the gateway, without the `convox` CLI
 - **MFA Integration**: Handles step-up authentication prompts
 
 <Aside type="note" title="CLI vs Native Convox CLI">
@@ -134,36 +143,21 @@ CLI makes OAuth login and multi-rack management easier, but it is not required.
 
 PostgreSQL stores all persistent state:
 
-```
-users
-├── id, email, role, created_at
-├── mfa_enabled, mfa_enforced_at
-└── locked_at, lock_reason
+| Table | Holds |
+|-------|-------|
+| `users` | Email, name, roles, MFA enrollment and preference, lock state |
+| `user_sessions` | Web and CLI sessions (token hashes), device, MFA and step-up times, expiry |
+| `api_tokens` | Token hashes, owner, permissions, expiry, last use |
+| `mfa_methods`, `mfa_backup_codes`, `trusted_devices` | MFA factors (TOTP secrets encrypted), backup code hashes, trusted browsers |
+| `mfa_attempts`, `used_totp_steps`, `webauthn_challenges` | MFA rate limiting, TOTP replay protection, single-use WebAuthn challenges |
+| `cli_login_states` | CLI logins in progress |
+| `settings` | Global and per-app settings stored in the database |
+| `deploy_approval_requests` | Deploy approval requests and what they were used for |
+| `slack_integration` | The Slack workspace, bot token (encrypted) and channel routing |
+| `audit.audit_event` | The append-only, hash-chained audit log |
+| `audit_verification_status` | The latest audit verification run, for display |
 
-user_sessions
-├── id, user_id, token_hash
-├── channel (web/cli), device_info
-├── expires_at, last_activity_at
-└── ip_address, user_agent
-
-api_tokens
-├── id, user_id, name, token_hash
-├── role, permissions
-├── expires_at, last_used_at
-└── created_by_email
-
-mfa_methods
-├── id, user_id, type (totp/webauthn/yubikey)
-├── secret, public_key_credential
-└── name, last_used_at
-
-audit.audit_event
-├── id, timestamp, user_email
-├── action_type, action, status
-├── request_id, ip_address
-├── rbac_decision, response_time_ms
-└── details (redacted as needed)
-```
+Background jobs (anchors, audit verification, notifications) run on River, whose tables are in the same database.
 
 ## Security Architecture
 
@@ -171,7 +165,7 @@ audit.audit_event
 
 1. **OAuth 2.0 + PKCE**: Initial authentication with Google
 2. **Session Tokens**: Opaque, database-backed tokens
-3. **MFA**: Optional second factor for sensitive operations
+3. **MFA**: Required for every user by default, with step-up MFA for sensitive operations
 4. **API Tokens**: Scoped tokens for CI/CD
 
 ### Authorization Model
@@ -185,17 +179,18 @@ Examples:
 - gateway:user:create  (create new user)
 ```
 
-Roles are hierarchical:
+The roles for people build on each other:
 - `viewer` < `ops` < `deployer` < `admin`
 
-Each role inherits all permissions from roles below it.
+Each includes the permissions of the roles below it. The `cicd` role, for API tokens, is a separate narrow set.
 
 ### Audit Trail Security
 
-- **Immutability**: Logs written to append-only storage
-- **Secret Redaction**: Passwords, tokens, and keys automatically masked
-- **S3 WORM**: Optional cryptographic anchoring to immutable S3 storage
-- **Checksums**: Integrity verification for compliance
+- **Append-only**: the database refuses updates and deletes on audit events
+- **Hash chain**: each event's HMAC covers the one before it
+- **S3 WORM**: hourly anchors of the chain head in S3 Object Lock storage
+- **Verification**: the gateway checks the chain and anchors every hour and alerts on failure
+- **Secret Redaction**: env values are `[REDACTED]` unless an admin lists them as visible
 
 ## Deployment Topology
 
@@ -212,7 +207,7 @@ Production Environment
 Staging Environment
 ├── Convox Rack API (internal)
 ├── Rack Gateway (public or VPN)
-└── PostgreSQL Database (can be shared)
+└── PostgreSQL Database (its own database; a server can host several)
 ```
 
 ### Network Security
@@ -239,7 +234,7 @@ See [Private Network Deployment](/deployment/private-network/) for complete setu
 
 ## Scalability
 
-The gateway is stateless (session state in database) and can be horizontally scaled:
+Sessions, settings and the audit log live in the database, so you can run more than one instance:
 
 ```mermaid
 flowchart TD
@@ -252,7 +247,8 @@ flowchart TD
     G3 --> DB
 ```
 
-Typical deployment runs 1-2 instances. The gateway adds minimal latency (typically under 10ms) to requests.
+The default `convox.yml` runs one instance. Some limits are kept per instance, in memory: the throttling of repeated
+denial entries and the 10 concurrent WebSocket sessions per user or token.
 
 ## Next Steps
 

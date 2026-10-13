@@ -13,16 +13,20 @@ Audit logs are read-only. Admins (`gateway:audit_log:read`) see everyone's activ
 
 ## Viewing Logs
 
-Navigate to **Audit Logs** (or **My Activity**) in the sidebar to see the activity log:
+Navigate to **Audit Logs** (or **My Activity**) in the sidebar to see the activity log. Cards at the top show the
+total, the success rate and the failed or denied count for the current filters.
 
 | Column | Description |
 |--------|-------------|
-| **Timestamp** | When the event occurred |
-| **User** | Who performed the action |
-| **Action** | What was done |
+| **Actor** | The user, or the API token and its owner |
+| **Type** | The action type (`convox`, `gateway`, `auth`, ...) |
+| **Action** | What was done, e.g. `release.promote` |
+| **Resource Type** | The kind of thing affected |
 | **Resource** | What was affected |
-| **Status** | Success or failure |
+| **Status** | The outcome (see below) |
 | **IP Address** | Origin of the request |
+| **Timestamp** | When the event occurred |
+| **View** | Opens the full entry |
 
 ## Filtering Logs
 
@@ -32,10 +36,10 @@ Use the filter panel to narrow results:
 Filter by user, resource, or action text.
 
 ### Action Type
-- Authentication
 - Convox API
-- User Management
-- Token Management
+- Authentication
+- User Management (results of user changes)
+- Token Management (results of API token changes)
 
 ### Status
 - Success
@@ -61,29 +65,17 @@ next to an action means the row stands for that many events, e.g. repeated denia
 - Admin
 
 ### Date Range
-- Last 15 minutes, 1 hour, 24 hours, 7 days, 30 days
-- Custom range
+- Last 15 minutes, hour, 24 hours, 7 days (the default) or 30 days
+- All time
+- Custom: a start and end date and time
+
+**Per Page** sets how many rows each page shows.
 
 ## Log Details
 
-Click any log entry to see full details:
-
-```json
-{
-  "timestamp": "2024-01-15T14:30:00.123Z",
-  "user_email": "alice@example.com",
-  "action_type": "convox",
-  "action": "deploy.create",
-  "resource_type": "app",
-  "resource": "myapp",
-  "status": "success",
-  "http_status": 200,
-  "response_time_ms": 1250,
-  "ip_address": "192.168.1.100",
-  "user_agent": "rack-gateway-cli/1.2.0",
-  "event_count": 1
-}
-```
+Click **View** on an entry to see everything recorded for it: timestamp, actor (for an API token, its name, ID and
+owner), type, action, event count, resource and resource type, status, RBAC decision, HTTP status, response time,
+IP address, user agent, the command (when one was recorded) and the details JSON.
 
 ## Exporting Logs
 
@@ -91,15 +83,17 @@ Click any log entry to see full details:
 
 1. Apply desired filters
 
-2. Click **Export**
+2. Click **Export CSV**
 
 3. Download the CSV file
 
 </Steps>
 
-<Aside type="tip">
-Exports include all fields, not just the columns visible in the UI.
-</Aside>
+The CSV has a row per entry as the table shows it (repeated events grouped): `first_seen`, `last_seen`,
+`user_email`, `user_name`, `action_type`, `action`, `command`, `resource`, `status`, `event_count`,
+`min_response_ms`, `max_response_ms`, `avg_response_ms`, `ip_address` and `user_agent`. It leaves out the details
+JSON and the hash chain fields; query the database for those (see
+[Audit Trail](/security/compliance/audit-trail/)).
 
 ## Compliance Features
 
@@ -113,21 +107,18 @@ are also sent to Sentry and Slack. See
 
 ### Retention
 
-Logs are retained according to your configuration:
-- Default: 400 days (SOC 2 compliance)
-- Financial: 7 years (SOX/FINRA)
+The gateway never deletes audit events: the table is append-only, and the database refuses updates and deletes.
+Keep the database's backups as long as your compliance program needs.
 
 ### WORM Anchors
 
-If configured, hourly anchors are written to S3 Object Lock storage for immutability.
+If configured, hourly anchors are written to S3 Object Lock storage and locked for the bucket's default retention
+(400 days in the example Terraform).
 
-## Real-Time Monitoring
+## Watching Recent Activity
 
-For live monitoring:
-
-1. Set filter to "Last 5 minutes"
-2. Enable **Auto-refresh**
-3. Watch for new entries
+Choose **Last 15 Minutes** and click **Refresh** to load new entries. The page doesn't refresh by itself; for
+alerts as things happen, use the [Slack integration](/integrations/slack/).
 
 ## Related
 

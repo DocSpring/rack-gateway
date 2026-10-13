@@ -46,7 +46,7 @@ export function CircleCiCard({ enabled }: CircleCiCardProps) {
               <code className="ml-1 rounded bg-muted px-1 py-0.5">CIRCLECI_TOKEN</code> env var.
             </p>
             <p className="text-muted-foreground text-sm">
-              Per-app organization slugs and job names are configured in app settings.
+              Per-app repositories and approval job names are configured in app settings.
             </p>
           </div>
         ) : (
@@ -58,7 +58,7 @@ export function CircleCiCard({ enabled }: CircleCiCardProps) {
               <div>CIRCLECI_TOKEN=your-api-token</div>
             </div>
             <p className="text-muted-foreground text-xs">
-              Per-app organization slugs are configured in app settings.
+              Per-app repositories and approval job names are configured in app settings.
             </p>
           </div>
         )}

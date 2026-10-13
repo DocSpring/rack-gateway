@@ -37,11 +37,13 @@ Time-based One-Time Passwords (TOTP) generate a 6-digit code that changes every 
 <Steps>
 
 1. Open **Account Security** in the web UI
-2. Click **Enable MFA**
+2. Click **Enable MFA** (or **Add Method** if you already have one; adding a method asks you to verify an existing
+   one first)
 3. Choose **Authenticator app**
 4. Scan the QR code with your app
-5. Enter the 6-digit code to confirm
-6. Save the backup codes shown after confirmation
+5. Enter the 6-digit code to confirm. Check **Trust this browser** to skip the MFA prompt at sign-in on this
+   browser
+6. Save the backup codes shown with your first method
 
 </Steps>
 
@@ -56,13 +58,17 @@ If you can’t scan the QR code:
 
 ### Web UI
 
-Enter the 6-digit code when prompted for MFA. You can also trust the device to reduce prompts.
+Enter the 6-digit code when prompted for MFA. You can also trust the device to reduce prompts at sign-in.
 
 ### CLI
+
+The CLI asks for the code when a command needs MFA, or you can pass it up front:
 
 ```bash
 rack-gateway deploy -a myapp --mfa-code 123456
 ```
+
+Each code works once: the gateway refuses a code that has already been used.
 
 ## Troubleshooting
 

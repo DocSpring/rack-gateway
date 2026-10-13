@@ -30,7 +30,7 @@ Rack Gateway sits between your users and the Convox rack, providing:
     Role-based access control with four levels: viewer, ops, deployer, and admin.
   </Card>
   <Card title="Audit Logging" icon="document">
-    Every API call logged with user attribution, automatic secret redaction, and S3 WORM support.
+    Every request recorded before it acts, with user attribution, env value redaction, and hourly S3 WORM anchors.
   </Card>
   <Card title="Multi-Factor Auth" icon="seti:lock">
     TOTP, WebAuthn (security keys), and YubiKey support with step-up authentication.
@@ -58,11 +58,11 @@ flowchart LR
     Gateway --- Audit
 ```
 
-1. **User runs a command**: `convox apps` or `rack-gateway apps`
+1. **User runs a command**: `rack-gateway apps` (or `convox apps` with `RACK_URL` pointing at the gateway)
 2. **Gateway authenticates**: Validates the user's session or API token
 3. **Gateway authorizes**: Checks RBAC permissions for the requested action
 4. **Gateway proxies**: Forwards the request to the real Convox rack
-5. **Gateway logs**: Records the action with user attribution
+5. **Gateway logs**: Records the attempt before forwarding (refusing the request if it can't), then the result
 
 The real rack token never leaves the gateway. Users only have session tokens that the gateway validates.
 
@@ -89,7 +89,7 @@ The CLI:
 - Handles OAuth authentication with the gateway
 - Manages session tokens securely
 - Supports multiple rack configurations
-- Wraps convox commands
+- Runs the Convox commands itself, through the gateway (it doesn't need the `convox` CLI)
 
 ## Single-Tenant Design
 
@@ -133,13 +133,14 @@ Built-in roles provide granular control:
 
 Every action is logged with:
 
-- **User identification**: Email address of the authenticated user
-- **Action details**: Method, path, parameters
-- **Outcome**: Success/failure, status codes
+- **User identification**: Email address of the authenticated user, or the API token and its owner
+- **Action details**: Action name, resource and details
+- **Outcome**: Success, failure or denial, and the HTTP status
 - **Timing**: Timestamps and latency
-- **Secret redaction**: Passwords, tokens, and API keys automatically masked
+- **Secret redaction**: Env values are `[REDACTED]` unless an admin lists them as visible
 
-Logs can be exported to CloudWatch, S3 WORM storage (for compliance), or your SIEM.
+Events are stored in Postgres in an append-only, hash-chained table, anchored hourly to S3 Object Lock (WORM)
+storage, and also written to stdout as JSON for CloudWatch or your SIEM.
 
 ### Multi-Factor Authentication
 
@@ -148,7 +149,7 @@ Protect sensitive operations with MFA:
 - **TOTP**: Google Authenticator, Authy, 1Password
 - **WebAuthn**: YubiKey 5, Touch ID, Windows Hello
 - **YubiKey OTP**: Hardware token authentication
-- **Trusted devices**: Remember devices for 30 days
+- **Trusted devices**: Remember browsers for 30 days by default
 - **Backup codes**: 10 one-time recovery codes
 
 ### Deploy Approvals
@@ -156,7 +157,7 @@ Protect sensitive operations with MFA:
 Require manual approval for CI/CD deployments:
 
 - Create approval requests from CircleCI or GitHub Actions
-- Approve/reject from the web UI or Slack
+- Approve or reject in the web UI or with `rack-gateway deploy-approval`; Slack posts each request with a link
 - Track approval status in audit logs
 - Integrate with your existing CI/CD workflow
 
@@ -178,7 +179,7 @@ Rack Gateway focuses on authentication and authorization. It doesn't provide:
 - **Rack management**: Use Terraform or Convox Console for rack lifecycle
 - **Monitoring**: Use Datadog, CloudWatch, or your preferred solution
 - **Multiple OAuth providers**: Currently Google Workspace only
-- **Custom roles**: Use the four built-in roles
+- **Custom roles**: Use the four built-in roles (plus CI/CD for tokens), or give an API token individual permissions
 
 For more advanced features, consider [Convox Console](https://docs.convox.com/management/console-rack-management).
 

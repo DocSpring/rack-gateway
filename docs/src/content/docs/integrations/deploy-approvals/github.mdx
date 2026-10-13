@@ -12,7 +12,7 @@ Rack Gateway integrates with GitHub to verify commits and (optionally) post PR c
 - **Commit verification** against a branch
 - **PR detection** for the branch being deployed
 - **Optional PR comments** when a request is created
-- **Branch policy controls** (default branch restrictions)
+- **Branch policy controls** (no deploys from the default branch unless allowed)
 
 ## Configuration
 
@@ -25,38 +25,41 @@ GITHUB_TOKEN=ghp_xxxxxxxxxxxxxxxxxxxx
 
 ### Token Permissions
 
-The token needs permissions to read branches/commits and post PR comments:
+The gateway reads the branch, compares commits, lists open pull requests and (optionally) comments on one:
 
-| Permission | Scope | Purpose |
-|------------|-------|---------|
-| `repo` | Read | Verify commits and branches |
-| `issues` | Write | Post PR comments |
+| Permission | Access | Purpose |
+|------------|--------|---------|
+| Contents | Read | Read the branch and compare commits |
+| Pull requests | Read (write to comment) | Find the branch's open PR, and post the PR comment |
 
 <Tabs>
-<TabItem label="Personal Access Token">
+<TabItem label="Fine-grained token">
 
-1. Go to GitHub Settings → Developer settings → Personal access tokens
-2. Generate a token with `repo` and `issues:write`
+1. Go to GitHub Settings → Developer settings → Personal access tokens → Fine-grained tokens
+2. Limit it to the repositories you deploy, with Contents (read) and Pull requests (read and write)
 3. Store it as `GITHUB_TOKEN`
 
 </TabItem>
-<TabItem label="GitHub App">
+<TabItem label="Classic token">
 
-1. Create a GitHub App
-2. Grant permissions: Contents (read), Pull requests (read), Issues (write)
-3. Use an installation token as `GITHUB_TOKEN`
+1. Go to GitHub Settings → Developer settings → Personal access tokens → Tokens (classic)
+2. Generate a token with the `repo` scope (`public_repo` is enough for public repositories)
+3. Store it as `GITHUB_TOKEN`
 
 </TabItem>
 </Tabs>
+
+The gateway reads `GITHUB_TOKEN` once at startup. An app installation token expires after an hour, so use a
+long-lived token.
 
 ### Per-App Settings
 
 These settings live under **Apps → `{app}` → Settings**:
 
-| Setting | Description | Example |
+| Setting | Description | Default |
 |---------|-------------|---------|
-| `vcs_provider` | Must be `github` | `github` |
-| `vcs_repo` | Repository in `owner/repo` format | `MyOrg/myapp` |
+| `vcs_provider` | `github` | `github` |
+| `vcs_repo` | Repository in `owner/repo` format, e.g. `MyOrg/myapp` | none |
 | `github_verification` | Enable commit verification | `true` |
 | `verify_git_commit_mode` | `branch` or `latest` | `latest` |
 | `require_pr_for_branch` | Require an open PR | `true` |
@@ -82,12 +85,19 @@ RGW_APP_MYAPP_SETTING_GITHUB_POST_PR_COMMENT=true
 
 ## Commit Verification
 
-When a deploy approval request is created, the gateway verifies the commit:
+When a deploy approval request is created with `github_verification` on, the gateway checks, in order:
 
-- **latest**: commit must equal branch HEAD
-- **branch**: commit must exist somewhere in branch history
+1. The request names a branch (`--branch`); without one it's refused with `git_branch is required for GitHub
+   verification`
+2. The branch isn't `default_branch`, unless `allow_deploy_from_default_branch` is on: otherwise it's refused with
+   `deploying from default branch 'main' is not allowed`. By default, deploys come from a feature branch
+3. The commit matches the branch, by `verify_git_commit_mode`:
+   - **latest**: commit must equal the branch head
+   - **branch**: commit must be the branch head or one of its ancestors
+4. With `require_pr_for_branch` on, the branch has an open pull request
 
-If verification fails, the request is rejected.
+If any check fails, the gateway answers 400 (for example `GitHub verification failed: no open pull request found
+for branch my-branch`) and no request is created.
 
 ## Pull Request Detection
 

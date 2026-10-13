@@ -11,11 +11,17 @@ Use this checklist before deploying Rack Gateway to production. Each item addres
 
 ### Security Fundamentals
 
-- [ ] **APP_SECRET_KEY generated securely**
+- [ ] **APP_SECRET_KEY and AUDIT_HMAC_SECRET generated securely**
   ```bash
   openssl rand -base64 32
   ```
-  Never reuse across environments. Store securely.
+  At least 32 bytes each. Never reuse across environments, and never change `AUDIT_HMAC_SECRET` once events are
+  written (it keys the audit hash chain). Store both securely.
+
+- [ ] **Running a release build**
+  ```bash
+  ./rack-gateway-api build-info   # must report: test bypasses: compiled out
+  ```
 
 - [ ] **COLUMN_ENCRYPTION_KEY generated and backed up**
   ```bash
@@ -47,8 +53,8 @@ Use this checklist before deploying Rack Gateway to production. Each item addres
   - At least 2 admins for redundancy
 
 - [ ] **Session timeout configured**
-  - `RGW_SETTING_SESSION_TIMEOUT_MINUTES` set appropriately
-  - Default: 5 minutes for sensitive environments
+  - `RGW_SETTING_SESSION_TIMEOUT_MINUTES`, or Settings → Session Timeout
+  - Default: 5 minutes of inactivity for web sessions (CLI sessions last 90 days from their last use)
 
 ### Database
 
@@ -56,6 +62,9 @@ Use this checklist before deploying Rack Gateway to production. Each item addres
   - Production-grade instance (not Docker)
   - Encryption at rest enabled
   - SSL connections required
+  - Audit roles created, the gateway connecting as the app user and migrations as the admin user (see
+    [Database Setup](/deployment/database-setup/#database-users-and-audit-roles))
+  - Migrations applied with `rack-gateway-api migrate` before the release starts
 
 - [ ] **Database backups configured**
   - Automated daily backups
@@ -71,12 +80,15 @@ Use this checklist before deploying Rack Gateway to production. Each item addres
 - [ ] **Resource limits configured**
   - Memory limits prevent OOM kills
   - CPU limits ensure fair sharing
-  - At least 2 instances for high availability
+  - Instance count chosen (the default `convox.yml` runs one)
 
 - [ ] **Health checks enabled**
-  - `/api/v1/health` for liveness
-  - `/api/v1/health/ready` for readiness
+  - `/api/v1/health` for liveness and readiness (it fails for a minute after any audit write failure)
   - Appropriate intervals and thresholds
+
+- [ ] **Reverse proxy configured**
+  - `TRUSTED_PROXY_CIDRS` lists the proxies in front of the gateway
+  - WebSocket upgrades pass through, request bodies aren't size-limited
 
 ## Security Hardening
 
@@ -111,14 +123,15 @@ Use this checklist before deploying Rack Gateway to production. Each item addres
 
 ### Audit Logging
 
-- [ ] **Audit logging enabled**
-  - All actions logged with user attribution
-  - Sensitive data automatically redacted
-  - Log retention set (`LOG_RETENTION_DAYS`)
+- [ ] **Audit logging reviewed**
+  - Always on: every request is recorded before it acts, with user attribution
+  - Env values redacted; `audit_visible_env_vars` lists only harmless keys
+  - Container log retention set (`LOG_RETENTION_DAYS` in `convox.yml`)
 
 - [ ] **Audit anchoring configured** (Recommended)
   - S3 WORM bucket created
   - `AUDIT_ANCHOR_BUCKET` and `AUDIT_ANCHOR_CHAIN_ID` set
+  - `AUDIT_VERIFY_HEARTBEAT_URL` set to a heartbeat monitor, so you hear when hourly verification stops
   - See [S3 WORM Storage](/deployment/terraform/s3-worm-storage/)
 
 - [ ] **HMAC secret configured**
@@ -136,7 +149,7 @@ Use this checklist before deploying Rack Gateway to production. Each item addres
   - Alerts configured for errors
 
 - [ ] **Metrics collection enabled**
-  - Health endpoint monitoring
+  - Health endpoint monitoring, or `UPTIME_HEARTBEAT_URL` pinged while the gateway is healthy
   - Database metrics tracked
   - Alert thresholds configured
 
@@ -169,10 +182,10 @@ Use this checklist before deploying Rack Gateway to production. Each item addres
 - [ ] **Rack connection verified**
   - `RACK_TOKEN` valid and not expired
   - `RACK_HOST` points to correct rack
-  - Health check passes through gateway
+  - `rack-gateway rack info` works through the gateway
 
 - [ ] **Proxy functionality tested**
-  - `convox apps` returns expected results
+  - `rack-gateway apps` returns expected results
   - Build and deploy operations work
   - Environment variable access works
 
@@ -180,7 +193,7 @@ Use this checklist before deploying Rack Gateway to production. Each item addres
 
 - [ ] **Email notifications configured** (Optional)
   - `POSTMARK_API_TOKEN` set
-  - `POSTMARK_FROM_EMAIL` verified in Postmark
+  - `POSTMARK_FROM` verified in Postmark
   - Test email sent successfully
 
 - [ ] **Slack notifications configured** (Optional)
@@ -191,7 +204,7 @@ Use this checklist before deploying Rack Gateway to production. Each item addres
 ### CI/CD Integration
 
 - [ ] **Deploy approvals configured** (If using)
-  - CircleCI token configured
+  - `CIRCLECI_TOKEN` set, for CircleCI auto-approval
   - Approval job names match
   - GitHub integration tested
   - `service_image_patterns` set for each app, pinning the image repository (approval-bound builds are refused without it)
@@ -210,12 +223,11 @@ Use this checklist before deploying Rack Gateway to production. Each item addres
 1. **Verify health endpoints**
    ```bash
    curl https://gateway.example.com/api/v1/health
-   curl https://gateway.example.com/api/v1/health/ready
    ```
 
 2. **Test user login**
    - Open web UI
-   - Sign in with Google
+   - Continue with Google
    - Verify correct roles assigned
 
 3. **Test MFA enrollment**
@@ -224,8 +236,8 @@ Use this checklist before deploying Rack Gateway to production. Each item addres
 
 4. **Test Convox operations**
    ```bash
-   rack-gateway convox apps
-   rack-gateway convox ps -a myapp
+   rack-gateway apps
+   rack-gateway ps -a myapp
    ```
 
 5. **Verify audit logging**
@@ -276,7 +288,9 @@ Use this checklist before deploying Rack Gateway to production. Each item addres
 ```bash
 # Required
 APP_SECRET_KEY=$(openssl rand -base64 32)
+AUDIT_HMAC_SECRET=$(openssl rand -base64 32)      # Never change it after the first event
 COLUMN_ENCRYPTION_KEY=$(openssl rand -base64 32)  # Generate once and back it up
+DATABASE_URL=postgres://rack_gateway_app:...@db:5432/rack_gateway?sslmode=require
 DOMAIN=gateway.example.com
 GOOGLE_CLIENT_ID=xxx
 GOOGLE_CLIENT_SECRET=xxx
@@ -288,7 +302,7 @@ ADMIN_USERS=admin1@example.com,admin2@example.com
 LOG_RETENTION_DAYS=400
 RACK_ALIAS=production
 RACK_DISPLAY_NAME="Production"
-AUDIT_HMAC_SECRET=$(openssl rand -hex 32)
+TRUSTED_PROXY_CIDRS=10.0.0.0/16                   # The proxies in front of the gateway
 
 # If using audit anchoring
 AUDIT_ANCHOR_BUCKET=audit-anchors-prod
@@ -296,7 +310,7 @@ AUDIT_ANCHOR_CHAIN_ID=production
 
 # If using email
 POSTMARK_API_TOKEN=xxx
-POSTMARK_FROM_EMAIL=gateway@example.com
+POSTMARK_FROM=gateway@example.com
 
 # If using Slack
 SLACK_CLIENT_ID=xxx
@@ -313,6 +327,7 @@ SENTRY_ENVIRONMENT=production
 ```bash
 # Similar to production but with staging-specific values
 APP_SECRET_KEY=$(openssl rand -base64 32)  # Different from prod!
+AUDIT_HMAC_SECRET=$(openssl rand -base64 32)  # Different from prod!
 COLUMN_ENCRYPTION_KEY=$(openssl rand -base64 32)  # Different from prod!
 DOMAIN=gateway-staging.example.com
 RACK_ALIAS=staging

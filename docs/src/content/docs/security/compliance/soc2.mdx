@@ -49,7 +49,7 @@ SOC 2 is organized into five Trust Services Categories:
 |-----------|-------------|----------------------|
 | CC3.1 | Specify objectives | Configurable security settings |
 | CC3.2 | Identify risks | RBAC denials logged |
-| CC3.3 | Consider fraud | Anomaly detection in logs |
+| CC3.3 | Consider fraud | Failed login and MFA alerts, automatic lock after repeated MFA failures, rate limit alerts |
 | CC3.4 | Identify changes | Change tracking in audit logs |
 
 ### CC5: Control Activities
@@ -71,7 +71,7 @@ SOC 2 is organized into five Trust Services Categories:
 | CC6.5 | Restrict access | Private network deployment | Network configuration |
 | CC6.6 | Manage credentials | Token hashing, rotation | Token management |
 | CC6.7 | Restrict privileged access | Admin role restrictions | RBAC configuration |
-| CC6.8 | Prevent malicious software | N/A (SaaS model) | - |
+| CC6.8 | Prevent malicious software | N/A (organizational) | - |
 
 **Key Controls for CC6:**
 
@@ -86,8 +86,8 @@ SOC 2 is organized into five Trust Services Categories:
 2. **Authorization (CC6.2)**
 
    - Role-based access control
-   - Five distinct roles (viewer → admin)
-   - Inheritance-based permissions
+   - Four roles for people (viewer → admin) and a CI/CD role for API tokens
+   - Per-permission MFA requirements
 
 3. **De-provisioning (CC6.3)**
 
@@ -108,7 +108,7 @@ SOC 2 is organized into five Trust Services Categories:
 | Criterion | Requirement | Gateway Implementation | Evidence |
 |-----------|-------------|----------------------|----------|
 | CC7.1 | Detect security events | Real-time audit logging | Audit logs |
-| CC7.2 | Monitor infrastructure | CloudWatch integration | Metrics/alarms |
+| CC7.2 | Monitor infrastructure | CloudWatch logs, heartbeats, hourly audit verification | Metrics/alarms |
 | CC7.3 | Evaluate events | RBAC decision logging | Decision logs |
 | CC7.4 | Respond to incidents | Lock accounts, revoke sessions | Incident records |
 | CC7.5 | Recover from incidents | Session revocation, re-auth | Recovery actions |
@@ -139,8 +139,11 @@ graph LR
 **Deploy Approvals for Change Control:**
 
 - CI/CD deployments require human approval
-- Approvers separate from deployers
+- Only users with the approve permission (admins) can approve, with MFA on the request
 - Full audit trail of approvals
+
+The gateway doesn't stop a token's owner approving their own pipeline's request. If your controls require a
+different approver, give CI tokens to a user who isn't an approver, or check it in your review process.
 
 ### CC9: Risk Mitigation
 
@@ -160,8 +163,8 @@ graph LR
 
 **Protection Mechanisms:**
 
-- Automatic secret redaction in logs
-- Protected environment variables
+- Env var values redacted from audit logs
+- Secret and protected environment variables
 - Token hashing (secrets never stored in plaintext)
 - HTTPS-only communication
 
@@ -218,7 +221,7 @@ curl -b "session_token=TOKEN" \
 
 - [ ] OAuth configured with Google Workspace
 - [ ] Domain restriction enabled
-- [ ] MFA required for privileged roles
+- [ ] MFA required for all users (the default)
 - [ ] RBAC roles assigned appropriately
 - [ ] Session timeout configured (≤15 min recommended)
 - [ ] API tokens have appropriate roles
@@ -226,7 +229,8 @@ curl -b "session_token=TOKEN" \
 
 ### Monitoring (CC7)
 
-- [ ] Audit logging enabled
+- [ ] `AUDIT_HMAC_SECRET` and S3 anchors configured
+- [ ] Heartbeat monitors for uptime and audit verification
 - [ ] CloudWatch integration configured
 - [ ] Alerts for failed logins
 - [ ] Alerts for RBAC denials
@@ -236,7 +240,7 @@ curl -b "session_token=TOKEN" \
 ### Change Management (CC8)
 
 - [ ] Deploy approvals enabled
-- [ ] Approvers != Deployers
+- [ ] Approvers are not the owners of the CI tokens they approve
 - [ ] CI/CD uses dedicated tokens
 - [ ] Change log maintained
 
@@ -250,7 +254,8 @@ curl -b "session_token=TOKEN" \
 ## Auditor FAQ
 
 **Q: How are users authenticated?**
-A: OAuth 2.0 with Google Workspace, with optional MFA via TOTP or WebAuthn.
+A: OAuth 2.0 (OpenID Connect) with Google Workspace, plus MFA, required for every user by default:
+TOTP, WebAuthn security keys or YubiKey OTP, with backup codes for recovery.
 
 **Q: How is access controlled?**
 A: Role-based access control with five roles in a hierarchy. Each request is checked against the user's role.
@@ -262,13 +267,15 @@ A: Admin role is restricted to few users. All admin actions are logged.
 A: All API requests are logged with user, action, resource, decision, and timestamp.
 
 **Q: How long are logs retained?**
-A: Retention is operator-managed. Use database policies plus S3 WORM anchors (`AUDIT_ANCHOR_RETENTION_DAYS`) for compliance.
+A: Audit events are never deleted: the table is append-only. S3 anchors are locked for the bucket's default
+Object Lock retention (400 days in the example Terraform).
 
 **Q: How are secrets protected in logs?**
 A: Audit entries never record env var values unless an admin lists the key in the app's `audit_visible_env_vars`, and never for secret or protected keys. Rack parameter changes record the parameter names only. See [Secret Redaction](/security/compliance/audit-trail/#secret-redaction).
 
 **Q: How is the audit log protected from tampering?**
-A: Audit events are cryptographically chained, and optional S3 Object Lock anchors preserve chain integrity.
+A: Each event's HMAC covers its fields and the previous event's hash, and hourly anchors in an S3 Object Lock bucket
+record the chain head. The gateway verifies the chain and anchors every hour and alerts on any failure.
 
 ## Next Steps
 

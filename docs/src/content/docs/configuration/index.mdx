@@ -27,11 +27,11 @@ This project does not use `.env` files. All environment configuration goes throu
   <Card title="OAuth Setup" icon="star">
     [Google Workspace OAuth](/configuration/oauth-setup/) configuration guide.
   </Card>
-  <Card title="Session Management" icon="setting">
-    [Session policies](/configuration/session-management/) and timeout configuration.
+  <Card title="Sessions" icon="setting">
+    [Session policies](/security/authentication/sessions/) and timeout configuration.
   </Card>
   <Card title="Security Settings" icon="seti:lock">
-    [MFA and security](/configuration/security-settings/) settings.
+    [MFA, sessions and deploy approvals](/user-guide/web-ui/settings/) in the Settings page.
   </Card>
 </CardGrid>
 
@@ -58,7 +58,7 @@ See [OAuth Setup](/configuration/oauth-setup/) for detailed instructions.
 DATABASE_URL = "postgres://user:pass@host:5432/rack_gateway?sslmode=require"
 ```
 
-Or using individual variables:
+Or, without `DATABASE_URL`, the standard libpq variables:
 
 ```toml
 [env]
@@ -95,9 +95,10 @@ RACK_ALIAS = "production"
 |----------|---------|
 | [Environment Variables](/configuration/environment-variables/) | Complete reference of all options |
 | [OAuth Setup](/configuration/oauth-setup/) | Google Workspace authentication |
-| [Session Management](/configuration/session-management/) | Session timeout and policies |
-| [Security Settings](/configuration/security-settings/) | MFA enforcement, timeouts |
-| [Email Notifications](/configuration/email-notifications/) | Postmark email configuration |
+| [Sessions](/security/authentication/sessions/) | Session timeout and policies |
+| [Settings](/user-guide/web-ui/settings/) | MFA enforcement, timeouts, destructive actions, deploy approvals |
+| [Security Hardening](/security/hardening/) | Production security configuration |
+| [Email](/integrations/email/) | Postmark email configuration |
 
 ## Development vs Production
 
@@ -109,8 +110,8 @@ Development mode (`DEV_MODE=true`) only exists in builds compiled with the `test
 - Uses non-secure cookies (no HTTPS required)
 - Auto-generates `APP_SECRET_KEY` if missing (`COLUMN_ENCRYPTION_KEY` is never generated: it is required
   in every mode)
-- Runs database migrations on startup
-- Logs emails to stdout instead of sending
+- Runs database migrations on startup (production never does: run `rack-gateway-api migrate`)
+- Logs emails to stdout instead of sending them, unless `POSTMARK_API_TOKEN` is set
 - Connects to mock services on localhost
 
 The published Docker image is built without the tag, and refuses to start with `DEV_MODE` or any other
@@ -125,6 +126,7 @@ and set:
 - `COLUMN_ENCRYPTION_KEY` (generated once and backed up)
 - `AUDIT_HMAC_SECRET` (secure random value)
 - OAuth credentials (real Google Workspace)
+- `DOMAIN` (the gateway's hostname)
 - Database URL (real PostgreSQL)
 - Rack credentials (real Convox rack)
 

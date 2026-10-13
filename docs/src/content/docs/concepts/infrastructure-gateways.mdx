@@ -378,25 +378,36 @@ Optional (with TLS):
 
 ### Configuration Example
 
+An abridged version of the repository's `convox.yml`:
+
 ```yaml
 # convox.yml
+environment:
+  - DOMAIN
+  - APP_SECRET_KEY
+  - COLUMN_ENCRYPTION_KEY
+  - GOOGLE_CLIENT_ID
+  - GOOGLE_CLIENT_SECRET
+  - GOOGLE_ALLOWED_DOMAIN
+  - ADMIN_USERS
+  - RACK_TOKEN          # The rack's API token; never sent to clients
+  - AUDIT_HMAC_SECRET
+  - AUDIT_ANCHOR_BUCKET
+  - AUDIT_ANCHOR_CHAIN_ID
+
 services:
   gateway:
-    domain: gateway.example.com
-    port: 8443
-    resources:
-      - database
+    image: docker.io/docspringcom/rack-gateway:vX.Y.Z
+    command: ./scripts/start-gateway.sh
     environment:
-      - RACK_HOST=rack.example.com
-      - RACK_TOKEN          # From Convox resources
-      - GOOGLE_CLIENT_ID
-      - GOOGLE_CLIENT_SECRET
-      - ADMIN_USERS=admin@example.com
-
-resources:
-  database:
-    type: postgres
+      - PORT=8080
+      - DATABASE_URL    # An external Postgres (RDS), set with Terraform
+    health: /api/v1/health
+    internal: true      # Not on the public load balancer; reach it over a private network
+    port: 8080
 ```
+
+See [Convox Deployment](/deployment/convox/) for the full file.
 
 ## Key Takeaways
 

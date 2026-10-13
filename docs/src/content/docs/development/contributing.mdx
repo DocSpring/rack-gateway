@@ -50,17 +50,18 @@ Thank you for your interest in contributing to Rack Gateway! This guide covers e
 # 1. Run linting (with auto-fix)
 task lint:fix
 
-# 2. Run tests
-task go:test
+# 2. Run the tests for what you changed
+task go:test:unit
 task web:test
-
-# 3. Run full CI suite
-task ci
+task web:e2e -- --grep "the flow you changed"
 ```
+
+Never bypass the git hooks (`--no-verify`): the pre-commit hook formats, lints, and checks duplication and file
+lengths.
 
 ### Before Submitting
 
-1. **All tests pass** - `task ci` must complete successfully
+1. **CI passes** - CI runs the full suite (`task ci`) on every push, and a PR merges only when it's green
 2. **Code is formatted** - Run `task lint:fix`
 3. **Commit messages are clear** - Follow commit conventions below
 4. **Documentation is updated** - For new features or changes
@@ -74,7 +75,10 @@ task ci
 - Follow [Effective Go](https://go.dev/doc/effective_go) guidelines
 - Use `gofmt` and `goimports` (handled by `task lint:fix`)
 - Maximum line length: 120 characters
-- Maximum function length: 100 lines
+- Maximum function length: 100 lines and 50 statements, and cognitive complexity 15
+- No `panic`, `time.Sleep` or `fmt.Print*` outside CLI output: return errors, use contexts with timeouts, and log
+- No `//nolint` comments: fix the code. The only exceptions are `//nolint:lll` on struct tag lines gofmt can't
+  break, and gosec exceptions that name the rule and the reason (`// #nosec G402 -- racks have no public CA chain`)
 
 #### Naming
 
@@ -118,9 +122,10 @@ func GetUser(id string) *User { ... }
 
 #### Style
 
-- Use Biome for formatting and linting
+- Use Biome for formatting and linting; `// biome-ignore` comments aren't allowed
 - Prefer functional components with hooks
 - Use TypeScript strict mode
+- Use the generated API client in `web/src/api/` (`task generate` after changing Go handlers)
 
 #### Component Structure
 
@@ -169,7 +174,8 @@ These limits are enforced by CI and must be followed.
 | TypeScript/TSX code | 500 lines |
 | TypeScript test files | 1000 lines |
 
-If a file approaches these limits, refactor into smaller modules.
+If a file approaches these limits, refactor into smaller modules. Production code may not duplicate 10 or more
+lines (`task duplication`).
 
 ## Commit Conventions
 
@@ -251,7 +257,7 @@ Why is this change needed?
 1. **Automated checks** - CI must pass
 2. **Code review** - At least one maintainer approval
 3. **Documentation** - Updates if needed
-4. **Merge** - Squash and merge with clean commit message
+4. **Merge** - A maintainer merges once CI is green
 
 ## Security Guidelines
 
@@ -325,20 +331,12 @@ Email security concerns to: security@docspring.com
 
 ### Communication
 
-- **GitHub Issues** - Bug reports, feature requests
-- **GitHub Discussions** - Questions, ideas
+- **GitHub Issues** - Bug reports, feature requests, questions
 - **Pull Requests** - Code review, feedback
 
 ## License
 
-By contributing, you agree that your contributions will be licensed under the project's license.
-
-## Recognition
-
-Contributors are recognized in:
-
-- GitHub contributors list
-- Release notes for significant contributions
-- Project documentation
+Rack Gateway is licensed under the Apache License 2.0 (`LICENSE`). By contributing, you agree that your
+contributions are licensed under it.
 
 Thank you for contributing to Rack Gateway!

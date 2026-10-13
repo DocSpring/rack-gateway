@@ -22,7 +22,7 @@ If you're new to Rack Gateway, start with these guides:
     The `rack-gateway` CLI is your primary interface for running Convox commands through the gateway.
 
     - [Overview](/user-guide/cli/) - Introduction to the CLI
-    - [Installation](/user-guide/cli/installation/) - Install on macOS, Linux, or Windows
+    - [Installation](/user-guide/cli/installation/) - The Linux release, or build from source
     - [Authentication](/user-guide/cli/authentication/) - Login and session management
     - [Multi-Rack](/user-guide/cli/multi-rack/) - Work with multiple environments
     - [Commands](/user-guide/cli/commands/) - Complete command reference
@@ -32,7 +32,7 @@ If you're new to Rack Gateway, start with these guides:
     The web interface provides admin functionality and self-service features.
 
     - [Overview](/user-guide/web-ui/) - Introduction to the web UI
-    - [Dashboard](/user-guide/web-ui/dashboard/) - Main dashboard features
+    - [Rack Overview](/user-guide/web-ui/dashboard/) - The rack landing page
     - [User Management](/user-guide/web-ui/user-management/) - Manage users and roles
     - [API Tokens](/user-guide/web-ui/api-tokens/) - Create tokens for CI/CD
     - [Audit Logs](/user-guide/web-ui/audit-logs/) - View activity history
@@ -66,11 +66,11 @@ If you're new to Rack Gateway, start with these guides:
 
 | Task | Where |
 |------|-------|
-| Add a user | Web UI → Users → Create User |
-| Change roles | Web UI → Users → Edit User |
+| Add a user | Web UI → Users → Add User |
+| Change roles | Web UI → Users → user's actions → Edit User |
 | View audit logs | Web UI → Audit Logs |
-| Create API token | Web UI → API Tokens → Create |
-| Configure MFA | Web UI → Settings → Security |
+| Create API token | Web UI → API Tokens → Create Token |
+| Configure MFA | Web UI → Settings → MFA Requirements |
 
 ## Role-Based Access
 
@@ -79,9 +79,9 @@ Your role determines what you can do:
 | Role | Capabilities |
 |------|--------------|
 | **Viewer** | Read-only: list apps, view logs, see builds |
-| **Ops** | Viewer + restart apps, manage processes |
-| **Deployer** | Ops + create builds, promote releases |
-| **Admin** | Full access including user management |
+| **Ops** | Viewer + restart apps, run and stop processes, read env vars |
+| **Deployer** | Ops + deploy, change env vars, promote releases, own API tokens |
+| **Admin** | Full access including users, settings and integrations |
 
 See [RBAC Overview](/security/rbac/) for detailed permissions.
 

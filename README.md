@@ -12,9 +12,9 @@ See [NOTICE](./NOTICE) for details.
 
 API proxy for Convox racks with SSO, RBAC, and audit logging. SOC2 compliant.
 
-![Screenshot of audit logs](./docs/legacy/images/audit-logs.jpg)
+![Screenshot of audit logs](./docs/images/audit-logs.jpg)
 
-_[More screenshots](./docs/legacy/SCREENSHOTS.md)_
+_[More screenshots](./docs/SCREENSHOTS.md)_
 
 ## What is Convox?
 
@@ -36,19 +36,17 @@ inquire about an enterprise license for on-premise deployments. Convox Console p
 advanced features such as more authentication options, fine-grained RBAC and custom roles, support
 for managing multiple racks, monitoring and alerts, workflows for CI/CD, etc.
 
-## 📖 Start Here
+## 📖 Documentation
 
-**First time setup?** Follow these steps:
+The full documentation is at **[docspring.github.io/rack-gateway](https://docspring.github.io/rack-gateway/)** (source in `docs/src/content/docs/`):
 
-1. **Quick Start** (below) - Gets you running in 5 minutes with mock services
-2. **[AGENTS.md](AGENTS.md)** - Technical implementation details for AI agents
-3. **[docs/DEV.md](docs/DEV.md)** - Development guide
-
-## Other Documentation
-
-- **[docs/DEPLOY.md](docs/DEPLOY.md)** - Production deployment guide
-- **[docs/CONFIGURATION.md](docs/CONFIGURATION.md)** - All environment variables and options
-- **[docs/legacy/CONVOX_REFERENCE.md](docs/legacy/CONVOX_REFERENCE.md)** - How Convox works
+- **[Quick Start](https://docspring.github.io/rack-gateway/getting-started/quick-start/)** - Run everything locally with mock services
+- **[Deployment](https://docspring.github.io/rack-gateway/deployment/)** - Convox and Docker deployment, database, S3 audit anchors
+- **[Environment Variables](https://docspring.github.io/rack-gateway/configuration/environment-variables/)** - Every setting
+- **[CLI](https://docspring.github.io/rack-gateway/user-guide/cli/)** - Login, multi-rack use, MFA
+- **[Development](https://docspring.github.io/rack-gateway/development/)** - Local setup, testing, contributing
+- **[docs/CONVOX_REFERENCE.md](docs/CONVOX_REFERENCE.md)** - How Convox works
+- **[AGENTS.md](AGENTS.md)** - Technical implementation details for AI agents
 
 ## Features
 
@@ -58,7 +56,8 @@ for managing multiple racks, monitoring and alerts, workflows for CI/CD, etc.
 - **Single-Tenant Design**: One gateway per rack, deployed alongside Convox API
 - **Multi-Rack CLI**: CLI can switch between multiple gateways using `--rack` flag
 - **Session Management**: Database-backed sessions with secure token storage
-- **Minimal Web UI**: User and role management interface
+- **Web UI**: Users and roles, API tokens, audit logs, settings, integrations and deploy approvals
+- **MFA**: WebAuthn, TOTP, YubiKey OTP and backup codes, with step-up for sensitive actions
 - **Deploy Approvals**: Manual approval workflow for CI/CD actions (build/object/release/promote)
 
 ## Quick Start
@@ -68,30 +67,29 @@ for managing multiple racks, monitoring and alerts, workflows for CI/CD, etc.
 Get everything running locally with mock services - no Google OAuth setup required:
 
 ```bash
-# 1. Clone and install
+# 1. Clone and install the tools
 git clone https://github.com/DocSpring/rack-gateway.git
 cd rack-gateway
-go mod download
-cd web && bun install && cd ..
+mise install            # the pinned Go, Node, Bun and golangci-lint
+scripts/dev-setup.sh    # Task, air, goimports and libfido2
+brew install overmind   # or see github.com/DarthSim/overmind; task dev runs the services with it
 
-# 2. Set up configuration (uses defaults with mock services)
-cp mise.local.toml.example mise.local.toml
-
-# 3. Start everything
+# 2. Start everything (mise.toml already configures the mock services)
 task dev
 ```
 
 **🎉 You're done!** Open these URLs:
 
-- **Web UI**: http://localhost:5223 (test users: admin@example.com, deployer@example.com, ops@example.com, viewer@example.com)
+- **Web UI**: http://localhost:5223 (sign in as admin@example.com, the seeded admin; add other users on the Users page)
 - **Gateway API**: http://localhost:8447
 - **Mock Convox**: http://localhost:5443
 
 ### 🧪 Test the CLI
 
 ```bash
-# Login (opens mock OAuth in browser)
-./bin/rack-gateway login staging http://localhost:8447
+# Build the CLI, then log in (opens mock OAuth in browser)
+task go:build:cli
+./bin/rack-gateway login local http://localhost:8447
 
 # Run Convox commands through the gateway
 ./bin/rack-gateway apps
@@ -100,10 +98,9 @@ task dev
 
 ### Prerequisites
 
-- Go 1.26+
+- mise - [Install mise](https://mise.jdx.dev/getting-started.html). `mise install` installs the pinned Go, Bun and
+  Node versions from `mise.toml`, and mise sets the development environment variables
 - Docker & Docker Compose
-- Node.js 22.18+ and Bun 1.3+ (CI runs Node 24)
-- mise (for environment variables) - [Install mise](https://mise.jdx.dev/getting-started.html)
 - libfido2 (for WebAuthn CLI support)
 
 **Install libfido2:**
@@ -120,19 +117,8 @@ sudo apt-get install libfido2-dev
 
 **Install all development dependencies:**
 
-Run the setup task to install task runner, bun, air, goimports, and libfido2:
-
-```bash
-# Automated setup (recommended)
-task dev-setup
-
-# Or install task runner first, then run dev-setup:
-# macOS (Homebrew)
-brew install go-task/tap/go-task && task dev-setup
-
-# Linux (curl)
-curl -sL https://taskfile.dev/install.sh | sh -s -- -b /usr/local/bin && task dev-setup
-```
+`scripts/dev-setup.sh` (or `task dev-setup` once Task is installed) installs Task, Bun, air, goimports and
+libfido2, skipping any that are already installed.
 
 ### Building
 
@@ -149,7 +135,8 @@ task test       # Run all tests
 
 ### Real Google OAuth Setup
 
-For complete development setup with real Google OAuth (instead of mock), see **[docs/DEV.md](docs/DEV.md)**.
+For complete development setup with real Google OAuth (instead of mock), see
+**[Local Setup](https://docspring.github.io/rack-gateway/development/local-setup/)**.
 
 **Development URLs:**
 
@@ -163,14 +150,9 @@ For complete development setup with real Google OAuth (instead of mock), see **[
 
 Use `task docker:test:up` to boot the isolated preview-style stack on the test ports. It runs alongside the dev or preview stack while reusing the shared Postgres container.
 
-The development environment includes a mock Google OAuth server that simulates the authentication flow with test users:
-
-- **admin@example.com** - Admin User (full access)
-- **deployer@example.com** - Deployer User (full deployment permissions including env vars)
-- **ops@example.com** - Ops User (manage processes and view environments)
-- **viewer@example.com** - Viewer User
-
-When logging in via http://localhost:8447 during development, you'll be redirected to the mock OAuth server to select which test user to authenticate as.
+The development environment includes a mock Google OAuth server that lets you pick one of its test accounts
+(admin@example.com, deployer@example.com, ops@example.com, viewer@example.com). Only admin@example.com is a gateway
+user at first (from `ADMIN_USERS`); add the others on the Users page to sign in as them.
 
 ## How It Works
 
@@ -184,11 +166,10 @@ Rack gateway is a secure proxy for the Convox API. It accepts session tokens (fo
 # For CI/CD with API token
 export RACK_URL="https://convox:<api-token>@gateway.example.com/api/v1/rack-proxy"
 convox apps  # Uses standard convox CLI directly
-
-# For developers with session token
-export RACK_URL="https://convox:<session-token>@gateway.example.com/api/v1/rack-proxy"
-convox apps  # Uses standard convox CLI directly
 ```
+
+The native CLI can't answer MFA prompts, so with a session token, commands that need MFA fail; use the
+`rack-gateway` CLI for those.
 
 #### Option 2: rack-gateway CLI Wrapper (Convenience)
 
@@ -209,7 +190,7 @@ The `rack-gateway` CLI is optional if you prefer the native Convox CLI. It provi
 - Automatic token management
 - Multi-rack configuration
 - Browser-based login flow
-- Token expiry reminders
+- MFA prompts (WebAuthn, TOTP, YubiKey OTP, backup codes) for commands that need them
 
 ## CLI Usage
 
@@ -261,7 +242,8 @@ The CLI determines which rack to use in this order:
 
 1. `--rack` flag: `rack-gateway --rack production apps`
 2. Environment variable: `RACK_GATEWAY_RACK=production rack-gateway apps`
-3. Current rack stored in `~/.config/rack-gateway/config.json`
+3. `RACK_GATEWAY_URL` (an unnamed rack, used with `RACK_GATEWAY_API_TOKEN` in CI)
+4. Current rack stored in `~/.config/rack-gateway/config.json`
 
 ### Generate shell completions:
 
@@ -278,7 +260,8 @@ source <(./bin/rack-gateway completion zsh)
 
 ## Configuration
 
-See docs/CONFIGURATION.md for the full list of environment variables and configuration options.
+See [Environment Variables](https://docspring.github.io/rack-gateway/configuration/environment-variables/) for the full list of environment variables
+and configuration options.
 
 ### Database
 
@@ -288,7 +271,8 @@ The gateway uses Postgres to store users, API tokens, and audit logs. Set a conn
 DATABASE_URL=postgres://user:pass@host:5432/dbname?sslmode=require
 ```
 
-The database is automatically initialized on first run with an admin user from the first Google OAuth login.
+Production gateways never migrate on startup: run `./rack-gateway-api migrate` (as the admin database user) before
+each release. The users in `ADMIN_USERS` are created as admins at startup; signing in never creates a user.
 
 The CLI stores its configuration separately:
 
@@ -316,13 +300,14 @@ Examples:
 
 ## Audit Logging
 
-All API calls are logged to stdout in structured JSON format:
+Every action is recorded in an append-only audit log in Postgres, chained with HMAC-SHA256 and anchored hourly to
+an S3 bucket with Object Lock, and the gateway verifies the chain every hour. Each request is also logged to stdout
+as JSON:
 
 ```json
 {
   "ts": "2024-01-15T10:30:00Z",
   "user_email": "user@your-domain.com",
-  "rack": "staging",
   "method": "POST",
   "path": "/apps/myapp/restart",
   "status": 200,
@@ -344,50 +329,26 @@ Sensitive data is redacted before it is logged:
 
 ## Deployment
 
-### Docker
+See [Deployment](https://docspring.github.io/rack-gateway/deployment/) for Convox and Docker. On Convox, deploy with `scripts/deploy.sh <rack>`: it
+builds, runs the migrations against the new release, then promotes it (plain `convox deploy` skips migrations).
 
-```bash
-task docker
-docker run -p 8080:8080 \
-  -e GOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID \
-  -e GOOGLE_CLIENT_SECRET=$GOOGLE_CLIENT_SECRET \
-  -e RACK_TOKEN=$RACK_TOKEN \
-  rack-gateway-api:latest
-```
+## CloudWatch Alerts
 
-### Convox
-
-```bash
-convox apps create rack-gateway
-convox env set GOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID -a rack-gateway
-convox env set GOOGLE_CLIENT_SECRET=$GOOGLE_CLIENT_SECRET -a rack-gateway
-convox deploy -a rack-gateway
-```
-
-## CloudWatch Configuration
-
-Set log retention:
-
-```bash
-aws logs put-retention-policy \
-  --log-group-name /convox/your-rack/rack-gateway \
-  --retention-in-days 90
-```
-
-Create metric filters for security monitoring:
+On Convox the request log goes to CloudWatch Logs (retention: `LOG_RETENTION_DAYS` in `convox.yml`). Denied
+requests can feed a metric filter:
 
 ```bash
 aws logs put-metric-filter \
-  --log-group-name /convox/your-rack/rack-gateway \
+  --log-group-name <the app's log group> \
   --filter-name rbac-denies \
-  --filter-pattern '[..., rbac_decision="deny", ...]' \
+  --filter-pattern '{ $.rbac_decision = "deny" }' \
   --metric-transformations \
-    metricName=RBACDenies,metricNamespace=ConvoxAuth,metricValue=1
+    metricName=RBACDenies,metricNamespace=RackGateway,metricValue=1
 ```
 
 ## Security Considerations
 
-Rack Gateway was built with the goal of achieving SOC 2 compliance for DocSpring's infrastructure.
+Rack Gateway was built to meet SOC 2 requirements for production infrastructure.
 
 **We highly recommend setting up Tailscale for secure rack access, so that neither the Convox API nor
 the Rack Gateway API are exposed to the public internet.**
@@ -401,17 +362,14 @@ the Rack Gateway API are exposed to the public internet.**
 
 ## Testing
 
-Run all tests:
-
 ```bash
-task test
+task go:test:unit   # Go unit tests
+task web:test       # Web unit tests
+task web:e2e        # Playwright E2E tests
+task lint:fix       # Linters, with auto-fix
 ```
 
-Run linters:
-
-```bash
-task lint
-```
+CI runs the full suite (`task ci`) on every push. See [Testing](https://docspring.github.io/rack-gateway/development/testing/).
 
 ## Troubleshooting
 
@@ -438,8 +396,10 @@ task lint
 1. Fork the repository
 2. Create a feature branch
 3. Make changes with tests
-4. Run `task test` and `task lint`
+4. Run `task lint:fix` and the tests for what you changed
 5. Submit pull request
+
+See [Contributing](https://docspring.github.io/rack-gateway/development/contributing/).
 
 ## Support
 
@@ -492,10 +452,6 @@ Verify what you deployed:
 ```bash
 gh attestation verify oci://docker.io/docspringcom/rack-gateway:v1.0.1 --repo DocSpring/rack-gateway
 ```
-
-## Deployment
-
-See [DEPLOY.md](./docs/DEPLOY.md) for a production-ready deployment guide, environment configuration, persistence, and a minimal `convox.yml` example.
 
 ## License
 

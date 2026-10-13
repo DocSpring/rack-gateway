@@ -17,11 +17,12 @@ Navigate to **Users** in the sidebar to see the list:
 
 | Column | Description |
 |--------|-------------|
-| **Name / Email** | User identity |
+| **User** | Name and email |
 | **Roles** | Current role badges |
 | **Status** | Active or locked |
-| **Created By** | Administrator who added the user |
+| **Added By** | Administrator who added the user |
 | **Created** | When the user was added |
+| **Actions** | View details, and (admins) edit, lock or unlock, and delete |
 
 ## Adding Users (Admin)
 
@@ -29,43 +30,49 @@ Navigate to **Users** in the sidebar to see the list:
 
 1. Click **Add User**
 2. Enter the user's name and email
-3. Select a role (Viewer, Ops, Deployer, Admin)
+3. Check one or more roles (Viewer, Ops, Deployer, Admin)
 4. Click **Add User**
 
 </Steps>
 
-New users receive a welcome email with login instructions.
+New users receive a welcome email with login instructions, and the other admins are told a user was added. Adding
+a user needs MFA on the request.
 
 ## Editing Users (Admin)
 
-Admins can update name, email, and role:
+Admins can update a user's name and roles (not their email):
 
 <Steps>
 
-1. Click a user's **Edit** action
+1. Choose **Edit User** from the user's actions menu, or **Edit** on their detail page
 2. Update details
 3. Click **Save Changes**
 
 </Steps>
 
+Changing roles needs MFA on the request. A role change applies to the user's next request, and to their API
+tokens, which can never do more than their owner's role allows.
+
 ## Locking or Unlocking Users (Admin)
 
-Locking disables access immediately and invalidates active sessions.
+Locking blocks access at once: it revokes the user's sessions and their API tokens stop working until they're
+unlocked. A lock needs a reason: the user's email includes it, and in the web UI only admins see it.
 
 <Steps>
 
-1. Open the user's detail page
-2. Click **Lock Account** or **Unlock Account**
+1. Choose **Lock Account** from the user's actions menu, or on their detail page
+2. Enter the reason and confirm
 
 </Steps>
+
+**Unlock Account** reverses it. The user is emailed when locked and when unlocked. You can't lock or delete your own account.
 
 ## Deleting Users (Admin)
 
 <Steps>
 
-1. Open the user's detail page
-2. Click **Delete User**
-3. Confirm the deletion
+1. Choose **Delete User** from the user's actions menu, or on their detail page
+2. Type `DELETE` to confirm
 
 </Steps>
 
@@ -78,8 +85,9 @@ Deletion is permanent. Audit history remains, but access is removed.
 Click a user to view their details. The page includes:
 
 - Role badges and account status
-- Active sessions with **Sign Out Everywhere**
-- User-specific audit logs
+- **Active Sessions**: when each was created and last seen, when it expires, the client (browser or CLI) and user
+  agent, with **Sign Out** for one session and **Sign Out Everywhere** for all
+- The user's audit logs
 
 Every user can open their own page (click your name at the bottom of the sidebar) to review their sessions, sign out a session they don't recognize (or all of them), and see their own activity. Signing out sessions needs a fresh MFA check. **My Activity** in the sidebar opens your own audit log; admins see **Audit Logs** with everyone's activity instead.
 

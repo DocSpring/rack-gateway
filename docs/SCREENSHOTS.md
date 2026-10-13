@@ -14,7 +14,7 @@
 
 ## API Tokens
 
-![Screenshot of api tokens](./images/api_tokens.jpg)
+![Screenshot of api tokens](./images/api-tokens.jpg)
 
 ## Processes
 

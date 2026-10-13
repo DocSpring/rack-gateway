@@ -30,10 +30,10 @@ Rack Gateway is an open-source, self-hosted authentication and authorization pro
     Four built-in roles (viewer, ops, deployer, admin) with granular permissions. Control who can do what on your infrastructure.
   </Card>
   <Card title="Complete Audit Trail" icon="document">
-    Every API call is logged with automatic secret redaction. Export to CloudWatch, S3 WORM storage, or your SIEM.
+    Every request is recorded before it acts, in a hash-chained log anchored hourly to S3 Object Lock. Env values are redacted. Entries also go to stdout as JSON for CloudWatch or your SIEM.
   </Card>
   <Card title="Multi-Factor Authentication" icon="seti:lock">
-    TOTP, WebAuthn (security keys), and YubiKey support. Enforce MFA for all users or specific roles.
+    TOTP, WebAuthn (security keys), and YubiKey OTP. Required for all users by default, with step-up MFA for sensitive commands.
   </Card>
   <Card title="Deploy Approvals" icon="approve-check">
     Manual approval workflow for CI/CD deployments. Integrates with CircleCI, GitHub, and Slack.
@@ -91,8 +91,8 @@ cg logs -a myapp
 
 Rack Gateway was built to achieve SOC 2 compliance for production infrastructure. It provides:
 
-- **Immutable audit logs** with cryptographic anchoring to S3 WORM storage
-- **Automatic secret redaction** for passwords, tokens, and API keys
+- **Append-only audit logs**, hash-chained and anchored hourly to S3 WORM storage, verified every hour
+- **Secret redaction**: env values are `[REDACTED]` in audit logs and Slack unless an admin lists them as visible
 - **Session management** with configurable timeouts and revocation
 - **MFA enforcement** with step-up authentication for sensitive operations
 

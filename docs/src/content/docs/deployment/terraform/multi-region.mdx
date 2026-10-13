@@ -281,6 +281,9 @@ resource "aws_s3_bucket_replication_configuration" "audit_anchors" {
 
 ### Route 53 Health Checks
 
+Route 53 health checkers come from the internet, so this only works for gateways with a public endpoint. For
+gateways on a private network, use a heartbeat monitor (`UPTIME_HEARTBEAT_URL`) instead.
+
 ```hcl
 resource "aws_route53_health_check" "gateway_us" {
   fqdn              = "gateway-us.example.com"
@@ -399,34 +402,23 @@ resource "aws_route53_record" "gateway_dr" {
 
 Configure the CLI to handle multiple regional gateways:
 
-```json
-// ~/.config/rack-gateway/config.json
-{
-  "racks": {
-    "us": {
-      "gateway_url": "https://gateway-us.example.com",
-      "session_token": "..."
-    },
-    "eu": {
-      "gateway_url": "https://gateway-eu.example.com",
-      "session_token": "..."
-    }
-  },
-  "current_rack": "us"
-}
+```bash
+# Log in to each regional gateway once
+rack-gateway login us https://gateway-us.example.com
+rack-gateway login eu https://gateway-eu.example.com
 ```
 
 Usage:
 
 ```bash
 # Work with US rack
-rack-gateway --rack us convox apps
+rack-gateway apps --rack us
 
 # Work with EU rack
-rack-gateway --rack eu convox apps
+rack-gateway apps --rack eu
 
 # Switch default rack
-rack-gateway rack eu
+rack-gateway switch eu
 ```
 
 ## State Synchronization
@@ -437,28 +429,19 @@ For independently deployed gateways, these items may need synchronization:
 
 | Item | Sync Method | Frequency |
 |------|-------------|-----------|
-| Users | OAuth (automatic) | On login |
-| RBAC roles | Manual or automation | As needed |
+| Users | Added on each gateway, or seeded with `ADMIN_USERS` etc. | As needed |
+| RBAC roles | Manual, or the seed lists | As needed |
 | API tokens | Region-specific | N/A |
-| Audit logs | S3 replication | Continuous |
+| Audit logs | Each gateway's own database and anchor chain | Not synced |
 
 ### User Synchronization
 
-Users authenticate via Google OAuth, so they're automatically provisioned on first login to any region. Roles can be:
+Each gateway has its own users: signing in never creates one. Either:
 
-1. **Manual** - Admins assign roles in each region
-2. **Automated** - Script syncs roles via API
-3. **SSO-based** - Derive roles from Google Groups
-
-```bash
-#!/bin/bash
-# Sync admin users across regions
-ADMINS="admin1@example.com,admin2@example.com"
-
-for REGION in us eu; do
-  rack-gateway --rack $REGION admin users sync --admins "$ADMINS"
-done
-```
+1. **Add them on each gateway** - an admin adds users and roles on its **Users** page
+2. **Seed them from configuration** - set the same `ADMIN_USERS`, `DEPLOYER_USERS`, `OPERATIONS_USERS` and
+   `VIEWER_USERS` on every gateway (for example from one Terraform variable). Each start creates missing users
+   and resets listed users' roles to the list's role
 
 ## Disaster Recovery Runbook
 

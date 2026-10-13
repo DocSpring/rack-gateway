@@ -77,9 +77,15 @@ notifications stop and are reported in the logs until you reconnect Slack.
 2. Navigate to **Integrations**
 3. Click **Connect to Slack**
 4. Authorize the app in Slack
-5. Configure channel routing
+5. Invite the bot to each channel it should post in (`/invite @Rack Gateway`). With the `chat:write` scope a bot
+   can only post in channels it belongs to, and the channel picker lists public channels only
+6. Configure channel routing
 
 </Steps>
+
+Connecting, changing channels or alerts, sending a test and disconnecting are admin actions that need a recent MFA
+verification (the [step-up window](/security/rbac/permissions/#mfa-requirements)). **Disconnect** removes the
+integration and its stored bot token.
 
 ## Channel Configuration
 
@@ -87,6 +93,11 @@ Each channel has:
 
 - A selected Slack channel
 - A list of **action patterns** (glob syntax)
+
+**Add Channel** adds another channel config. Each change is saved straight away. If someone else changed the
+configuration since your page loaded, the save is refused with "The channel configuration changed since it was
+loaded. Showing the latest; make your change again." and the page reloads the current configuration, so one admin
+never overwrites another's change.
 
 ### Default Channels
 
@@ -125,7 +136,10 @@ Action names use underscores (e.g., `deploy_approval_request.*`). Use the Audit 
 ### Testing
 
 Each channel card includes a **Test** button that sends a test message, naming the gateway, to the selected Slack
-channel.
+channel. If it fails with `not_in_channel`, invite the bot to that channel.
+
+Patterns use Go's `filepath.Match` syntax: `*` matches any run of characters, `?` one character, and `[...]` a
+character class. A pattern must match the whole action, so `login` matches nothing; use `login.*`.
 
 ## Deploy Approval Alerts
 
@@ -133,7 +147,11 @@ The Slack integration also supports a dedicated **Deploy Approval Alerts** chann
 
 - Enable the alert toggle
 - Choose a single Slack channel
-- The gateway posts deploy approval alerts to this channel regardless of action patterns
+- When a deploy approval request is created, the gateway posts an alert with the request's details and a link to
+  approve it in the web UI, regardless of action patterns
+
+Approving and rejecting happen in the web UI or CLI; Slack only notifies. Route `deploy_approval_request.*` to a
+channel to hear about approvals and rejections too.
 
 ## Message Formatting
 

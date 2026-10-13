@@ -3,7 +3,7 @@ title: "OAuth Flow"
 description: "OAuth 2.0 implementation details in Rack Gateway."
 ---
 
-import { Aside, Steps, Tabs, TabItem } from '@astrojs/starlight/components';
+import { Aside, Steps } from '@astrojs/starlight/components';
 
 Rack Gateway uses Google OAuth 2.0 with OpenID Connect (OIDC) for authentication. The implementation uses vetted libraries and follows security best practices including PKCE for CLI flows.
 
@@ -11,35 +11,13 @@ Rack Gateway uses Google OAuth 2.0 with OpenID Connect (OIDC) for authentication
 
 ### Google Cloud Setup
 
-<Steps>
-
-1. **Create OAuth Client**
-
-   In Google Cloud Console → APIs & Services → Credentials:
-   - Click "Create Credentials" → "OAuth client ID"
-   - Application type: "Web application"
-   - Name: "Rack Gateway"
-
-2. **Configure Redirect URIs**
-
-   Add authorized redirect URIs:
-   ```
-   https://gateway.example.com/api/v1/auth/web/callback
-   https://gateway.example.com/api/v1/auth/cli/callback
-   ```
-
-3. **Set Environment Variables**
-
-   ```bash
-   GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
-   GOOGLE_CLIENT_SECRET=your-client-secret
-   GOOGLE_ALLOWED_DOMAIN=yourcompany.com
-   ```
-
-</Steps>
+Create a Google OAuth client with the redirect URIs `https://<DOMAIN>/api/v1/auth/web/callback` and
+`https://<DOMAIN>/api/v1/auth/cli/callback`, and set `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` and
+`GOOGLE_ALLOWED_DOMAIN`. See [OAuth Setup](/configuration/oauth-setup/) for the steps.
 
 <Aside type="caution" title="Domain Restriction">
-Always set `GOOGLE_ALLOWED_DOMAIN` to restrict authentication to your organization. Without this, anyone with a Google account could attempt to authenticate.
+`GOOGLE_ALLOWED_DOMAIN` restricts sign-in to your organization. It is required: outside dev mode the gateway refuses to
+start without it.
 </Aside>
 
 ## Web OAuth Flow
@@ -54,22 +32,21 @@ sequenceDiagram
 
     Browser->>Gateway: GET /api/v1/auth/web/login
     Gateway->>Gateway: Generate state token
-    Gateway->>Gateway: Store state in session
-    Gateway-->>Browser: Redirect to Google
+    Gateway-->>Browser: Set state cookie + redirect to Google
 
     Browser->>Google: Authorization request
     Note over Browser,Google: User authenticates<br/>and consents
     Google-->>Browser: Redirect with code + state
 
     Browser->>Gateway: GET /api/v1/auth/web/callback?code=...&state=...
-    Gateway->>Gateway: Validate state
+    Gateway->>Gateway: Validate state against the cookie
     Gateway->>Google: Exchange code for tokens
     Google-->>Gateway: ID token + access token
     Gateway->>Gateway: Verify ID token signature
     Gateway->>Gateway: Validate domain
-    Gateway->>Gateway: Create/update user
-    Gateway->>Gateway: Create session
-    Gateway-->>Browser: Set session cookie + redirect
+    Gateway->>Gateway: Look up the user (they must already exist)
+    Gateway->>Gateway: Record the attempt, create session
+    Gateway-->>Browser: Set session cookie + redirect (to MFA first, if needed)
 ```
 
 ### Web Flow Parameters
@@ -187,7 +164,12 @@ The gateway verifies Google's ID token using the `go-oidc` library:
 
 5. **Domain validation**
 
-   Extracts email from claims and validates domain
+   Requires `email_verified`, and an email domain and `hd` claim that both match `GOOGLE_ALLOWED_DOMAIN`
+
+6. **User lookup**
+
+   The user must already exist: an admin adds them, or `ADMIN_USERS` (and the other seed variables) create them
+   on first start. Signing in never creates a user.
 
 </Steps>
 
@@ -218,63 +200,31 @@ Claims extracted from Google's ID token:
 
 ### Common OAuth Errors
 
-<Tabs>
-<TabItem label="Domain Not Allowed">
+A failed web login redirects to the login error page, `/app/auth/error?error=<code>`, which shows a fixed message
+for each code (never text from the URL or from Google):
 
-**Error**: "email domain not allowed"
+| Code | Cause |
+|------|-------|
+| `unauthorized` | The account is outside `GOOGLE_ALLOWED_DOMAIN`, or isn't a gateway user. An admin must add them |
+| `access_denied` | The user canceled or declined the sign-in at Google |
+| `identity_provider_error` | Google returned another error |
+| `missing_code` | The callback had no authorization code or state |
+| `state_mismatch` | The state doesn't match this browser's login (an old tab, or a forged link). Start again |
+| `exchange_failed` | Google wouldn't exchange the code. Check the client ID and secret |
+| `session_failed` | The gateway couldn't create a session |
+| `audit_unavailable` | The audit log couldn't record the login, so it was refused |
 
-**Cause**: User attempted to sign in with an email outside the allowed domain.
+The CLI flow uses the same idea with its own page, `/app/cli/auth/error?error=<code>`.
 
-**Solution**: Ensure users sign in with their organization email.
-
-</TabItem>
-<TabItem label="Invalid State">
-
-**Error**: "state mismatch"
-
-**Cause**: The state parameter from Google doesn't match the stored state. Possible CSRF attack or expired session.
-
-**Solution**: Restart the login flow.
-
-</TabItem>
-<TabItem label="Token Exchange Failed">
-
-**Error**: "failed to exchange code for token"
-
-**Cause**: Invalid authorization code or client credentials.
-
-**Solution**: Verify OAuth client configuration in Google Cloud Console.
-
-</TabItem>
-<TabItem label="Provider Unavailable">
-
-**Error**: "failed to create OIDC provider"
-
-**Cause**: Cannot reach Google's OIDC discovery endpoint.
-
-**Solution**: Check network connectivity. The gateway retries with exponential backoff (up to 20 seconds).
-
-</TabItem>
-</Tabs>
-
-### Error Response Format
-
-OAuth errors return structured JSON:
-
-```json
-{
-  "error": "domain_not_allowed",
-  "error_description": "Email domain not allowed: user@external.com"
-}
-```
+If the gateway can't reach Google's OIDC discovery endpoint when it starts, it retries with exponential backoff for
+up to 20 seconds, then exits with "failed to create OIDC provider". Check its outbound network access.
 
 ## Security Considerations
 
 ### State Parameter
 
 - Generated using cryptographically secure random bytes
-- 32 bytes, base64url encoded
-- Stored server-side and validated on callback
+- Stored in a short-lived cookie (web) or server-side (CLI) and validated on callback
 - Prevents CSRF attacks
 
 ### Token Storage
@@ -324,7 +274,8 @@ The redirect URI in your request doesn't match any authorized URI in Google Clou
 
 1. Check the exact URI (including protocol and path)
 2. Ensure no trailing slashes mismatch
-3. Verify the `GATEWAY_URL` environment variable
+3. Verify `DOMAIN`: the redirect URIs are `https://<DOMAIN>/api/v1/auth/web/callback` and
+   `https://<DOMAIN>/api/v1/auth/cli/callback`
 
 ### "invalid_client"
 

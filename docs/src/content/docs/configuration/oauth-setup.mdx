@@ -1,14 +1,99 @@
 ---
 title: "OAuth Setup"
-description: "Configuring Google Workspace OAuth."
+description: "Creating the Google OAuth client the gateway signs users in with."
 ---
 
-import { Aside } from '@astrojs/starlight/components';
+import { Aside, Steps } from '@astrojs/starlight/components';
 
-<Aside type="caution" title="Coming Soon">
-This page is under construction. Check back soon for complete documentation.
+Rack Gateway signs people in with Google (OpenID Connect). Each gateway needs an OAuth client in a Google Cloud
+project that belongs to your Google Workspace organization.
+
+## Create the OAuth Client
+
+<Steps>
+
+1. **Choose a project**
+
+   In the [Google Cloud Console](https://console.cloud.google.com/), create a project for the gateway or pick an
+   existing one in your Workspace organization.
+
+2. **Configure the consent screen**
+
+   Under **APIs & Services → OAuth consent screen** (Google Auth Platform → Branding and Audience in newer
+   consoles):
+   - User type: **Internal**, so only accounts in your Workspace can use it
+   - App name: for example "Rack Gateway"
+   - Scopes: `openid`, `email` and `profile` (no sensitive scopes)
+
+3. **Create the client**
+
+   Under **APIs & Services → Credentials**, choose **Create Credentials → OAuth client ID**:
+   - Application type: **Web application**
+   - Name: for example "Rack Gateway (production)"
+
+4. **Add the redirect URIs**
+
+   Add both, with your gateway's `DOMAIN`:
+
+   ```
+   https://gateway.example.com/api/v1/auth/web/callback
+   https://gateway.example.com/api/v1/auth/cli/callback
+   ```
+
+   The first is the web login; the second is where Google returns a CLI login before the gateway sends the
+   browser back to the CLI.
+
+5. **Give the gateway the credentials**
+
+   ```bash
+   GOOGLE_CLIENT_ID=1234567890-abc.apps.googleusercontent.com
+   GOOGLE_CLIENT_SECRET=...   # a secret: set it like the other secrets, never in git
+   GOOGLE_ALLOWED_DOMAIN=example.com
+   DOMAIN=gateway.example.com
+   ```
+
+</Steps>
+
+Use one OAuth client per gateway (staging, production, each region), so each has only its own redirect URIs.
+
+## Who Can Sign In
+
+A Google sign-in is accepted only when:
+
+- the ID token is valid for this client and issuer;
+- `email_verified` is true;
+- both the email's domain and the token's `hd` (hosted domain) claim match `GOOGLE_ALLOWED_DOMAIN`, so personal
+  Gmail accounts and other organizations are refused even if they reach the consent screen;
+- the email belongs to an existing gateway user. Signing in never creates a user: an admin adds people on the
+  **Users** page, and `ADMIN_USERS` (plus `DEPLOYER_USERS`, `OPERATIONS_USERS` and `VIEWER_USERS`) creates the
+  first ones at startup.
+
+Anyone else lands on the login error page as unauthorized. The refusal is recorded in the audit log, and the
+address that tried is emailed a failed-login notice (when email is configured).
+
+## Other Settings
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `GOOGLE_OAUTH_BASE_URL` | `https://accounts.google.com` | The OIDC issuer. Leave it unset for Google. It must be `https://` (only `testbypass` builds accept the local mock) |
+
+<Aside type="note">
+The gateway expects Google's claims, including `hd`. Another OIDC provider only works if it issues the same claims.
 </Aside>
 
-## Overview
+## Local Development
 
-Content coming soon.
+The development stack uses the mock OAuth server (`GOOGLE_OAUTH_BASE_URL=http://localhost:3345` in `mise.toml`),
+so no Google client is needed. To try real Google sign-in locally, see
+[Local Setup](/development/local-setup/).
+
+## Troubleshooting
+
+| Problem | Fix |
+|---------|-----|
+| `redirect_uri_mismatch` from Google | The redirect URI must match exactly, scheme and path included: check `DOMAIN` and the two URIs above |
+| `invalid_client` | `GOOGLE_CLIENT_ID` or `GOOGLE_CLIENT_SECRET` is wrong, or the client was deleted |
+| Login error page says unauthorized | The account is outside `GOOGLE_ALLOWED_DOMAIN`, or isn't a gateway user yet |
+| Google says the app is restricted | The consent screen is Internal and the account belongs to another organization |
+
+See [OAuth Flow](/security/authentication/oauth-flow/) for how the web and CLI logins work.

@@ -65,13 +65,14 @@ Enforce admin review before deployments:
 
    Create an API token with the `cicd` role
 
-2. **Set up CI workflow**
+2. **Configure the app**
 
-   Add approval request step to your CircleCI config
+   Set the app's `vcs_repo` and `service_image_patterns`, and for CircleCI the approval job name and
+   `circleci_auto_approve_on_approval`
 
-3. **Enable auto-approval**
+3. **Set up CI workflow**
 
-   Configure app settings (approval job name, auto-approve)
+   Add an approval request step and a hold job to your CircleCI config
 
 </Steps>
 
@@ -115,7 +116,7 @@ Receive security alerts via email:
 
 2. **Configure gateway**
 
-   Set `POSTMARK_API_KEY` and `POSTMARK_FROM_EMAIL`
+   Set `POSTMARK_API_TOKEN` and `POSTMARK_FROM`
 
 3. **Automatic notifications**
 
@@ -129,14 +130,20 @@ Receive security alerts via email:
 
 Integrations can respond to these event categories:
 
-| Category | Examples | Notifications |
-|----------|----------|---------------|
-| **Authentication** | Login, logout, failed auth | Slack, Email |
-| **MFA** | Enrollment, verification failures | Slack, Email |
-| **User Management** | User created, roles changed, locked | Slack, Email |
-| **API Tokens** | Token created, updated, deleted | Slack |
-| **Deploy Approvals** | Request, approve, reject | Slack, CircleCI, GitHub |
-| **Security** | Rate limits, suspicious activity | Slack, Email |
+Every audit log entry can be routed to Slack with an action pattern; the defaults are listed on the
+[Slack](/integrations/slack/#default-channels) page. Email is sent for a fixed set of events:
+
+| Category | Examples | Email |
+|----------|----------|-------|
+| **Authentication** | New CLI login, failed login | The user |
+| **MFA** | Failed verification, automatic lock after 5 failures | The user |
+| **User Management** | User added, locked, unlocked | The user; admins when a user is added |
+| **API Tokens** | Token created | The owner and the other admins |
+| **Rack Parameters** | Parameters changed | Admins |
+| **Security** | Rate limit exceeded | The user and admins |
+
+Deploy approval requests also reach CI and GitHub: approving one can approve the CircleCI hold job, and the
+gateway can comment on the pull request.
 
 ## Configuration Reference
 
@@ -144,10 +151,11 @@ Integrations can respond to these event categories:
 |----------|-------------|-------------|
 | `SLACK_CLIENT_ID` | Slack | OAuth client ID |
 | `SLACK_CLIENT_SECRET` | Slack | OAuth client secret |
-| `POSTMARK_API_KEY` | Email | Postmark API token |
-| `POSTMARK_FROM_EMAIL` | Email | Sender email address |
+| `POSTMARK_API_TOKEN` | Email | Postmark API token |
+| `POSTMARK_FROM` | Email | Sender email address |
 | `CIRCLECI_TOKEN` | CircleCI | API token for job approval |
-| `GITHUB_TOKEN` | GitHub | API token for PR comments |
+| `GITHUB_TOKEN` | GitHub | API token for commit verification and PR comments |
+| `GITHUB_API_URL` | GitHub | REST API root for GitHub Enterprise (default `https://api.github.com`) |
 
 See [Configuration Reference](/configuration/environment-variables/) for complete details.
 
