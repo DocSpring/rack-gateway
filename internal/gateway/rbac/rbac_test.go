@@ -104,16 +104,14 @@ func TestAuthorizeUsesCurrentRoles(t *testing.T) {
 	require.False(t, userCan(t, mgr, database, "user@test.com", deleteApps), "re-created user must not keep old roles")
 }
 
-// TestAuthorizeDeniesSuspendedAndLockedUsers verifies blocked users get nothing.
-func TestAuthorizeDeniesSuspendedAndLockedUsers(t *testing.T) {
+// TestAuthorizeDeniesLockedUsers verifies locked users, and their tokens, get nothing.
+func TestAuthorizeDeniesLockedUsers(t *testing.T) {
 	mgr, _ := newTestManager(t)
 	now := time.Now()
 	locked := &db.User{Email: "locked@test.com", Roles: []string{"admin"}, LockedAt: &now}
-	suspended := &db.User{Email: "suspended@test.com", Roles: []string{"admin"}, Suspended: true}
 
 	for _, p := range []Principal{
 		UserPrincipal(locked),
-		UserPrincipal(suspended),
 		TokenPrincipal(locked, []string{"convox:*:*"}),
 		UserPrincipal(nil),
 	} {

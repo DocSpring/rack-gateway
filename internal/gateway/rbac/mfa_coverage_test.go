@@ -41,23 +41,15 @@ func TestEveryWritePermissionHasAnMFALevel(t *testing.T) {
 	}
 }
 
-// Rack operations that replace credentials or certificates, or skip the checks a build gets, need MFA on the request.
-// The other rack writes need it within the step-up window.
+// Rack operations that delete an app or skip the checks a build gets need MFA on the request. The other rack writes
+// need it within the step-up window.
 func TestRackWriteMFALevels(t *testing.T) {
 	cases := map[string]rbac.MFALevel{
-		rbac.Convox(rbac.ResourceBuild, rbac.ActionImport):       rbac.MFAAlways,
-		rbac.Convox(rbac.ResourceInstance, rbac.ActionKeyroll):   rbac.MFAAlways,
-		rbac.Convox(rbac.ResourceCert, rbac.ActionDelete):        rbac.MFAAlways,
-		rbac.Convox(rbac.ResourceBuild, rbac.ActionUpdate):       rbac.MFAStepUp,
-		rbac.Convox(rbac.ResourceCert, rbac.ActionUpdate):        rbac.MFAStepUp,
-		rbac.Convox(rbac.ResourceCert, rbac.ActionGenerate):      rbac.MFAStepUp,
-		rbac.Convox(rbac.ResourceCert, rbac.ActionImport):        rbac.MFAStepUp,
-		rbac.Convox(rbac.ResourceRegistry, rbac.ActionAdd):       rbac.MFAStepUp,
-		rbac.Convox(rbac.ResourceRegistry, rbac.ActionRemove):    rbac.MFAStepUp,
-		rbac.Convox(rbac.ResourceBuild, rbac.ActionCreate):       rbac.MFAStepUp,
-		rbac.Convox(rbac.ResourceObject, rbac.ActionCreate):      rbac.MFANone,
-		rbac.Convox(rbac.ResourceApp, rbac.ActionDelete):         rbac.MFAAlways,
-		rbac.Convox(rbac.ResourceInstance, rbac.ActionTerminate): rbac.MFAAlways,
+		rbac.Convox(rbac.ResourceBuild, rbac.ActionImport):  rbac.MFAAlways,
+		rbac.Convox(rbac.ResourceBuild, rbac.ActionUpdate):  rbac.MFAStepUp,
+		rbac.Convox(rbac.ResourceBuild, rbac.ActionCreate):  rbac.MFAStepUp,
+		rbac.Convox(rbac.ResourceObject, rbac.ActionCreate): rbac.MFANone,
+		rbac.Convox(rbac.ResourceApp, rbac.ActionDelete):    rbac.MFAAlways,
 	}
 	for perm, want := range cases {
 		if got := rbac.MFALevelForPermission(perm); got != want {

@@ -4460,7 +4460,7 @@
                     "type": "string"
                 },
                 "action_type": {
-                    "description": "\"convox\", \"users\", \"auth\"",
+                    "description": "permission scope: auth, convox, gateway, security",
                     "type": "string"
                 },
                 "api_token_id": {
@@ -4813,9 +4813,6 @@
                     "items": {
                         "type": "string"
                     }
-                },
-                "suspended": {
-                    "type": "boolean"
                 },
                 "updated_at": {
                     "type": "string"

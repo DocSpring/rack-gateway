@@ -23,6 +23,5 @@ export interface DbUser {
   name?: string;
   preferred_mfa_method?: string;
   roles?: string[];
-  suspended?: boolean;
   updated_at?: string;
 }

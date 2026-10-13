@@ -36,6 +36,15 @@ func newAnchorCache(store auditverify.AnchorStore) *anchorCache {
 	return &anchorCache{store: store, bodies: map[anchorVersion][]byte{}}
 }
 
+// GetObjectLockConfiguration always reads the bucket's configuration.
+func (c *anchorCache) GetObjectLockConfiguration(
+	ctx context.Context,
+	params *s3.GetObjectLockConfigurationInput,
+	optFns ...func(*s3.Options),
+) (*s3.GetObjectLockConfigurationOutput, error) {
+	return c.store.GetObjectLockConfiguration(ctx, params, optFns...)
+}
+
 // ListObjectVersions always lists the bucket.
 func (c *anchorCache) ListObjectVersions(
 	ctx context.Context,

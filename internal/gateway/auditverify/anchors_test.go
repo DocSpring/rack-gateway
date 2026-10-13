@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/riverqueue/river"
 	"github.com/riverqueue/river/rivertype"
@@ -41,7 +42,7 @@ func writeAnchor(t *testing.T, database *gwdb.Database, bucket *fakes3.Bucket, a
 func writeAnchorStoredAt(t *testing.T, database *gwdb.Database, bucket *fakes3.Bucket, at, stored time.Time) {
 	t.Helper()
 	bucket.AdvanceTo(stored)
-	worker := jobaudit.NewAnchorWriterWorker(database, bucket, testBucket, testChainID, 7)
+	worker := jobaudit.NewAnchorWriterWorker(database, bucket, testBucket, testChainID)
 	job := &river.Job[jobaudit.AnchorWriterArgs]{JobRow: &rivertype.JobRow{CreatedAt: at}}
 	require.NoError(t, worker.Work(context.Background(), job))
 }
@@ -260,4 +261,23 @@ func TestVerifyReadsAnchorsConcurrently(t *testing.T) {
 	})
 	requireOK(t, report)
 	assert.Equal(t, anchors, report.AnchorsChecked)
+}
+
+// Anchors are only kept as long as the bucket's default Object Lock rule says, so verification fails when that's
+// shorter than AUDIT_ANCHOR_RETENTION_DAYS.
+func TestVerifyFailsWhenTheBucketKeepsAnchorsTooBriefly(t *testing.T) {
+	database := newAuditDatabase(t)
+	bucket := fakes3.New(firstHour)
+	writeEvents(t, database, 1)
+	writeAnchor(t, database, bucket, firstHour)
+	bucket.LockConfiguration.Rule.DefaultRetention.Days = aws.Int32(30)
+
+	report := verify(t, database, auditverify.Options{
+		Anchors: &auditverify.AnchorOptions{
+			Store: bucket, Bucket: testBucket, ChainID: testChainID, MinRetentionDays: 400,
+		},
+		Now: firstHour.Add(time.Hour),
+	})
+	require.Equal(t, 1, report.FailureCount, "failures: %q", report.Failures)
+	assert.Contains(t, report.Failures[0], "locks anchors for 30 days, less than AUDIT_ANCHOR_RETENTION_DAYS (400)")
 }

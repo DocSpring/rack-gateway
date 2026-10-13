@@ -177,7 +177,6 @@ export function UsersPage() {
           roles: [role],
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
-          suspended: false,
           created_by_email: currentUser?.email,
           created_by_name: currentUser?.name,
         } as User)

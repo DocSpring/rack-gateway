@@ -121,7 +121,7 @@ func (h *Handler) auditRackParamsChanged(r *http.Request, actor string, keys []s
 	_ = h.logAudit(r, &db.AuditLog{
 		UserEmail:    actor,
 		UserName:     r.Header.Get("X-User-Name"),
-		ActionType:   "convox",
+		ActionType:   audit.ActionTypeConvox,
 		Action:       audit.BuildAction(rbac.ResourceRack.String(), audit.ActionVerbParamsSet),
 		ResourceType: "rack",
 		Resource:     h.rackName,

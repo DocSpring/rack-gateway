@@ -55,8 +55,8 @@ against a database, it marks the database as `production`, or `development` in a
 `COLUMN_ENCRYPTION_KEY` encrypts the secrets the gateway stores in its database: TOTP seeds and YubiKey
 public IDs (`mfa_methods.secret`) and the Slack bot token. Values are encrypted with AES-256-GCM and bound
 to where they belong (the user and MFA method type, or the Slack workspace), so a value copied to another
-user's row, or to a method of another type, can't be decrypted there. A plaintext value is never used as it is,
-but the upgrade sweep encrypts any it finds (see **Existing data is upgraded at startup** below).
+user's row, or to a method of another type, can't be decrypted there. A plaintext value is never used: reading
+one is an error, as for a value that doesn't decrypt.
 
 - **Generate it once** with `openssl rand -base64 32` and store it with your other secrets. Use a
   different key per environment. It is separate from `APP_SECRET_KEY`, so rotating the session secret
@@ -73,14 +73,9 @@ but the upgrade sweep encrypts any it finds (see **Existing data is upgraded at 
   automatic account lock.
   Slack must be reconnected. The gateway logs (and reports to Sentry, if configured) every value it fails
   to decrypt when it tries to use it.
-- **Existing data is upgraded at startup.** Secrets stored by releases before column encryption (before
-  v0.1.7: plaintext TOTP seeds, base64 Slack tokens) are encrypted when the server starts, before it serves
-  requests, and once more 10 minutes later, in case the previous release stored more during the rollout. The
-  sweep runs on every start and is safe to repeat. It logs a warning naming each row it encrypts (the user
-  and MFA method type, or the Slack workspace, never the value). It will be removed in a later release; until then it encrypts any
-  plaintext value it finds, so someone who can write to the database could plant a TOTP seed they know and
-  have it encrypted. After the upgrade nothing else stores plaintext, so the sweep 10 minutes after startup
-  encrypting anything is reported to Sentry, if configured, and logged as an error.
+- **Upgrading from before v0.1.7** (plaintext TOTP seeds, base64 Slack tokens): deploy a release from v0.1.7 to
+  v0.1.10 first. Those releases encrypt the existing secrets when they start; later releases don't, and can't
+  read secrets stored before column encryption.
 - **Rotation isn't supported yet.** Every encrypted value records which key encrypted it, so rotation can
   be added later without changing the stored format.
 
@@ -225,7 +220,7 @@ See [Deploy Approvals](/integrations/deploy-approvals/) for common keys.
 | `AUDIT_HMAC_SECRET` | (required in prod) | HMAC chain secret: at least 32 bytes (`openssl rand -base64 32`). Without it (`DEV_MODE` only) the gateway doesn't verify its audit log. |
 | `AUDIT_ANCHOR_BUCKET` | | S3 bucket for anchors. Unset, no anchors are written |
 | `AUDIT_ANCHOR_CHAIN_ID` | | Chain identifier, the anchors' key prefix. Required with `AUDIT_ANCHOR_BUCKET` |
-| `AUDIT_ANCHOR_RETENTION_DAYS` | `400` | Not used for retention: anchors are locked by the bucket's default Object Lock rule, so set the retention there. The gateway only shows this value in anchor write errors |
+| `AUDIT_ANCHOR_RETENTION_DAYS` | `400` | The least the anchor bucket's default Object Lock retention may be. The bucket's rule locks the anchors; the gateway checks it at startup and in every verification, and refuses to start (verification fails) unless the bucket locks new objects in COMPLIANCE mode for at least this many days. Set it to the bucket's retention. Needs `s3:GetBucketObjectLockConfiguration` |
 | `AUDIT_ANCHOR_INTERVAL_MINUTES` | `60` | Anchor interval |
 | `AUDIT_HASH_V2_FROM` | | Chain index where hash v2 starts, recorded after upgrading, for the hourly verification and `verify-audit` (see [Verification](/deployment/terraform/s3-worm-storage/#pinning-where-hash-v2-starts)). The gateway refuses to start when it isn't a chain index. |
 | `AWS_ENDPOINT_URL_S3` | | S3 endpoint override, e.g. MinIO (`testbypass` builds only) |

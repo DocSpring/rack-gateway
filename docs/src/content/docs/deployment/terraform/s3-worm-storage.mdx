@@ -288,7 +288,9 @@ resource "aws_iam_role_policy" "anchor_writer" {
           "s3:GetObject",
           "s3:GetObjectVersion",
           "s3:ListBucket",
-          "s3:ListBucketVersions"
+          "s3:ListBucketVersions",
+          # The gateway checks the bucket's default retention at startup and in every verification
+          "s3:GetBucketObjectLockConfiguration"
         ]
         Resource = [
           aws_s3_bucket.audit_anchors.arn,
@@ -347,7 +349,8 @@ resource "aws_iam_role_policy" "anchor_verifier" {
           "s3:GetObjectVersion",
           "s3:ListBucket",
           "s3:ListBucketVersions",
-          "s3:GetObjectRetention"
+          "s3:GetObjectRetention",
+          "s3:GetBucketObjectLockConfiguration"
         ]
         Resource = [
           aws_s3_bucket.audit_anchors.arn,
@@ -409,8 +412,10 @@ It prints a summary and exits non-zero if it finds any integrity failure. Warnin
 - `RGW_DATABASE_URL`, `GATEWAY_DATABASE_URL` or `DATABASE_URL`, for a role with `SELECT` on `audit.audit_event`
   (the `audit_reader` role is enough).
 - Unless `--no-anchors` is given: `AUDIT_ANCHOR_BUCKET`, `AUDIT_ANCHOR_CHAIN_ID` and AWS credentials allowed
-  `s3:ListBucket`, `s3:ListBucketVersions`, `s3:GetObject` and `s3:GetObjectVersion` on the bucket, and
-  `kms:Decrypt` on its key (the verifier role above).
+  `s3:ListBucket`, `s3:ListBucketVersions`, `s3:GetObject`, `s3:GetObjectVersion` and
+  `s3:GetBucketObjectLockConfiguration` on the bucket, and `kms:Decrypt` on its key (the verifier role above).
+  It fails unless the bucket's default retention is COMPLIANCE mode for at least `AUDIT_ANCHOR_RETENTION_DAYS`
+  (default 400).
 - On a gateway that was upgraded from a version before hash v2: `AUDIT_HASH_V2_FROM` (or `--hash-v2-from`), see
   below.
 
@@ -497,9 +502,11 @@ version before hash v2 has no legacy events and needs no pin.
 ### Hourly Verification in the Gateway
 
 The gateway runs these checks itself at half past every hour (UTC), with the configuration `verify-audit` reads:
-`AUDIT_HMAC_SECRET`, `AUDIT_HASH_V2_FROM` and the anchor settings. Its role needs `s3:ListBucketVersions` and
-`s3:GetObjectVersion` on the bucket ([IAM Role for the Gateway](#iam-role-for-the-gateway)); without them every run
-fails and alerts.
+`AUDIT_HMAC_SECRET`, `AUDIT_HASH_V2_FROM` and the anchor settings. Its role needs `s3:ListBucketVersions`,
+`s3:GetObjectVersion` and `s3:GetBucketObjectLockConfiguration` on the bucket
+([IAM Role for the Gateway](#iam-role-for-the-gateway)); without them every run fails and alerts. The gateway also
+reads the bucket's Object Lock configuration before it starts, and refuses to start unless the default retention is
+COMPLIANCE mode for at least `AUDIT_ANCHOR_RETENTION_DAYS`.
 
 - **What a run checks.** The first run after the gateway starts, every run while verification is failing, and one
   run a day check every event. The hourly runs in between check the events written since the last passing run,

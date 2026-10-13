@@ -326,7 +326,7 @@ func logDeployApprovalAudit(
 	_ = logger.LogRequestEntry(ctx, &db.AuditLog{
 		UserEmail:    userEmail,
 		UserName:     userName,
-		ActionType:   "gateway",
+		ActionType:   audit.ActionTypeGateway,
 		Action:       action,
 		ResourceType: "deploy-approval-request",
 		Resource:     resourceID,

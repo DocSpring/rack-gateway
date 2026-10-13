@@ -144,11 +144,6 @@ func keyID(key []byte) string {
 	return hex.EncodeToString(mac.Sum(nil)[:kidBytes])
 }
 
-// IsEncrypted reports whether value carries the envelope prefix (under any key or version).
-func IsEncrypted(value string) bool {
-	return strings.HasPrefix(value, Prefix)
-}
-
 // EnvelopePrefix returns the start of every value this Cipher writes: "rgwenc:v1:<kid>:".
 func (c *Cipher) EnvelopePrefix() string {
 	return Prefix + version + ":" + c.kid + ":"

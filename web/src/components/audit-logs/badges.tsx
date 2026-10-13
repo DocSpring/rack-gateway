@@ -58,15 +58,15 @@ export function getActionTypeBadgeAppearance(type?: string): AuditLogBadgeAppear
         variant: 'outline',
         className: 'bg-blue-600 text-white border border-border',
       }
-    case 'users':
+    case 'gateway':
       return {
         variant: 'outline',
         className: 'bg-purple-600 text-white border border-border',
       }
-    case 'tokens':
+    case 'security':
       return {
         variant: 'outline',
-        className: 'bg-amber-600 text-white border border-border',
+        className: 'bg-red-700 text-white border border-border',
       }
     case 'convox':
       return {

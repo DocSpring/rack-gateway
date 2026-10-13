@@ -40,9 +40,6 @@ func (a *App) initializeServices() error {
 	if err := a.ensureAuditSecret(); err != nil {
 		return err
 	}
-	if err := a.upgradePlaintextColumns(); err != nil {
-		return err
-	}
 	if err := a.seedInitialUsers(); err != nil {
 		return err
 	}
@@ -283,6 +280,12 @@ func (a *App) initJobsClient(sender email.Sender, notifier *slackpkg.Notifier, a
 	if err != nil {
 		return fmt.Errorf("failed to load audit anchor config: %w", err)
 	}
+	// Anchors are only as permanent as the bucket's Object Lock rule: refuse to start without one that keeps them.
+	if auditAnchorConfig != nil {
+		if err := auditAnchorConfig.CheckBucketRetention(context.Background()); err != nil {
+			return fmt.Errorf("audit anchor bucket: %w", err)
+		}
+	}
 
 	client, err := jobs.NewClient(a.Database.Pool(), &jobs.Dependencies{
 		Database:      a.Database,
@@ -335,7 +338,7 @@ func (a *App) startJobsWorker() error {
 }
 
 func (a *App) initSecurityNotifier(logger *audit.Logger) {
-	a.SecurityNotifier = security.NewNotifier(a.EmailSender, logger, a.Database, a.JobsClient)
+	a.SecurityNotifier = security.NewNotifier(logger, a.Database, a.JobsClient)
 }
 
 func (a *App) deriveRackIdentity() (string, string) {

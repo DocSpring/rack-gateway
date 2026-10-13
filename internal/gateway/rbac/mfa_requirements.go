@@ -31,10 +31,7 @@ var MFARequirements = map[string]MFALevel{
 	// ========================================================================
 
 	// DESTRUCTIVE OPERATIONS - Always require fresh MFA, no time window
-	Convox(ResourceApp, ActionDelete):         MFAAlways,
-	Convox(ResourceInstance, ActionTerminate): MFAAlways,
-	Convox(ResourceInstance, ActionKeyroll):   MFAAlways, // Replaces every instance's SSH key pair
-	Convox(ResourceCert, ActionDelete):        MFAAlways,
+	Convox(ResourceApp, ActionDelete): MFAAlways,
 
 	// Importing a build skips the manifest and image checks a build gets: its manifest and images come straight
 	// from the archive. Admins only (convox:*:*), and rare.
@@ -65,13 +62,6 @@ var MFARequirements = map[string]MFALevel{
 
 	// Rack operations
 	Convox(ResourceRack, ActionUpdate): MFAStepUp,
-
-	// TLS certificates and private registries (what serves the apps' traffic, and where their images come from)
-	Convox(ResourceCert, ActionUpdate):     MFAStepUp,
-	Convox(ResourceCert, ActionGenerate):   MFAStepUp,
-	Convox(ResourceCert, ActionImport):     MFAStepUp,
-	Convox(ResourceRegistry, ActionAdd):    MFAStepUp,
-	Convox(ResourceRegistry, ActionRemove): MFAStepUp,
 
 	// Object uploads for builds (write operation but low risk)
 	Convox(ResourceObject, ActionCreate): MFANone,

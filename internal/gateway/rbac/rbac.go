@@ -78,10 +78,10 @@ func NewDBManager(database *db.Database, domain string) (*DBManager, error) {
 //
 // Human users are checked against the roles on their current database record, so role changes take
 // effect on the next request. API tokens must hold the permission themselves AND their owner's
-// current roles must allow it. Suspended or locked users (and tokens they own) are always denied.
+// current roles must allow it. Locked users (and tokens they own) are always denied.
 func (m *DBManager) Authorize(p Principal, permission string) (bool, error) {
 	user := p.User
-	if user == nil || user.Suspended || user.LockedAt != nil {
+	if user == nil || user.LockedAt != nil {
 		return false, nil
 	}
 	if p.APIToken && !matchesAnyPermission(p.TokenPermissions, permission) {

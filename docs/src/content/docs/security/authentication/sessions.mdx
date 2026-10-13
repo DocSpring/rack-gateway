@@ -116,7 +116,6 @@ sequenceDiagram
 | Not idle | `last_seen_at` + TTL > now | 401 + auto-revoke |
 | User exists | Associated user found | 401 + auto-revoke |
 | User not locked | `locked_at` is null | 401 + auto-revoke |
-| User not suspended | `suspended` is false | 401 + auto-revoke |
 
 ## Session Expiration
 
@@ -169,7 +168,7 @@ sessions: **Revoke** for one, or **Revoke All**. Users can revoke their own; rev
 Sessions stop working when:
 
 - The session expires (idle timeout)
-- The user is locked (locking revokes every session) or suspended
+- The user is locked (locking revokes every session)
 - The user is deleted
 
 ## Session Metadata

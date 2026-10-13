@@ -12,8 +12,10 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
+	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 )
 
 // AdminHandler is defined in admin.go
@@ -279,7 +281,7 @@ func (h *AdminHandler) auditAdminAction(
 
 	email, name := extractAuditUserInfo(c)
 	detailsJSON := marshalAuditDetails(details)
-	actionType, resourceType := classifyAuditAction(action)
+	actionType, resourceType := auditEntryTypes(c, action)
 
 	entry := &db.AuditLog{
 		UserEmail:      email,
@@ -329,15 +331,15 @@ func marshalAuditDetails(details map[string]interface{}) string {
 	return ""
 }
 
-func classifyAuditAction(action string) (actionType, resourceType string) {
-	switch {
-	case strings.HasPrefix(action, "api_token."):
-		return "tokens", "api_token"
-	case strings.HasPrefix(action, "user."):
-		return "users", "user"
-	default:
-		return "admin", "admin"
+// auditEntryTypes returns the action type and resource type of an admin handler's audit entry, as its request's
+// attempt entry has them: the scope of the route's permission, and the action's resource.
+func auditEntryTypes(c *gin.Context, action string) (actionType, resourceType string) {
+	actionType = audit.ActionTypeGateway
+	if spec, ok := rbac.LookupHTTPRoute(c.Request.Method, c.FullPath()); ok {
+		actionType = spec.AuditName(c.Request.URL.Query()).ActionType
 	}
+	resourceType, _, _ = strings.Cut(action, ".")
+	return actionType, resourceType
 }
 
 func mapStatusToRBAC(status string) string {

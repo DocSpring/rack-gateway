@@ -11,7 +11,7 @@ import (
 // GetUserByID retrieves a user by ID
 func (d *Database) GetUserByID(id int64) (*User, error) {
 	row := d.queryRow(
-		`SELECT id, email, name, roles, created_at, updated_at, suspended, mfa_enrolled,
+		`SELECT id, email, name, roles, created_at, updated_at, mfa_enrolled,
 			mfa_enforced_at, preferred_mfa_method, locked_at, locked_reason, locked_by_user_id
 		FROM users WHERE id = ?`,
 		id,
@@ -35,7 +35,7 @@ func (d *Database) GetUserByID(id int64) (*User, error) {
 // GetUser retrieves a user by email
 func (d *Database) GetUser(email string) (*User, error) {
 	row := d.queryRow(
-		`SELECT u.id, u.email, u.name, u.roles, u.created_at, u.updated_at, u.suspended,
+		`SELECT u.id, u.email, u.name, u.roles, u.created_at, u.updated_at,
 			u.mfa_enrolled, u.mfa_enforced_at, u.preferred_mfa_method,
 			u.locked_at, u.locked_reason, u.locked_by_user_id,
 			lbu.email, lbu.name
@@ -96,21 +96,10 @@ func (d *Database) UpdateUserRoles(email string, roles []string) error {
 	return nil
 }
 
-// deleteUserAuditLogs is a no-op that preserves audit logs for compliance.
-// Audit logs are immutable and should never be deleted.
-// The audit.audit_event table has triggers that block DELETE operations.
-func (_ *Database) deleteUserAuditLogs(_ string) error {
-	return nil
-}
-
 // DeleteUser removes a user from the database and revokes all their sessions.
 func (d *Database) DeleteUser(email string) error {
 	user, err := d.GetUser(email)
 	if err != nil {
-		return err
-	}
-
-	if err := d.deleteUserAuditLogs(email); err != nil {
 		return err
 	}
 
@@ -132,7 +121,7 @@ func (d *Database) DeleteUser(email string) error {
 // ListUsers returns all users
 func (d *Database) ListUsers() ([]*User, error) {
 	rows, err := d.query(
-		`SELECT u.id, u.email, u.name, u.roles, u.created_at, u.updated_at, u.suspended,
+		`SELECT u.id, u.email, u.name, u.roles, u.created_at, u.updated_at,
 			u.locked_at, u.locked_reason, u.locked_by_user_id,
 			cu.id, cu.email, cu.name
 		FROM users u

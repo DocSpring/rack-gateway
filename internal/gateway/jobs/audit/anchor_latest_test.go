@@ -43,7 +43,7 @@ func sha256Hex(data []byte) string {
 }
 
 func newTestWorker(database *db.Database, s3Client S3Client) *AnchorWriterWorker {
-	return NewAnchorWriterWorker(database, s3Client, "test-bucket", testChainID, 7)
+	return NewAnchorWriterWorker(database, s3Client, "test-bucket", testChainID)
 }
 
 func anchorJob(at time.Time) *river.Job[AnchorWriterArgs] {

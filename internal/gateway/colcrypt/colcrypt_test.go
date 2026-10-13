@@ -59,7 +59,7 @@ func TestRoundTrip(t *testing.T) {
 	c := mustCipher(t, DevKey)
 	for _, plaintext := range []string{"", "JBSWY3DPEHPK3PXP", "xoxb-1234-abcd", "with:colons|and|pipes"} {
 		envelope := mustEncrypt(t, c, plaintext, MFASecretScope(7, "totp"))
-		if !strings.HasPrefix(envelope, c.EnvelopePrefix()) || !IsEncrypted(envelope) {
+		if !strings.HasPrefix(envelope, c.EnvelopePrefix()) {
 			t.Fatalf("envelope %q lacks prefix %q", envelope, c.EnvelopePrefix())
 		}
 		if plaintext != "" && strings.Contains(envelope, plaintext) {

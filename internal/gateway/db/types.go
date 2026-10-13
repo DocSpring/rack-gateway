@@ -13,7 +13,6 @@ type User struct {
 	Roles              []string   `json:"roles"`
 	CreatedAt          time.Time  `json:"created_at"`
 	UpdatedAt          time.Time  `json:"updated_at"`
-	Suspended          bool       `json:"suspended"`
 	MFAEnrolled        bool       `json:"mfa_enrolled"`
 	MFAEnforcedAt      *time.Time `json:"mfa_enforced_at,omitempty"`
 	PreferredMFAMethod *string    `json:"preferred_mfa_method,omitempty"`
@@ -86,7 +85,7 @@ type AuditLog struct {
 	UserName                string    `json:"user_name,omitempty"`
 	APITokenID              *int64    `json:"api_token_id,omitempty"`
 	APITokenName            string    `json:"api_token_name,omitempty"`
-	ActionType              string    `json:"action_type"` // "convox", "users", "auth"
+	ActionType              string    `json:"action_type"` // permission scope: auth, convox, gateway, security
 	Action                  string    `json:"action"`      // e.g., "env.read", "user.create", "login.oauth_failed"
 	Command                 string    `json:"command,omitempty"`
 	Resource                string    `json:"resource,omitempty"`

@@ -93,8 +93,6 @@ const (
 	ResourceApp Resource = iota // app
 	// ResourceBuild identifies a Convox build resource.
 	ResourceBuild // build
-	// ResourceCert identifies a Convox certificate resource.
-	ResourceCert // cert
 	// ResourceDeploy identifies a Convox deploy resource.
 	ResourceDeploy // deploy
 	// ResourceEnv identifies a Convox environment resource.
@@ -109,12 +107,8 @@ const (
 	ResourceProcess // process
 	// ResourceRack identifies a Convox rack resource.
 	ResourceRack // rack
-	// ResourceRegistry identifies a Convox registry resource.
-	ResourceRegistry // registry
 	// ResourceRelease identifies a Convox release resource.
 	ResourceRelease // release
-	// ResourceResource identifies a generic Convox resource.
-	ResourceResource // resource
 	// ResourceAPIToken identifies a gateway API token resource.
 	ResourceAPIToken // api_token
 	// ResourceDeployApprovalRequest identifies a deploy approval request.
@@ -201,10 +195,8 @@ func (r *Resource) UnmarshalJSON(data []byte) error {
 type Action uint8
 
 const (
-	// ActionAdd represents an add operation on a resource.
-	ActionAdd Action = iota // add
 	// ActionApprove represents an approval operation.
-	ActionApprove // approve
+	ActionApprove Action = iota // approve
 	// ActionCreate represents a creation operation.
 	ActionCreate // create
 	// ActionDelete represents a deletion operation.
@@ -217,8 +209,6 @@ const (
 	ActionGenerate // generate
 	// ActionImport represents an import operation.
 	ActionImport // import
-	// ActionKeyroll represents a key rotation operation.
-	ActionKeyroll // keyroll
 	// ActionList represents listing resources.
 	ActionList // list
 	// ActionManage represents management operations.
@@ -227,8 +217,6 @@ const (
 	ActionPromote // promote
 	// ActionRead represents read-only access.
 	ActionRead // read
-	// ActionRemove represents removing associations.
-	ActionRemove // remove
 	// ActionRestart signifies restarting a resource.
 	ActionRestart // restart
 	// ActionSet represents setting a value.
@@ -259,7 +247,7 @@ func (a Action) IsValid() bool { return a <= ActionSetProtected }
 // ParseAction converts a string name into an Action value.
 func ParseAction(v string) (Action, error) {
 	// Try each known value
-	for a := ActionAdd; a <= ActionSetProtected; a++ {
+	for a := ActionApprove; a <= ActionSetProtected; a++ {
 		if a.String() == v {
 			return a, nil
 		}

@@ -29,10 +29,16 @@ type entry struct {
 	deleteMarker bool
 }
 
+// DefaultRetentionDays is the default COMPLIANCE retention of a new fake bucket.
+const DefaultRetentionDays = 400
+
 // Bucket is a fake versioned bucket. The zero value isn't usable; call New.
 type Bucket struct {
 	// PageSize is the number of keys (or versions) per listing page.
 	PageSize int
+	// LockConfiguration is what GetObjectLockConfiguration returns: by default Object Lock with a COMPLIANCE
+	// retention of DefaultRetentionDays.
+	LockConfiguration *types.ObjectLockConfiguration
 
 	mu       sync.Mutex
 	entries  map[string][]*entry // oldest first
@@ -43,7 +49,29 @@ type Bucket struct {
 // New returns an empty bucket whose clock starts at start. Each write without an explicit time is stamped one
 // second after the latest write so far.
 func New(start time.Time) *Bucket {
-	return &Bucket{PageSize: DefaultPageSize, entries: map[string][]*entry{}, clock: start}
+	return &Bucket{
+		PageSize: DefaultPageSize,
+		LockConfiguration: &types.ObjectLockConfiguration{
+			ObjectLockEnabled: types.ObjectLockEnabledEnabled,
+			Rule: &types.ObjectLockRule{DefaultRetention: &types.DefaultRetention{
+				Mode: types.ObjectLockRetentionModeCompliance,
+				Days: aws.Int32(DefaultRetentionDays),
+			}},
+		},
+		entries: map[string][]*entry{},
+		clock:   start,
+	}
+}
+
+// GetObjectLockConfiguration returns the bucket's LockConfiguration.
+func (b *Bucket) GetObjectLockConfiguration(
+	_ context.Context,
+	_ *s3.GetObjectLockConfigurationInput,
+	_ ...func(*s3.Options),
+) (*s3.GetObjectLockConfigurationOutput, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return &s3.GetObjectLockConfigurationOutput{ObjectLockConfiguration: b.LockConfiguration}, nil
 }
 
 // PutAt stores a new version of key written at modified.

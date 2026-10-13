@@ -73,7 +73,7 @@ it to stdout as one JSON line for CloudWatch:
 | `user_email` | User's email address (a token's owner for API tokens) | `alice@example.com` |
 | `user_name` | User's display name | `Alice Developer` |
 | `api_token_id`, `api_token_name` | The API token, when one made the request | `ci-deploy` |
-| `action_type` | The scope of the action: `convox`, `gateway`, `auth` or `security`. Results that admin handlers record use `users`, `tokens` or `admin` | `convox` |
+| `action_type` | The scope of the permission the action needs: `convox`, `gateway`, `auth` or `security`. A request's attempt and result entries have the same type | `convox` |
 | `action` | `<resource>.<verb>`, named after the route's permission | `release.promote`, `user.create`, `login.oauth_failed` |
 | `resource` | Target resource | `myapp` |
 | `resource_type` | Resource category | `app`, `build`, `release` |
@@ -335,7 +335,7 @@ ORDER BY day DESC;
 | **Requests** | Every gateway API and rack request, reads included, with its RBAC decision |
 | **Deployments** | Build, release, promote, deploy approvals |
 | **Environment** | Read, set, unset (values redacted), and secret reveals |
-| **User Management** | Create, update, delete, lock |
+| **User Management** | Create, update, delete, lock, MFA reset |
 | **Token Management** | Create, delete tokens |
 | **Settings** | Configuration changes |
 

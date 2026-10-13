@@ -328,15 +328,6 @@ func submitMFAVerification(baseURL, sessionToken, code string) error {
 	return fmt.Errorf("gateway error: %s", RenderGatewayError(bodyBytes))
 }
 
-func checkWebAuthnAvailability() bool {
-	defer func() {
-		if r := recover(); r != nil {
-			_ = r
-		}
-	}()
-	return webauthn.CheckAvailability()
-}
-
 func hasMethodType(methods []MFAMethodResponse, methodType string) bool {
 	for _, m := range methods {
 		if m.Type == methodType && !m.IsEnrolling {

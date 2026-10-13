@@ -28,20 +28,19 @@ import (
 // Handler proxies requests through the gateway while enforcing RBAC, MFA, and
 // audit logging requirements.
 type Handler struct {
-	config           *config.Config
-	rbacManager      rbac.Manager
-	auditLogger      *audit.Logger
-	secretNames      map[string]struct{}
-	secretNamesErr   error // CONVOX_SECRET_ENV_VARS can't be read: every env var counts as secret
-	database         *db.Database
-	settingsService  *settings.Service
-	allowDestructive bool
-	emailer          email.Sender
-	rackName         string
-	rackAlias        string
-	rackCertManager  *rackcert.Manager
-	mfaService       *mfa.Service
-	sessionManager   *auth.SessionManager
+	config          *config.Config
+	rbacManager     rbac.Manager
+	auditLogger     *audit.Logger
+	secretNames     map[string]struct{}
+	secretNamesErr  error // CONVOX_SECRET_ENV_VARS can't be read: every env var counts as secret
+	database        *db.Database
+	settingsService *settings.Service
+	emailer         email.Sender
+	rackName        string
+	rackAlias       string
+	rackCertManager *rackcert.Manager
+	mfaService      *mfa.Service
+	sessionManager  *auth.SessionManager
 }
 
 // no async jobs client here; emailer may be an async sender
@@ -62,19 +61,18 @@ func NewHandler(
 	sessionManager *auth.SessionManager,
 ) *Handler {
 	h := &Handler{
-		config:           cfg,
-		rbacManager:      rbacManager,
-		auditLogger:      auditLogger,
-		secretNames:      make(map[string]struct{}),
-		database:         database,
-		settingsService:  settingsService,
-		allowDestructive: false,
-		emailer:          mailer,
-		rackName:         rackName,
-		rackAlias:        strings.TrimSpace(rackAlias),
-		rackCertManager:  rackCertManager,
-		mfaService:       mfaService,
-		sessionManager:   sessionManager,
+		config:          cfg,
+		rbacManager:     rbacManager,
+		auditLogger:     auditLogger,
+		secretNames:     make(map[string]struct{}),
+		database:        database,
+		settingsService: settingsService,
+		emailer:         mailer,
+		rackName:        rackName,
+		rackAlias:       strings.TrimSpace(rackAlias),
+		rackCertManager: rackCertManager,
+		mfaService:      mfaService,
+		sessionManager:  sessionManager,
 	}
 	h.secretNamesErr = h.loadSecretNames()
 	// Settings are loaded on-demand from the settings service (no initialization needed)
@@ -115,9 +113,6 @@ func (h *Handler) rackDisplay() string {
 	}
 	return h.rackName
 }
-
-// SetAllowDestructive toggles whether destructive Convox operations are allowed.
-func (h *Handler) SetAllowDestructive(v bool) { h.allowDestructive = v }
 
 // ProxyToRack handles proxying requests to the Convox rack with RBAC, MFA, and audit logging.
 func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {

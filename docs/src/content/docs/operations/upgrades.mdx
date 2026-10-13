@@ -207,6 +207,18 @@ A restore to before the upgrade loses the audit events written since; see
 
 ## Release Notes That Need Action
 
+### Anchor bucket retention checked at startup
+
+`AUDIT_ANCHOR_RETENTION_DAYS` is now checked: the gateway reads the anchor bucket's Object Lock configuration at
+startup and in every audit verification, and refuses to start (verification fails and alerts) unless the bucket's
+default retention is COMPLIANCE mode for at least that many days.
+
+1. **Give the gateway's role `s3:GetBucketObjectLockConfiguration` on the anchor bucket before deploying** (see
+   [IAM Role for the Gateway](/deployment/terraform/s3-worm-storage/#iam-role-for-the-gateway)), and the role
+   `verify-audit` runs with elsewhere. Without it the new release doesn't start.
+2. **Check `AUDIT_ANCHOR_RETENTION_DAYS` matches the bucket's retention** (`worm_retention_days`). It defaults to
+   400.
+
 ### Audit hash v2 and `verify-audit`
 
 This release changes how audit events are hashed (hash v2: every stored column, recomputable from the row) and
@@ -260,7 +272,7 @@ itself every hour and alerts when they fail.
    run, and the hourly verification keeps failing (with a daily reminder), until the anchors' retention ends and
    they're deleted.
 
-### Column encryption key required
+### Column encryption key required (v0.1.7)
 
 TOTP seeds, YubiKey public IDs and the Slack bot token are now stored encrypted with a dedicated key. See
 [Column Encryption](/configuration/environment-variables/#column-encryption).
@@ -268,12 +280,9 @@ TOTP seeds, YubiKey public IDs and the Slack bot token are now stored encrypted 
 1. **Set `COLUMN_ENCRYPTION_KEY` before deploying** (`openssl rand -base64 32`) and back it up. Every command
    that opens the database, including `migrate`, refuses to run without it, so a deploy without the key
    fails before the new release is promoted.
-2. **Existing secrets are encrypted when the new release starts**, before it serves requests. The log shows
-   a `Column encryption:` line with counts and a warning for each row encrypted. This happens at startup rather
-   than in `migrate` because the previous release keeps serving while `migrate` runs. It runs again 10 minutes
-   after startup, for anything the previous release stored during the rollout (a TOTP enrollment or a Slack
-   reconnect); if it encrypts anything then, it reports it to Sentry. During this upgrade that can be a real
-   enrollment from the rollout; after it, it means a secret was written straight into the database.
+2. **Existing secrets are encrypted when the new release starts** (v0.1.7 to v0.1.10 only), before it serves
+   requests. Releases after v0.1.10 don't encrypt existing secrets, so upgrade a gateway from before v0.1.7 to
+   v0.1.10 first.
 3. **Expect a short gap for TOTP and YubiKey OTP.** Once the new release has upgraded the data, any process
    still running the previous release can't read the encrypted values, so its TOTP and YubiKey OTP checks
    and Slack notifications fail until it is replaced. WebAuthn and backup codes keep working.

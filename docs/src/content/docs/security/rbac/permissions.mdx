@@ -42,7 +42,6 @@ Resources that map to Convox API operations:
 |----------|-------------|
 | `app` | Applications |
 | `build` | Docker image builds |
-| `cert` | SSL/TLS certificates |
 | `deploy` | Deployment operations |
 | `env` | Environment variables |
 | `instance` | EC2/container instances |
@@ -50,9 +49,7 @@ Resources that map to Convox API operations:
 | `object` | Build artifacts and objects |
 | `process` | Running processes/containers |
 | `rack` | Rack configuration |
-| `registry` | Docker registries |
 | `release` | Application releases |
-| `resource` | Convox resources (databases, etc.) |
 | `secret` | Secret env var values (`convox:secret:read` reveals them) |
 
 The gateway forwards only the rack API routes it has a permission for (see
@@ -98,7 +95,6 @@ Authentication and MFA resources:
 
 | Action | Description |
 |--------|-------------|
-| `add` | Add item to a collection |
 | `approve` | Approve a request |
 | `create` | Create a new resource |
 | `delete` | Delete a resource |
@@ -106,12 +102,10 @@ Authentication and MFA resources:
 | `exec` | Execute commands |
 | `generate` | Generate credentials/codes |
 | `import` | Import external resources |
-| `keyroll` | Rotate keys/credentials |
 | `list` | List resources |
 | `manage` | General management operations |
 | `promote` | Promote a release |
 | `read` | Read/view a resource |
-| `remove` | Remove item from collection |
 | `restart` | Restart a service |
 | `run_privileged` | Start a process with privileged options |
 | `set` | Set a value |

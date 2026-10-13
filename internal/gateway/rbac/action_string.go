@@ -8,35 +8,32 @@ func _() {
 	// An "invalid array index" compiler error signifies that the constant values have changed.
 	// Re-run the stringer command to generate them again.
 	var x [1]struct{}
-	_ = x[ActionAdd-0]
-	_ = x[ActionApprove-1]
-	_ = x[ActionCreate-2]
-	_ = x[ActionDelete-3]
-	_ = x[ActionDeployWithApproval-4]
-	_ = x[ActionExec-5]
-	_ = x[ActionGenerate-6]
-	_ = x[ActionImport-7]
-	_ = x[ActionKeyroll-8]
-	_ = x[ActionList-9]
-	_ = x[ActionManage-10]
-	_ = x[ActionPromote-11]
-	_ = x[ActionRead-12]
-	_ = x[ActionRemove-13]
-	_ = x[ActionRestart-14]
-	_ = x[ActionSet-15]
-	_ = x[ActionStart-16]
-	_ = x[ActionStop-17]
-	_ = x[ActionTerminate-18]
-	_ = x[ActionUnset-19]
-	_ = x[ActionUpdate-20]
-	_ = x[ActionUpdateName-21]
-	_ = x[ActionRunPrivileged-22]
-	_ = x[ActionSetProtected-23]
+	_ = x[ActionApprove-0]
+	_ = x[ActionCreate-1]
+	_ = x[ActionDelete-2]
+	_ = x[ActionDeployWithApproval-3]
+	_ = x[ActionExec-4]
+	_ = x[ActionGenerate-5]
+	_ = x[ActionImport-6]
+	_ = x[ActionList-7]
+	_ = x[ActionManage-8]
+	_ = x[ActionPromote-9]
+	_ = x[ActionRead-10]
+	_ = x[ActionRestart-11]
+	_ = x[ActionSet-12]
+	_ = x[ActionStart-13]
+	_ = x[ActionStop-14]
+	_ = x[ActionTerminate-15]
+	_ = x[ActionUnset-16]
+	_ = x[ActionUpdate-17]
+	_ = x[ActionUpdateName-18]
+	_ = x[ActionRunPrivileged-19]
+	_ = x[ActionSetProtected-20]
 }
 
-const _Action_name = "addapprovecreatedeletedeploy_with_approvalexecgenerateimportkeyrolllistmanagepromotereadremoverestartsetstartstopterminateunsetupdateupdate_namerun_privilegedset_protected"
+const _Action_name = "approvecreatedeletedeploy_with_approvalexecgenerateimportlistmanagepromotereadrestartsetstartstopterminateunsetupdateupdate_namerun_privilegedset_protected"
 
-var _Action_index = [...]uint8{0, 3, 10, 16, 22, 42, 46, 54, 60, 67, 71, 77, 84, 88, 94, 101, 104, 109, 113, 122, 127, 133, 144, 158, 171}
+var _Action_index = [...]uint8{0, 7, 13, 19, 39, 43, 51, 57, 61, 67, 74, 78, 85, 88, 93, 97, 106, 111, 117, 128, 142, 155}
 
 func (i Action) String() string {
 	idx := int(i) - 0

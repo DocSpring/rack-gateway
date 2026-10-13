@@ -66,7 +66,7 @@ const mockLogs = [
     timestamp: '2024-01-15T10:30:00Z',
     user_email: 'admin@example.com',
     user_name: 'Admin User',
-    action_type: 'users',
+    action_type: 'gateway',
     action: 'user.create',
     resource: 'newuser@example.com',
     resource_type: 'user',
@@ -405,6 +405,24 @@ describe('AuditPage', () => {
       await waitFor(() => {
         expect(api.get).toHaveBeenCalledWith(expect.stringContaining('action_type=auth'))
       })
+    })
+
+    it('offers one action type per permission scope', async () => {
+      vi.mocked(api.get).mockResolvedValue(makeResponse(mockLogs))
+
+      const Wrapper = createWrapper()
+      render(<AuditPage />, { wrapper: Wrapper })
+
+      await waitFor(() => {
+        expect(screen.getByText('admin@example.com')).toBeInTheDocument()
+      })
+
+      const actionTypeSelect = document.getElementById('action-type') as HTMLSelectElement | null
+      if (!actionTypeSelect) {
+        throw new Error('Action type select not found')
+      }
+      const values = Array.from(actionTypeSelect.options, (option) => option.value)
+      expect(values).toEqual(['all', 'convox', 'gateway', 'auth', 'security'])
     })
 
     it('filters by resource type', async () => {

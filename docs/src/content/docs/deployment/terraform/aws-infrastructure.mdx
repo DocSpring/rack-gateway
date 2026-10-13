@@ -287,7 +287,9 @@ resource "aws_iam_role_policy" "gateway_s3" {
           "s3:ListBucket",
           # verify-audit reads every version of each anchor
           "s3:GetObjectVersion",
-          "s3:ListBucketVersions"
+          "s3:ListBucketVersions",
+          # The gateway checks the bucket's default retention at startup and in every verification
+          "s3:GetBucketObjectLockConfiguration"
         ]
         Resource = [
           aws_s3_bucket.audit_anchors.arn,

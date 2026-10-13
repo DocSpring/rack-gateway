@@ -234,10 +234,6 @@ func (m *SessionManager) validateUserState(sessionID int64, user *db.User) error
 		_, _ = m.db.RevokeUserSession(sessionID, nil)
 		return fmt.Errorf("session user missing")
 	}
-	if user.Suspended {
-		_, _ = m.db.RevokeUserSession(sessionID, nil)
-		return fmt.Errorf("user suspended")
-	}
 	if user.LockedAt != nil {
 		_, _ = m.db.RevokeUserSession(sessionID, nil)
 		return fmt.Errorf("user locked")

@@ -36,7 +36,7 @@ func (d *Database) getUserSessionWithUser(
 		       us.expires_at, us.channel, us.device_id, us.device_name, us.mfa_verified_at,
 		       us.recent_step_up_at, us.trusted_device_id, us.ip_address, us.user_agent,
 		       us.revoked_at, us.revoked_by_user_id, us.metadata, us.device_metadata,
-		       u.id, u.email, u.name, u.roles, u.created_at, u.updated_at, u.suspended,
+		       u.id, u.email, u.name, u.roles, u.created_at, u.updated_at,
 		       u.mfa_enrolled, u.mfa_enforced_at, u.preferred_mfa_method, u.locked_at,
 		       u.locked_reason, u.locked_by_user_id, lbu.email, lbu.name
 		FROM user_sessions us
@@ -65,7 +65,7 @@ func (d *Database) getUserSessionWithUser(
 		&session.ID, &session.UserID, &session.TokenHash, &session.CreatedAt, &session.UpdatedAt,
 		&session.LastSeenAt, &session.ExpiresAt, &session.Channel, &s.deviceID, &s.deviceName,
 		&s.mfaVerified, &s.recentStep, &s.trustedID, &s.ip, &s.ua, &s.revoked, &s.revoker, &s.meta, &s.deviceMeta,
-		&user.ID, &user.Email, &user.Name, &rolesJSON, &user.CreatedAt, &user.UpdatedAt, &user.Suspended,
+		&user.ID, &user.Email, &user.Name, &rolesJSON, &user.CreatedAt, &user.UpdatedAt,
 		&user.MFAEnrolled, &mfaEnforced, &preferred, &lockedAt, &lockedReason, &lockedBy,
 		&lockedByEmail, &lockedByName,
 	); err != nil {

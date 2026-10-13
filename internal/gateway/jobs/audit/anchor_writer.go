@@ -27,30 +27,19 @@ type AnchorWriterArgs struct{}
 // Kind returns the unique identifier for this job type
 func (AnchorWriterArgs) Kind() string { return "audit:anchor_writer" }
 
-// AnchorWriterWorker writes audit log chain anchors to S3 WORM bucket
+// AnchorWriterWorker writes audit log chain anchors to the S3 Object Lock bucket. The bucket's default COMPLIANCE
+// retention locks each anchor (the gateway checks it at startup and in every verification); the writer sets none.
 type AnchorWriterWorker struct {
 	river.WorkerDefaults[AnchorWriterArgs]
-	db            *db.Database
-	s3Client      S3Client
-	bucket        string
-	chainID       string
-	retentionDays int
+	db       *db.Database
+	s3Client S3Client
+	bucket   string
+	chainID  string
 }
 
 // NewAnchorWriterWorker creates a new anchor writer worker
-func NewAnchorWriterWorker(
-	database *db.Database,
-	s3Client S3Client,
-	bucket, chainID string,
-	retentionDays int,
-) *AnchorWriterWorker {
-	return &AnchorWriterWorker{
-		db:            database,
-		s3Client:      s3Client,
-		bucket:        bucket,
-		chainID:       chainID,
-		retentionDays: retentionDays,
-	}
+func NewAnchorWriterWorker(database *db.Database, s3Client S3Client, bucket, chainID string) *AnchorWriterWorker {
+	return &AnchorWriterWorker{db: database, s3Client: s3Client, bucket: bucket, chainID: chainID}
 }
 
 // AnchorFormat is the format of the anchors this version writes. A format 2 anchor's prev_anchor_hash always
@@ -181,12 +170,9 @@ func (w *AnchorWriterWorker) writeAnchorLocked(ctx context.Context, lock *db.Aud
 	hash := sha256.Sum256(canonicalJSON)
 	hashBase64 := base64.StdEncoding.EncodeToString(hash[:])
 
-	// Calculate retention date
-	retainUntil := timestamp.Add(time.Duration(w.retentionDays) * 24 * time.Hour)
-
-	// Write JSON to S3 with Object Lock and checksum
-	// The SHA256 checksum is stored in S3 metadata, so no separate .sha256 file is needed
-	if err := w.putObjectWithRetention(ctx, key, canonicalJSON, retainUntil, &hashBase64); err != nil {
+	// Write JSON to S3 with its checksum. The SHA256 checksum is stored in S3 metadata, so no separate .sha256 file
+	// is needed.
+	if err := w.putAnchorObject(ctx, key, canonicalJSON, &hashBase64); err != nil {
 		return fmt.Errorf("failed to write anchor JSON: %w", err)
 	}
 
@@ -212,14 +198,12 @@ func newAnchorPayload(chainID string, ts time.Time, head db.AuditChainHead, prev
 	return anchor
 }
 
-// putObjectWithRetention writes an object to S3 with appropriate retention and encryption settings.
-// For AWS S3: uses KMS encryption. Object Lock retention is applied via bucket default retention.
-// For MinIO: relies on bucket-level default retention.
-func (w *AnchorWriterWorker) putObjectWithRetention(
+// putAnchorObject writes an anchor to S3. On AWS it uses KMS encryption. Both AWS and MinIO lock it with the
+// bucket's default Object Lock retention.
+func (w *AnchorWriterWorker) putAnchorObject(
 	ctx context.Context,
 	key string,
 	data []byte,
-	retainUntil time.Time,
 	checksumSHA256 *string,
 ) error {
 	putInput := &s3.PutObjectInput{
@@ -244,8 +228,8 @@ func (w *AnchorWriterWorker) putObjectWithRetention(
 	if err != nil {
 		// Log detailed error information for debugging 400 errors
 		return fmt.Errorf(
-			"S3 PutObject failed (bucket=%s, key=%s, size=%d, useAWS=%t, hasChecksum=%t, retainUntil=%s): %w",
-			w.bucket, key, len(data), useAWS, checksumSHA256 != nil, retainUntil.Format(time.RFC3339), err,
+			"S3 PutObject failed (bucket=%s, key=%s, size=%d, useAWS=%t, hasChecksum=%t): %w",
+			w.bucket, key, len(data), useAWS, checksumSHA256 != nil, err,
 		)
 	}
 	return nil

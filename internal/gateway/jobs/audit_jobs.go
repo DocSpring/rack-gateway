@@ -24,11 +24,19 @@ import (
 // defaultAnchorInterval is how often the anchor writer runs unless AUDIT_ANCHOR_INTERVAL_MINUTES says otherwise.
 const defaultAnchorInterval = time.Hour
 
+// defaultAnchorRetentionDays is AUDIT_ANCHOR_RETENTION_DAYS when it isn't set.
+const defaultAnchorRetentionDays = 400
+
+// bucketCheckTimeout bounds the startup check of the anchor bucket's Object Lock configuration.
+const bucketCheckTimeout = 30 * time.Second
+
 // AuditAnchorConfig says where audit anchors are written: an S3 bucket with Object Lock.
 type AuditAnchorConfig struct {
-	S3Client      *s3.Client
-	Bucket        string
-	ChainID       string
+	S3Client *s3.Client
+	Bucket   string
+	ChainID  string
+	// RetentionDays is the least the bucket's default COMPLIANCE retention may be (AUDIT_ANCHOR_RETENTION_DAYS).
+	// The bucket's rule locks the anchors; the gateway only checks it.
 	RetentionDays int
 	// Interval is how often the anchor writer runs (AUDIT_ANCHOR_INTERVAL_MINUTES). Anchors are keyed by hour, so
 	// it writes at most one an hour.
@@ -47,11 +55,11 @@ func NewAuditAnchorConfigFromEnv() (*AuditAnchorConfig, error) {
 		return nil, fmt.Errorf("AUDIT_ANCHOR_BUCKET is set but AUDIT_ANCHOR_CHAIN_ID is missing")
 	}
 
-	retentionDays := 400
+	retentionDays := defaultAnchorRetentionDays
 	if value := os.Getenv("AUDIT_ANCHOR_RETENTION_DAYS"); value != "" {
 		parsed, err := strconv.Atoi(value)
-		if err != nil {
-			return nil, fmt.Errorf("invalid AUDIT_ANCHOR_RETENTION_DAYS: %w", err)
+		if err != nil || parsed <= 0 {
+			return nil, fmt.Errorf("AUDIT_ANCHOR_RETENTION_DAYS must be a positive number of days (got %q)", value)
 		}
 		retentionDays = parsed
 	}
@@ -74,6 +82,14 @@ func NewAuditAnchorConfigFromEnv() (*AuditAnchorConfig, error) {
 		RetentionDays: retentionDays,
 		Interval:      anchorIntervalFromEnv(),
 	}, nil
+}
+
+// CheckBucketRetention refuses an anchor bucket that doesn't lock anchors in COMPLIANCE mode for at least
+// RetentionDays (auditverify.CheckBucketRetention). The gateway checks it before it starts.
+func (c *AuditAnchorConfig) CheckBucketRetention(ctx context.Context) error {
+	ctx, cancel := context.WithTimeout(ctx, bucketCheckTimeout)
+	defer cancel()
+	return auditverify.CheckBucketRetention(ctx, c.S3Client, c.Bucket, c.RetentionDays)
 }
 
 // anchorIntervalFromEnv returns AUDIT_ANCHOR_INTERVAL_MINUTES, or an hour when it isn't a positive number.
@@ -99,10 +115,11 @@ func AuditVerifyOptions(anchors *AuditAnchorConfig) (auditverify.Options, error)
 	opts := auditverify.Options{Secret: secret, HashV2From: pinned}
 	if anchors != nil {
 		opts.Anchors = &auditverify.AnchorOptions{
-			Store:   anchors.S3Client,
-			Bucket:  anchors.Bucket,
-			ChainID: anchors.ChainID,
-			MaxAge:  maxAnchorAge(anchors.Interval),
+			Store:            anchors.S3Client,
+			Bucket:           anchors.Bucket,
+			ChainID:          anchors.ChainID,
+			MaxAge:           maxAnchorAge(anchors.Interval),
+			MinRetentionDays: anchors.RetentionDays,
 		}
 	}
 	return opts, nil
@@ -116,13 +133,8 @@ func maxAnchorAge(interval time.Duration) time.Duration {
 
 // anchorWriterJob registers the anchor writer, which runs when the gateway starts and every anchor interval.
 func anchorWriterJob(workers *river.Workers, deps *Dependencies, anchors *AuditAnchorConfig) *river.PeriodicJob {
-	river.AddWorker(workers, jobaudit.NewAnchorWriterWorker(
-		deps.Database,
-		anchors.S3Client,
-		anchors.Bucket,
-		anchors.ChainID,
-		anchors.RetentionDays,
-	))
+	worker := jobaudit.NewAnchorWriterWorker(deps.Database, anchors.S3Client, anchors.Bucket, anchors.ChainID)
+	river.AddWorker(workers, worker)
 	return river.NewPeriodicJob(
 		river.PeriodicInterval(anchors.Interval),
 		func() (river.JobArgs, *river.InsertOpts) { return jobaudit.AnchorWriterArgs{}, nil },

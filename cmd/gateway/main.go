@@ -223,13 +223,7 @@ func writeAuditAnchor() error {
 	}
 	defer closeDatabase(database)
 
-	worker := jobaudit.NewAnchorWriterWorker(
-		database,
-		anchorConfig.S3Client,
-		anchorConfig.Bucket,
-		anchorConfig.ChainID,
-		anchorConfig.RetentionDays,
-	)
+	worker := jobaudit.NewAnchorWriterWorker(database, anchorConfig.S3Client, anchorConfig.Bucket, anchorConfig.ChainID)
 
 	// Write this hour's anchor directly (synchronously), for the hour by the database's clock. It takes the same
 	// lock as the periodic job, and fails rather than waits while another anchor write holds it.

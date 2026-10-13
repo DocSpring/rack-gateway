@@ -13,7 +13,6 @@ import (
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
-	"github.com/DocSpring/rack-gateway/internal/gateway/email"
 	"github.com/DocSpring/rack-gateway/internal/gateway/jobs"
 	jobemail "github.com/DocSpring/rack-gateway/internal/gateway/jobs/email"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
@@ -21,11 +20,9 @@ import (
 
 // Notifier handles security event notifications via audit logs and email
 type Notifier struct {
-	emailSender   email.Sender
-	auditLogger   *audit.Logger
-	database      *db.Database
-	emailsEnabled bool
-	jobsClient    *jobs.Client
+	auditLogger *audit.Logger
+	database    *db.Database
+	jobsClient  *jobs.Client
 
 	// Email rate limiting and deduplication
 	mu              sync.Mutex
@@ -35,27 +32,11 @@ type Notifier struct {
 	stopCleanup     chan struct{}
 }
 
-// NewNotifier creates a new security notifier
-func NewNotifier(
-	emailSender email.Sender,
-	auditLogger *audit.Logger,
-	database *db.Database,
-	jobsClient *jobs.Client,
-) *Notifier {
-	// Check if email sender is actually configured (not noop)
-	emailsEnabled := false
-	if emailSender != nil {
-		// NoopSender is not useful for notifications
-		if _, isNoop := emailSender.(email.NoopSender); !isNoop {
-			emailsEnabled = true
-		}
-	}
-
+// NewNotifier creates a new security notifier. Its emails are sent by jobs on jobsClient.
+func NewNotifier(auditLogger *audit.Logger, database *db.Database, jobsClient *jobs.Client) *Notifier {
 	n := &Notifier{
-		emailSender:     emailSender,
 		auditLogger:     auditLogger,
 		database:        database,
-		emailsEnabled:   emailsEnabled,
 		jobsClient:      jobsClient,
 		recentEmails:    make(map[string]time.Time),
 		cleanupInterval: 5 * time.Minute,
@@ -97,7 +78,6 @@ func (n *Notifier) cleanupRecentEmails() {
 }
 
 // shouldSendEmail checks if we should send this email based on deduplication window
-// enqueueSecurityNotification enqueues a security notification if deduplication allows
 // admins returns the admins to alert, looked up now so admins added or removed since startup are respected.
 func (n *Notifier) admins() []string {
 	if n.database == nil {
@@ -111,6 +91,7 @@ func (n *Notifier) admins() []string {
 	return emails
 }
 
+// enqueueSecurityNotification enqueues a security notification if deduplication allows
 func (n *Notifier) enqueueSecurityNotification(recipient, subject, eventType string, args river.JobArgs) {
 	if recipient == "" && !strings.HasPrefix(eventType, "admin") {
 		return
@@ -138,10 +119,6 @@ func (n *Notifier) enqueueSecurityNotification(recipient, subject, eventType str
 
 // Returns true if email should be sent, false if it was recently sent
 func (n *Notifier) shouldSendEmail(recipient, subject, eventType string) bool {
-	if !n.emailsEnabled {
-		return false
-	}
-
 	// Create a hash of recipient + subject + event type for deduplication
 	hash := fmt.Sprintf("%x", sha256.Sum256([]byte(recipient+subject+eventType)))
 
@@ -180,7 +157,7 @@ func (n *Notifier) FailedMFAAttempt(userEmail, userName, ipAddress, userAgent st
 		if err := n.auditLogger.LogDBEntry(&db.AuditLog{
 			UserEmail:    userEmail,
 			UserName:     userName,
-			ActionType:   "auth",
+			ActionType:   audit.ActionTypeAuth,
 			Action:       audit.ActionMFAVerifyFailed,
 			ResourceType: "auth",
 			Resource:     "mfa",
@@ -265,7 +242,7 @@ func (n *Notifier) RateLimitExceeded(userEmail, userName, path, ipAddress, userA
 		if err := n.auditLogger.LogDBEntry(&db.AuditLog{
 			UserEmail:    userEmail,
 			UserName:     userName,
-			ActionType:   "security",
+			ActionType:   audit.ActionTypeSecurity,
 			Action:       audit.BuildAction(audit.ActionScopeRateLimit, audit.ActionVerbExceeded),
 			ResourceType: "security",
 			Resource:     path,
@@ -306,67 +283,4 @@ func (n *Notifier) RateLimitExceeded(userEmail, userName, path, ipAddress, userA
 		IPAddress:   ipAddress,
 		UserAgent:   userAgent,
 	})
-}
-
-// SuspiciousActivity logs and notifies about suspicious login patterns
-func (n *Notifier) SuspiciousActivity(
-	userEmail, userName, reason, ipAddress, userAgent string,
-	details map[string]string,
-) {
-	// Audit log
-	if n.database != nil {
-		if err := n.auditLogger.LogDBEntry(&db.AuditLog{
-			UserEmail:    userEmail,
-			UserName:     userName,
-			ActionType:   audit.ActionTypeSecurity,
-			Action:       audit.ActionScopeSuspiciousActivity,
-			ResourceType: audit.ActionScopeRateLimit,
-			Resource:     reason,
-			Status:       audit.StatusAlert,
-			IPAddress:    ipAddress,
-			UserAgent:    userAgent,
-		}); err != nil {
-			log.Printf(
-				`{"level":"error","event":"audit_log_failed","action":%q,"error":%q}`,
-				audit.ActionScopeSuspiciousActivity,
-				err,
-			)
-		}
-	}
-
-	// Email notification to user (with rate limiting)
-	n.enqueueSecurityNotification(
-		userEmail,
-		"Suspicious Activity",
-		"suspicious_activity",
-		jobemail.SuspiciousActivityUserArgs{
-			UserEmail: userEmail,
-			UserName:  userName,
-			Reason:    reason,
-			IPAddress: ipAddress,
-			UserAgent: userAgent,
-			Details:   details,
-		},
-	)
-
-	// Notify admins about suspicious activity (with deduplication per user+reason)
-	admins := n.admins()
-	if len(admins) == 0 {
-		return
-	}
-	adminKey := fmt.Sprintf("admins-%s-%s", userEmail, reason)
-	n.enqueueSecurityNotification(
-		adminKey,
-		"Suspicious Activity",
-		"suspicious_activity_admin",
-		jobemail.SuspiciousActivityAdminArgs{
-			AdminEmails: admins,
-			UserEmail:   userEmail,
-			UserName:    userName,
-			Reason:      reason,
-			IPAddress:   ipAddress,
-			UserAgent:   userAgent,
-			Details:     details,
-		},
-	)
 }

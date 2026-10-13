@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"sync"
 	"time"
 
 	gtwlog "github.com/DocSpring/rack-gateway/internal/gateway/logging"
@@ -135,14 +134,10 @@ type LoggerSender struct{ From string }
 
 // Send logs an email to stdout instead of sending it.
 func (_ *LoggerSender) Send(to, subject, textBody, htmlBody string) error {
-	if htmlBody != "" {
-		gtwlog.DebugTopicf(gtwlog.TopicEmailSummary, "to=%s subject=%q", to, subject)
-		gtwlog.DebugTopicf(gtwlog.TopicEmailBody, "text=%s\n\nhtml=%s", textBody, htmlBody)
-		appendDevEmail([]string{to}, subject, textBody, htmlBody)
-		return nil
-	}
 	gtwlog.DebugTopicf(gtwlog.TopicEmailSummary, "to=%s subject=%q", to, subject)
-	appendDevEmail([]string{to}, subject, textBody, htmlBody)
+	if htmlBody != "" {
+		gtwlog.DebugTopicf(gtwlog.TopicEmailBody, "text=%s\n\nhtml=%s", textBody, htmlBody)
+	}
 	return nil
 }
 
@@ -157,51 +152,9 @@ func (_ *LoggerSender) SendMany(to []string, subject, textBody, htmlBody string)
 		bcc = append(bcc, to[1:]...)
 	}
 	b, _ := json.Marshal(bcc)
-	if htmlBody != "" {
-		gtwlog.DebugTopicf(gtwlog.TopicEmailSummary, "to=%s bcc=%s subject=%q", primary, string(b), subject)
-		gtwlog.DebugTopicf(gtwlog.TopicEmailBody, "text=%s html=%s", textBody, htmlBody)
-		appendDevEmail(to, subject, textBody, htmlBody)
-		return nil
-	}
 	gtwlog.DebugTopicf(gtwlog.TopicEmailSummary, "to=%s bcc=%s subject=%q", primary, string(b), subject)
-	appendDevEmail(to, subject, textBody, htmlBody)
+	if htmlBody != "" {
+		gtwlog.DebugTopicf(gtwlog.TopicEmailBody, "text=%s html=%s", textBody, htmlBody)
+	}
 	return nil
-}
-
-// DevEmail represents an in-memory email for E2E tests and local development.
-type DevEmail struct {
-	To      []string  `json:"to"`
-	Subject string    `json:"subject"`
-	Text    string    `json:"text"`
-	HTML    string    `json:"html"`
-	TS      time.Time `json:"ts"`
-}
-
-var (
-	devMu     sync.Mutex
-	devOutbox []DevEmail
-	devMax    = 100
-)
-
-func appendDevEmail(to []string, subject, text, html string) {
-	devMu.Lock()
-	defer devMu.Unlock()
-	devOutbox = append(devOutbox, DevEmail{To: to, Subject: subject, Text: text, HTML: html, TS: time.Now().UTC()})
-	if len(devOutbox) > devMax {
-		devOutbox = devOutbox[len(devOutbox)-devMax:]
-	}
-}
-
-// GetDevOutbox returns up to 'limit' most recent dev emails (newest last)
-func GetDevOutbox(limit int) []DevEmail {
-	devMu.Lock()
-	defer devMu.Unlock()
-	n := len(devOutbox)
-	if limit <= 0 || limit > n {
-		limit = n
-	}
-	start := n - limit
-	out := make([]DevEmail, limit)
-	copy(out, devOutbox[start:])
-	return out
 }
