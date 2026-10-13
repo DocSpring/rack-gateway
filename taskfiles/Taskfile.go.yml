@@ -232,13 +232,17 @@ tasks:
     sources:
       - Taskfile.go.yml
       - go.*
+      - "*.go"
       - cmd/**/*.go
       - internal/**/*.go
       - tools/**/*.go
+      - scripts/**/*.go
+      - .golangci.yml
+      - scripts/check_go_nolint.sh
     cmds:
       # The release variant (no build tags) is what ships. Only the testbypass package differs with the tag, so the
       # second run lints just that package's testbypass files.
-      - golangci-lint run ./cmd/... ./internal/... ./tools/...
+      - golangci-lint run ./...
       - golangci-lint run --build-tags testbypass ./internal/gateway/testbypass/...
       - scripts/check_go_nolint.sh
 
@@ -248,11 +252,15 @@ tasks:
     sources:
       - Taskfile.go.yml
       - go.*
+      - "*.go"
       - cmd/**/*.go
       - internal/**/*.go
       - tools/**/*.go
+      - scripts/**/*.go
+      - .golangci.yml
+      - scripts/check_go_nolint.sh
     cmds:
-      - golangci-lint run --fix ./cmd/... ./internal/... ./tools/...
+      - golangci-lint run --fix ./...
       - golangci-lint run --fix --build-tags testbypass ./internal/gateway/testbypass/...
       - scripts/check_go_nolint.sh
 

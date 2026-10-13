@@ -35,6 +35,7 @@ linters:
       - reference
       - tmp
       - bin
+      - node_modules
     rules:
       - path: '(.+)_test\.go'
         linters:
@@ -42,7 +43,7 @@ linters:
           - funlen
           - goconst
       # Command-line programs print their output.
-      - path: '^(cmd|internal/cli)/'
+      - path: '^(cmd|internal/cli|scripts)/'
         linters:
           - forbidigo
         text: 'fmt\.Print'
@@ -123,6 +124,7 @@ formatters:
       - reference
       - tmp
       - bin
+      - node_modules
   settings:
     gofmt:
       simplify: true
