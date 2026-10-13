@@ -3,7 +3,7 @@ title: "Sessions"
 description: "Session management and security in Rack Gateway."
 ---
 
-import { Aside, Steps } from '@astrojs/starlight/components';
+import { Steps } from '@astrojs/starlight/components';
 
 Rack Gateway uses database-backed sessions to maintain authentication state after OAuth login. Sessions are designed for security, auditability, and revocability.
 
@@ -40,8 +40,8 @@ graph LR
 | Property | Web Sessions | CLI Sessions |
 |----------|--------------|--------------|
 | **Storage** | HTTP-only cookie | Config file |
-| **Default Lifetime** | 5 minutes idle | 90 days |
-| **Expiration Type** | Sliding (activity-based) | Fixed |
+| **Default Lifetime** | 5 minutes idle | 90 days idle |
+| **Expiration Type** | Sliding (activity-based) | Sliding (activity-based) |
 | **CSRF Required** | Yes | No |
 | **MFA Support** | Full | Full |
 
@@ -64,7 +64,7 @@ Sessions are created after successful OAuth authentication:
    - Channel (web or cli)
    - IP address
    - User agent
-   - Device information
+   - Device name (CLI)
    - MFA status
 
 4. **Set expiration**
@@ -133,13 +133,11 @@ Expires:         10:08 AM (not 10:05!)
 
 Each request refreshes the expiration, allowing continuous use without re-authentication.
 
-### Absolute Timeout (CLI)
+### CLI Sessions
 
-CLI sessions have a fixed 90-day lifetime:
-
-- Longer lifetime for automation convenience
-- Activity does not extend expiration
-- Token must be refreshed by re-authenticating
+CLI sessions last 90 days from their last use, so a CLI used at least every 90 days stays signed in. Every command
+still needs MFA for anything above read access (see [Step-Up Authentication](#step-up-authentication)), so a
+copied CLI session token alone can only read.
 
 ### Configuring Timeout
 
@@ -156,38 +154,23 @@ Sessions can be revoked through multiple mechanisms:
 
 ### User-Initiated Logout
 
-```bash
-# CLI logout
-rack-gateway logout
+**Logout** in the web UI's sidebar revokes the web session. `rack-gateway logout` only removes the rack and its
+token from the CLI's config; it doesn't revoke the CLI session on the gateway, so revoke that from your sessions
+(below).
 
-# Web UI: Click user menu → Sign Out
-```
+### Revoking Sessions
 
-### Admin Revocation
-
-Administrators can revoke user sessions:
-
-1. Web UI → Users → Select User → Sessions
-2. Click "Revoke" on specific session or "Revoke All"
+Users and administrators can revoke sessions from a user's page (**Users** → the user), which lists their active
+sessions: **Revoke** for one, or **Revoke All**. Users can revoke their own; revoking anyone else's needs
+`gateway:user:update` (admins). Either way it needs MFA on the request.
 
 ### Automatic Revocation
 
-Sessions are automatically revoked when:
+Sessions stop working when:
 
-- Session expires (idle or absolute timeout)
-- User account is locked
-- User account is suspended
-- Password/MFA is reset (optional)
-
-### Programmatic Revocation
-
-```go
-// Revoke by session ID
-sessionManager.RevokeByID(sessionID, &revokedByUserID)
-
-// Revoke all sessions for a user
-sessionManager.RevokeAllForUser(userID, &revokedByUserID)
-```
+- The session expires (idle timeout)
+- The user is locked (locking revokes every session) or suspended
+- The user is deleted
 
 ## Session Metadata
 
@@ -198,8 +181,8 @@ Each session stores metadata for security and auditing:
 | `user_id` | Associated user |
 | `token_hash` | SHA-256 of session token |
 | `channel` | `web` or `cli` |
-| `device_id` | Optional device identifier |
-| `device_name` | User-provided device name |
+| `device_id` | Device identifier sent by the CLI |
+| `device_name` | Device name sent by the CLI (the host name) |
 | `ip_address` | Last seen IP address |
 | `user_agent` | Last seen user agent |
 | `created_at` | Session creation time |
@@ -211,18 +194,8 @@ Each session stores metadata for security and auditing:
 
 ### Device Tracking
 
-Sessions track device information for the user to identify their active sessions:
-
-```json
-{
-  "device_id": "browser-firefox-001",
-  "device_name": "Firefox on MacOS",
-  "ip_address": "192.168.1.100",
-  "user_agent": "Mozilla/5.0 (Macintosh; ...)"
-}
-```
-
-Users can view their active sessions in the web UI under Account → Security → Active Sessions.
+Sessions record the IP address and user agent of their last request, and CLI sessions the device that logged in,
+so users can recognize their sessions. Users see their active sessions on their own page (**Users** → their name).
 
 ## MFA and Sessions
 
@@ -251,9 +224,14 @@ stateDiagram-v2
 
 For sensitive actions, users may need to re-verify MFA even within an active session:
 
-- Configurable step-up window (default: 10 minutes)
-- After step-up, `recent_step_up_at` is updated
-- Subsequent sensitive actions within window don't require re-verification
+- Configurable step-up window (`mfa_step_up_window_minutes`, default 10 minutes)
+- Verifying a factor (TOTP, WebAuthn, YubiKey OTP or a backup code) sets `recent_step_up_at` and opens the window
+- Subsequent step-up actions within the window don't require re-verification
+- Only a verified factor opens the window. A login that needs no MFA challenge, or that a trusted device lets skip
+  it, opens none, and trusting a device doesn't restart it
+- Adding an MFA method needs no step-up for a user's first factor, and a step-up once they have one
+- Some actions need MFA on every request, even within the window (see
+  [MFA Requirements](/security/rbac/permissions/#mfa-requirements))
 
 ### Inline MFA Proofs
 
@@ -293,17 +271,10 @@ X-CSRF-Token: <token>
 
 API requests with bearer tokens don't require CSRF (token-based auth is inherently CSRF-safe).
 
-## Session Cleanup
+## Session Records
 
-Expired and revoked sessions are automatically cleaned up:
-
-- Background job runs periodically
-- Removes sessions where `expires_at < now - 7 days`
-- Preserves recent revoked sessions for audit purposes
-
-<Aside type="note">
-Revoked sessions are kept for 7 days to support audit log correlation. After that, they're permanently deleted.
-</Aside>
+Expired and revoked sessions stay in the database with their `revoked_at` and `expires_at`, so they can be matched
+to audit entries later. They can't be used again.
 
 ## Security Best Practices
 

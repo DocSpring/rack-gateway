@@ -10,9 +10,12 @@ An optional `admin` service is included in `convox.yml` for running migrations o
 
 ## Prerequisites
 
-- Convox CLI authenticated against your rack
+- Convox CLI authenticated against your rack (for the first deploy; later deploys can go through the gateway)
 - Google OAuth client configured (see [OAuth Setup](/configuration/oauth-setup/))
-- PostgreSQL database (Convox resource or external)
+- A PostgreSQL database with the audit roles, an admin user and an app user (see
+  [Database Setup](/deployment/database-setup/))
+- A private network to reach it: the `gateway` service is `internal: true` (see
+  [Private Network](/deployment/private-network/))
 
 ## Deployment Steps
 
@@ -21,15 +24,18 @@ An optional `admin` service is included in `convox.yml` for running migrations o
 1. **Set required environment variables**
 
    ```bash
-   convox env set \
+   convox env set -a rack-gateway \
      DOMAIN=gateway.example.com \
      APP_SECRET_KEY=$(openssl rand -base64 32) \
+     AUDIT_HMAC_SECRET=$(openssl rand -base64 32) \
      COLUMN_ENCRYPTION_KEY=$(openssl rand -base64 32) \
      GOOGLE_CLIENT_ID=your-client-id \
      GOOGLE_CLIENT_SECRET=your-client-secret \
      GOOGLE_ALLOWED_DOMAIN=example.com \
      ADMIN_USERS=admin@example.com \
-     RACK_TOKEN=your-convox-rack-token
+     RACK_TOKEN=your-convox-rack-token \
+     DATABASE_URL=postgres://rack_gateway_app:...@db-host:5432/rack_gateway \
+     ADMIN_DATABASE_URL=postgres://rack_gateway_admin:...@db-host:5432/rack_gateway
    ```
 
    <Aside type="note">
@@ -46,17 +52,23 @@ An optional `admin` service is included in `convox.yml` for running migrations o
 2. **(Optional) Configure audit anchors**
 
    ```bash
-   convox env set \
-     AUDIT_HMAC_SECRET=your-hmac-secret \
+   convox env set -a rack-gateway \
      AUDIT_ANCHOR_BUCKET=your-worm-bucket \
-     AUDIT_ANCHOR_CHAIN_ID=production \
-     AUDIT_ANCHOR_RETENTION_DAYS=400
+     AUDIT_ANCHOR_CHAIN_ID=production
    ```
 
-3. **Deploy**
+   The gateway's IAM role (the `IAM_ROLE_ARN` annotation in `convox.yml`) needs to write to the bucket. See
+   [S3 WORM Storage](/deployment/terraform/s3-worm-storage/).
+
+3. **Build, migrate, promote**
+
+   The gateway never migrates on startup, so `convox deploy` alone would start a release against an old schema.
+   Build the release, migrate with it, then promote it:
 
    ```bash
-   convox deploy -a rack-gateway
+   convox build -a rack-gateway --description "rack-gateway vX.Y.Z"   # prints the release ID
+   convox run admin ./rack-gateway-api migrate -a rack-gateway --release <release-id>
+   convox releases promote <release-id> -a rack-gateway
    ```
 
 4. **Verify**
@@ -64,6 +76,8 @@ An optional `admin` service is included in `convox.yml` for running migrations o
    ```bash
    curl -s https://gateway.example.com/api/v1/health
    ```
+
+   Then sign in as one of the `ADMIN_USERS` and enroll MFA.
 
 </Steps>
 
@@ -74,7 +88,10 @@ An optional `admin` service is included in `convox.yml` for running migrations o
 | Variable | Description |
 |----------|-------------|
 | `DOMAIN` | Gateway domain (used for OAuth redirects) |
-| `APP_SECRET_KEY` | Session/CSRF secret |
+| `APP_SECRET_KEY` | Session/CSRF secret (at least 32 bytes) |
+| `AUDIT_HMAC_SECRET` | Audit hash chain secret (at least 32 bytes) |
+| `DATABASE_URL` | The app user's connection string |
+| `ADMIN_DATABASE_URL` | The admin user's connection string, for the `admin` service |
 | `COLUMN_ENCRYPTION_KEY` | Encrypts stored TOTP seeds and the Slack token (`openssl rand -base64 32`) |
 | `GOOGLE_CLIENT_ID` | OAuth client ID |
 | `GOOGLE_CLIENT_SECRET` | OAuth client secret |
@@ -86,7 +103,6 @@ An optional `admin` service is included in `convox.yml` for running migrations o
 
 | Variable | Description |
 |----------|-------------|
-| `AUDIT_HMAC_SECRET` | HMAC chain secret (required in production) |
 | `RACK_ALIAS` | Short rack identifier |
 | `RACK_DISPLAY_NAME` | Human-readable rack name |
 
@@ -105,30 +121,30 @@ For the complete list, see [Environment Variables](/configuration/environment-va
 
 ## Database Configuration
 
-### Using Convox PostgreSQL Resource
-
-```bash
-convox resources create postgres --name gateway-db
-convox resources link gateway-db -a rack-gateway
-```
-
-Convox automatically sets `DATABASE_URL` for linked apps.
-
-### Using External PostgreSQL
-
-```bash
-convox env set DATABASE_URL=postgres://user:pass@host:5432/rack_gateway
-```
+Use an external PostgreSQL (for example RDS) set up as in [Database Setup](/deployment/database-setup/): the
+`gateway` service connects as the app user (`DATABASE_URL`), and the `admin` service as the admin user
+(`RGW_DATABASE_URL=${ADMIN_DATABASE_URL}` in `convox.yml`).
 
 ## Running Migrations
 
-Use the `admin` service in `convox.yml` for database tasks:
+Use the `admin` service in `convox.yml` for database tasks, against the release you're about to promote:
 
 ```bash
-convox run admin -- ./rack-gateway-api migrate -a rack-gateway
+convox run admin ./rack-gateway-api migrate -a rack-gateway --release <release-id>
 ```
 
 `migrate` needs `COLUMN_ENCRYPTION_KEY` like the server does (`convox.yml` shares it with every service).
+
+## Later Deploys
+
+Once the gateway runs, deploy it through itself with the `rack-gateway` CLI. From the repository root:
+
+```bash
+./scripts/bump-version.sh patch     # pins convox.yml to the new image tag
+./scripts/deploy.sh <rack>          # build, migrate against the new release, promote
+```
+
+`scripts/deploy_all.sh` runs `deploy.sh` for each rack in its `RACKS` list in turn (edit the list for your racks).
 
 ## Convox Manifest
 
@@ -137,5 +153,6 @@ The repository ships a production-ready `convox.yml` that defines:
 - `gateway` service (API + web UI)
 - `admin` service (on-demand maintenance)
 - CloudWatch retention via `LOG_RETENTION_DAYS` in `appSettings`
+- The image pinned to an immutable release tag (`docker.io/docspringcom/rack-gateway:vX.Y.Z`), never `:latest`
 
 Keep the manifest in sync with your deployment.

@@ -10,9 +10,10 @@ Trusted devices let the gateway remember a browser after a successful MFA verifi
 ## How It Works
 
 - A trusted-device cookie is set after verification
-- Future logins skip the MFA prompt until the TTL expires (default 30 days)
-- Trust is browser-specific
+- Future web logins skip the MFA prompt until the TTL expires (default 30 days)
+- Trust is browser-specific, and only applies to web logins: a CLI login asks for MFA whenever it applies to you
 - A trusted device is not a factor: sensitive actions that need step-up still ask you to verify one
+- Trusting a device needs a step-up
 
 ## Trusting a Device
 
@@ -37,16 +38,18 @@ You can trust a device in two ways:
 
 </Steps>
 
+The checkbox and the button always say 30 days, but the trust lasts as long as the configured TTL.
+
 ## Managing Trusted Devices
 
 The **Trusted Devices** table shows:
 
-- Device label
-- Last used time
-- IP address
-- Expiration
+- Device
+- Last used
+- IP
+- Expires
 
-To revoke a device, click **Revoke** next to the entry.
+To revoke a device, click **Revoke** next to the entry (this needs a step-up).
 
 ## Configuration
 

@@ -51,7 +51,7 @@ cg deploy
     `rack`, `racks`, `switch` - Configure and switch between racks
   </Card>
   <Card title="Convox Commands" icon="rocket">
-    `apps`, `deploy`, `ps`, `logs`, etc. - All standard Convox operations
+    `apps`, `deploy`, `ps`, `logs`, etc. - The Convox operations the gateway allows
   </Card>
   <Card title="Gateway Features" icon="seti:lock">
     `api-token`, `deploy-approval`, `gateway` - Gateway-specific features
@@ -93,7 +93,7 @@ You can override this with the `--config` flag or `GATEWAY_CLI_CONFIG_DIR` envir
 ### Authentication
 | Command | Description |
 |---------|-------------|
-| `login <rack> <url>` | Login to a gateway via OAuth |
+| `login [rack] [url]` | Login to a gateway via OAuth (no arguments: sign in again to the current rack) |
 | `logout` | Logout from the current rack |
 | `test-auth` | Test authentication (optionally with MFA) |
 
@@ -116,8 +116,7 @@ You can override this with the `--config` flag or `GATEWAY_CLI_CONFIG_DIR` envir
 | `instances` | List instances |
 | `logs` | View application logs |
 | `ps` | List app processes |
-| `releases` | List releases |
-| `resources` | List resources |
+| `releases` | List, promote and roll back releases |
 | `restart` | Restart an application |
 | `run` | Run a one-off process |
 | `scale` | Scale app processes |

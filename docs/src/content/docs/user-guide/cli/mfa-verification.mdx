@@ -9,13 +9,15 @@ The `rack-gateway` CLI supports multi-factor authentication (MFA) for enhanced s
 
 ## When MFA is Required
 
-MFA verification may be required in several scenarios:
+MFA is needed:
 
-1. **During login** - If your account has MFA enabled
-2. **Step-up authentication** - When performing sensitive operations
-3. **Session refresh** - When your MFA verification has expired
+1. **During login** - in the browser, when MFA applies to you (see [MFA During Login](#mfa-during-login))
+2. **For sensitive commands** - a step-up, which then covers your other commands for the step-up window
+3. **For the most sensitive commands** - every time, whatever the step-up window
 
-The gateway administrator configures which operations require MFA and how long verifications remain valid.
+Which commands need MFA is fixed by the gateway, per permission (see
+[MFA Requirements](/security/rbac/permissions/#mfa-requirements)). Administrators set how long the step-up window
+lasts and whether every user must use MFA.
 
 ## MFA Methods
 
@@ -25,17 +27,20 @@ The CLI supports multiple MFA methods:
   <TabItem label="TOTP">
     **Time-based One-Time Passwords** (Google Authenticator, Authy, 1Password, etc.)
 
-    ```bash
-    Enter TOTP code: 123456
+    ```
+    Multi-factor authentication required (TOTP).
+    Enter MFA code (TOTP or backup code):
     ```
 
-    Enter the 6-digit code from your authenticator app.
+    Enter the 6-digit code from your authenticator app. The same prompt takes a YubiKey OTP (touch a YubiKey
+    enrolled as a YubiKey OTP method) or a backup code.
   </TabItem>
   <TabItem label="WebAuthn">
     **Security Keys** (YubiKey 5, Touch ID, Windows Hello)
 
-    ```bash
-    Touch your security key to approve api on staging (2 of 4)...
+    ```
+    Multi-factor authentication required (WebAuthn).
+    Touch your security key to approve api on staging (2 of 4)... (press Ctrl+C to abort)
     ```
 
     The CLI prompts you to touch your hardware security key, and says what the touch is for. User verification is
@@ -46,18 +51,22 @@ The CLI supports multiple MFA methods:
     you don't miss one while the terminal is out of sight. On macOS, allow notifications for Script Editor if they
     don't appear. To turn them off, set `"touch_notifications": false` in `~/.config/rack-gateway/config.json`.
 
+    Only security keys marked **CLI Compatible** in the web UI can be used from the CLI.
+
     <Aside type="note">
-    WebAuthn requires system libraries on Linux. See [Installation](/user-guide/cli/installation/#webauthn-support-optional).
+    The prebuilt Linux release has no security key support. WebAuthn needs a CLI built with `libfido2`; see
+    [Installation](/user-guide/cli/installation/#webauthn-support-optional).
     </Aside>
   </TabItem>
   <TabItem label="Backup Codes">
     **One-time recovery codes**
 
-    ```bash
-    Enter backup code: XXXX-XXXX-XXXX
+    ```
+    Enter MFA code (TOTP or backup code): 3F9A1C0B7E42
     ```
 
-    Use a backup code if you've lost access to your primary MFA device.
+    Use a backup code if you've lost access to your primary MFA device. Enter it at the TOTP prompt (or with
+    `--mfa-code`); case, spaces and hyphens don't matter.
 
     <Aside type="caution">
     Each backup code can only be used once. Generate new codes from the web UI after using them.
@@ -67,68 +76,51 @@ The CLI supports multiple MFA methods:
 
 ## MFA During Login
 
-If MFA is required for your account, you'll be prompted after OAuth authentication:
+Login MFA happens in the browser, after Google sign-in and before the browser returns to the CLI. If you have no
+MFA method yet, the browser has you enroll one. See [CLI Authentication](/user-guide/cli/authentication/#mfa-during-login).
 
-```bash
-$ rack-gateway login production https://gateway.example.com
+### Choosing a Method
 
-Opening browser for authentication...
-✓ OAuth successful
+For a command, the CLI uses one method, the first of:
 
-MFA verification required.
-Available methods: TOTP, WebAuthn
+1. `--mfa-method totp` or `--mfa-method webauthn`
+2. Your preferred method, set under **Account Security** in the web UI
+3. `mfa_preference` in `~/.config/rack-gateway/config.json` (for all racks, or in one rack's entry)
+4. A CLI-compatible security key, then TOTP, then a backup code
 
-Attempting WebAuthn verification...
-Touch your security key...
-✓ MFA verified
-
-✓ Logged in as developer@company.com
-```
-
-### Fallback Behavior
-
-If you have multiple MFA methods enrolled:
-
-1. **WebAuthn is tried first** (if available and your CLI supports it)
-2. **Falls back to TOTP** if WebAuthn fails or isn't available
-3. **Backup codes** can be used if prompted
+The CLI doesn't fall back to another method if that one fails: run the command again with `--mfa-method`.
 
 ## Step-Up Authentication
 
 Certain sensitive operations require "step-up" MFA verification, even if you're already logged in. When this happens:
 
 ```bash
-$ rack-gateway env set DATABASE_URL=... -a myapp
-
-Step-up MFA required for this operation.
-Enter TOTP code: 123456
-✓ MFA verified
-
-Setting DATABASE_URL...
-✓ Environment variable set
+$ rack-gateway env set LOG_LEVEL=debug -a myapp
+Multi-factor authentication required (TOTP).
+Enter MFA code (TOTP or backup code):
 ```
 
-### Operations That May Require Step-Up
+The CLI asks before sending the command, unless your step-up window is still open.
 
-Operations requiring step-up MFA are configured by your administrator, but commonly include:
+### Commands That Need Step-Up
 
-- Environment variable changes
-- App deletion
-- Resource management
-- API token creation
-- User management (admins)
+- `deploy`, `build`, `releases promote` and `releases rollback`
+- `env set`, `env unset` and `env edit`, and `env get` / `env --unmask` when they show secret values
+- `run`, `exec`, `ps stop` and `restart`
+- `scale`, `apps create` and other app changes, and `rack update`
 
 ### Step-Up Window
 
-After successful MFA verification, there's typically a window (default: 10 minutes) where additional step-up prompts aren't required. This is configurable by the gateway administrator.
+A verified MFA proof opens a step-up window (10 minutes by default; administrators can change it) in which other
+step-up commands don't ask again.
 
 The window doesn't cover changes to protected env vars: `env set` and `env unset` with `--allow-protected` ask
 for MFA every time, and the gateway verifies it on the request that makes the change. See
 [Protected env vars](/user-guide/cli/commands/#protected-env-vars).
 
-Nor does it cover the commands whose permissions always need MFA (`apps delete`, `instances terminate`,
-`instances keyroll`, `certs delete` and `builds import`): they ask for MFA every time, and the gateway refuses the
-request unless it carries a proof it verifies on that request.
+Nor does it cover the commands whose permissions always need MFA (`apps delete`, `builds import`,
+`api-token create`, `api-token update`, `api-token delete` and `deploy-approval approve`): they ask for MFA every
+time, and the gateway refuses the request unless it carries a proof it verifies on that request.
 
 ### One Key Touch Per Command
 
@@ -144,17 +136,21 @@ promptly.
 
 You can preflight your MFA status or supply a code for non-interactive runs.
 
-### Check MFA status
+### Check MFA
 
 ```bash
-# Verify MFA enrollment and status
+# Verify with the method a command would use
 rack-gateway test-auth mfa
+
+# Or test one method
+rack-gateway test-auth totp
+rack-gateway test-auth webauthn
 ```
 
 ### Using --mfa-code
 
 ```bash
-# Provide the code directly (useful for scripting)
+# Provide a TOTP code, YubiKey OTP or backup code up front
 rack-gateway deploy -a myapp --mfa-code 123456
 ```
 
@@ -168,17 +164,21 @@ rack-gateway deploy -a myapp --mfa-method webauthn
 
 ## Testing MFA Status
 
-Check your MFA enrollment and verification status:
-
 ```bash
 $ rack-gateway test-auth mfa
+Testing authentication to https://gateway.example.com...
+✓ Authentication successful
+  User is enrolled in MFA: true
+  MFA required: true
+  Enrolled methods:
+    - Authenticator app (totp)
+    - YubiKey 5C (webauthn)
 
-✓ Authenticated as developer@company.com
-  Role: deployer
-  MFA enrolled: Yes
-  MFA methods: TOTP, WebAuthn
-  Last MFA verification: 5 minutes ago
-  Step-up window: Active (expires in 5 minutes)
+Testing preferred MFA method...
+  Server preferred method: webauthn
+
+Attempting webauthn authentication...
+✓ MFA verification successful with webauthn
 ```
 
 ## Connection Security
@@ -194,14 +194,16 @@ For automated workflows, you have several options:
 
 ### API Tokens (Recommended)
 
-API tokens bypass MFA entirely and are the recommended approach for CI/CD:
+API tokens don't use MFA, so they're the way to run commands from CI/CD:
 
 ```bash
-export RACK_GATEWAY_API_TOKEN="rgw_token_..."
+export RACK_GATEWAY_API_TOKEN="rgw_..."
+export RACK_GATEWAY_URL="https://gateway.example.com"
 rack-gateway deploy -a myapp
 ```
 
-API tokens have their own permissions and can be scoped appropriately.
+A token can only do what its permissions allow, and only while its owner's role allows it too. Managing API tokens
+and approving deploys can't be done with a token.
 
 ### TOTP Code via Flag
 
@@ -222,11 +224,11 @@ Embedding TOTP secrets in CI/CD reduces security. Prefer API tokens instead.
 ### "WebAuthn not available"
 
 WebAuthn requires:
-- System libraries (Linux only - see [Installation](/user-guide/cli/installation/#webauthn-support-optional))
-- A connected security key
-- CLI built with CGO enabled
+- A CLI built with security key support (not the prebuilt Linux release, which prints "WebAuthn support not
+  compiled in this build"); see [Installation](/user-guide/cli/installation/#webauthn-support-optional)
+- A connected security key, marked **CLI Compatible** in the web UI
 
-If WebAuthn isn't available, the CLI falls back to TOTP.
+Without it, use `--mfa-method totp`.
 
 ### "Invalid TOTP code"
 
@@ -235,17 +237,18 @@ TOTP codes are time-sensitive. Check that:
 - You're using the correct authenticator entry
 - The code hasn't expired (codes change every 30 seconds)
 
-### "No MFA methods enrolled"
+### "MFA not enrolled" or "no CLI-compatible MFA methods found"
 
-You need to enroll at least one MFA method in the web UI:
+You need at least one MFA method the CLI can use. Enroll one in the web UI, or mark a security key
+**CLI Compatible**:
 
 1. Open the web UI: `rack-gateway web`
 2. Go to Account Security
 3. Enroll TOTP or WebAuthn
 
-### "Step-up required but no interactive terminal"
+### No interactive terminal
 
-In non-interactive contexts (cron jobs, CI), use either:
+Without a terminal, the CLI reads the MFA code from standard input. In cron jobs and CI, use either:
 - API tokens (recommended)
 - The `--mfa-code` flag with a TOTP code
 
@@ -253,8 +256,8 @@ In non-interactive contexts (cron jobs, CI), use either:
 
 Backup codes are one-time use. If rejected:
 - The code may have already been used
-- The code may be expired
-- You may be entering it incorrectly (include hyphens if shown)
+- You may have generated new codes since, which replaces the old set
+- You may have mistyped it (each code is 12 characters, 0-9 and A-F)
 
 Generate new backup codes from the web UI.
 

@@ -43,8 +43,12 @@ When prompted for MFA, select the security key option and complete the browser p
 The CLI can use WebAuthn methods marked **CLI Compatible**:
 
 1. In **Account Security**, edit your WebAuthn method
-2. Enable **CLI Compatible** (recommended for hardware keys)
-3. Use `--mfa-method webauthn` when prompted
+2. Enable **CLI Compatible** (recommended for hardware keys; passkeys stored in a browser or phone can't be used
+   from the CLI)
+3. The CLI uses it when it's your preferred method, or when you pass `--mfa-method webauthn`
+
+The CLI needs security key support built in. The prebuilt Linux release doesn't have it; see
+[Installation](/user-guide/cli/installation/#webauthn-support-optional).
 
 ```bash
 rack-gateway deploy -a myapp --mfa-method webauthn
@@ -59,7 +63,7 @@ In **Account Security → Registered MFA Methods**, you can:
 
 - Edit the label
 - Toggle **CLI Compatible** (WebAuthn only)
-- Remove a method
+- Remove a method (needs MFA every time)
 
 <Aside type="caution">
 Keep at least one MFA method active so you don’t lock yourself out.

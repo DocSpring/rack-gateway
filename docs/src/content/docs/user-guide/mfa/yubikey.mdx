@@ -8,7 +8,8 @@ import { Aside } from '@astrojs/starlight/components';
 YubiKey OTP generates a 44-character one-time password when you touch the key. The gateway can validate these OTPs if Yubico credentials are configured.
 
 <Aside type="note">
-YubiKey OTP enrollment is not currently exposed in the web UI. It requires gateway configuration and API-level enrollment.
+YubiKey OTP enrollment is not in the web UI or the CLI. It needs the Yubico credentials below and a call to
+`POST /api/v1/auth/mfa/enroll/yubiotp/start` with an OTP from the key.
 </Aside>
 
 ## Requirements
@@ -22,7 +23,8 @@ YUBICO_SECRET_KEY=...
 
 ## Using YubiKey OTP
 
-If OTP enrollment is enabled for your account, you can enter a YubiKey OTP anywhere the gateway prompts for an MFA code (web or CLI). Touch the key and paste the OTP.
+Once a YubiKey is enrolled, you can enter its OTP anywhere the gateway asks for an MFA code: the web UI's code
+prompt, the CLI's code prompt, or `--mfa-code`. Touch the key with the cursor in the field; the key types the OTP.
 
 ## Recommended Alternative
 

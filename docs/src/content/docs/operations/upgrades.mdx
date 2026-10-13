@@ -20,12 +20,11 @@ Always review the release notes for breaking changes:
 ### Verify Current Version
 
 ```bash
-# Check deployed version
-convox ps -a rack-gateway | head -5
-
-# Or via API
-curl https://gateway.example.com/api/v1/health
+# The CLI's version and the gateway's
+rack-gateway version
 ```
+
+`rack-gateway version` asks the gateway for its version (`GET /api/v1/info`), so it needs a login.
 
 ### Backup Database
 
@@ -37,8 +36,8 @@ aws rds create-db-snapshot \
   --db-instance-identifier rack-gateway-prod \
   --db-snapshot-identifier rack-gateway-pre-upgrade-$(date +%Y%m%d)
 
-# Or manual backup
-pg_dump $DATABASE_URL > backup_pre_upgrade.sql
+# Or manual backup, with the admin connection
+pg_dump "$ADMIN_DATABASE_URL" > backup_pre_upgrade.sql
 ```
 
 ## Upgrade Procedures
@@ -103,10 +102,10 @@ pg_dump $DATABASE_URL > backup_pre_upgrade.sql
 2. **Stop current container**
 
    ```bash
-   docker-compose down
+   docker compose down
    ```
 
-3. **Update docker-compose.yml**
+3. **Update compose.yaml**
 
    ```yaml
    services:
@@ -114,121 +113,33 @@ pg_dump $DATABASE_URL > backup_pre_upgrade.sql
        image: docker.io/docspringcom/rack-gateway:v1.2.0
    ```
 
-4. **Run migrations**
+4. **Run migrations** (as the admin database user)
 
    ```bash
-   docker-compose run --rm gateway rack-gateway-api migrate
+   docker compose run --rm gateway ./rack-gateway-api migrate
    ```
 
 5. **Start new version**
 
    ```bash
-   docker-compose up -d
+   docker compose up -d
    ```
 
 6. **Verify**
 
    ```bash
    curl http://localhost:8080/api/v1/health
-   docker-compose logs -f
-   ```
-
-</Steps>
-
-### Kubernetes Deployment
-
-<Steps>
-
-1. **Update deployment**
-
-   ```yaml
-   apiVersion: apps/v1
-   kind: Deployment
-   spec:
-     template:
-       spec:
-         containers:
-           - name: gateway
-             image: docker.io/docspringcom/rack-gateway:v1.2.0
-   ```
-
-2. **Apply migration job**
-
-   ```bash
-   kubectl apply -f migration-job.yaml
-   kubectl wait --for=condition=complete job/rack-gateway-migrate
-   ```
-
-3. **Roll out deployment**
-
-   ```bash
-   kubectl apply -f deployment.yaml
-   kubectl rollout status deployment/rack-gateway
-   ```
-
-4. **Verify**
-
-   ```bash
-   kubectl get pods -l app=rack-gateway
-   kubectl logs -l app=rack-gateway --tail=100
+   docker compose logs -f
    ```
 
 </Steps>
 
 ## Zero-Downtime Upgrades
 
-For high-availability deployments:
-
-### Prerequisites
-
-- At least 2 gateway instances
-- Load balancer with health checks
-- Rolling deployment strategy
-
-### Procedure
-
-```mermaid
-sequenceDiagram
-    participant LB as Load Balancer
-    participant Old1 as Gateway v1 (1)
-    participant Old2 as Gateway v1 (2)
-    participant New1 as Gateway v2 (1)
-    participant New2 as Gateway v2 (2)
-
-    Note over LB,Old2: Initial state: both v1 healthy
-
-    LB->>Old1: Traffic
-    LB->>Old2: Traffic
-
-    Note over Old1,New1: Deploy v2 instance 1
-
-    New1->>New1: Start, run migrations
-    LB->>New1: Health check passes
-    LB->>Old1: Remove from rotation
-    Old1->>Old1: Terminate
-
-    Note over Old2,New2: Deploy v2 instance 2
-
-    New2->>New2: Start
-    LB->>New2: Health check passes
-    LB->>Old2: Remove from rotation
-    Old2->>Old2: Terminate
-
-    Note over LB,New2: Final state: both v2 healthy
-```
-
-### Convox Rolling Deployment
-
-Convox handles this automatically with proper configuration:
-
-```yaml
-services:
-  gateway:
-    scale:
-      count: 3
-    deployment:
-      minimum: 2    # Keep 2 running during deploy
-```
+On Convox, promoting a release is a rolling deploy: with the default deployment settings Convox starts the new
+process, waits for its health check, then stops the old one, so even a single instance upgrades without downtime.
+Migrations run before the promote, while the old release is still serving, so they must work with the old
+release; the release notes below say when one doesn't.
 
 ## Database Migrations
 
@@ -266,11 +177,9 @@ convox releases rollback RELEASE_ID -a rack-gateway
 
 ### Image Rollback
 
-```bash
-# Update to previous image
-convox env set IMAGE_TAG=v1.1.0 -a rack-gateway
-convox deploy -a rack-gateway
-```
+The image tag is pinned in `convox.yml`. To go back to an earlier version, deploy the `convox.yml` from that
+version's tag (`git checkout v1.1.0 -- convox.yml`, then `scripts/deploy.sh <rack>`), or roll back to a release
+that already runs it. Migrations aren't undone, so check the release notes below before rolling back past one.
 
 ### Database Rollback
 
@@ -289,9 +198,12 @@ aws rds restore-db-instance-from-db-snapshot \
   --db-instance-identifier rack-gateway-restored \
   --db-snapshot-identifier rack-gateway-pre-upgrade-20240115
 
-# Update DATABASE_URL to point to restored instance
+# Update DATABASE_URL and ADMIN_DATABASE_URL to point to restored instance
 # Deploy previous version
 ```
+
+A restore to before the upgrade loses the audit events written since; see
+[Restore from Backup](/operations/database-maintenance/#restore-from-backup).
 
 ## Release Notes That Need Action
 
@@ -428,31 +340,12 @@ pinned by `service_image_patterns`. Builds are refused until the patterns are se
 
 ## Version Compatibility
 
-### API Compatibility
+Rack Gateway is pre-1.0: any release can change the API, the CLI or the schema. Keep the CLI and every gateway on
+the same release, and read the release notes for each version you skip. `rack-gateway version` shows the CLI's
+version and the gateway's; a CLI that's too old or too new for the gateway's login flow says so when you log in.
 
-Rack Gateway maintains backward compatibility within major versions:
-
-| Version Range | Compatibility |
-|--------------|---------------|
-| v1.x → v1.y | API compatible |
-| v1.x → v2.x | Check migration guide |
-
-### CLI Compatibility
-
-The CLI should match the gateway major version:
-
-| Gateway | CLI | Compatible |
-|---------|-----|------------|
-| v1.2.0 | v1.0.0 | Yes |
-| v1.2.0 | v2.0.0 | Check release notes |
-
-### Database Compatibility
-
-Database migrations are usually additive within major versions. Rollback requires:
-
-1. Previous version must be able to use the new schema (check the release notes above: after the audit hash v2
-   migration, earlier versions can't write audit events to the database)
-2. Or restore from backup
+Migrations are forward-only. Rolling back the gateway works when the previous version can use the new schema (the
+release notes say when it can't); otherwise restore from backup.
 
 ## Upgrade Checklist
 
@@ -466,11 +359,12 @@ Before upgrading:
 
 After upgrading:
 
-- [ ] Verify health endpoints
+- [ ] Verify the health endpoint
 - [ ] Check application logs for errors
 - [ ] Test critical functionality (login, deploy)
+- [ ] Run `verify-audit`, or check the next hourly verification on the **Audit Logs** page
 - [ ] Monitor error rates for 24 hours
-- [ ] Update documentation with new version
+- [ ] Upgrade the CLI to the same release
 
 ## Troubleshooting Upgrades
 
@@ -487,8 +381,8 @@ convox logs -a rack-gateway --since 5m
 ### Health Check Failing
 
 ```bash
-# Test health endpoint directly
-convox run gateway -a rack-gateway -- wget -q -O - http://localhost:8080/api/v1/health
+# Test health endpoint inside a running process (PID from convox ps)
+convox exec <pid> -a rack-gateway wget -q -O - http://localhost:8080/api/v1/health
 
 # Check startup logs
 convox logs -a rack-gateway | grep -i "start\|error"
@@ -497,12 +391,16 @@ convox logs -a rack-gateway | grep -i "start\|error"
 ### Database Migration Error
 
 ```bash
-# Check migration status
-convox run gateway -- rack-gateway migrate --dry-run
-
-# View detailed error
-convox run gateway -- rack-gateway migrate --verbose
+# Run the migrations again; the error names the failing migration
+convox run admin ./rack-gateway-api migrate -a rack-gateway
 ```
+
+```sql
+-- Applied migrations
+SELECT version FROM schema_migrations ORDER BY version DESC LIMIT 10;
+```
+
+Each migration runs in its own transaction, so a failed one leaves nothing behind.
 
 ## Further Reading
 

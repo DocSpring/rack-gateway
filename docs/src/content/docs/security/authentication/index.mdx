@@ -5,7 +5,7 @@ description: "Authentication mechanisms in Rack Gateway."
 
 import { Aside, Card, CardGrid } from '@astrojs/starlight/components';
 
-Rack Gateway uses a multi-layered authentication system combining OAuth 2.0 for identity, session tokens for authorization, and optional multi-factor authentication for additional security.
+Rack Gateway uses a multi-layered authentication system combining OAuth 2.0 for identity, session tokens for authorization, and multi-factor authentication, which is required for every user by default.
 
 ## Authentication Methods
 
@@ -20,7 +20,7 @@ Rack Gateway uses a multi-layered authentication system combining OAuth 2.0 for 
   <Card title="API Tokens" icon="seti:lock">
     **For automation**
 
-    Long-lived tokens for CI/CD pipelines, scripts, and integrations. Each token has an assigned role.
+    Long-lived tokens for CI/CD pipelines, scripts, and integrations. Each token has its own permissions, limited by its owner's role.
 
     [Learn more →](/security/authentication/api-tokens/)
   </Card>
@@ -62,13 +62,13 @@ The gateway supports two authentication channels:
 |--------|-------------|-----|
 | **OAuth Flow** | Standard code flow | PKCE code flow |
 | **Session Storage** | HTTP-only cookie | Local config file |
-| **Session Lifetime** | Configurable (default 5 min idle) | 90 days |
+| **Session Lifetime** | Ends after inactivity (default 5 min) | 90 days |
 | **MFA** | Browser-based prompts | Terminal prompts |
 | **CSRF Protection** | Required (cookie-based) | Not needed (token-based) |
 
 ### Web Authentication
 
-1. User clicks "Sign in with Google"
+1. User clicks **Continue with Google**
 2. Redirected to Google OAuth consent screen
 3. After approval, redirected back with authorization code
 4. Gateway exchanges code for ID token
@@ -152,10 +152,9 @@ graph LR
     MFA -->|Failed| Deny[Access Denied]
 ```
 
-MFA can be:
-- **Required for all users** (recommended for production)
-- **Required for specific roles** (e.g., admins only)
-- **Optional** (user choice)
+MFA is required for every user by default (`mfa_require_all_users`). With that setting off, users who haven't
+enrolled can sign in to the web UI without MFA, but the CLI still requires every user to enroll. Either way, actions
+that need MFA ask for it (see [MFA Requirements](/security/rbac/permissions/#mfa-requirements)).
 
 See [MFA Overview](/user-guide/mfa/) for setup details.
 
@@ -163,10 +162,10 @@ See [MFA Overview](/user-guide/mfa/) for setup details.
 
 | Characteristic | Session (Human) | API Token (Automation) |
 |---------------|-----------------|------------------------|
-| **Creation** | OAuth flow | Admin creates in UI |
-| **Lifetime** | Short (idle timeout) | Long (until revoked) |
-| **Revocation** | Logout or admin action | Delete token |
-| **MFA** | Required if enabled | N/A |
+| **Creation** | OAuth flow | Created in the web UI or with `rack-gateway api-token create` (deployers for themselves, admins for anyone) |
+| **Lifetime** | Web: idle timeout; CLI: 90 days from last use | Until deleted or its optional expiry |
+| **Revocation** | Web logout, or revoking it from the user's sessions | Delete token |
+| **MFA** | Required | N/A (limited by permissions instead) |
 | **CSRF** | Required (web) | Not required |
 | **Use Case** | Interactive access | CI/CD, scripts |
 
@@ -190,7 +189,7 @@ See [Configuration](/configuration/environment-variables/) for complete referenc
 - [ ] `GOOGLE_ALLOWED_DOMAIN` set to your domain
 - [ ] `APP_SECRET_KEY` is strong and unique
 - [ ] Session timeout appropriate for your security needs
-- [ ] MFA enabled for privileged users
+- [ ] MFA required for all users (the default)
 - [ ] Audit logging configured
 
 ## Next Steps

@@ -9,28 +9,30 @@ Backup codes provide emergency access if you lose your primary MFA device.
 
 ## Key Facts
 
-- 10 one-time codes generated per batch
-- Each code works once
-- Codes are only shown when generated
+- 10 one-time codes generated per batch, each 12 characters (0-9 and A-F)
+- Each code works once; case, spaces and hyphens don't matter when you enter one
+- Codes are only shown when generated; the gateway stores only hashes
+- **Backup Codes** in Account Security shows how many unused codes you have and when they were generated
 
 <Aside type="danger">
-Store backup codes securely. If you lose them, recovery may require admin assistance.
+Store backup codes securely. If you lose every MFA method and your backup codes, the only recovery is for an admin
+to delete your user and add you again. That also deletes your API tokens.
 </Aside>
 
 ## Getting Backup Codes
 
 ### During Enrollment
 
-When you enable MFA, the UI displays a fresh set of backup codes. Download or copy them immediately.
+When you enroll your first MFA method, the UI displays a fresh set of backup codes. Download or copy them
+immediately.
 
 ### Regenerating Codes
 
 <Steps>
 
 1. Go to **Account Security**
-2. Open **Backup Codes**
-3. Click **Regenerate backup codes**
-4. Download the latest codes
+2. In **Backup Codes**, click **Regenerate backup codes** (this needs a step-up)
+3. Click **Download latest codes**
 
 </Steps>
 
@@ -44,11 +46,8 @@ Enter a backup code when prompted for MFA.
 
 ### CLI
 
-```bash
-rack-gateway login
-```
-
-When prompted, paste a backup code instead of a TOTP code.
+At the CLI's MFA code prompt (`Enter MFA code (TOTP or backup code):`), enter a backup code instead of a TOTP code,
+or pass it with `--mfa-code`. Login MFA happens in the browser, where **Use a backup code** switches the prompt.
 
 ## Best Practices
 

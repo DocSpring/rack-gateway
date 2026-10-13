@@ -125,10 +125,11 @@ sequenceDiagram
 
 Rack Gateway uses **Google OAuth 2.0** for authentication:
 
-1. User clicks "Sign in with Google"
+1. User clicks **Continue with Google**
 2. Google verifies identity (password, MFA)
 3. Google returns user identity to Gateway
-4. Gateway creates a session token
+4. Gateway checks the account is in the allowed domain and is a gateway user
+5. Gateway asks for its own MFA (unless the browser is trusted), then creates a session token
 
 ```
 Google OAuth → User Identity → Session Token → Authenticated Requests

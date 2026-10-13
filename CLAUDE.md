@@ -1,6 +1,6 @@
 # Rack Gateway - Technical Details
 
-IMPORTANT: Read [docs/legacy/CONVOX_REFERENCE.md](docs/legacy/CONVOX_REFERENCE.md) and [README.md](README.md) first for context on how Convox actually works and current project status.
+IMPORTANT: Read [docs/CONVOX_REFERENCE.md](docs/CONVOX_REFERENCE.md) and [README.md](README.md) first for context on how Convox actually works and current project status.
 
 ## 🚨 MISSION-CRITICAL AUTHENTICATION GATEWAY
 
@@ -147,7 +147,7 @@ This file contains high-level architecture and task commands. Component-specific
 - **`internal/gateway/CLAUDE.md`** - Gateway API server (Go, auth, RBAC, proxy)
 - **`internal/cli/CLAUDE.md`** - CLI client (multi-rack, OAuth flow)
 - **`mock-oauth/CLAUDE.md`** - Mock OAuth server for testing
-- **`docs/`** - Detailed documentation (configuration, database, Convox reference)
+- **`docs/src/content/docs/`** - The documentation site (configuration, deployment, operations, security); `docs/CONVOX_REFERENCE.md` explains Convox
 
 ## 🔌 PORT CONFIGURATION - SINGLE SOURCE OF TRUTH
 
@@ -172,7 +172,7 @@ This file contains high-level architecture and task commands. Component-specific
 - `mise.toml` - Defines all port environment variables
 - `web/vite.config.ts` - Uses `process.env.GATEWAY_PORT` for proxy
 - `Procfile.dev` - Uses `$MOCK_OAUTH_PORT` and `$MOCK_CONVOX_PORT`
-- [docs/CONFIGURATION.md](docs/CONFIGURATION.md) - Full list of environment variables
+- [docs/src/content/docs/configuration/environment-variables.mdx](docs/src/content/docs/configuration/environment-variables.mdx) - Full list of environment variables
 
 ## 🛠 Task Runner Overview
 
@@ -180,7 +180,7 @@ This file contains high-level architecture and task commands. Component-specific
 
 - `Taskfile.yml` - Root taskfile that includes all others
 - `taskfiles/Taskfile.go.yml` - Go-specific tasks (build, test, lint, e2e)
-- `taskfiles/Taskfile.web.yml` - Web frontend tasks (build, test, lint, e2e)
+- `web/Taskfile.yml` - Web frontend tasks (build, test, lint, e2e), included as `web:`
 - `taskfiles/Taskfile.db.yml` - Database tasks (migrate, reset)
 - `taskfiles/Taskfile.docker.yml` - Docker orchestration tasks
 - `taskfiles/docker-stack.yml` - Shared Docker stack helpers
@@ -544,7 +544,7 @@ See component-specific CLAUDE.md files for detailed implementation information:
 - `mise.local.toml` - Local overrides (gitignored, create your own)
 - `mise.local.toml.example` - Template for local configuration
 
-See [docs/CONFIGURATION.md](docs/CONFIGURATION.md) for complete environment variable reference.
+See [docs/src/content/docs/configuration/environment-variables.mdx](docs/src/content/docs/configuration/environment-variables.mdx) for complete environment variable reference.
 
 ## Version Management and Deployment
 
@@ -746,7 +746,7 @@ run). CI on GitHub then runs everything `task ci` runs:
 
 ## Database Maintenance
 
-See `docs/DATABASE_MAINTENANCE.md` for complete database maintenance procedures including migrations and resets.
+See `docs/src/content/docs/operations/database-maintenance.mdx` for complete database maintenance procedures including migrations and resets.
 
 ### Running SQL Queries
 
@@ -867,10 +867,10 @@ source reference/convox_racks_terraform/racks/staging/.envrc && \
 │   ├── cli/                      # CLI config templates
 │   └── cli-e2e/                  # E2E test configs
 ├── docs/                         # Documentation
-│   ├── CONFIGURATION.md          # Environment variables
+│   ├── src/content/docs/         # The docs site (Astro/Starlight), published to GitHub Pages
 │   ├── CONVOX_REFERENCE.md       # Convox API reference
-│   ├── DATABASE_MAINTENANCE.md   # Database operations
-│   └── images/                   # Documentation images
+│   ├── SCREENSHOTS.md            # Web UI screenshots (linked from README.md)
+│   └── images/                   # Screenshot images
 ├── internal/                     # Go internal packages
 │   ├── cli/                      # CLI implementation (all commands)
 │   │   ├── sdk/                  # SDK client

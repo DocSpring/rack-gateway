@@ -22,7 +22,7 @@ The `rack-gateway` CLI uses OAuth to authenticate you with the gateway. This pag
 
    Your default browser opens to the gateway's OAuth page. If it doesn't open automatically, the CLI prints a URL you can copy.
 
-3. **Sign in with Google**
+3. **Continue with Google**
 
    Authenticate with your Google Workspace account. The gateway validates that your email domain is allowed.
 
@@ -80,7 +80,7 @@ Session tokens are stored in `~/.config/rack-gateway/config.json`:
   "gateways": {
     "production": {
       "url": "https://gateway.example.com",
-      "token": "rgw_sess_...",
+      "token": "Fz2kQ...",
       "email": "developer@company.com",
       "expires_at": "2024-02-15T10:30:00Z",
       "session_id": 1024,
@@ -103,49 +103,44 @@ file atomically, so a crash never leaves a partial config. Don't copy it anywher
 
 ### Session Duration
 
-CLI sessions are long-lived by default (currently 90 days). Sessions can be:
-- **Revoked** by an administrator via the web UI
-- **Expired** after a period of inactivity
-- **Invalidated** if MFA enforcement changes
+CLI sessions last 90 days from their last use. Sessions can be:
+- **Revoked** by you or an administrator in the web UI
+- **Expired** after 90 days without use
+- **Ended** when your account is locked or deleted
 
 ### Checking Session Status
 
 ```bash
 # Test your current session
 rack-gateway test-auth
-
-# Output shows authentication status
-✓ Authenticated as developer@company.com
-  Role: deployer
-  Session expires: 2024-02-15 10:30:00 UTC
 ```
+
+```
+Testing authentication to https://gateway.example.com...
+✓ Authentication successful
+  User is enrolled in MFA: true
+  MFA required: true
+  Enrolled methods:
+  ...
+```
+
+`rack-gateway rack` shows who you're logged in as and when the session expires.
 
 ### Session Expiration
 
-When your session expires, you'll see an error like:
-
-```
-Error: session expired or invalid
-Please run: rack-gateway login production https://gateway.example.com
-```
-
-Simply re-run the login command to get a new session.
+When your session has expired or been revoked, commands fail with an authentication error. Run
+`rack-gateway login` to sign in again to the current rack (the rack and its URL are kept).
 
 ## Logout
 
-To remove your session:
-
 ```bash
-# Logout from current rack
+# Log out of the current rack (or pass --rack)
 rack-gateway logout
-
-# The session is revoked on the server and removed locally
 ```
 
-This:
-1. Notifies the gateway to invalidate your session
-2. Removes the session token from your local config
-3. Keeps the rack configuration so you can easily log in again
+This removes the rack, with its URL and session token, from your local config. It doesn't revoke the session on
+the gateway: to end it there, revoke it under your account's sessions in the web UI. To use the rack again, run
+`rack-gateway login <rack> <gateway-url>`.
 
 ## Using API Tokens
 
@@ -153,16 +148,16 @@ For CI/CD or automation, you can use API tokens instead of OAuth sessions:
 
 ```bash
 # Set via environment variable
-export RACK_GATEWAY_API_TOKEN="rgw_token_..."
+export RACK_GATEWAY_API_TOKEN="rgw_..."
 rack-gateway apps
 
 # Or pass directly
-rack-gateway apps --api-token "rgw_token_..."
+rack-gateway apps --api-token "rgw_..."
 ```
 
 API tokens:
 - Don't require interactive login
-- Have their own role and permissions
+- Have their own permissions, limited by their owner's role
 - Can be scoped to specific operations
 - Should be created via the web UI or `api-token` command
 
@@ -170,24 +165,17 @@ See [API Tokens](/user-guide/web-ui/api-tokens/) for creating and managing token
 
 ## MFA During Login
 
-If MFA is required for your account, you'll be prompted after OAuth:
+MFA during login happens in the browser: after Google, the gateway asks for your MFA method (or, if you have none
+yet, has you enroll one) before it sends the browser back to the CLI. The page shows the device name and IP that
+started the login, so you can check it's yours, and **Cancel Login** stops it.
 
-```bash
-rack-gateway login production https://gateway.example.com
+A CLI login asks for MFA whenever MFA applies to you: always with the default `mfa_require_all_users`, otherwise
+once you have enrolled a method. A trusted device doesn't skip it.
 
-Opening browser for authentication...
-✓ OAuth successful
-
-MFA verification required.
-Enter TOTP code: 123456
-✓ MFA verified
-
-✓ Logged in as developer@company.com
-```
-
-The CLI supports:
+After login, commands that need MFA ask for it in the terminal:
 - **TOTP** - Enter the code from your authenticator app
-- **WebAuthn** - Touch your security key when prompted
+- **WebAuthn** - Touch your security key when prompted (CLI builds with WebAuthn support)
+- **YubiKey OTP** - Touch a YubiKey that types a one-time password
 - **Backup codes** - Enter a backup code if you've lost access to your device
 
 See [MFA Verification](/user-guide/cli/mfa-verification/) for details.
@@ -230,27 +218,24 @@ and open the printed URL in the browser there.
 The gateway and CLI must both support the loopback login. Upgrade whichever side is older; after upgrading
 the gateway, install the matching rack-gateway CLI.
 
-### "Domain not allowed"
+### "Not authorized"
 
-```
-Error: email domain not allowed
-```
-
-Your Google Workspace domain isn't configured in the gateway. Contact your administrator to add your domain to `GOOGLE_ALLOWED_DOMAIN`.
+The login page says you aren't authorized when your Google account is outside the gateway's
+`GOOGLE_ALLOWED_DOMAIN`, or when you aren't a gateway user yet. Ask an administrator to add you.
 
 ### "Session invalid" after working previously
 
 Possible causes:
-1. **Administrator revoked your session** - Log in again
-2. **MFA enforcement changed** - You may need to enroll in MFA
-3. **Gateway restarted with new secret** - All sessions invalidated; log in again
+1. **Your session was revoked** (by you, an administrator, or a lock) - Log in again
+2. **It expired** after 90 days without use - Log in again
+3. **Your account is locked** - Ask an administrator
 
 ### "Permission denied" errors
 
 You're authenticated but your role doesn't allow the operation:
 
 ```
-Error: permission denied: convox:app:delete requires admin role
+Error: You don't have permission to promote releases.
 ```
 
 Contact your administrator to adjust your role if needed.

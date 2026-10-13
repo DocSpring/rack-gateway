@@ -82,7 +82,7 @@ sequenceDiagram
     participant Gateway as Rack Gateway
     participant Google
 
-    User->>Browser: Click "Sign in with Google"
+    User->>Browser: Click "Continue with Google"
     Browser->>Gateway: GET /auth/google
     Gateway->>Browser: Redirect to Google
     Browser->>Google: Authorization request
@@ -103,7 +103,7 @@ sequenceDiagram
 
 1. **Authorization Request**
 
-   User clicks "Sign in with Google" and Gateway redirects to Google with:
+   User clicks **Continue with Google** and Gateway redirects to Google with:
    - `client_id`: Identifies Rack Gateway to Google
    - `redirect_uri`: Where to send user after login
    - `scope`: What information Gateway needs (email, profile)
@@ -228,11 +228,13 @@ The ID token is a JWT containing user identity:
 
 Rack Gateway validates ID tokens by:
 
-1. **Signature verification**: Using Google's public keys
-2. **Issuer check**: Must be `accounts.google.com`
+1. **Signature verification**: Using the issuer's published keys
+2. **Issuer check**: Must be the configured issuer (`GOOGLE_OAUTH_BASE_URL`, `https://accounts.google.com` by default)
 3. **Audience check**: Must match our client ID
 4. **Expiration check**: Token must not be expired
-5. **Domain check**: Email must match `GOOGLE_ALLOWED_DOMAIN`
+5. **Domain check**: `email_verified` must be true, and both the email's domain and the `hd` claim must match
+   `GOOGLE_ALLOWED_DOMAIN`
+6. **User check**: The email must belong to an existing gateway user (users are never created at sign-in)
 
 ## Security Considerations
 
@@ -247,7 +249,7 @@ Without state:
 3. Victim's session linked to attacker's account
 
 With state:
-1. Gateway generates random state, stores in session
+1. Gateway generates random state, stores it in a short-lived cookie
 2. State included in authorization request
 3. State returned with callback
 4. Gateway verifies state matches → CSRF blocked
@@ -274,7 +276,7 @@ Rack Gateway handles tokens securely:
 | Authorization code | Memory only | One-time use, exchanged immediately |
 | Access token | Not stored | Only used for immediate API calls |
 | ID token | Validated, discarded | Identity extracted, token not needed |
-| Session token | HTTP-only cookie | Prevents JavaScript access |
+| Session token | HTTP-only cookie (web); the CLI's config file, readable only by you (CLI) | Prevents JavaScript access |
 
 ## How Rack Gateway Uses OAuth
 
@@ -286,28 +288,30 @@ GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=your-client-secret
 GOOGLE_ALLOWED_DOMAIN=example.com  # Restrict to your organization
 
-# Generated automatically
-REDIRECT_URI=https://gateway.example.com/auth/google/callback
+DOMAIN=gateway.example.com  # The gateway's redirect URIs are built from it
 ```
+
+The redirect URIs to register with Google are `https://<DOMAIN>/api/v1/auth/web/callback` (web) and
+`https://<DOMAIN>/api/v1/auth/cli/callback` (CLI).
 
 ### Login Flow
 
-1. User visits Gateway and clicks "Sign in with Google"
+1. User visits Gateway and clicks **Continue with Google**
 2. Gateway redirects to Google with PKCE challenge
 3. User authenticates with Google (password + MFA)
 4. Google redirects back with authorization code
 5. Gateway exchanges code for ID token
-6. Gateway validates token and checks domain
-7. Gateway creates session, issues cookie
+6. Gateway validates the token, the domain and that the user exists
+7. Gateway asks for its own MFA (unless the browser is trusted), creates a session, and issues the cookie
 8. User is now authenticated
 
 ### Session Management
 
 After OAuth login, Rack Gateway manages its own sessions:
 
-- Session token stored in HTTP-only cookie
+- Session token stored in HTTP-only cookie (web) or the CLI's config file
 - Session validated on each request
-- Session expires after configurable timeout
+- Web sessions expire after a configurable idle timeout; CLI sessions after 90 days without use
 - No continuous connection to Google required
 
 This means:
@@ -346,5 +350,5 @@ The protocol has many options, but the authorization code flow with PKCE is stra
 ## Further Reading
 
 - [OAuth Setup](/configuration/oauth-setup/) - Configure Google OAuth for Rack Gateway
-- [Session Management](/configuration/session-management/) - Session policies and timeouts
+- [Sessions](/security/authentication/sessions/) - Session policies and timeouts
 - [Authentication Flow](/security/authentication/oauth-flow/) - Technical implementation details

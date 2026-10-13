@@ -13,7 +13,7 @@ These flags work with any command:
 
 | Flag | Short | Description |
 |------|-------|-------------|
-| `--rack` | `-r` | Override the current rack |
+| `--rack` | `-r` | Override the current rack (deploy approval commands accept a comma-separated list, or `all`) |
 | `--config` | | Override config directory |
 | `--api-token` | | Use API token for authentication |
 | `--mfa-code` | | Provide MFA code for step-up auth |
@@ -27,28 +27,35 @@ These flags work with any command:
 Authenticate with a gateway via OAuth.
 
 ```bash
-rack-gateway login <rack-alias> <gateway-url>
+rack-gateway login [rack-alias] [gateway-url] [flags]
 ```
 
 **Arguments:**
 - `rack-alias` - A name you choose for this rack (e.g., `production`, `staging`)
 - `gateway-url` - The gateway's URL (e.g., `https://gateway.example.com`)
 
+With no arguments it signs in again to the current rack; with only a rack alias, to that configured rack.
+
+**Flags:**
+- `--no-open` - Print the login URL instead of opening a browser
+- `--auth-file` - Also write the login URL to a file, for automation
+
 **Example:**
 ```bash
 rack-gateway login production https://gateway.example.com
+rack-gateway login            # sign in again to the current rack
 ```
 
 ### logout
 
-Revoke your session and remove local credentials.
+Remove the rack, with its URL and session token, from your local config. This doesn't revoke the session on the
+gateway: revoke it under your sessions in the web UI.
 
 ```bash
 rack-gateway logout [flags]
 ```
 
-**Flags:**
-- `--rack, -r` - Logout from a specific rack (default: current rack)
+Use the global `--rack` flag to log out of another rack.
 
 **Example:**
 ```bash
@@ -61,21 +68,22 @@ rack-gateway logout -r staging
 Test your authentication status.
 
 ```bash
-rack-gateway test-auth [mfa|otp|webauthn]
+rack-gateway test-auth [mfa]
 ```
 
 **Example:**
 ```bash
-rack-gateway test-auth
-rack-gateway test-auth mfa
-rack-gateway test-auth webauthn
+rack-gateway test-auth                            # Test the session (or RACK_GATEWAY_API_TOKEN)
+rack-gateway test-auth mfa                        # Also verify your preferred MFA method
+rack-gateway test-auth mfa --mfa-method webauthn  # Verify a specific method
 ```
 
 ## Rack Management Commands
 
 ### rack
 
-Show current rack configuration.
+Show the current rack and your login. Its subcommands (`info`, `logs`, `params`, `ps`, `releases`, `scale`,
+`update`) act on the rack itself.
 
 ```bash
 rack-gateway rack
@@ -84,9 +92,9 @@ rack-gateway rack
 **Output:**
 ```
 Current rack: production
-URL: https://gateway.example.com
-User: developer@company.com
-Role: deployer
+Gateway URL: https://gateway.example.com
+Status: Logged in as developer@company.com
+Token expires: 2026-12-01T10:00:00Z
 ```
 
 ### racks
@@ -99,9 +107,9 @@ rack-gateway racks
 
 **Output:**
 ```
-  RACK        URL                               USER
-* production  https://gateway-prod.example.com  developer@company.com
-  staging     https://gateway-staging.example.com  developer@company.com
+Configured racks:
+* production
+  staging
 ```
 
 ### switch
@@ -119,7 +127,12 @@ rack-gateway switch staging
 
 ## Convox Commands
 
-These commands are proxied to the Convox rack API. They work the same as the native `convox` CLI commands.
+These commands are proxied to the Convox rack API. They work the same as the native `convox` CLI commands, for the
+rack API routes the gateway forwards. `certs`, `registries`, `resources`, `instances keyroll`, `instances terminate`
+and `apps cancel` are refused (see [Permissions](/security/rbac/permissions/#rack-api-routes)).
+
+Commands that take `-a, --app` find the app from the flag, then `CONVOX_APP`, then a `.convox/app` file in the
+current directory or a parent, then the current directory's name.
 
 ### apps
 
@@ -139,12 +152,14 @@ rack-gateway build [flags]
 
 **Flags:**
 - `-a, --app` - Application name
-- `-d, --description` - Build description
-- `--manifest` - Path to convox.yml (default: `convox.yml`)
+- `--description` - Build description
+- `-m, --manifest` - Path to the manifest (default: `convox.yml`)
+- `-f, --file` - Path to the Dockerfile
+- `--no-cache` - Build without the cache
 
 **Example:**
 ```bash
-rack-gateway build -a myapp -d "Deploy v1.2.3"
+rack-gateway build -a myapp --description "Deploy v1.2.3"
 ```
 
 ### builds
@@ -165,12 +180,15 @@ rack-gateway deploy [flags]
 
 **Flags:**
 - `-a, --app` - Application name
-- `-d, --description` - Deploy description
-- `--manifest` - Path to convox.yml
+- `--description` - Build description
+- `-m, --manifest` - Path to the manifest
+- `-f, --file` - Path to the Dockerfile
+- `--no-cache` - Build without the cache
+- `--wait` - Wait for the deployment to finish
 
 **Example:**
 ```bash
-rack-gateway deploy -a myapp
+rack-gateway deploy -a myapp --wait
 ```
 
 ### env
@@ -182,11 +200,14 @@ rack-gateway env [command] -a <app>
 ```
 
 **Subcommands:**
-- `rack-gateway env -a <app>` - List environment variables
-- `rack-gateway env set VAR=value -a <app>` - Set a variable
-- `rack-gateway env unset VAR -a <app>` - Remove a variable
+- `rack-gateway env -a <app>` - List environment variables (secret and protected values masked)
+- `rack-gateway env get VAR -a <app>` - Show one variable. `--unmask` shows a secret value (needs `convox:secret:read`
+  and a step-up)
+- `rack-gateway env set VAR=value -a <app>` - Set variables
+- `rack-gateway env unset VAR -a <app>` - Remove variables
+- `rack-gateway env edit -a <app>` - Edit the variables in `$EDITOR`
 
-**Flags (`set` and `unset`):**
+**Flags (`set`, `unset` and `edit`):**
 - `--promote` - Promote the new release
 - `--allow-protected` - Change or remove the protected env vars named in the command (admins only, see below)
 
@@ -194,7 +215,7 @@ rack-gateway env [command] -a <app>
 ```bash
 rack-gateway env -a myapp
 rack-gateway env set DATABASE_URL=postgres://... -a myapp
-rack-gateway env unset DEBUG -a myapp
+rack-gateway env unset DEBUG -a myapp --promote
 ```
 
 #### Protected env vars
@@ -230,13 +251,13 @@ rack-gateway env unset LEGACY_API_URL --allow-protected -a myapp
 Execute a command in a running process.
 
 ```bash
-rack-gateway exec <process> <command> -a <app>
+rack-gateway exec <process-id> <command> -a <app>
 ```
 
 **Example:**
 ```bash
-rack-gateway exec web "rails console" -a myapp
-rack-gateway exec web bash -a myapp
+rack-gateway ps -a myapp                      # find the process ID
+rack-gateway exec web-6f8b9c-x2kq4 bash -a myapp
 ```
 
 ### logs
@@ -249,8 +270,8 @@ rack-gateway logs -a <app> [flags]
 
 **Flags:**
 - `-f, --follow` - Stream logs in real-time
-- `--since` - Show logs since timestamp (e.g., `1h`, `30m`)
-- `--filter` - Filter logs by process type
+- `--since` - Show logs since a time or duration (e.g., `1h`, `30m`)
+- `--filter` - Only show lines matching this filter
 
 **Example:**
 ```bash
@@ -274,14 +295,6 @@ List releases for an application.
 rack-gateway releases -a <app>
 ```
 
-### resources
-
-List resources (databases, Redis, etc.).
-
-```bash
-rack-gateway resources
-```
-
 ### restart
 
 Restart an application.
@@ -295,8 +308,14 @@ rack-gateway restart -a <app>
 Run a one-off process.
 
 ```bash
-rack-gateway run <process> <command> -a <app>
+rack-gateway run <service> <command> -a <app>
 ```
+
+**Flags:**
+- `-d, --detach` - Don't attach to the process
+- `--release` - Run a specific release
+- `--env` - Extra environment variables
+- `--entrypoint` - Override the entrypoint
 
 **Example:**
 ```bash
@@ -308,17 +327,18 @@ rack-gateway run web "rake db:migrate" -a myapp
 Scale application processes.
 
 ```bash
-rack-gateway scale <process>=<count> -a <app> [flags]
+rack-gateway scale <service> -a <app> [flags]
 ```
 
 **Flags:**
+- `--count` - Number of processes
 - `--cpu` - CPU units
 - `--memory` - Memory in MB
 
 **Example:**
 ```bash
-rack-gateway scale web=3 -a myapp
-rack-gateway scale worker=2 --memory 512 -a myapp
+rack-gateway scale web --count 3 -a myapp
+rack-gateway scale worker --count 2 --memory 512 -a myapp
 ```
 
 ## Gateway-Specific Commands
@@ -332,16 +352,17 @@ rack-gateway api-token [command]
 ```
 
 **Subcommands:**
-- `list` - List API tokens (admin only)
+- `list` - List your API tokens (admins see everyone's)
 - `get` - Show a specific token
-- `create` - Create a new token
+- `create` - Create a new token (`--name`, `--role` or `--permission`, `--expires-at`, `--user` for admins,
+  `--output text|json|token`)
 - `delete` - Delete a token
 
 **Example:**
 ```bash
 rack-gateway api-token list
 rack-gateway api-token get <token-id>
-rack-gateway api-token create --name "CI/CD" --role deployer
+rack-gateway api-token create --name "CI/CD" --role cicd
 rack-gateway api-token delete <token-id>
 ```
 
@@ -354,11 +375,11 @@ rack-gateway deploy-approval [command]
 ```
 
 **Subcommands:**
-- `list` - List pending approvals
-- `approve` - Approve a request
-- `request` - Create a new approval request
+- `list` - List requests (`--open` for pending only, `--status`, `--app`, `--commit`)
+- `approve` - Approve a request, by ID or by app and commit
+- `request` - Create a new approval request (`--wait` blocks until it's decided)
 - `show` - Show request details
-- `wait` - Wait for a request decision
+- `wait` - Wait for requests for a commit to appear, and show (or with `--approve`, approve) them
 
 **Example:**
 ```bash
@@ -367,8 +388,10 @@ rack-gateway deploy-approval approve <request-id>
 rack-gateway deploy-approval approve --app web,proxy --commit <sha> --rack us,eu
 rack-gateway deploy-approval show <request-id>
 rack-gateway deploy-approval request --app myapp --git-commit <sha> --message "Deploy"
-rack-gateway deploy-approval wait <request-id>
+rack-gateway deploy-approval wait --commit <sha> --approve
 ```
+
+See [Deploy Approvals](/integrations/deploy-approvals/workflow/) for the full workflow.
 
 ### gateway
 
@@ -380,9 +403,16 @@ rack-gateway gateway
 
 **Output:**
 ```
-Gateway URL: https://gateway.example.com
-Gateway Version: v0.1.0
-Rack Alias: production
+Gateway URL:     https://gateway.example.com
+Gateway Version: v0.1.10
+
+Rack Name:       production
+Rack Alias:      production
+Rack Host:       https://api.production-system.svc.cluster.local:5443
+
+Logged in as:    developer@company.com
+Name:            Developer
+Roles:           deployer
 ```
 
 ### version
@@ -395,9 +425,9 @@ rack-gateway version
 
 **Output:**
 ```
-CLI version:     v0.1.0
-Gateway version: v0.1.0
-Rack version:    3.18.4
+client: v0.1.10
+gateway: v0.1.10
+server: 3.23.3
 ```
 
 ### web
@@ -441,7 +471,7 @@ rack-gateway logs -a myapp -r production -f
 
 **Scale for high traffic:**
 ```bash
-rack-gateway scale web=5 -a myapp -r production
+rack-gateway scale web --count 5 -a myapp -r production
 ```
 
 **Run migrations:**

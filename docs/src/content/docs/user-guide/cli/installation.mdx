@@ -7,45 +7,22 @@ import { Aside, Tabs, TabItem, Steps } from '@astrojs/starlight/components';
 
 The `rack-gateway` CLI is distributed as a single binary. Choose the installation method that works best for your platform.
 
-## Download from GitHub Releases
+## Download from GitHub Releases (Linux x86_64)
 
-<Tabs>
-  <TabItem label="macOS">
-    ```bash
-    # For Apple Silicon (M1/M2/M3)
-    curl -L https://github.com/docspring/rack-gateway/releases/latest/download/rack-gateway-darwin-arm64 -o rack-gateway
-    chmod +x rack-gateway
-    sudo mv rack-gateway /usr/local/bin/
+Each release publishes a Linux x86_64 build with a checksum and a signed build provenance attestation:
 
-    # For Intel Macs
-    curl -L https://github.com/docspring/rack-gateway/releases/latest/download/rack-gateway-darwin-amd64 -o rack-gateway
-    chmod +x rack-gateway
-    sudo mv rack-gateway /usr/local/bin/
-    ```
-  </TabItem>
-  <TabItem label="Linux">
-    ```bash
-    # For x86_64
-    curl -L https://github.com/docspring/rack-gateway/releases/latest/download/rack-gateway-linux-amd64 -o rack-gateway
-    chmod +x rack-gateway
-    sudo mv rack-gateway /usr/local/bin/
+```bash
+VERSION=v0.1.10  # see https://github.com/docspring/rack-gateway/releases
+curl -fsSLO https://github.com/docspring/rack-gateway/releases/download/$VERSION/rack-gateway-linux-amd64.tar.gz
+curl -fsSLO https://github.com/docspring/rack-gateway/releases/download/$VERSION/rack-gateway-linux-amd64.tar.gz.sha256
+sha256sum --check rack-gateway-linux-amd64.tar.gz.sha256
+gh attestation verify rack-gateway-linux-amd64.tar.gz --repo DocSpring/rack-gateway
+tar xzf rack-gateway-linux-amd64.tar.gz
+sudo install -m 0755 rack-gateway-linux-amd64 /usr/local/bin/rack-gateway
+```
 
-    # For ARM64
-    curl -L https://github.com/docspring/rack-gateway/releases/latest/download/rack-gateway-linux-arm64 -o rack-gateway
-    chmod +x rack-gateway
-    sudo mv rack-gateway /usr/local/bin/
-    ```
-  </TabItem>
-  <TabItem label="Windows">
-    ```powershell
-    # Download the Windows binary
-    Invoke-WebRequest -Uri "https://github.com/docspring/rack-gateway/releases/latest/download/rack-gateway-windows-amd64.exe" -OutFile "rack-gateway.exe"
-
-    # Move to a directory in your PATH, or add the current directory to PATH
-    Move-Item rack-gateway.exe C:\Users\YourName\bin\
-    ```
-  </TabItem>
-</Tabs>
+The release build has no WebAuthn support (no CGO), so it verifies MFA with TOTP, YubiKey OTP or backup codes. To
+use a security key from the CLI, or on macOS and other platforms, [build from source](#building-from-source).
 
 ## Verify Installation
 
@@ -56,9 +33,9 @@ rack-gateway version
 You should see output like:
 
 ```
-CLI version:     v0.1.0
-Gateway version: (not connected)
-Rack version:    (not connected)
+client: v0.1.10
+gateway: (not logged in)
+server: (not logged in)
 ```
 
 ## Shell Completion
@@ -118,11 +95,13 @@ cg logs -a myapp
 
 ## WebAuthn Support (Optional)
 
-For hardware security key (WebAuthn/FIDO2) support in the CLI, you may need additional system libraries on Linux:
+Security keys (WebAuthn/FIDO2) in the CLI need a build with libfido2. Install it before building from source:
 
 <Tabs>
   <TabItem label="macOS">
-    No additional dependencies required. macOS includes libfido2 support.
+    ```bash
+    brew install libfido2
+    ```
   </TabItem>
   <TabItem label="Ubuntu/Debian">
     ```bash
@@ -142,7 +121,8 @@ For hardware security key (WebAuthn/FIDO2) support in the CLI, you may need addi
 </Tabs>
 
 <Aside type="note" title="WebAuthn is Optional">
-WebAuthn support is optional. If your organization uses TOTP (authenticator apps) for MFA, you don't need these libraries. The CLI will fall back to TOTP automatically if WebAuthn is unavailable.
+WebAuthn support is optional. Without it (the release build, or `task go:build:cli:nofido`), the CLI offers your
+other MFA methods: an authenticator app (TOTP), a YubiKey OTP or a backup code.
 </Aside>
 
 ## Building from Source
@@ -153,7 +133,8 @@ If you prefer to build from source:
 
 1. **Prerequisites**
    - Go 1.26 or later
-   - Git
+   - Git and [Task](https://taskfile.dev)
+   - libfido2 (see [WebAuthn Support](#webauthn-support-optional)), unless you build without WebAuthn
 
 2. **Clone and build**
    ```bash
@@ -187,7 +168,7 @@ task go:build:cli:nofido
 
 ## Updating
 
-To update to the latest version, simply re-run the download command for your platform, or rebuild from source with:
+To update, download the new release (Linux x86_64), or rebuild from source:
 
 ```bash
 cd rack-gateway

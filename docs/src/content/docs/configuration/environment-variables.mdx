@@ -25,8 +25,7 @@ and in the end-to-end tests:
 | `APP_SECRET_KEY` or `AUDIT_HMAC_SECRET` set to a development value, or shorter than 32 bytes | The development values are published in the repository, so anyone could forge sessions or recompute audit hashes, and a short secret can be guessed. The server refuses them when it starts |
 
 They only work in a build compiled with the `testbypass` Go build tag, which the development and E2E stacks use. The
-published Docker image and the published image is built without it, so they can't honour these settings: a release
-build refuses to start while any of them is set, and the error names each one. Remove them from the environment and
+published Docker image is built without it, so it can't honour these settings: a release build refuses to start while any of them is set, and the error names each one. Remove them from the environment and
 restart. `rack-gateway-api build-info` shows whether a binary has the bypasses compiled in.
 
 A `testbypass` build refuses them too when its database is marked `production`. The first time a gateway starts
@@ -40,7 +39,7 @@ against a database, it marks the database as `production`, or `development` in a
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `PORT` | `8080` | TCP port the API listens on |
-| `DOMAIN` | (required) | Gateway domain for OAuth redirect URLs |
+| `DOMAIN` | (required) | The gateway's host name, e.g. `gateway.example.com`. It sets the public URL (`https://<DOMAIN>`) used for OAuth redirects, links in emails and Slack, and the WebAuthn origin, and requests for any other `Host` or `Origin` are refused |
 | `DEV_MODE` | `false` | Development mode (`testbypass` builds only, see [Test Bypasses](#test-bypasses)) |
 | `APP_SECRET_KEY` | (required) | Secret for sessions and CSRF: at least 32 bytes (`openssl rand -base64 32`) |
 | `COLUMN_ENCRYPTION_KEY` | (required) | Key that encrypts stored secrets: standard base64 of exactly 32 random bytes (`openssl rand -base64 32`). See [Column Encryption](#column-encryption) |
@@ -48,6 +47,8 @@ against a database, it marks the database as `production`, or `development` in a
 | `TRUSTED_PROXY_CIDRS` | | Comma-separated CIDRs of the reverse proxies in front of the gateway (e.g. an ingress). `X-Forwarded-For` is only believed from these, and the client IP is the right-most address that isn't one of them. Leave empty when clients connect directly; set it whenever there is a proxy, or audit logs, rate limits and security emails all see the proxy's address |
 | `LOG_LEVEL` | `info` | Log level (`debug`, `info`, `warn`, `error`) |
 | `DEBUG_TOPICS` | | Comma-separated debug topics |
+| `RATE_LIMIT_RPS` | `10` | Requests per second allowed from one client IP |
+| `RATE_LIMIT_BURST` | `20` | Burst size for the per-IP rate limit |
 
 ## Column Encryption
 
@@ -101,17 +102,20 @@ but the upgrade sweep encrypts any it finds (see **Existing data is upgraded at 
 | `DEPLOYER_USERS` | Comma-separated deployer emails |
 | `OPERATIONS_USERS` | Comma-separated ops emails |
 
+Every start creates the listed users that don't exist yet, and resets each listed user's roles to that list's role,
+so a role you change in the web UI for a seeded user reverts at the next start. Seeding writes no audit entries.
+
 ## Convox Rack
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `RACK_HOST` | | Convox rack API URL |
+| `RACK_HOST` | | Convox rack API URL. Inside a Convox v3 rack it can be left unset: the gateway then uses `https://api.<RACK>-system.svc.cluster.local:5443` |
 | `RACK_TOKEN` | | Convox rack API token |
 | `RACK_USERNAME` | `convox` | Basic auth username |
-| `RACK` | `default` | Rack name (internal identifier) |
-| `RACK_ALIAS` | `RACK` | Short alias (user-facing) |
+| `RACK` | `default` | Rack name (internal identifier). Convox sets it for apps running on a rack |
+| `RACK_ALIAS` | `RACK` | Short alias (user-facing). Authenticator apps show TOTP entries as `Rack Gateway (<RACK_ALIAS>)` |
 | `RACK_DISPLAY_NAME` | `RACK_ALIAS` | Human-friendly display name; every email subject and Slack message starts with `Rack Gateway (<name>)` |
-| `ENABLE_RACK_TLS_PINNING` | `false` | Enable rack TLS pinning |
+| `ENABLE_RACK_TLS_PINNING` | `false` | Pin the rack API's self-signed certificate on first use. Off by default: the Convox rack API generates a new certificate every time it restarts, so a pinned certificate stops matching after each rack update |
 
 ## Database
 
@@ -120,7 +124,7 @@ but the upgrade sweep encrypts any it finds (see **Existing data is upgraded at 
 | `RGW_DATABASE_URL` | Preferred Postgres URL |
 | `GATEWAY_DATABASE_URL` | Alternate Postgres URL |
 | `DATABASE_URL` | Alternate Postgres URL |
-| `ADMIN_DATABASE_URL` | Admin URL for migrations/reset |
+| `ADMIN_DATABASE_URL` | Admin URL for `migrate` and `reset-db` (falls back to the URLs above) |
 | `PGHOST` / `PGPORT` / `PGUSER` / `PGPASSWORD` / `PGDATABASE` | libpq connection fields |
 | `PGSSLMODE` | SSL mode override |
 
@@ -147,8 +151,8 @@ See [Connection Pool](/deployment/database-setup/#connection-pool) for sizing.
 |----------|-------------|
 | `YUBICO_CLIENT_ID` | YubiKey OTP client ID |
 | `YUBICO_SECRET_KEY` | YubiKey OTP secret |
-| `WEBAUTHN_RP_ID` | WebAuthn RPID |
-| `WEBAUTHN_ORIGIN` | WebAuthn origin |
+| `WEBAUTHN_RP_ID` | WebAuthn relying party ID (default: `DOMAIN`) |
+| `WEBAUTHN_ORIGIN` | WebAuthn origin (default: the gateway's public URL, `https://<DOMAIN>`) |
 
 ## Deploy Approvals
 
@@ -216,15 +220,16 @@ See [Deploy Approvals](/integrations/deploy-approvals/) for common keys.
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `AUDIT_HMAC_SECRET` | (required in prod) | HMAC chain secret: at least 32 bytes (`openssl rand -base64 32`). Without it (`DEV_MODE` only) the gateway doesn't verify its audit log. |
-| `AUDIT_ANCHOR_BUCKET` | | S3 bucket for anchors |
-| `AUDIT_ANCHOR_CHAIN_ID` | | Chain identifier |
-| `AUDIT_ANCHOR_RETENTION_DAYS` | `400` | Object Lock retention |
+| `AUDIT_ANCHOR_BUCKET` | | S3 bucket for anchors. Unset, no anchors are written |
+| `AUDIT_ANCHOR_CHAIN_ID` | | Chain identifier, the anchors' key prefix. Required with `AUDIT_ANCHOR_BUCKET` |
+| `AUDIT_ANCHOR_RETENTION_DAYS` | `400` | Not used for retention: anchors are locked by the bucket's default Object Lock rule, so set the retention there. The gateway only shows this value in anchor write errors |
 | `AUDIT_ANCHOR_INTERVAL_MINUTES` | `60` | Anchor interval |
 | `AUDIT_HASH_V2_FROM` | | Chain index where hash v2 starts, recorded after upgrading, for the hourly verification and `verify-audit` (see [Verification](/deployment/terraform/s3-worm-storage/#pinning-where-hash-v2-starts)). The gateway refuses to start when it isn't a chain index. |
 | `AWS_ENDPOINT_URL_S3` | | S3 endpoint override, e.g. MinIO (`testbypass` builds only) |
-| `AWS_ACCESS_KEY_ID` | | AWS access key |
-| `AWS_SECRET_ACCESS_KEY` | | AWS secret key |
-| `AWS_REGION` | `us-east-1` | AWS region |
+
+The anchor writer uses the AWS SDK's default credential chain: on Convox, the app's IAM role (the
+[Terraform module](/deployment/terraform/s3-worm-storage/) creates it), or `AWS_ACCESS_KEY_ID`,
+`AWS_SECRET_ACCESS_KEY` and `AWS_REGION` elsewhere.
 
 ## Heartbeats
 
@@ -243,10 +248,10 @@ monitoring service's key, so set them as secrets. An invalid value stops the gat
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `POSTMARK_API_TOKEN` | | Postmark API token |
-| `POSTMARK_FROM` | `no-reply@{domain}` | Sender |
+| `POSTMARK_FROM` | `no-reply@<GOOGLE_ALLOWED_DOMAIN>` | Sender |
 | `POSTMARK_STREAM` | `outbound` | Message stream |
 | `POSTMARK_API_BASE` | `https://api.postmarkapp.com` | API base override (`testbypass` builds only) |
-| `DEV_EMAIL_LOG` | `false` | Log emails instead of dropping them when no Postmark token is set |
+| `DEV_EMAIL_LOG` | `false` | `true` logs emails instead of dropping them when `POSTMARK_API_TOKEN` isn't set (always on with `DEV_MODE`) |
 
 ## Integrations
 
@@ -264,7 +269,7 @@ monitoring service's key, so set them as secrets. An invalid value stops the gat
 |----------|---------|-------------|
 | `SENTRY_DSN` | | Backend DSN |
 | `SENTRY_ENVIRONMENT` | | Environment name |
-| `SENTRY_RELEASE` | | Release tag |
+| `SENTRY_RELEASE` | `RELEASE` | Release tag (Convox sets `RELEASE` to the release ID) |
 | `SENTRY_JS_DSN` | | Frontend DSN |
 | `SENTRY_JS_TRACES_SAMPLE_RATE` | `0` | Frontend perf rate |
 | `ENABLE_SENTRY_TEST_BUTTONS` | `false` | Show test UI |
@@ -276,7 +281,8 @@ monitoring service's key, so set them as secrets. An invalid value stops the gat
 | `RACK_GATEWAY_RACK` | Default rack name |
 | `RACK_GATEWAY_URL` | Gateway URL for `RACK_GATEWAY_API_TOKEN`; without one it must match the rack's configured URL. Not allowed with several racks |
 | `RACK_GATEWAY_API_TOKEN` | API token for automation |
-| `GATEWAY_CLI_CONFIG_DIR` | Override CLI config dir |
+| `GATEWAY_CLI_CONFIG_DIR` | Override CLI config dir (default `~/.config/rack-gateway`) |
+| `CONVOX_APP` | Default app for commands that take `--app` (after `--app` and before `.convox/app`) |
 
 ## Redaction
 
@@ -286,6 +292,20 @@ monitoring service's key, so set them as secrets. An invalid value stops the gat
 | `RGW_APP_<APP>_SETTING_AUDIT_VISIBLE_ENV_VARS` | The app's env vars whose values audit logs and Slack show (`audit_visible_env_vars`). Every other value is `[REDACTED]`, and secret and protected keys always are |
 
 See [Secret Redaction](/security/compliance/audit-trail/#secret-redaction).
+
+## Database Maintenance
+
+| Variable | Description |
+|----------|-------------|
+| `RESET_RACK_GATEWAY_DATABASE` | Must be `DELETE_ALL_DATA` for `rack-gateway-api reset-db` to run |
+| `DISABLE_DATABASE_ENVIRONMENT_CHECK` | Lets `reset-db` reset a database marked `production` (or unmarked, outside `DEV_MODE`). A database marked `development` can always be reset |
+
+## Development
+
+| Variable | Description |
+|----------|-------------|
+| `FORCE_CSP_IN_DEV` | `true` sends the Content Security Policy in `DEV_MODE` too (the E2E and preview stacks set it) |
+| `WEB_DEV_SERVER_URL` | Vite dev server the gateway proxies the web UI to in development |
 
 ## Development Ports
 

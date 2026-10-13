@@ -219,7 +219,7 @@ rack-gateway migrate
 RESET_RACK_GATEWAY_DATABASE=DELETE_ALL_DATA rack-gateway reset-db
 ```
 
-See `docs/DATABASE_MAINTENANCE.md` for details.
+See `docs/src/content/docs/operations/database-maintenance.mdx` for details.
 
 ## Testing
 
@@ -241,7 +241,7 @@ Tests complete CLI flows with real gateway server.
 
 ## Configuration
 
-All configuration via environment variables. See `docs/CONFIGURATION.md` for complete list.
+All configuration via environment variables. See `docs/src/content/docs/configuration/environment-variables.mdx` for complete list.
 
 **Critical variables:**
 

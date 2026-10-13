@@ -34,13 +34,13 @@ rack-gateway racks
 
 Output:
 ```
-  RACK        URL                                  USER
-* production  https://gateway-prod.example.com     developer@company.com
-  staging     https://gateway-staging.example.com  developer@company.com
-  eu-prod     https://gateway-eu.example.com       developer@company.com
+Configured racks:
+* production
+  staging
+  eu-prod
 ```
 
-The `*` indicates the current rack.
+The `*` marks the current rack.
 
 ## Switching Racks
 
@@ -52,7 +52,10 @@ rack-gateway switch staging
 
 # Verify
 rack-gateway rack
-# Output: Current rack: staging (https://gateway-staging.example.com)
+# Current rack: staging
+# Gateway URL: https://gateway-staging.example.com
+# Status: Logged in as developer@company.com
+# Token expires: 2026-12-01T10:00:00Z
 ```
 
 ## Per-Command Rack Override
@@ -70,7 +73,8 @@ rack-gateway deploy -r staging
 rack-gateway logs -a myapp -r eu-prod
 ```
 
-The `--rack` flag doesn't change your default; it only affects that one command.
+The `--rack` flag doesn't change your default; it only affects that one command. Deploy approval commands also
+take a comma-separated list of racks, or `all`.
 
 ## Environment Variable Override
 
@@ -95,7 +99,7 @@ Your rack configurations are stored in `~/.config/rack-gateway/config.json`:
   "gateways": {
     "production": {
       "url": "https://gateway-prod.example.com",
-      "token": "rgw_sess_abc123...",
+      "token": "Fz2kQ...",
       "email": "developer@company.com",
       "expires_at": "2024-02-15T10:30:00Z",
       "session_id": 1024,
@@ -106,7 +110,7 @@ Your rack configurations are stored in `~/.config/rack-gateway/config.json`:
     },
     "staging": {
       "url": "https://gateway-staging.example.com",
-      "token": "rgw_sess_def456...",
+      "token": "pR7wD...",
       "email": "developer@company.com",
       "expires_at": "2024-02-15T10:30:00Z",
       "session_id": 2048,
@@ -118,14 +122,13 @@ Your rack configurations are stored in `~/.config/rack-gateway/config.json`:
 
 ## Removing a Rack
 
-To remove a rack configuration, log out from it:
+`logout` removes a rack, with its URL and session token, from your config:
 
 ```bash
-# Logout from staging (removes session but keeps config)
 rack-gateway logout -r staging
 ```
 
-To completely remove a rack, edit the config file directly or log in again with the same alias to replace it.
+It doesn't revoke the session on that gateway; revoke it under your sessions in the web UI.
 
 ## Updating a Gateway URL
 
@@ -173,14 +176,14 @@ cgs deploy    # Deploy to staging
 
 ### CI/CD Configuration
 
-For CI/CD, use API tokens with `RACK_GATEWAY_API_TOKEN` instead of managing OAuth sessions:
+For CI/CD, use an API token instead of a login. CI has no config file, so give it the gateway URL too:
 
 ```bash
 # In your CI environment
-export RACK_GATEWAY_API_TOKEN="rgw_token_..."
-export RACK_GATEWAY_RACK="production"
+export RACK_GATEWAY_API_TOKEN="rgw_..."
+export RACK_GATEWAY_URL="https://gateway-prod.example.com"
 
-rack-gateway deploy
+rack-gateway deploy --app myapp --wait
 ```
 
 ## Precedence Order
@@ -189,14 +192,15 @@ When determining which rack to use:
 
 1. `--rack` flag (highest priority)
 2. `RACK_GATEWAY_RACK` environment variable
-3. `current` in config file (default)
+3. `RACK_GATEWAY_URL` (an unnamed rack, used with `RACK_GATEWAY_API_TOKEN`)
+4. `current` in config file (default)
 
 ## Troubleshooting
 
 ### "Rack not found"
 
 ```
-Error: rack "production" not found
+Error: rack production not found. Use 'rack-gateway racks' to list available racks
 ```
 
 The alias doesn't exist in your config. List available racks:
@@ -206,21 +210,17 @@ rack-gateway racks
 
 ### "Session expired" on one rack
 
-Sessions expire independently per rack. Re-login to the affected rack:
+Sessions expire independently per rack. Sign in to the affected rack again (its URL is kept):
 ```bash
-rack-gateway login production https://gateway-prod.example.com
+rack-gateway login production
 ```
 
 ### Different users on different racks
 
 It's normal to have different users or roles on different racks. Each rack maintains its own session:
 
-```bash
-rack-gateway racks
-#   RACK        URL                             USER
-# * production  https://gateway-prod.example.com  admin@company.com
-#   staging     https://gateway-staging.example.com  developer@company.com
-```
+`rack-gateway rack` shows who you're logged in as on the current rack (it always shows the current rack, whatever
+`--rack` says); `switch` to another rack to see its login.
 
 ## Next Steps
 

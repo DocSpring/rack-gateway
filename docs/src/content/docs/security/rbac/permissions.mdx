@@ -53,6 +53,12 @@ Resources that map to Convox API operations:
 | `registry` | Docker registries |
 | `release` | Application releases |
 | `resource` | Convox resources (databases, etc.) |
+| `secret` | Secret env var values (`convox:secret:read` reveals them) |
+
+The gateway forwards only the rack API routes it has a permission for (see
+[Rack API Routes](#rack-api-routes)). Requests to any other route are refused with `404` and logged as denied, so
+`certs`, `registries`, `resources`, `instances keyroll`, `instances terminate` and `apps cancel` don't work
+through the gateway, whatever the caller's role.
 
 ### Gateway Resources
 
@@ -65,9 +71,15 @@ Resources specific to the gateway:
 | `deploy_approval_request` | Deploy approval requests |
 | `integration` | Third-party integrations |
 | `job` | Background jobs |
-| `secret` | Gateway secrets |
-| `setting` | Gateway configuration settings |
+| `setting` | A single gateway or app setting |
+| `setting_group` | A group of settings saved together (one settings form) |
 | `user` | Gateway users |
+
+### Security Resources
+
+| Resource | Description |
+|----------|-------------|
+| `secret` | `security:secret:update` refreshes the pinned rack TLS certificate |
 
 ### Auth Resources
 
@@ -78,7 +90,7 @@ Authentication and MFA resources:
 | `auth` | Authentication sessions |
 | `mfa_backup_codes` | MFA recovery codes |
 | `mfa_method` | MFA methods (TOTP, WebAuthn) |
-| `mfa_preferences` | MFA preferences |
+| `mfa_preferences` | Preferred MFA method |
 | `mfa_verification` | MFA verification challenges |
 | `trusted_device` | Trusted device tokens |
 
@@ -198,6 +210,7 @@ Secret values come back masked unless the caller also holds `convox:secret:read`
 | `convox:instance:list` | List instances | viewer, ops, deployer, cicd, admin |
 | `convox:instance:read` | View instance details | viewer, ops, deployer, cicd, admin |
 | `convox:rack:read` | View rack configuration | viewer, ops, deployer, cicd, admin |
+| `convox:rack:update` | Update the rack, change its parameters or scale it | admin |
 | `convox:log:read` | Stream logs | viewer, ops, deployer, admin |
 | `convox:object:create` | Upload build artifacts | deployer, admin |
 
@@ -214,13 +227,13 @@ Secret values come back masked unless the caller also holds `convox:secret:read`
 | `gateway:user:list` | View the team directory (names, emails, roles, locked status) | viewer, ops, deployer, admin |
 | `gateway:user:read` | View any user's details, sessions, lock reasons and MFA preferences | admin |
 | `gateway:user:create` | Create new user | admin |
-| `gateway:user:update` | Update user (roles, lock), revoke any user's sessions | admin |
+| `gateway:user:update` | Change a user's roles, lock or unlock them, revoke their sessions | admin |
 | `gateway:user:update_name` | Change a user's display name | admin |
 | `gateway:user:delete` | Delete user | admin |
 | `gateway:audit_log:read` | Read and export every user's audit log | admin |
 
 <Aside type="note">
-Every user may view their own details, list and revoke their own sessions, and read their own audit log without these permissions. API tokens can't use these endpoints at all.
+Every user may view their own details, list and revoke their own sessions, and read their own audit log without these permissions (revoking a session still needs MFA on that request). API tokens can't use these endpoints at all.
 </Aside>
 
 </TabItem>
@@ -268,11 +281,20 @@ Settings are controlled by key or group. See [Settings](/user-guide/web-ui/setti
 
 | Permission | Description | Roles |
 |------------|-------------|-------|
-| `gateway:integration:list` | List integrations | admin |
-| `gateway:integration:read` | View integration config | admin |
-| `gateway:integration:create` | Create integration | admin |
-| `gateway:integration:update` | Update integration | admin |
-| `gateway:integration:delete` | Delete integration | admin |
+| `gateway:integration:read` | View the Slack integration and list its channels | admin |
+| `gateway:integration:create` | Connect Slack | admin |
+| `gateway:integration:update` | Change Slack channels and alerts, send a Slack test message or a Sentry test event | admin |
+| `gateway:integration:delete` | Disconnect Slack | admin |
+
+</TabItem>
+<TabItem label="Jobs">
+
+| Permission | Description | Roles |
+|------------|-------------|-------|
+| `gateway:job:list` | List background jobs | admin |
+| `gateway:job:read` | View a background job | admin |
+| `gateway:job:update` | Retry a job | admin |
+| `gateway:job:delete` | Delete a job | admin |
 
 </TabItem>
 </Tabs>
@@ -284,7 +306,8 @@ These permissions control MFA and authentication operations:
 | Permission | Description | Notes |
 |------------|-------------|-------|
 | `auth:mfa_method:create` | Enroll new MFA method | Self-service |
-| `auth:mfa_method:update` | Update MFA method | Self-service |
+| `auth:mfa_method:update` | Rename an MFA method | Self-service |
+| `auth:mfa_preferences:update` | Choose the preferred MFA method | Self-service |
 | `auth:mfa_method:delete` | Remove MFA method | Self-service |
 | `auth:mfa_backup_codes:generate` | Generate backup codes | Self-service |
 | `auth:mfa_verification:create` | Initiate MFA challenge | System |
@@ -292,8 +315,43 @@ These permissions control MFA and authentication operations:
 | `auth:trusted_device:delete` | Remove trusted device | Self-service |
 
 <Aside type="tip">
-Auth permissions are typically handled automatically by the gateway during MFA flows. Users don't need explicit role grants for self-service MFA operations.
+Every signed-in user holds the auth permissions for their own account, whatever their role. API tokens hold none of them.
 </Aside>
+
+### Security Scope (`security:*`)
+
+| Permission | Description | Roles |
+|------------|-------------|-------|
+| `security:secret:update` | Refresh the pinned rack TLS certificate | admin |
+
+## MFA Requirements
+
+Each permission also says how recently the caller must have verified MFA. A request needs the strictest level of
+any permission it uses:
+
+| Level | What the request needs |
+|-------|------------------------|
+| None | A signed-in session |
+| Step-up | An MFA verification within the step-up window (`mfa_step_up_window_minutes`, 10 minutes by default). The CLI asks once per command |
+| Step-up once enrolled | Nothing for a user's first MFA method; step-up once they have one |
+| Always | An MFA proof verified on that request, even within the step-up window |
+
+Reads and lists need none. Any other permission needs **always** unless it's listed below:
+
+| Level | Permissions |
+|-------|-------------|
+| None | `convox:object:create`, `gateway:deploy_approval_request:create`, `auth:mfa_verification:create`, and the settings `ci_provider`, `circleci_approval_job_name`, `default_branch`, `github_post_pr_comment`, `vcs_provider`, `vcs_repo` |
+| Step-up once enrolled | `auth:mfa_method:create` |
+| Step-up | `convox:app:create`, `convox:app:update`, `convox:app:restart`, `convox:build:create`, `convox:build:update`, `convox:release:create`, `convox:release:promote`, `convox:env:set`, `convox:env:unset`, `convox:process:start`, `convox:process:exec`, `convox:process:stop`, `convox:process:terminate`, `convox:rack:update`, `convox:secret:read`, `gateway:user:update_name`, `gateway:integration:create`, `gateway:integration:update`, `gateway:integration:delete`, `gateway:job:update`, `gateway:job:delete`, the `vcs_and_ci_defaults` and `session_configuration` setting groups, the settings `allow_deploy_from_default_branch`, `approved_deploy_commands`, `audit_visible_env_vars`, `circleci_auto_approve_on_approval`, `service_image_patterns`, `verify_git_commit_mode`, and the `auth` permissions other than those above and `auth:mfa_method:delete` |
+
+So these always need MFA on the request itself: deleting apps, importing builds, creating, changing, locking and
+deleting users, revoking sessions, creating, changing and deleting API tokens, approving, rejecting and extending deploy approvals, removing an MFA method, refreshing the rack TLS certificate,
+changing protected env vars, privileged process options, and the settings that protect secrets or loosen deploy
+checks (`mfa_configuration`, `allow_destructive_actions`, `deploy_approvals`, `vcs_ci_deploy`,
+`protected_env_vars`, `secret_env_vars`, `github_verification`, `require_pr_for_branch`).
+
+API tokens can't verify MFA, so MFA levels don't apply to them; what a token may do is limited by its permissions and
+its owner's role. The levels are defined in `internal/gateway/rbac/mfa_requirements.go`.
 
 ## Wildcard Permissions
 
@@ -310,7 +368,7 @@ Wildcards match any value in that position:
 - `convox:*:read` would match all read actions
 
 <Aside type="caution" title="Admin Only">
-Wildcard permissions are reserved for the admin role. Custom roles cannot use wildcards.
+Only the admin role holds wildcard permissions. The roles are defined in code (`internal/gateway/rbac/roles_config.go`); there are no custom roles.
 </Aside>
 
 ## Permission Checking
@@ -357,10 +415,38 @@ Common API endpoints and their required permissions:
 | `/api/v1/rack-proxy/apps/:name/builds` | POST | `convox:build:create` |
 | `/api/v1/rack-proxy/apps/:name/builds/import` | POST | `convox:build:import` |
 | `/api/v1/rack-proxy/apps/:name/processes` | GET | `convox:process:list` |
-| `/api/v1/rack-proxy/apps/:name/processes/:id/exec` | POST | `convox:process:exec` |
+| `/api/v1/rack-proxy/apps/:name/processes/:id/exec` | GET (WebSocket) | `convox:process:exec` |
 | `/api/v1/apps/:app/env` | GET | `convox:env:read` |
 | `/api/v1/apps/:app/env` | PUT | `convox:env:set` |
 | `/api/v1/rack-proxy/apps/:name/releases/:id/promote` | POST | `convox:release:promote` |
+
+## Rack API Routes
+
+These are the only rack API routes the gateway forwards (under `/api/v1/rack-proxy`), from
+`internal/gateway/rbac/http_routes.go`:
+
+| Route | Permission |
+|-------|------------|
+| `GET /apps`, `GET /apps/{name}`, `GET /apps/{app}/services` | `convox:app:list`, `convox:app:read` |
+| `POST /apps` | `convox:app:create` |
+| `PUT /apps/{name}`, `PUT /apps/{app}/services/{name}` | `convox:app:update` |
+| `POST /apps/{app}/restart` | `convox:app:restart` |
+| `DELETE /apps/{name}` | `convox:app:delete` |
+| `GET /apps/{app}/builds`, `GET /apps/{app}/builds/{id}`, `GET /apps/{app}/builds/{id}.tgz` | `convox:build:list`, `convox:build:read` |
+| `POST /apps/{app}/builds`, `PUT /apps/{app}/builds/{id}` | `convox:build:create`, `convox:build:update` |
+| `POST /apps/{app}/builds/import` | `convox:build:import` |
+| `POST /apps/{app}/objects/tmp/{name}` | `convox:object:create` |
+| `GET /apps/{app}/releases`, `GET /apps/{app}/releases/{id}` | `convox:release:list`, `convox:release:read` |
+| `POST /apps/{app}/releases` | `convox:release:create` |
+| `POST /apps/{app}/releases/{id}/promote` | `convox:release:promote` |
+| `GET /apps/{app}/processes`, `GET /apps/{app}/processes/{pid}` | `convox:process:list`, `convox:process:read` |
+| `POST /apps/{app}/services/{service}/processes`, `POST /apps/{app}/services/{service}/restart` | `convox:process:start` |
+| `DELETE /apps/{app}/processes/{pid}` | `convox:process:terminate` |
+| `GET /apps/{app}/processes/{pid}/exec` (WebSocket) | `convox:process:exec` |
+| App, process, build and rack logs (`.../logs`, HTTP or WebSocket) | `convox:log:read` |
+| `GET /instances`, `GET /instances/{id}` | `convox:instance:list`, `convox:instance:read` |
+| `GET /system`, `/system/capacity`, `/system/metrics`, `/system/processes`, `/system/releases` | `convox:rack:read` |
+| `PUT /system` | `convox:rack:update` |
 
 ## Next Steps
 

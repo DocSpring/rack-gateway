@@ -258,10 +258,10 @@ flowchart LR
 
 | Method | Type | Setup Location |
 |--------|------|----------------|
-| **TOTP** | Something you have | Web UI or CLI |
+| **TOTP** | Something you have | Web UI |
 | **WebAuthn** | Something you have | Web UI |
-| **YubiKey OTP** | Something you have | Web UI |
-| **Backup Codes** | Something you have | Web UI |
+| **YubiKey OTP** | Something you have | API only |
+| **Backup Codes** | Something you have | Web UI (generated with your first method) |
 
 ### Secret Storage
 
@@ -282,8 +282,9 @@ methods and backup codes keep working.
 
 ```bash
 # MFA Settings
-RGW_SETTING_MFA_REQUIRE_ALL_USERS=true         # Require every user to enroll MFA
-RGW_SETTING_MFA_STEP_UP_WINDOW_MINUTES=10      # How long a step-up MFA verification lasts
+RGW_SETTING_MFA_REQUIRE_ALL_USERS=true         # Require every user to enroll MFA (default true)
+RGW_SETTING_MFA_STEP_UP_WINDOW_MINUTES=10      # How long a step-up MFA verification lasts (default 10)
+RGW_SETTING_MFA_TRUSTED_DEVICE_TTL_DAYS=30     # How long a trusted browser skips the sign-in prompt (default 30)
 ```
 
 ### User Experience

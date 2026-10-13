@@ -128,25 +128,26 @@ DocSpring maintains a [public fork of Convox](https://github.com/DocSpring/convo
 
 4. **Deploy Rack Gateway with Tailscale access**
 
-   Configure Rack Gateway to connect to the private Convox API:
+   When the gateway runs on the rack it protects, leave `RACK_HOST` unset: it reaches the Convox API inside the
+   cluster (`https://api.<RACK>-system.svc.cluster.local:5443`) and never needs the Tailscale ingress. Only a
+   gateway running elsewhere sets it:
 
    ```bash
-   # In your Rack Gateway environment
+   # In your Rack Gateway environment (gateway outside the rack only)
    RACK_HOST=https://convox-api-production.your-tailnet.ts.net
    RACK_TOKEN=your-rack-token
    ```
 
-   And expose Rack Gateway itself via Tailscale:
+   Expose Rack Gateway itself via Tailscale. Convox puts the app in the `<rack>-rack-gateway` namespace, with a
+   Kubernetes service named after the `gateway` service:
 
    ```hcl
    resource "kubernetes_ingress_v1" "rack_gateway_tailscale" {
      metadata {
        name      = "rack-gateway"
-       namespace = "rack-gateway"
+       namespace = "production-rack-gateway"
        annotations = {
-         "tailscale.com/expose"   = "true"
-         "tailscale.com/hostname" = "gateway-production"
-         "tailscale.com/tags"     = "tag:rack-gateway"
+         "tailscale.com/tags" = "tag:rack-gateway"
        }
      }
 
@@ -160,8 +161,8 @@ DocSpring maintains a [public fork of Convox](https://github.com/DocSpring/convo
              path_type = "Prefix"
              backend {
                service {
-                 name = "rack-gateway"
-                 port { number = 8447 }
+                 name = "gateway"
+                 port { name = "main" }   # the service's port (8080)
                }
              }
            }
@@ -174,11 +175,15 @@ DocSpring maintains a [public fork of Convox](https://github.com/DocSpring/convo
    }
    ```
 
+   The Tailscale ingress proxy connects to the gateway from inside the VPC, so set `TRUSTED_PROXY_CIDRS` to the
+   rack's VPC CIDR (for example `10.2.0.0/16`). The gateway then takes the client's tailnet address from the
+   proxy's `X-Forwarded-For`, and the audit log, rate limits and security emails name the real client.
+
 5. **Configure Tailscale ACLs**
 
    In your Tailscale admin console, set up ACLs to control who can access what:
 
-   ```json
+   ```jsonc
    {
      "acls": [
        {
@@ -186,6 +191,7 @@ DocSpring maintains a [public fork of Convox](https://github.com/DocSpring/convo
          "src": ["group:developers"],
          "dst": ["tag:rack-gateway:443"]
        },
+       // Only for a gateway outside the rack, which reaches the Convox API over Tailscale
        {
          "action": "accept",
          "src": ["tag:rack-gateway"],
@@ -231,7 +237,7 @@ curl https://gateway-production.your-tailnet.ts.net/api/v1/health
 rack-gateway login production https://gateway-production.your-tailnet.ts.net
 
 # Verify commands work
-rack-gateway convox apps
+rack-gateway apps
 ```
 
 ## Alternative Private Network Options

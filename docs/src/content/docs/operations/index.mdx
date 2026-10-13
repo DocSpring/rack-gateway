@@ -34,12 +34,14 @@ This section covers the operational aspects of running Rack Gateway in productio
 
 ## Quick Reference
 
-### Health Endpoints
+### Health Endpoint
 
-| Endpoint | Purpose | Expected Response |
-|----------|---------|-------------------|
-| `/api/v1/health` | Liveness check | `{"status": "ok"}` |
-| `/api/v1/health/ready` | Readiness check | `{"status": "ready", "database": "connected"}` |
+| Endpoint | Healthy | Unhealthy |
+|----------|---------|-----------|
+| `/api/v1/health` | 200 `{"status":"ok","service":"rack-gateway"}` | 503 `{"status":"unhealthy",...,"error":"..."}` for a minute after an audit write fails |
+
+It's the only health endpoint. It doesn't query the database: a request that fails to reach it shows up as errors
+in the logs and Sentry.
 
 ### Common Commands
 
@@ -47,28 +49,29 @@ This section covers the operational aspects of running Rack Gateway in productio
 # Check gateway health
 curl https://gateway.example.com/api/v1/health
 
-# View recent audit logs (admin)
-rack-gateway admin audit list --limit 50
+# Check the audit log's hash chain and anchors (run on the gateway, e.g. via convox run)
+./rack-gateway-api verify-audit
 
-# Check database connectivity
-rack-gateway migrate --dry-run
+# Apply pending migrations
+./rack-gateway-api migrate
 ```
+
+Recent audit logs are on the web UI's **Audit Logs** page, and `GET /api/v1/audit-logs` (admin).
 
 ### Log Locations
 
 | Deployment | Log Location |
 |------------|--------------|
-| Docker | `docker logs rack-gateway` |
+| Docker | `docker logs <container>` |
 | Convox | `convox logs -a rack-gateway` |
-| Kubernetes | `kubectl logs -l app=rack-gateway` |
 
 ## Operational Runbooks
 
 ### Daily Checks
 
-1. Verify health endpoints respond correctly
+1. Verify the health endpoint responds
 2. Check error tracking (Sentry) for new issues
-3. Review audit logs for unusual activity
+3. Review audit logs for unusual activity, and Slack alerts for a failed audit verification
 
 ### Weekly Tasks
 
@@ -90,18 +93,18 @@ Automate these checks where possible. Use monitoring tools to alert on health en
 
 ### Gateway Unreachable
 
-1. Check health endpoints
+1. Check the health endpoint (a 503 names the failing audit write)
 2. Verify database connectivity
 3. Check container/pod status
 4. Review recent deployments or changes
 
 ### Suspected Security Incident
 
-1. **Do not** modify audit logs
+1. **Do not** modify audit logs (the database refuses updates and deletes, and the hash chain would show them)
 2. Check audit log for suspicious activity
-3. Review active sessions and API tokens
+3. Lock affected users (ending their sessions), and revoke sessions and API tokens
 4. Contact security team
-5. Preserve evidence for forensics
+5. Preserve evidence: export the audit log and run `verify-audit`
 
 ### Database Issues
 

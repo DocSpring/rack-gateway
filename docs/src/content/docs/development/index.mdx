@@ -68,7 +68,7 @@ flowchart LR
 | Component | Location | Purpose |
 |-----------|----------|---------|
 | **Gateway Server** | `internal/gateway/` | API server with OAuth, RBAC, proxying, and audit logging |
-| **CLI Client** | `cmd/rack-gateway/` | Multi-rack aware CLI that authenticates via gateway |
+| **CLI Client** | `cmd/rack-gateway/`, `internal/cli/` | Multi-rack aware CLI that authenticates via gateway |
 | **Web UI** | `web/` | React SPA for admin interface |
 | **Mock OAuth** | `mock-oauth/` | Mock Google OAuth server for testing |
 
@@ -79,7 +79,8 @@ rack-gateway/
 ├── cmd/
 │   ├── gateway/          # Gateway server entrypoint
 │   ├── rack-gateway/     # CLI client entrypoint
-│   └── mock-convox/      # Mock Convox API for testing
+│   ├── mock-convox/      # Mock Convox API for testing
+│   └── totp-gen/         # TOTP codes for development and tests
 ├── internal/
 │   ├── gateway/          # Gateway server packages
 │   │   ├── app/          # Application setup
@@ -89,7 +90,8 @@ rack-gateway/
 │   │   ├── audit/        # Audit logging + redaction
 │   │   ├── handlers/     # HTTP handlers
 │   │   ├── middleware/   # HTTP middleware
-│   │   └── db/           # Database layer
+│   │   ├── jobs/         # Background jobs (River)
+│   │   └── db/           # Database layer and SQL migrations
 │   ├── cli/              # CLI implementation
 │   └── integration/      # Integration tests
 ├── web/                  # React SPA frontend
@@ -108,7 +110,7 @@ rack-gateway/
 ### Daily Development
 
 ```bash
-# Start the development environment
+# Start the development environment (Overmind; for people, not scripts or AI agents)
 task dev
 
 # This starts:
@@ -125,17 +127,16 @@ task dev
 2. **Make your changes** in the appropriate package
 3. **Run tests** to verify:
    ```bash
-   task go:test    # Go unit tests
-   task web:test   # Web unit tests
+   task go:test:unit   # Go unit tests (task go:test adds the integration tests)
+   task web:test       # Web unit tests
    ```
 4. **Run linters** to check code quality:
    ```bash
    task lint:fix   # Fix linting issues
    ```
-5. **Run full CI** before committing:
-   ```bash
-   task ci         # Complete CI suite
-   ```
+5. **Commit and push.** The pre-commit hook formats, lints and checks duplication and file lengths. CI runs the
+   full suite (`task ci`: lint, unit and integration tests, E2E tests and builds) on every push; run it locally
+   only when you need to (it takes about 15 minutes)
 
 ### Code Generation
 
@@ -160,16 +161,18 @@ Never edit generated files directly. Modify the source (Go handlers, OpenAPI ann
 
 ### Backend (Go)
 
-- **Go 1.26+** - Primary backend language
+- **Go** (version pinned in `mise.toml`) - Primary backend language
 - **Gin** - HTTP framework
-- **sqlc** - Type-safe SQL
+- **pgx / database/sql** - PostgreSQL access, with plain SQL migrations
+- **River** - Background jobs in PostgreSQL
 - **golangci-lint** - Linting with 20+ linters enabled
 
 ### Frontend (TypeScript)
 
-- **React 18** - UI framework
+- **React 19** - UI framework
 - **Vite** - Build tool
-- **TanStack Query** - Data fetching
+- **TanStack Router and Query** - Routing and data fetching
+- **Tailwind CSS** - Styling
 - **Biome** - Linting and formatting
 
 ### Testing
@@ -194,7 +197,8 @@ Never edit generated files directly. Modify the source (Go handlers, OpenAPI ann
 | `task dev` | Start development environment |
 | `task ci` | Run full CI suite (lint, test, build) |
 | `task lint:fix` | Fix linting issues |
-| `task go:test` | Run Go tests |
+| `task go:test:unit` | Run Go unit tests |
+| `task go:test` | Run Go unit and integration tests |
 | `task web:test` | Run web tests |
 | `task web:e2e` | Run Playwright E2E tests |
 | `task build` | Build all binaries |

@@ -144,7 +144,7 @@ Instead of giving developers the rack token directly, Rack Gateway:
 
 1. **Authenticates** users with Google Workspace OAuth (your existing identity provider)
 2. **Authorizes** requests based on user roles (viewer, ops, deployer, admin)
-3. **Audits** every action with user attribution and automatic secret redaction
+3. **Audits** every action with user attribution, redacting env values
 4. **Proxies** requests to the rack using the real token (which users never see)
 
 This gives self-hosted rack users the same security controls that Console users enjoy, while keeping everything on your own infrastructure.
@@ -162,7 +162,7 @@ Both Convox Console and Rack Gateway provide security controls for Convox racks.
 | Audit logging | Yes | Yes (with S3 WORM anchoring) |
 | MFA | Limited | Yes (TOTP, WebAuthn, YubiKey) |
 | Deploy approvals | Via workflows | Yes (built-in) |
-| Multi-rack | Yes (central management) | Yes (CLI wrapper) |
+| Multi-rack | Yes (central management) | Yes (one gateway per rack; the CLI switches between them) |
 | Pricing | Subscription | Free (open source) |
 | Hosting | Convox-hosted control plane | Fully self-hosted |
 | Data residency | Convox infrastructure | Your infrastructure only |

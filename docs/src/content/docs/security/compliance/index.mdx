@@ -11,7 +11,7 @@ Rack Gateway is designed with compliance in mind, providing the controls and aud
 
 <CardGrid>
   <Card title="Audit Logging" icon="document">
-    Complete, immutable audit trail of all actions with automatic secret redaction.
+    Complete, append-only, hash-chained audit trail of every request, written before the gateway acts.
 
     [Learn more →](/security/compliance/audit-trail/)
   </Card>
@@ -44,24 +44,23 @@ graph TB
 
     subgraph "Audit Layer"
         AuditLog[Audit Logger]
-        Redaction[Secret Redaction]
-        Database[(Audit Database)]
+        Database[(Hash-chained<br/>audit table)]
+        Verify[Hourly Verification]
     end
 
     subgraph "Retention Layer"
-        S3[S3 WORM Bucket]
+        S3[S3 Object Lock Anchors]
         KMS[AWS KMS]
-        Retention[Retention Policy]
     end
 
     OAuth --> AuditLog
     MFA --> AuditLog
     RBAC --> AuditLog
-    AuditLog --> Redaction
-    Redaction --> Database
+    AuditLog --> Database
     Database --> S3
     S3 --> KMS
-    S3 --> Retention
+    Verify --> Database
+    Verify --> S3
 ```
 
 ## Key Compliance Controls
@@ -83,24 +82,24 @@ graph TB
 | Activity logging | All API requests logged | Audit log entries |
 | User actions | Who did what, when | Audit trail |
 | Access attempts | Successful and failed | RBAC decisions |
-| Secret protection | Automatic redaction | Redacted logs |
-| Log integrity | S3 WORM storage | Object Lock |
+| Secret protection | Env var values redacted unless an app lists them as visible | Redacted logs |
+| Log integrity | HMAC hash chain, hourly verification, S3 Object Lock anchors | Verification status, anchors |
 
 ### Data Protection
 
 | Control | Implementation | Evidence |
 |---------|----------------|----------|
 | Encryption in transit | TLS 1.2+ required | HTTPS configuration |
-| Encryption at rest | AWS KMS for S3 | KMS key policy |
-| Data retention | Operator-managed retention | Retention policy docs |
-| Data deletion | Manual purge | Database procedures |
+| Encryption at rest | RDS and S3 encryption with AWS KMS; MFA secrets and the Slack token also encrypted with `COLUMN_ENCRYPTION_KEY` | KMS key policy |
+| Data retention | Audit events are never deleted; anchors are locked for the bucket's default Object Lock retention | Object Lock configuration |
+| Data deletion | Users and tokens can be deleted; their audit history stays | Audit log |
 
 ## Compliance Checklist
 
 ### Before Production
 
 - [ ] OAuth configured with domain restriction
-- [ ] MFA enabled for all privileged users
+- [ ] MFA required for all users (the default)
 - [ ] RBAC roles assigned appropriately
 - [ ] Audit logging configured and tested
 - [ ] S3 WORM bucket configured (if required)
@@ -154,11 +153,11 @@ For compliance audits, Rack Gateway provides:
 
 ## Audit Log Queries
 
-Use the admin API or direct SQL:
+Use the Audit Logs page, its API with an admin's session (API tokens can't read audit logs), or SQL:
 
 ```bash
 # API: last 7 days for a user
-curl -H "Authorization: Bearer TOKEN" \
+curl -b "session_token=$SESSION_TOKEN" \
   "https://gateway.example.com/api/v1/audit-logs?user=alice@example.com&range=7d"
 ```
 

@@ -24,8 +24,12 @@ convox logs -a rack-gateway --since 10m
 **Possible causes:**
 
 - `GOOGLE_ALLOWED_DOMAIN` doesn’t match the user’s email domain
+- The user hasn't been added to the gateway (signing in never creates a user)
+- The user's account is locked
 - Redirect URI mismatch in Google Cloud Console
 - `DOMAIN` misconfigured (affects OAuth redirects)
+
+The audit log records each refused login (`login.*_failed`, or `login.user_not_authorized`) with the reason.
 
 **Checks:**
 
@@ -34,17 +38,17 @@ convox logs -a rack-gateway --since 10m
    - `https://<DOMAIN>/api/v1/auth/cli/callback`
 2. Verify `GOOGLE_ALLOWED_DOMAIN` matches your workspace domain.
 
-### "Session Expired" Immediately
+### Web Session Ends Quickly
 
 **Possible causes:**
 
 - `APP_SECRET_KEY` changed between restarts
-- Session timeout set too low
+- Web sessions end after `session_timeout_minutes` without activity (5 minutes by default)
 
 **Checks:**
 
 - Ensure `APP_SECRET_KEY` is stable and stored in Convox env.
-- Adjust timeout with `RGW_SETTING_SESSION_TIMEOUT_MINUTES` if needed.
+- Raise the timeout on the **Settings** page, or with `RGW_SETTING_SESSION_TIMEOUT_MINUTES`.
 
 ### CLI Login Hangs
 
@@ -88,8 +92,9 @@ to be redirected there with a single-use login code.
 
 **Checks:**
 
-- Verify roles in the web UI (Users page).
-- If MFA is required, rerun the command and supply `--mfa-code` when prompted.
+- Verify roles in the web UI (Users page). A role change applies to the user's next request.
+- See [Permissions](/security/rbac/permissions/) for what each role can do. The CLI asks for MFA itself when a
+  command needs it; `--mfa-code` passes a code non-interactively.
 
 ### API Token Rejected
 
@@ -101,8 +106,10 @@ to be redirected there with a single-use login code.
 **Checks:**
 
 - Token must start with `rgw_`.
-- Use `RACK_GATEWAY_API_TOKEN` or `--api-token`.
-- Confirm token exists in the web UI (API Tokens).
+- Use `RACK_GATEWAY_API_TOKEN` or `--api-token`, and set `RACK_GATEWAY_URL` when there's no config file (CI).
+- Confirm token exists in the web UI (API Tokens) and hasn't expired.
+- A token stops working while its owner is locked, and is deleted with its owner.
+- A token never gets more than its owner's role, and never more than its own permissions.
 
 ## Convox Proxy Issues
 
@@ -129,24 +136,32 @@ to be redirected there with a single-use login code.
 
 ### "WebAuthn Not Available"
 
-- Ensure the CLI build has WebAuthn support (CGO + libfido2)
-- Fall back to TOTP when needed
+- Ensure the CLI build has WebAuthn support (CGO + libfido2); the release build doesn't
+- Fall back to TOTP, YubiKey OTP or a backup code with `--mfa-method` or `--mfa-code`
+
+### Account Locked After Failed MFA
+
+Five failed MFA attempts in five minutes lock the account. An admin unlocks it on the Users page.
 
 ### Lost MFA Device
 
-1. Use backup codes if available
-2. Ask an admin to remove MFA methods in the web UI
+1. Sign in with a backup code, then remove the lost method and enroll a new one under **Account Security**
+2. Without any method or backup code, an admin must delete the user and add them again. That deletes their API
+   tokens too, so CI using them needs new tokens
 
 ## Database Issues
 
 If the gateway fails to start or reports DB errors:
 
 1. Verify `DATABASE_URL` / `RGW_DATABASE_URL` is set
-2. Run migrations:
+2. Run migrations (production never migrates on startup):
 
 ```bash
-convox run admin -- ./rack-gateway-api migrate -a rack-gateway
+convox run admin ./rack-gateway-api migrate -a rack-gateway
 ```
+
+3. If requests fail with 503 and the health check names an audit write, see
+   [Database Maintenance](/operations/database-maintenance/): the gateway refuses requests it can't audit.
 
 <Aside type="note">
 Resetting the database requires `RESET_RACK_GATEWAY_DATABASE=DELETE_ALL_DATA` and is intended for development only.

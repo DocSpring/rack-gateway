@@ -402,5 +402,5 @@ The E2E tests run automatically in GitHub Actions on every push. If CI fails:
 ## Related Documentation
 
 - Main web guide: `/web/CLAUDE.md`
-- Database maintenance: `/docs/DATABASE_MAINTENANCE.md`
+- Database maintenance: `/docs/src/content/docs/operations/database-maintenance.mdx`
 - Task commands: Root `CLAUDE.md`

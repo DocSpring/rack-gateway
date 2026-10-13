@@ -235,7 +235,7 @@ healthcheck:
 ### Use Specific Version Tags
 
 ```bash
-docker pull docker.io/docspringcom/rack-gateway:v0.1.0
+docker pull docker.io/docspringcom/rack-gateway:vX.Y.Z
 ```
 
 ### Configure Resource Limits
@@ -268,12 +268,21 @@ server {
     ssl_certificate /etc/nginx/ssl/cert.pem;
     ssl_certificate_key /etc/nginx/ssl/key.pem;
 
+    # Build uploads stream through the gateway: don't cap the body size here
+    client_max_body_size 0;
+
     location / {
         proxy_pass http://gateway:8080;
         proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+
+        # exec, run and logs use WebSockets
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_read_timeout 1h;
+        proxy_request_buffering off;
     }
 }
 ```
@@ -316,6 +325,11 @@ gateway.example.com {
 
 </TabItem>
 </Tabs>
+
+Behind any reverse proxy, set `TRUSTED_PROXY_CIDRS` to the proxy's addresses (for example the Docker network's
+subnet). The gateway only believes `X-Forwarded-For` from those, so without it the audit log, rate limits and
+security emails all see the proxy's IP. The proxy must pass WebSocket upgrades through and must not limit request
+body sizes (the gateway caps API bodies itself and streams build archives).
 
 ### Database Backups
 
@@ -377,10 +391,11 @@ Common issues:
 
 | Error | Cause | Solution |
 |-------|-------|----------|
-| `database connection failed` | PostgreSQL not reachable | Check `DATABASE_URL` and network |
-| `APP_SECRET_KEY required` | Missing secret | Generate with `openssl rand -base64 32` |
+| `failed to ping postgres` | PostgreSQL not reachable | Check `DATABASE_URL` and network |
+| `APP_SECRET_KEY is required in production` | Missing secret | Generate with `openssl rand -base64 32` |
+| `AUDIT_HMAC_SECRET must be set in non-dev environments` | Missing secret | Generate with `openssl rand -base64 32` and never change it |
 | `COLUMN_ENCRYPTION_KEY is required` | Missing key | Generate once with `openssl rand -base64 32` and keep it |
-| `OAuth client not configured` | Missing Google credentials | Set `GOOGLE_CLIENT_*` variables |
+| `DOMAIN is required in production` / `GOOGLE_ALLOWED_DOMAIN is required in production` | Missing config | Set them |
 
 ### Database connection issues
 

@@ -75,7 +75,7 @@ Rack Gateway follows a **single-tenant, per-rack** deployment model:
 |--------|-------------|
 | **One gateway per rack** | Each Convox rack has its own gateway instance |
 | **No multi-tenancy** | Gateway manages exactly one rack |
-| **Shared database** | Gateway uses its own PostgreSQL database |
+| **Own database** | Each gateway uses its own PostgreSQL database (one server can host several) |
 | **Private network** | Recommended: Deploy behind Tailscale/VPN |
 
 ```mermaid
@@ -104,7 +104,7 @@ Before deploying, ensure you have:
 
 ### Required
 
-- **PostgreSQL 14+** - Database for users, tokens, audit logs
+- **PostgreSQL** (16 is what CI runs) - Database for users, tokens, audit logs
 - **Google Workspace** - OAuth provider for authentication
 - **Domain name** - For gateway API and web UI
 
@@ -137,7 +137,7 @@ Before deploying, ensure you have:
 
 5. **Verify**
 
-   Check health endpoints and log in to web UI.
+   Check `/api/v1/health` and log in to the web UI.
 
 6. **Harden**
 
@@ -151,12 +151,12 @@ All deployments use the same environment variables. Key categories:
 
 | Category | Variables | Purpose |
 |----------|-----------|---------|
-| **Core** | `APP_SECRET_KEY`, `DOMAIN` | Security and routing |
+| **Core** | `APP_SECRET_KEY`, `COLUMN_ENCRYPTION_KEY`, `DOMAIN` | Security and routing |
 | **OAuth** | `GOOGLE_CLIENT_*`, `GOOGLE_ALLOWED_DOMAIN` | Authentication |
 | **Database** | `DATABASE_URL`, `DB_*` | PostgreSQL connection |
 | **Rack** | `RACK_TOKEN`, `RACK_HOST` | Convox connectivity |
 | **Email** | `POSTMARK_*` | Email notifications |
-| **Audit** | `AUDIT_*`, S3 settings | Audit log anchoring |
+| **Audit** | `AUDIT_HMAC_SECRET`, `AUDIT_ANCHOR_*` | Audit hash chain and S3 anchoring |
 
 See [Environment Variables](/configuration/environment-variables/) for the complete reference.
 
@@ -185,8 +185,7 @@ See [Environment Variables](/configuration/environment-variables/) for the compl
 | Component | Purpose | Sizing |
 |-----------|---------|--------|
 | **PostgreSQL** | User data, audit logs | 10GB minimum, scale with logs |
-| **Gateway container** | API server | 256MB RAM, 0.25 CPU minimum |
-| **Web container** | Static SPA | 64MB RAM, minimal CPU |
+| **Gateway container** | API server and the web UI (built into the image) | The default `convox.yml` reserves 128MB RAM and 0.05 CPU |
 
 ### Optional (Recommended)
 
@@ -204,10 +203,11 @@ Before going to production, review the [Production Checklist](/deployment/produc
 
 Key production requirements:
 
-- [ ] Strong `APP_SECRET_KEY` (256-bit random)
+- [ ] Strong `APP_SECRET_KEY` and `AUDIT_HMAC_SECRET` (256-bit random), and a backed-up `COLUMN_ENCRYPTION_KEY`
 - [ ] HTTPS with valid certificates
 - [ ] Database backups configured
-- [ ] Audit log retention set (`LOG_RETENTION_DAYS`)
+- [ ] Anchor bucket's default Object Lock retention set, and container log retention (`LOG_RETENTION_DAYS` in
+  `convox.yml`)
 - [ ] Admin users configured
 - [ ] MFA policies enforced
 - [ ] Monitoring and alerting enabled

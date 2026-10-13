@@ -100,13 +100,13 @@ Beyond all Viewer permissions:
 - **SRE Teams**: Operational troubleshooting
 - **DevOps Engineers**: Day-to-day operations without deployment access
 
-### Key Capability: Container Exec
+### Key Capability: Running Commands in Containers
 
-The `convox:process:exec` permission allows running commands inside containers:
+`convox:process:exec` runs a command in a running process, and `convox:process:start` starts a one-off process:
 
 ```bash
-rack-gateway run web "rails console" -a myapp
-rack-gateway run web "cat /etc/hosts" -a myapp
+rack-gateway exec <process-id> "cat /etc/hosts" -a myapp   # convox:process:exec
+rack-gateway run web "rails console" -a myapp              # convox:process:start
 ```
 
 <Aside type="caution" title="Security Consideration">
@@ -141,13 +141,11 @@ Beyond all Ops permissions:
 
 | Permission | Description |
 |------------|-------------|
-| `convox:app:restart` | Restart applications |
 | `convox:build:create` | Create new builds |
 | `convox:object:create` | Upload build artifacts |
 | `convox:release:create` | Create releases |
 | `convox:release:read` | View release details |
 | `convox:release:promote` | Promote releases to production |
-| `convox:env:read` | View environment variables |
 | `convox:env:set` | Set environment variables |
 | `convox:app:update` | Update application settings |
 | `gateway:deploy_approval_request:create` | Request deploy approval |
@@ -235,13 +233,14 @@ The CI/CD role cannot be assigned to human users. It's specifically designed for
 The CI/CD role is designed to work with [Deploy Approvals](/integrations/deploy-approvals/):
 
 1. CI/CD pipeline creates a deploy approval request
-2. Human approver reviews and approves in Slack or web UI
-3. CI/CD pipeline promotes the release with `deploy_with_approval`
+2. An admin reviews and approves it in the web UI or with `rack-gateway deploy-approval approve` (Slack posts
+   the request with a link)
+3. The CI/CD pipeline deploys with `deploy_with_approval`
 
 ```bash
 # In CI/CD pipeline
-rack-gateway deploy-approval request --app myapp --commit <sha>
-# ... wait for approval ...
+rack-gateway deploy-approval request --app myapp --git-commit "$GIT_SHA" \
+  --message "Deploy $GIT_SHA" --wait
 rack-gateway deploy -a myapp
 ```
 
@@ -317,8 +316,8 @@ Follow the principle of least privilege. Most teams should have only 2-3 admins.
 
 | Capability | Viewer | Ops | Deployer | CI/CD | Admin |
 |------------|:------:|:---:|:--------:|:-----:|:-----:|
-| View apps, processes, logs | Yes | Yes | Yes | Yes | Yes |
-| View builds | Yes | Yes | Yes | Yes | Yes |
+| View apps and processes | Yes | Yes | Yes | Yes | Yes |
+| View logs and builds | Yes | Yes | Yes | No | Yes |
 | View releases | No | Yes | Yes | No | Yes |
 | View environment variables | No | Yes | Yes | No | Yes |
 | Restart applications | No | Yes | Yes | No | Yes |

@@ -6,8 +6,7 @@ description: "Audit log retention and S3 WORM anchors."
 import { Aside, Steps } from '@astrojs/starlight/components';
 
 Rack Gateway stores audit logs in PostgreSQL and can write **WORM anchors** to S3 for
-tamper-evident retention. The gateway does not automatically delete audit logs;
-retention policies are enforced by operators.
+tamper-evident retention. Audit logs are never deleted.
 
 ## Retention Overview
 
@@ -16,11 +15,10 @@ retention policies are enforced by operators.
 
 ## PostgreSQL Retention
 
-Audit logs remain in PostgreSQL until you delete them. For compliance-sensitive
-environments, retain logs long enough to satisfy your audit requirements.
-
-If you choose to prune logs manually, use the `timestamp` column in
-`audit.audit_event` and ensure you remain compliant with your policy.
+Audit logs stay in PostgreSQL for the life of the database. `audit.audit_event` is append-only: triggers refuse
+every `UPDATE` and `DELETE`, and each event's hash covers the previous one, so removing old events would also break
+verification of the chain. Plan the database's storage and backups for the log growing forever (a few hundred bytes
+per request).
 
 ## S3 WORM Anchors
 
@@ -33,11 +31,9 @@ Anchors are written periodically (default: hourly) to an Object Lock bucket.
 # Enable anchors
 AUDIT_ANCHOR_BUCKET=rack-gateway-audit-anchor-production
 AUDIT_ANCHOR_CHAIN_ID=production
-AUDIT_ANCHOR_RETENTION_DAYS=400
 
 # Optional
 AUDIT_ANCHOR_INTERVAL_MINUTES=60
-AWS_REGION=us-east-1
 AWS_ENDPOINT_URL_S3=http://minio:9000  # MinIO, in development and E2E (testbypass) builds only
 ```
 
@@ -51,30 +47,17 @@ AWS_ENDPOINT_URL_S3=http://minio:9000  # MinIO, in development and E2E (testbypa
 2. **Write anchor payload**
    - JSON payload written to S3 with Object Lock retention
 
-3. **Verify externally**
-   - Use the stored hash to validate the chain later
+3. **Verify**
+   - The gateway checks the chain and its anchors every hour and alerts when the check fails;
+     `rack-gateway-api verify-audit` runs the same check by hand
 
 </Steps>
 
-### Terraform Example (S3 WORM)
+### Bucket Setup
 
-```hcl
-resource "aws_s3_bucket" "audit_anchor" {
-  bucket = "rack-gateway-audit-anchor-${var.environment}"
-  versioning { enabled = true }
-  object_lock_configuration { object_lock_enabled = "Enabled" }
-}
-
-resource "aws_s3_bucket_object_lock_configuration" "audit_anchor" {
-  bucket = aws_s3_bucket.audit_anchor.id
-  rule {
-    default_retention {
-      mode  = "COMPLIANCE"
-      days  = 400
-    }
-  }
-}
-```
+The bucket needs Object Lock in Compliance mode, versioning, and a default retention as long as your policy
+requires: that default rule is what locks each anchor. See [S3 WORM Storage](/deployment/terraform/s3-worm-storage/)
+for example Terraform, the IAM policy and verification.
 
 <Aside type="note">
 Anchors are an integrity mechanism, not a log archive. If you need cold storage,

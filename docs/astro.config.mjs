@@ -139,18 +139,6 @@ export default defineConfig({
               slug: 'configuration/environment-variables',
             },
             { label: 'OAuth Setup', slug: 'configuration/oauth-setup' },
-            {
-              label: 'Session Management',
-              slug: 'configuration/session-management',
-            },
-            {
-              label: 'Security Settings',
-              slug: 'configuration/security-settings',
-            },
-            {
-              label: 'Email Notifications',
-              slug: 'configuration/email-notifications',
-            },
           ],
         },
         {

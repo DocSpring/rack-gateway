@@ -38,18 +38,13 @@ The gateway should never be directly exposed to the public internet. Always use 
 
 ### TLS Configuration
 
-All traffic should use TLS:
+The gateway serves plain HTTP on `PORT` and expects TLS to end in front of it: the Convox router, a load balancer,
+or Tailscale (`tailscale serve`). Set `DOMAIN` to the host name clients use; the gateway's public URL is
+`https://<DOMAIN>`, and requests for any other host are refused.
 
 ```bash
-# Required environment variables
-GATEWAY_URL=https://gateway.example.com
-
-# TLS certificate (for standalone deployment)
-TLS_CERT_FILE=/etc/ssl/certs/gateway.crt
-TLS_KEY_FILE=/etc/ssl/private/gateway.key
+DOMAIN=gateway.example.com
 ```
-
-When deployed on Convox, TLS is handled by the load balancer.
 
 ### Firewall Rules
 
@@ -59,7 +54,7 @@ Restrict network access:
 |------|--------|-------------|----------|
 | 443 | VPN/Tailscale | Gateway | HTTPS |
 | 5432 | Gateway | RDS | PostgreSQL |
-| 443 | Gateway | Convox API | HTTPS |
+| 5443 | Gateway | Convox rack API | HTTPS |
 
 Block all other inbound traffic to the gateway.
 
@@ -86,13 +81,13 @@ openssl rand -base64 32
 
 ### MFA Enforcement
 
-Require MFA for all users or privileged roles:
+MFA settings (**Settings** → MFA Configuration, or `RGW_SETTING_*` variables):
 
-| Setting | Recommended Value | Notes |
-|---------|-------------------|-------|
-| MFA Required | All users | Or at minimum, admins/deployers |
-| Step-up Window | 10 minutes | Shorter for higher security |
-| Trusted Device TTL | 7 days | Or disable for highest security |
+| Setting | Default | Recommendation |
+|---------|---------|----------------|
+| `mfa_require_all_users` | `true` | Keep it on. The CLI requires enrollment from every user regardless |
+| `mfa_step_up_window_minutes` | `10` | Shorter for higher security |
+| `mfa_trusted_device_ttl_days` | `30` | Shorter, such as 7, for higher security. A trusted device only skips the login challenge; it never opens a step-up window |
 
 The CLI verifies the gateway's TLS certificate (system roots) for all requests, including websockets, and
 refuses plain `http://` gateways except on loopback, so serve the gateway over HTTPS with a publicly trusted
@@ -100,15 +95,9 @@ or system-trusted certificate.
 
 ### Session Security
 
-Configure secure session settings:
-
-```bash
-# Short idle timeout (5-15 minutes recommended)
-SESSION_TIMEOUT_MINUTES=5
-
-# Secure cookies (automatic in production)
-SECURE_COOKIES=true
-```
+Browser sessions end after `session_timeout_minutes` of inactivity (default 5; **Settings** → Session
+Configuration, or `RGW_SETTING_SESSION_TIMEOUT_MINUTES`). The session cookie is `HttpOnly`, `SameSite=Lax` and, in
+the published image, always `Secure`.
 
 ## RBAC Hardening
 
@@ -167,8 +156,9 @@ Restrict administrative access:
 
 Mark sensitive environment variables in each app's settings (or pin them with `RGW_APP_<APP>_SETTING_*`):
 
-- **`secret_env_vars`**: values masked, and changed only with `convox:secret:set`. Names containing `SECRET` or
-  `TOKEN`, or ending in `_KEY`, are secrets already; `CONVOX_SECRET_ENV_VARS` adds names for every app.
+- **`secret_env_vars`**: values masked unless the caller holds `convox:secret:read` and asks to reveal them.
+  Names containing `SECRET` or `TOKEN`, or ending in `_KEY`, are secrets already; `CONVOX_SECRET_ENV_VARS` adds names
+  for every app.
 - **`protected_env_vars`**: values masked, and changed only by an admin with `--allow-protected` and MFA.
 
 Changing either list needs MFA on that request, even within the step-up window, as changing a protected value does.
@@ -231,81 +221,49 @@ Restrict database access:
 
 Enable comprehensive auditing:
 
-```bash
-# Enable all audit features
-AUDIT_ENABLED=true
-AUDIT_LOG_REQUESTS=true
-AUDIT_LOG_RESPONSES=false  # Don't log response bodies
-```
+Audit logging is always on and can't be turned off: every request is recorded before the gateway acts on it, and a
+request whose audit entry can't be written is refused. Set `AUDIT_HMAC_SECRET` (required in production) so the
+entries are hash-chained, and set the heartbeat URLs so a monitor alerts when the gateway or its hourly audit
+verification stops running (see [Heartbeats](/operations/monitoring/#heartbeats)).
 
 ### S3 WORM for Compliance
 
-For compliance requirements:
+Anchor the chain in an S3 bucket with Object Lock:
 
 ```bash
-AUDIT_ANCHOR_S3_BUCKET=audit-anchor-production
-AUDIT_ANCHOR_S3_REGION=us-east-1
+AUDIT_ANCHOR_BUCKET=rack-gateway-audit-anchor-production
+AUDIT_ANCHOR_CHAIN_ID=production
 ```
 
-See [Data Retention](/security/compliance/data-retention/) for full configuration.
+See [S3 WORM Storage](/deployment/terraform/s3-worm-storage/) for the bucket, IAM and verification.
 
 ### Security Alerting
 
-Configure alerts for security events:
-
-```bash
-# Slack notifications
-SLACK_WEBHOOK_URL=https://hooks.slack.com/...
-SLACK_NOTIFY_SECURITY_EVENTS=true
-
-# Email alerts
-POSTMARK_API_KEY=your-key
-SECURITY_ALERT_EMAIL=security@example.com
-```
+Connect the [Slack integration](/integrations/slack/) and route security events to a channel by action pattern,
+for example `login.*_failed`, `mfa.verify_failed`, `mfa_method.*`, `user.update_roles`, `api_token.*` and
+`audit_log.verification_*`. With `POSTMARK_API_TOKEN` set, the gateway also emails users about failed logins, new CLI
+logins, locks and new API tokens, and admins about new users, new API tokens, rack parameter changes and rate
+limiting (see [Email](/integrations/email/)).
 
 **Alert on:**
-- Multiple failed login attempts
-- RBAC denials
-- Admin actions
-- Account locks
-- Token creation/deletion
+- Failed logins and MFA verifications
+- MFA method changes and account locks
+- Role changes
+- API token creation and deletion
+- Audit log verification failures
 
 ## Deployment Hardening
 
 ### Container Security
 
-Secure your container deployment:
-
-```yaml
-# convox.yml
-services:
-  gateway:
-    # Run as non-root user
-    user: "65534:65534"
-
-    # Read-only filesystem
-    volumes:
-      - /tmp:rw
-
-    # Resource limits
-    cpu: 256
-    memory: 512
-```
+The published image runs the gateway as a non-root user. On Convox, keep the service `internal: true` so it is only
+reachable inside the rack's network (and through Tailscale), and deploy a pinned image tag, never `:latest`. See
+the repository's `convox.yml`.
 
 ### Health Checks
 
-Configure health checks without exposing sensitive information:
-
-```yaml
-services:
-  gateway:
-    health:
-      path: /api/v1/health
-      interval: 30
-      timeout: 5
-```
-
-The health endpoint should not require authentication and should not expose internal details.
+`GET /api/v1/health` needs no authentication and reveals no internal details. It fails for a minute after any
+audit write fails, so a load balancer takes an instance with a broken audit log out of service.
 
 ## Security Checklist
 
@@ -314,7 +272,7 @@ The health endpoint should not require authentication and should not expose inte
 - [ ] Gateway on private network (VPN/Tailscale)
 - [ ] HTTPS enforced with valid certificate
 - [ ] OAuth domain restriction configured
-- [ ] MFA required for privileged users
+- [ ] MFA required for all users
 - [ ] Session timeout ≤ 15 minutes
 - [ ] Admin users ≤ 3
 - [ ] CI/CD uses CI/CD role tokens
@@ -339,11 +297,12 @@ The gateway sets secure HTTP headers:
 
 | Header | Value | Purpose |
 |--------|-------|---------|
-| `Strict-Transport-Security` | `max-age=31536000` | Force HTTPS |
+| `Strict-Transport-Security` | `max-age=63072000` | Force HTTPS |
 | `X-Content-Type-Options` | `nosniff` | Prevent MIME sniffing |
 | `X-Frame-Options` | `DENY` | Prevent clickjacking |
 | `Content-Security-Policy` | Strict policy | Prevent XSS |
-| `X-XSS-Protection` | `1; mode=block` | XSS filter |
+| `Referrer-Policy` | `strict-origin-when-cross-origin` | Keep paths out of other sites' referrers |
+| `X-XSS-Protection` | `1; mode=block` | XSS filter in old browsers |
 
 ### Content Security Policy
 
@@ -351,13 +310,17 @@ The gateway uses a strict CSP:
 
 ```
 default-src 'self';
+connect-src 'self';
 script-src 'self' 'nonce-xxx';
 style-src 'self' 'nonce-xxx';
 img-src 'self' data:;
-font-src 'self';
-connect-src 'self';
-frame-ancestors 'none';
+base-uri 'self';
+form-action 'self';
+frame-ancestors 'none'
 ```
+
+With `SENTRY_JS_DSN` set, `connect-src` and `img-src` also allow the Sentry host, and violations are reported to
+Sentry.
 
 ## Incident Response
 
@@ -365,8 +328,8 @@ frame-ancestors 'none';
 
 <Steps>
 
-1. Lock the account immediately
-2. Revoke all sessions
+1. Lock the account immediately (this signs out every session and stops the user's API tokens)
+2. Check that no sessions remain
 3. Review audit logs for suspicious activity
 4. Rotate any accessed secrets
 5. Investigate root cause

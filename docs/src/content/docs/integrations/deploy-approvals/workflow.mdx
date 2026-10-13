@@ -27,7 +27,7 @@ sequenceDiagram
 
     Note over CI: Workflow pauses at approval job
 
-    Gateway->>Admin: Notification (Slack/Email)
+    Gateway->>Admin: Slack alert (if configured)
     Admin->>Gateway: Review request
     Admin->>Gateway: Approve (MFA required)
     Gateway->>Gateway: Mark approved
@@ -71,7 +71,7 @@ rack-gateway deploy-approval request \
 | `git_branch` | `--branch` | Context for reviewers |
 | `ci_metadata` | `--ci-metadata` | CI provider integration |
 | `message` | `--message` | Human-readable description |
-| `target_api_token_id` | Auto-detected | Token that will use approval |
+| `target_api_token_id` | The requesting API token, or `--target-api-token-id` | Token that will use approval |
 | `app` | `--app` | Application name |
 | `pr_url` | GitHub verification | The branch's open pull request, if it has one |
 
@@ -92,7 +92,9 @@ graph LR
     PR -->|Not found, PR not required| Continue[Continue without PR]
 ```
 
-An open PR is required unless the app's `require_pr_for_branch` is off.
+An open PR is required unless the app's `require_pr_for_branch` is off. Before checking the commit, the gateway
+also refuses a request without `--branch`, and one from the app's `default_branch` unless
+`allow_deploy_from_default_branch` is on (see [GitHub Integration](/integrations/deploy-approvals/github/#commit-verification)).
 
 Verification modes:
 - **latest**: Commit must be the latest on the branch
@@ -118,9 +120,10 @@ The review UI shows:
 
 | Action | Requires | Result |
 |--------|----------|--------|
-| **Approve** | MFA step-up | Request approved, CI auto-approved |
-| **Reject** | None | Request rejected with notes |
-| **Ignore** | None | Request expires automatically |
+| **Approve** | Admin, MFA every time | Request approved, CI auto-approved |
+| **Reject** | Admin, MFA every time | Request rejected with notes |
+| **Extend** | Admin, MFA every time | A lapsed approval is approved again for a new window |
+| **Ignore** | None | A pending request expires after `DEPLOY_APPROVAL_PENDING_MAX_AGE` (7 days) |
 
 ## Phase 3: Approval
 
@@ -132,7 +135,8 @@ The review UI shows:
 
 2. **MFA challenge presented**
 
-   Admin must verify with TOTP, WebAuthn, or backup code
+   Admin must verify with WebAuthn, TOTP, YubiKey OTP or a backup code. A recent step-up doesn't count:
+   every approval asks again
 
 3. **MFA verified**
 
@@ -148,7 +152,7 @@ The review UI shows:
 
 </Steps>
 
-### MFA Step-Up Flow
+### MFA Flow
 
 ```mermaid
 sequenceDiagram
@@ -157,7 +161,7 @@ sequenceDiagram
     participant MFA as MFA System
 
     Admin->>Gateway: Click Approve
-    Gateway->>Gateway: Check MFA step-up
+    Gateway->>Gateway: Require a fresh MFA verification
     Gateway->>Admin: Request MFA verification
     Admin->>Gateway: Submit MFA code
     Gateway->>MFA: Verify code
@@ -191,6 +195,9 @@ sequenceDiagram
     participant Gateway as Gateway
     participant API as CircleCI API
 
+    Gateway->>API: GET /workflow/{id}, GET /pipeline/{id}
+    API-->>Gateway: Pipeline revision and repository
+    Gateway->>Gateway: Pipeline builds the approved commit of vcs_repo?
     Gateway->>API: GET /workflow/{id}/job
     API-->>Gateway: Job list
     Gateway->>Gateway: Find approval job by name
@@ -297,8 +304,9 @@ After successful build:
 
 | Field | Value |
 |-------|-------|
-| `object_url` | S3 URL of build artifact |
+| `object_url` | The uploaded archive (`object://<app>/...`) |
 | `build_id` | Convox build ID |
+| `release_id` | The build's release |
 
 ## Phase 6: Deploy Validation
 
@@ -323,10 +331,15 @@ A promote the gateway refuses is answered with 403 and isn't forwarded, and one 
 
 | Action | Endpoint | Validation |
 |--------|----------|------------|
-| Build create | `POST /apps/:app/builds` | Manifest + approval |
-| Object upload | `POST /apps/:app/objects` | Approval exists |
-| Release promote | `POST /apps/:app/releases/:id/promote` | Release linked to approval |
-| Process exec | `POST /apps/:app/processes/:id/exec` | Approval + command allowlist |
+| Object upload | `POST /apps/{app}/objects/tmp/{name}` | Approval waiting for its archive |
+| Build create | `POST /apps/{app}/builds` | The approval's archive, manifest check |
+| Build and build log read | `GET /apps/{app}/builds/{id}`, build logs | The approval's build |
+| Release read and promote | `GET /apps/{app}/releases/{id}`, `POST .../promote` | The approval's release |
+| Process start | `POST /apps/{app}/services/{service}/processes` | The approval's release, command in `approved_deploy_commands` |
+| Process exec and stop | `SOCKET /apps/{app}/processes/{pid}/exec`, `DELETE /apps/{app}/processes/{pid}` | A process started under the approval |
+
+Each check also requires that the token's owner could do the action themselves: an approval never gives a token
+more than its owner's role.
 
 ### Validation Flow
 
@@ -356,8 +369,7 @@ After successful deployment, the request is marked as deployed.
 {
   "status": "deployed",
   "build_id": "BABC123",
-  "release_id": "RABC123",
-  "deployed_at": "2024-01-15T10:42:00Z"
+  "release_id": "RABC123"
 }
 ```
 
@@ -394,50 +406,44 @@ or the app's `vcs_repo` is missing. No request or `create` entry exists for a re
 ### Common Errors
 
 <Tabs>
-<TabItem label="No Approval Found">
+<TabItem label="No Valid Approval">
 
 ```
-Error: No active deploy approval found for this commit
+Error: You don't have permission to promote releases.
 ```
+
+A token that relies on `deploy_with_approval` gets the same 403 as any other missing permission when it has no
+approved, unexpired request for the app (`permission denied` for uploads and builds). The gateway doesn't say
+which, so it can't be used to probe approvals. With `LOG_LEVEL=debug` and `DEBUG_TOPICS=deploy.approval`, the
+gateway logs the reason (`deploy approval expired`, `deploy approval status check failed: expected=approved
+actual=pending`, or not found).
 
 **Causes:**
-- Approval request not created
-- Approval expired
-- Different commit hash
+- No request was created for this app and token, or it was rejected
+- The approval window passed
+- The request is for a different commit or token
 
 **Resolution:**
-- Create new approval request
-- Check commit hash matches exactly
-
-</TabItem>
-<TabItem label="Approval Expired">
-
-```
-Error: Deploy approval has expired (was approved 20 minutes ago)
-```
-
-**Causes:**
-- Deployment took too long after approval
-- Approval window is too short
-
-**Resolution:**
-- Request new approval
-- Increase `RGW_SETTING_DEPLOY_APPROVAL_WINDOW_MINUTES`
+- `rack-gateway deploy-approval show --app <app> --commit <sha>` shows the request and its status
+- Create a new request, or ask an admin to extend a lapsed approval
 
 </TabItem>
 <TabItem label="Manifest Validation Failed">
 
 ```
-Error: Image tag does not match approved commit
+Error: manifest validation failed: service web image "docker.io/myorg/app:latest" is not tagged with the approved commit 0123456789abcdef0123456789abcdef01234567
 ```
 
+The build is refused with 403. Other messages name the rule that failed, for example `does not match required
+pattern`, or `git-sha ... does not match the approved commit ...`.
+
 **Causes:**
-- Image tags don't include commit hash
-- Wrong commit hash in image tag
+- Image tags don't include the full approved commit
+- An image doesn't match the app's `service_image_patterns`
 
 **Resolution:**
-- Ensure images are tagged with approved commit
-- Check image tag pattern matches your convention
+- Tag images with the full commit SHA, and reference those tags in `convox.yml`
+- Check the pattern for each service
 
 </TabItem>
 </Tabs>
@@ -447,9 +453,11 @@ Error: Image tag does not match approved commit
 | Scenario | Behavior |
 |----------|----------|
 | CI job fails after approval | Approval still valid until expiry |
-| Build fails | Can retry build with same approval |
-| Promote fails | Can retry promote with same approval |
-| Approval expired | Must create new request and get new approval |
+| Upload or build refused by the rack | The claim is released, so CI can retry with the same approval |
+| Build ran on the rack and failed | An approval makes one build: create a new request |
+| Promote refused by the rack | Can retry promote with same approval |
+| Promote timed out or lost its connection | Retries are refused for up to 15 minutes, since it may still be running |
+| Approval expired | Ask an admin to extend it, or create a new request |
 
 ## Best Practices
 

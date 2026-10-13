@@ -5,11 +5,12 @@ description: "Role-based access control in Rack Gateway."
 
 import { Aside } from '@astrojs/starlight/components';
 
-Rack Gateway uses Role-Based Access Control (RBAC) to manage what users can do. Each user is assigned a role that determines their permissions.
+Rack Gateway uses Role-Based Access Control (RBAC) to manage what users can do. Each user holds one or more roles, and their permissions are everything those roles grant.
 
-## The Four Roles
+## The Roles
 
-Rack Gateway has four built-in roles arranged in a hierarchy:
+Rack Gateway has four built-in roles for people, arranged in a hierarchy, and a fifth, CI/CD, that only API tokens
+can hold:
 
 ```mermaid
 flowchart TB
@@ -21,7 +22,7 @@ flowchart TB
     Admin --> Deployer --> Ops --> Viewer
 ```
 
-Each role inherits all permissions from the roles below it.
+Each role includes all permissions of the roles below it. See [Roles](/security/rbac/roles/) for CI/CD.
 
 ## Role Capabilities
 
@@ -29,7 +30,7 @@ Each role inherits all permissions from the roles below it.
 |------|--------|-----------|
 | **Viewer** | List apps, view logs, see builds, read processes | Any write operations |
 | **Ops** | All Viewer + restart apps, exec into containers, manage processes | Build, deploy, create apps |
-| **Deployer** | All Ops + build, deploy, create/update apps, manage environment | Delete apps, user management |
+| **Deployer** | All Ops + build, deploy, update apps, manage environment, create their own API tokens | Create or delete apps, user management |
 | **Admin** | Everything including user management, settings, destructive operations | Nothing restricted |
 
 ## Permission Format
@@ -70,8 +71,8 @@ Operational access for incident response and debugging.
 **Additional operations:**
 - Restart applications
 - Execute commands in containers (`exec`)
-- Start and stop processes
-- Scale applications (within limits)
+- Run one-off processes and stop processes
+- View environment variables (secret values stay masked) and list releases
 
 **Use case:** On-call engineers and operations staff.
 
@@ -83,10 +84,10 @@ Deployment access for engineers who ship code.
 
 **Additional operations:**
 - Create builds
-- Promote releases
-- Create and update applications
-- Manage environment variables
-- Manage resources
+- Create and promote releases
+- Update applications and scale their services
+- Set environment variables
+- Request deploy approvals, and create API tokens for their own CI pipelines
 
 **Use case:** Software engineers and DevOps.
 
@@ -115,9 +116,9 @@ Request → Extract User → Check Role → Map to Permission → Allow/Deny
 ```
 
 1. **Extract User** - Identify the user from session or API token
-2. **Check Role** - Look up the user's role
-3. **Map to Permission** - Convert the API endpoint to a permission
-4. **Allow/Deny** - Check if the role grants the permission
+2. **Check Role** - Read the user's current roles from the database (on every request, so a change applies at once)
+3. **Map to Permission** - Convert the API endpoint to a permission. An endpoint without one is refused
+4. **Allow/Deny** - Check whether the roles grant the permission, then whether its [MFA requirement](/security/rbac/permissions/#mfa-requirements) is met
 
 ### Example: Deploying an App
 
@@ -127,8 +128,9 @@ rack-gateway deploy -a myapp
 
 1. User identified as `developer@company.com`
 2. User has role `deployer`
-3. Deploy maps to `convox:release:promote`
-4. Deployer role includes this permission → **Allowed**
+3. A deploy uploads the source (`convox:object:create`), creates a build (`convox:build:create`) and promotes the
+   release (`convox:release:promote`)
+4. Deployer role includes these permissions → **Allowed** (the CLI asks for MFA once, for the step-up window)
 
 ### Example: Deleting an App
 
@@ -143,17 +145,20 @@ rack-gateway apps delete myapp
 
 ## API Tokens and RBAC
 
-API tokens have their own role assignment:
+API tokens hold their own permissions, given as a role shortcut or as individual permissions:
 
 ```bash
-# Create a deployer-level token for CI/CD
-rack-gateway api-token create --name "CI/CD" --role deployer
+# Create a token with the CI/CD role's permissions
+rack-gateway api-token create --name "CI/CD" --role cicd
 ```
 
-The token's role determines what operations it can perform, independent of who created it.
+Every request a token makes needs the permission in the token *and* in its owner's current roles. A token can't be
+given more than its owner's roles allow, and if the owner is demoted, locked or deleted, the token loses what the
+owner lost.
 
 <Aside type="note" title="Token Scope">
-An admin can create a viewer-level token. The token's capabilities are limited by its assigned role, not the creator's role.
+An admin can create a viewer-level token: it can do only what a viewer can. A deployer can't create an admin-level
+token.
 </Aside>
 
 ## Assigning Roles
@@ -161,11 +166,11 @@ An admin can create a viewer-level token. The token's capabilities are limited b
 Roles are assigned by administrators through the web UI:
 
 1. Go to **Users**
-2. Click on a user
-3. Select their role from the dropdown
-4. Save changes
+2. Edit the user
+3. Tick the roles they should have
+4. Save changes (this needs MFA)
 
-Role changes take effect immediately for new requests.
+Role changes take effect immediately, for requests already signed in too.
 
 ## RBAC and Audit Logging
 
@@ -175,11 +180,13 @@ All RBAC decisions are logged:
 {
   "timestamp": "2024-01-15T10:30:00Z",
   "user_email": "developer@company.com",
-  "method": "DELETE",
-  "path": "/apps/myapp",
+  "action_type": "convox",
+  "action": "app.delete",
+  "resource": "myapp",
+  "resource_type": "app",
+  "status": "denied",
   "rbac_decision": "deny",
-  "required_permission": "convox:app:delete",
-  "user_role": "deployer"
+  "http_status": 403
 }
 ```
 

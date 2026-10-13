@@ -5,13 +5,15 @@ description: "PostgreSQL configuration for Rack Gateway."
 
 import { Aside, Steps, Tabs, TabItem } from '@astrojs/starlight/components';
 
-Rack Gateway requires PostgreSQL 14+ for storing users, API tokens, audit logs, and session data.
+Rack Gateway stores users, API tokens, sessions, settings and the audit log in PostgreSQL. Give each gateway its
+own database, with an admin user for migrations and a separate, narrower app user for the gateway itself (see
+[Database Users and Audit Roles](#database-users-and-audit-roles)).
 
 ## Requirements
 
 | Requirement | Minimum | Recommended |
 |-------------|---------|-------------|
-| **PostgreSQL version** | 14 | 16 |
+| **PostgreSQL version** | 16 (what development and CI run) | 16 |
 | **Storage** | 10GB | 50GB+ (scales with audit logs) |
 | **Memory** | 256MB | 1GB+ |
 | **Connections** (`max_connections`) | 60 (default pools, see below) | 100+ |
@@ -77,25 +79,10 @@ gateway process. Small RDS instances allow fewer than 100 connections.
 
 ## Database Provisioning
 
+Use a PostgreSQL server where you can create roles: the migrations need the audit roles below, and the gateway
+should connect as a user that can't change the audit log.
+
 <Tabs>
-<TabItem label="Convox Resource">
-
-Create a PostgreSQL resource in your Convox rack:
-
-```bash
-# Create database
-convox resources create postgres --name gateway-db
-
-# Link to application
-convox resources link gateway-db -a rack-gateway
-
-# View connection info
-convox resources info gateway-db
-```
-
-Convox automatically sets `DATABASE_URL` for linked apps.
-
-</TabItem>
 <TabItem label="AWS RDS">
 
 Create an RDS PostgreSQL instance:
@@ -135,6 +122,9 @@ resource "aws_db_instance" "gateway" {
 
 For local development:
 
+The repository's `docker-compose.yml` runs `postgres:16-alpine` and the `task` helpers create the audit roles
+for you (`scripts/audit-roles.sql`). For your own container:
+
 ```yaml
 services:
   postgres:
@@ -152,8 +142,53 @@ volumes:
   pgdata:
 ```
 
+Then create the audit roles before the first migration:
+`psql "$DATABASE_URL" -f scripts/audit-roles.sql`.
+
 </TabItem>
 </Tabs>
+
+## Database Users and Audit Roles
+
+The audit log lives in the `audit` schema, owned by a role the gateway never uses. The migrations expect three
+roles that don't log in to exist already:
+
+| Role | Holds | Granted to |
+|------|-------|------------|
+| `audit_owner` | Owns the `audit` schema, its table and functions | The admin user (so migrations can create them) |
+| `audit_writer` | Appending events through `audit.append_audit_event` | The app user |
+| `audit_reader` | Reading events | The app user |
+
+`scripts/audit-roles.sql` creates them (it's safe to run again); with Terraform, use `postgresql_role` resources.
+
+Then use two login users:
+
+- **Admin user** (for example the RDS master user, `rack_gateway_admin`): owns the database's tables and runs
+  `migrate`, `reset-db` and maintenance. It must be a member of `audit_owner`.
+- **App user** (for example `rack_gateway_app`): what the gateway connects as. It can read and write the
+  ordinary tables, append to the audit log and read it, but it can't update or delete audit events, change the
+  audit functions, or alter the schema.
+
+```sql
+-- As the admin user, after creating the audit roles
+GRANT audit_owner TO rack_gateway_admin;
+
+CREATE ROLE rack_gateway_app WITH LOGIN PASSWORD '...';
+GRANT audit_writer, audit_reader TO rack_gateway_app;
+GRANT CONNECT ON DATABASE rack_gateway TO rack_gateway_app;
+GRANT USAGE ON SCHEMA public TO rack_gateway_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO rack_gateway_app;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO rack_gateway_app;
+-- Tables and sequences later migrations create
+ALTER DEFAULT PRIVILEGES FOR ROLE rack_gateway_admin IN SCHEMA public
+  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO rack_gateway_app;
+ALTER DEFAULT PRIVILEGES FOR ROLE rack_gateway_admin IN SCHEMA public
+  GRANT USAGE, SELECT ON SEQUENCES TO rack_gateway_app;
+```
+
+The repository's `convox.yml` gives the `gateway` service the app user (`DATABASE_URL`) and the `admin` service
+the admin user (`RGW_DATABASE_URL=${ADMIN_DATABASE_URL}`; `scripts/start-gateway.sh` unsets `ADMIN_DATABASE_URL`
+before the server starts).
 
 ## Migrations
 
@@ -166,19 +201,22 @@ starts. The published image never does: run `rack-gateway-api migrate` before st
 
 Run migrations manually:
 
-```bash
-# Via Docker
-docker exec rack-gateway rack-gateway-api migrate
+Run them as the admin user:
 
-# Via Convox
-convox run gateway -- rack-gateway-api migrate -a rack-gateway
+```bash
+# Via Docker (the binary is /app/rack-gateway-api in the image)
+docker run --rm -e DATABASE_URL="$ADMIN_DATABASE_URL" -e COLUMN_ENCRYPTION_KEY \
+  docspringcom/rack-gateway:vX.Y.Z ./rack-gateway-api migrate
+
+# Via Convox: against the new release, before promoting it
+convox run admin ./rack-gateway-api migrate -a rack-gateway --release <release-id>
 ```
 
 ### Migration Safety
 
-- Migrations are idempotent - safe to run multiple times
-- Each migration runs in a transaction
-- Failures abort startup with clear error messages
+- `migrate` applies only migrations missing from `schema_migrations`, so it's safe to run again
+- Each migration runs in a transaction: a failure rolls it back, and `migrate` exits non-zero naming it
+- It also runs the job queue's (River) migrations
 
 ## Database Reset
 
@@ -232,6 +270,9 @@ The gateway creates these tables:
 | `cli_login_states` | CLI OAuth state tracking |
 | `rgw_internal_metadata` | Environment markers |
 | `slack_integration` | Slack OAuth tokens |
+| `mfa_attempts`, `used_totp_steps`, `webauthn_challenges` | MFA rate limiting, TOTP replay protection, single-use WebAuthn challenges |
+| `audit_verification_status` | The latest audit verification run (display only) |
+| `river_*` | The background job queue |
 | `schema_migrations` | Migration tracking |
 
 ## Backup and Recovery
@@ -295,15 +336,16 @@ Audit logs grow continuously. Estimate storage needs:
 
 ### Log Retention
 
-For compliance, set appropriate retention:
+The gateway never deletes audit events, so the database keeps them as long as it exists: retention is a matter of
+keeping its backups. Two settings control the copies elsewhere:
 
 ```bash
-# 400 days (annual audit + buffer)
-convox env set LOG_RETENTION_DAYS=400
-
-# 7 years (SOX/FINRA compliance)
-convox env set LOG_RETENTION_DAYS=2557
+# CloudWatch retention for the container logs, including the stdout request log (convox.yml appSettings)
+convox env set LOG_RETENTION_DAYS=400 -a rack-gateway
 ```
+
+S3 anchors are locked for the bucket's default Object Lock retention, set on the bucket (see
+[S3 WORM Storage](/deployment/terraform/s3-worm-storage/)).
 
 ### Audit Anchoring
 
@@ -358,8 +400,8 @@ SELECT
 FROM pg_stat_user_indexes
 ORDER BY idx_scan DESC;
 
--- Reindex if needed
-REINDEX TABLE audit_events;
+-- Reindex if needed (as the admin user)
+REINDEX TABLE audit.audit_event;
 ```
 
 ## Monitoring
@@ -445,22 +487,8 @@ DATABASE_URL=postgres://user:pass@host:5432/db?sslmode=require
 
 ### Access Control
 
-Create a dedicated database user:
-
-```sql
--- Create role with minimal privileges
-CREATE ROLE rack_gateway_app WITH LOGIN PASSWORD 'secure-password';
-
--- Grant necessary permissions
-GRANT CONNECT ON DATABASE rack_gateway TO rack_gateway_app;
-GRANT USAGE ON SCHEMA public TO rack_gateway_app;
-GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO rack_gateway_app;
-GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO rack_gateway_app;
-
--- For migrations (separate admin user)
-CREATE ROLE rack_gateway_admin WITH LOGIN PASSWORD 'admin-password';
-GRANT ALL PRIVILEGES ON DATABASE rack_gateway TO rack_gateway_admin;
-```
+Connect the gateway as the app user, never the admin user: see
+[Database Users and Audit Roles](#database-users-and-audit-roles).
 
 ## Troubleshooting
 
@@ -483,17 +511,17 @@ psql $DATABASE_URL -c "SELECT * FROM pg_stat_activity WHERE datname = 'rack_gate
 # Check migration status
 psql $DATABASE_URL -c "SELECT * FROM schema_migrations ORDER BY version"
 
-# View gateway logs for migration errors
-convox logs -a rack-gateway --filter migration
+# The migrate command prints the migration that failed and why; if it reports a missing role,
+# create the audit roles (scripts/audit-roles.sql) and grant audit_owner to the admin user
 ```
 
 ### Performance Issues
 
 ```sql
 -- Find slow queries
-SELECT query, calls, mean_time, total_time
+SELECT query, calls, mean_exec_time, total_exec_time
 FROM pg_stat_statements
-ORDER BY total_time DESC
+ORDER BY total_exec_time DESC
 LIMIT 10;
 
 -- Check table sizes

@@ -244,17 +244,25 @@ The gateway runs the same check every hour and alerts through Sentry and Slack w
 | **Investigation** | Incidents may not be discovered for months |
 | **Cost** | Storage costs increase with retention |
 
-Rack Gateway default: 400 days (exceeds most compliance requirements)
+Rack Gateway never deletes audit events: the table is append-only. Its S3 WORM anchors are locked for the
+bucket's default Object Lock retention (400 days in the example Terraform).
 
 ### Implementing Retention
 
-```bash
-# Environment variable
-LOG_RETENTION_DAYS=400
-
-# For S3 WORM
-WORM_RETENTION_DAYS=400  # Objects locked for this period
+```hcl
+# The anchor bucket's default retention locks every anchor
+resource "aws_s3_bucket_object_lock_configuration" "audit_anchors" {
+  bucket = aws_s3_bucket.audit_anchors.id
+  rule {
+    default_retention {
+      mode = "COMPLIANCE"
+      days = 400
+    }
+  }
+}
 ```
+
+The events themselves stay in Postgres; keep its backups as long as your policies require.
 
 <Aside type="caution">
 Once data is written to WORM storage with a retention period, it **cannot** be deleted until that period expires—even by administrators. Set retention carefully.
@@ -285,11 +293,11 @@ flowchart TD
 ```
 
 **Flow**:
-1. Audit middleware captures request details
-2. Request processed by handler
-3. Response captured (success/failure)
-4. Log entry written to database
-5. Periodic job creates anchors in S3 WORM
+1. Audit middleware writes an `attempted` entry, and refuses the request (503) if it can't
+2. Request processed by handler (or forwarded to the rack)
+3. The result entry is written with the same request ID
+4. An hourly job writes an anchor of the chain head to S3 WORM
+5. An hourly job verifies the chain and anchors, alerting Sentry and Slack on failure
 
 ### What Gets Logged
 
@@ -298,7 +306,7 @@ flowchart TD
 | **Authentication** | Login attempts, OAuth callbacks |
 | **Session** | Session creation, expiration, logout |
 | **MFA** | Enrollment, verification, removal |
-| **Convox API** | All proxied requests and responses |
+| **Convox API** | Every proxied request and its outcome (status, not the response body) |
 | **Admin Actions** | User management, role changes |
 | **API Tokens** | Creation, deletion, usage |
 | **Settings** | Configuration changes |
@@ -315,30 +323,26 @@ flowchart TD
 ### Web UI
 
 Access audit logs through the web interface:
-- Filter by user, time range, event type
+- Filter by user, status, action type, resource type, text and time range
 - Export to CSV for external analysis
-- View detailed JSON for each entry
+- View each entry's details
 
 ### API
 
 ```bash
-# Get recent audit logs
-curl https://gateway.example.com/api/v1/admin/audit \
-  -H "Authorization: Bearer $TOKEN" \
-  -d '{"from": "2024-01-01", "to": "2024-01-31"}'
+# Requests refused in the last 30 days (with an admin's session)
+curl -b "session_token=$TOKEN" \
+  "https://gateway.example.com/api/v1/audit-logs?status=denied&range=30d"
 ```
 
-### CLI
+See [Using Audit Logs](/security/rbac/best-practices/#using-audit-logs) for the filters. API tokens can't read
+the audit log, and there's no CLI command for it.
+
+### Verifying Integrity
 
 ```bash
-# View recent logs
-rack-gateway admin audit list --limit 100
-
-# Filter by user
-rack-gateway admin audit list --user alice@example.com
-
-# Filter by event type
-rack-gateway admin audit list --type convox.releases.promote
+# Check the hash chain and S3 anchors (on the gateway's admin service)
+rack-gateway-api verify-audit
 ```
 
 ## Best Practices

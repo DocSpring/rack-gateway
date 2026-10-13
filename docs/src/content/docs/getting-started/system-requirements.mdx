@@ -11,20 +11,21 @@ This page covers the requirements for both local development and production depl
 
 ### Required Software
 
-| Software | Minimum Version | Purpose |
-|----------|-----------------|---------|
-| Go | 1.26+ | Gateway server and CLI |
-| Docker | 20.10+ | PostgreSQL and build containers |
+| Software | Version | Purpose |
+|----------|---------|---------|
+| mise | Latest | Tool versions and environment variables (`mise install` installs the pinned Go, Bun, Node and golangci-lint) |
+| Go | 1.26.9+ (`mise.toml` pins 1.27.2) | Gateway server and CLI |
+| Bun | 1.4+ (`mise.toml` pins 1.4.2) | Web frontend build tool |
+| Docker | 20.10+ | PostgreSQL, MinIO and the E2E stack |
 | Docker Compose | 2.0+ | Container orchestration |
-| Bun | 1.3+ | Web frontend build tool |
-| mise | Latest | Environment variable management |
+| Task | 3.x | Task runner: every build, test and lint command is a task |
+| Overmind | Latest | Runs the local services for `task dev` |
 
 ### Optional Software
 
 | Software | Purpose |
 |----------|---------|
-| libfido2 | WebAuthn/FIDO2 support in CLI |
-| Task | Task runner (recommended) |
+| libfido2 | WebAuthn/FIDO2 support in the CLI (the CLI build needs it unless you build with `-tags nofido`) |
 
 ## Installation
 
@@ -35,35 +36,29 @@ This page covers the requirements for both local development and production depl
     /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 
     # Install required software
-    brew install go
-    brew install --cask docker
-    brew install oven-sh/bun/bun
     brew install mise
+    mise install          # Go, Bun, Node and golangci-lint at the pinned versions
+    brew install --cask docker
+    brew install go-task/tap/go-task overmind
 
     # Install optional software
-    brew install go-task/tap/go-task
     brew install libfido2
     ```
   </TabItem>
   <TabItem label="Linux (Ubuntu/Debian)">
     ```bash
-    # Go
-    wget https://go.dev/dl/go1.26.9.linux-amd64.tar.gz
-    sudo tar -C /usr/local -xzf go1.26.9.linux-amd64.tar.gz
-    echo 'export PATH=$PATH:/usr/local/go/bin' >> ~/.bashrc
+    # mise, then the pinned Go, Bun, Node and golangci-lint
+    curl https://mise.jdx.dev/install.sh | sh
+    mise install
 
     # Docker
     curl -fsSL https://get.docker.com | sh
     sudo usermod -aG docker $USER
 
-    # Bun
-    curl -fsSL https://bun.sh/install | bash
-
-    # mise
-    curl https://mise.jdx.dev/install.sh | sh
-
     # Task runner
     sh -c "$(curl --location https://taskfile.dev/install.sh)" -- -d -b /usr/local/bin
+
+    # Overmind (needs tmux): see https://github.com/DarthSim/overmind#installation
 
     # libfido2 (for WebAuthn CLI support)
     sudo apt-add-repository ppa:yubico/stable
@@ -75,7 +70,7 @@ This page covers the requirements for both local development and production depl
     If you have the Task runner installed:
 
     ```bash
-    # Install all development dependencies automatically
+    # Install air, goimports and libfido2 (and Task and Bun if missing)
     task dev-setup
     ```
 
@@ -97,20 +92,19 @@ This page covers the requirements for both local development and production depl
 
 | Component | Requirement |
 |-----------|-------------|
-| CPU | 1+ vCPU |
-| Memory | 512MB+ RAM |
-| Disk | 100MB for application |
-| OS | Linux (x86_64) |
+| CPU | The default `convox.yml` reserves 0.05 vCPU |
+| Memory | The default `convox.yml` reserves 128 MB (also its memory limit) |
+| OS | Linux (x86_64): the published image is `linux/amd64` |
 
-The gateway is lightweight and can run on small instances. A single instance handles hundreds of requests per second.
+The gateway is lightweight; the `admin` service that runs migrations reserves 0.25 vCPU and 512 MB while it runs.
 
 ### Database
 
 | Component | Requirement |
 |-----------|-------------|
-| PostgreSQL | 14+ |
-| Storage | 1GB+ (grows with audit logs) |
-| Connections | 10+ per gateway instance |
+| PostgreSQL | 16 (what the dev and test stacks run) |
+| Storage | 1GB+ (grows with audit logs, which are never deleted) |
+| Connections | Up to 20 per gateway process (two pools of `DB_MAX_OPEN_CONNS`, default 10) |
 
 <Aside type="tip" title="Managed PostgreSQL Recommended">
 For production, use a managed PostgreSQL service (RDS, Cloud SQL, etc.) for automatic backups and high availability.
@@ -120,9 +114,10 @@ For production, use a managed PostgreSQL service (RDS, Cloud SQL, etc.) for auto
 
 | Port | Service | Access |
 |------|---------|--------|
-| 8080 (default) | Gateway API | Internal or VPN |
-| 443 | HTTPS (via load balancer) | Users/CI/CD |
+| 8080 (default `PORT`) | Gateway API (plain HTTP behind your TLS terminator) | Internal or VPN |
+| 443 | HTTPS (via load balancer or ingress) | Users/CI/CD |
 | 5432 | PostgreSQL | Gateway only |
+| 5443 | Convox rack API (outbound from the gateway) | Gateway only |
 
 ## Environment Configuration
 
@@ -137,28 +132,34 @@ This project does not use `.env` files. All environment configuration goes throu
 
 ### Required Environment Variables
 
-For development, the defaults in `mise.toml` work with mock services. For production:
+For development, the defaults in `mise.toml` work with mock services. In production the gateway reads its
+configuration from the environment of its container (for example `convox env set` or Terraform), not from mise.
+The minimum is:
 
-```toml
-# mise.local.toml (production example)
-
-[env]
+```bash
 # OAuth
-GOOGLE_CLIENT_ID = "your-client-id.apps.googleusercontent.com"
-GOOGLE_CLIENT_SECRET = "your-client-secret"
-GOOGLE_ALLOWED_DOMAIN = "your-company.com"
+GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=your-client-secret
+GOOGLE_ALLOWED_DOMAIN=your-company.com
+DOMAIN=gateway.your-company.com
 
 # Database
-DATABASE_URL = "postgres://user:pass@host:5432/rack_gateway?sslmode=require"
+DATABASE_URL=postgres://user:pass@host:5432/rack_gateway?sslmode=require
 
-# Security
-APP_SECRET_KEY = "your-32-byte-random-key"
+# Secrets (each at least 32 random bytes; generate them, never reuse the dev values)
+APP_SECRET_KEY=...
+AUDIT_HMAC_SECRET=...
+COLUMN_ENCRYPTION_KEY=...   # base64 of exactly 32 bytes
 
 # Convox Rack
-RACK_HOST = "https://api.rack.convox.cloud"
-RACK_TOKEN = "your-rack-token"
-RACK_ALIAS = "production"
+RACK_HOST=https://api.rack.convox.cloud
+RACK_TOKEN=your-rack-token
+RACK_ALIAS=production
+ADMIN_USERS=you@your-company.com
 ```
+
+Add `AUDIT_ANCHOR_BUCKET` and `AUDIT_ANCHOR_CHAIN_ID` for WORM anchors. See the
+[Production Checklist](/deployment/production-checklist/).
 
 See [Configuration Reference](/configuration/environment-variables/) for all options.
 
@@ -193,7 +194,7 @@ For WebAuthn/FIDO2 MFA support:
 
 - **YubiKey 5 series** (USB-A, USB-C, NFC)
 - **YubiKey Security Key** series
-- **Platform authenticators** (Touch ID, Windows Hello)
+- **Platform authenticators** (Touch ID, Windows Hello), in the web UI only
 - Any FIDO2-compatible authenticator
 
 ### CLI Requirements
@@ -220,7 +221,8 @@ The `rack-gateway` CLI requires `libfido2` for WebAuthn support:
 </Tabs>
 
 <Aside type="note">
-Without libfido2, the CLI can still authenticate but won't support WebAuthn MFA. TOTP and YubiKey OTP work without libfido2.
+A CLI built without libfido2 (`-tags nofido`, like the prebuilt Linux release) can still authenticate but won't
+support WebAuthn MFA. TOTP, YubiKey OTP and backup codes work without libfido2.
 </Aside>
 
 ## Verifying Installation
@@ -229,14 +231,14 @@ After installing dependencies:
 
 ```bash
 # Check Go version
-go version  # Should show 1.26+
+go version  # Should show 1.26.9 or newer
 
 # Check Docker
 docker --version
 docker compose version
 
 # Check Bun
-bun --version  # Should show 1.3+
+bun --version  # Should show 1.4+
 
 # Check mise
 mise --version

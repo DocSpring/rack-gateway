@@ -33,7 +33,7 @@ Admins only approve once in the gateway. CircleCI jobs proceed automatically.
 ### Gateway Environment Variables
 
 ```bash
-# CircleCI API token with workflow approval permissions
+# CircleCI personal API token of a user who can approve jobs in the project
 CIRCLECI_TOKEN=your-circleci-api-token
 ```
 
@@ -41,24 +41,28 @@ CIRCLECI_TOKEN=your-circleci-api-token
 
 <Steps>
 
-1. Visit https://app.circleci.com/settings/user/tokens
-2. Click "Create New Token"
-3. Name it "Rack Gateway Deploy Approvals"
+1. Sign in to CircleCI as the user the approvals should come from (ideally a dedicated machine user with write
+   access to the project)
+2. Visit https://app.circleci.com/settings/user/tokens
+3. Click "Create New Token" and name it "Rack Gateway Deploy Approvals"
 4. Copy the token immediately
 
 </Steps>
+
+Approving a job needs a personal API token: CircleCI project tokens can't call the v2 approval endpoint. Personal
+tokens have no scopes; they act as that user.
 
 ### Per-App Settings
 
 Each app using CircleCI needs these settings:
 
-| Setting | Required | Description | Example |
-|---------|----------|-------------|---------|
-| `vcs_provider` | Yes | Version control provider | `github` |
-| `vcs_repo` | Yes | Repository (org/repo) | `MyOrg/myapp` |
-| `ci_provider` | Yes | CI system | `circleci` |
-| `circleci_approval_job_name` | Yes | Approval job name | `approve_deploy_prod` |
-| `circleci_auto_approve_on_approval` | Yes | Enable auto-approval | `true` |
+| Setting | Default | Description | Example |
+|---------|---------|-------------|---------|
+| `vcs_provider` | `github` | Version control provider (for pipeline links) | `github` |
+| `vcs_repo` | none | Repository (org/repo) | `MyOrg/myapp` |
+| `ci_provider` | `circleci` | CI system | `circleci` |
+| `circleci_approval_job_name` | none | Approval job name | `approve_deploy_prod` |
+| `circleci_auto_approve_on_approval` | `false` | Enable auto-approval | `true` |
 
 <Tabs>
 <TabItem label="Environment Variables">
@@ -132,8 +136,9 @@ jobs:
 
   request_approval:
     docker:
-      - image: docspringcom/ci:deploy
+      - image: cimg/base:current
     steps:
+      - install_rack_gateway
       - run:
           name: Request deploy approval
           command: |
@@ -143,22 +148,35 @@ jobs:
               --branch "$CIRCLE_BRANCH" \
               --ci-metadata "{\"workflow_id\":\"$CIRCLE_WORKFLOW_ID\",\"pipeline_number\":\"<< pipeline.number >>\"}" \
               --message "Deploy $CIRCLE_BRANCH@${CIRCLE_SHA1:0:7} to production"
-          environment:
-            RACK_GATEWAY_API_TOKEN: $RACK_GATEWAY_API_TOKEN
-            RACK_GATEWAY_URL: $RACK_GATEWAY_URL
 
   deploy:
     docker:
-      - image: docspringcom/ci:deploy
+      - image: cimg/base:current
     steps:
       - checkout
+      - install_rack_gateway
       - run:
           name: Deploy via Rack Gateway
-          command: rack-gateway deploy --app myapp
-          environment:
-            RACK_GATEWAY_API_TOKEN: $RACK_GATEWAY_API_TOKEN
-            RACK_GATEWAY_URL: $RACK_GATEWAY_URL
+          command: rack-gateway deploy --app myapp --wait
+
+commands:
+  install_rack_gateway:
+    steps:
+      - run:
+          name: Install the rack-gateway CLI
+          command: |
+            VERSION=v0.1.10
+            BASE=https://github.com/docspring/rack-gateway/releases/download/$VERSION
+            curl -fsSLO $BASE/rack-gateway-linux-amd64.tar.gz
+            curl -fsSLO $BASE/rack-gateway-linux-amd64.tar.gz.sha256
+            sha256sum --check rack-gateway-linux-amd64.tar.gz.sha256
+            tar xzf rack-gateway-linux-amd64.tar.gz
+            sudo install -m 0755 rack-gateway-linux-amd64 /usr/local/bin/rack-gateway
 ```
+
+Set `RACK_GATEWAY_API_TOKEN` (a token with the `cicd` role) and `RACK_GATEWAY_URL` in a CircleCI context or the
+project's environment variables; CircleCI exports them to every job. Use one context per rack, each with its own
+token.
 
 ### Key Points
 
@@ -166,6 +184,8 @@ jobs:
 2. **`approve_deploy_production` job**: CircleCI approval job (type: approval) that blocks workflow
 3. **Job name must match**: Approval job name must match `circleci_approval_job_name` setting
 4. **CI metadata**: Include `workflow_id` and `pipeline_number`
+5. **Deploy job**: The deploy runs under the approval, so its manifest must reference pre-built images tagged with
+   the commit (see [Git Commit Verification](/integrations/deploy-approvals/#git-commit-verification))
 
 <Aside type="caution" title="Job Name Match">
 The approval job name in `.circleci/config.yml` must **exactly match** the `circleci_approval_job_name` setting. This is case-sensitive.
@@ -184,53 +204,19 @@ The gateway requires specific metadata for auto-approval:
 
 | Field | Source | Purpose |
 |-------|--------|---------|
-| `workflow_id` | `$CIRCLE_WORKFLOW_ID` | Identify workflow for job approval |
-| `pipeline_number` | `<< pipeline.number >>` | Build pipeline URL for display |
+| `workflow_id` | `$CIRCLE_WORKFLOW_ID` | Identify workflow for job approval (must be a UUID) |
+| `pipeline_number` | `<< pipeline.number >>` | Build pipeline URL for display (required for auto-approval) |
 
 <Aside type="note">
 `pipeline.number` uses CircleCI's pipeline parameter syntax (`<< >>`), not environment variable syntax (`$`).
 </Aside>
 
-## Tailscale Setup
+## Private Gateways
 
-If your gateway is accessible only via Tailscale (recommended), CircleCI needs to connect to your Tailscale network.
-
-### Docker Image
-
-Use a CI image with Tailscale installed:
-
-```yaml
-jobs:
-  request_approval:
-    docker:
-      - image: docspringcom/ci:deploy
-```
-
-### CircleCI Contexts
-
-Configure these contexts:
-
-**`deploy-app` context** (shared):
-- `TAILSCALE_OAUTH_SECRET` - Tailscale OAuth client secret
-
-**Per-environment contexts** (e.g., `convox-production`):
-- `RACK_GATEWAY_URL` - Gateway Tailscale hostname
-- `RACK_GATEWAY_API_TOKEN` - API token with `cicd` role
-
-### Tailscale Connection
-
-Commands automatically handle Tailscale connection:
-
-```yaml
-steps:
-  - setup_tailscale
-  - run: rack-gateway deploy-approval request ...
-```
-
-The `setup_tailscale` command:
-1. Starts Tailscale daemon
-2. Connects using OAuth secret as ephemeral node
-3. Verifies connectivity to gateway
+A gateway that's only reachable on a private network (Tailscale, a VPN, a VPC) needs the CI job to join that
+network before it calls the gateway. With Tailscale, run each job as an ephemeral node with a tag for CI, and let
+your Tailscale ACLs allow that tag to reach only the gateway. Store the Tailscale auth key or OAuth client secret in
+the same CircleCI context as the gateway token.
 
 ## Auto-Approval Flow
 
@@ -254,6 +240,9 @@ sequenceDiagram
     CircleCI-->>Gateway: 202 Accepted
 ```
 
+The approval runs as a background job a moment after the admin approves. If the workflow was rerun, the gateway
+approves the hold job in the newest workflow with the same name in that pipeline.
+
 The `ci_metadata` comes from the CI job that requested the approval, so the gateway doesn't trust it on its
 own: the hold job is only approved when the workflow's pipeline is building the approved commit of the app's
 repository, and the job is re-checked against the deploy approval on every attempt (retries can run later,
@@ -271,7 +260,8 @@ after a rejection or expiry).
 
 The gateway builds URLs for display in the web UI:
 
-**Formula:**
+The request's page in the web UI links the CircleCI pipeline:
+
 ```
 https://app.circleci.com/pipelines/{vcs_short}/{vcs_repo}/{pipeline_number}
 ```
@@ -331,14 +321,15 @@ workflows:
 
 ## Troubleshooting
 
-### CircleCI Shows "Not Connected"
+### CircleCI Card Isn't Enabled
+
+The **Integrations** page shows CircleCI as enabled only when the gateway has a `CIRCLECI_TOKEN`.
 
 <Steps>
 
 1. Verify `CIRCLECI_TOKEN` is set on gateway
 2. Restart gateway after adding environment variable
-3. Check token hasn't expired
-4. Verify token permissions
+3. Check token hasn't been revoked
 
 </Steps>
 
@@ -364,22 +355,26 @@ curl -H "Circle-Token: YOUR_TOKEN" https://circleci.com/api/v2/me
 convox logs --app rack-gateway | grep -i circleci
 ```
 
+Settings problems are logged as warnings when the request is approved, for example `CircleCI auto-approve enabled
+but no approval_job_name configured for app myapp` or `CircleCI auto-approve enabled but no CircleCIToken
+configured`. A failing approval job is logged with its attempts and retried.
+
 **Common error messages:**
 
 | Error | Cause |
 |-------|-------|
-| `approval job 'xxx' not found in workflow` | Job name mismatch |
-| `403 Forbidden` | Token lacks permissions or expired |
-| `workflow not found` | Invalid workflow_id in metadata |
+| `approval job "xxx" not found in workflow` | Job name mismatch |
+| `CircleCI API error (401)` / `(403)` / `(404)` | Token revoked, its user can't approve in the project, or the workflow doesn't exist |
+| `ci_metadata.pipeline_number is required` | The request's `--ci-metadata` has no `pipeline_number` |
 | `invalid CircleCI workflow_id` | `workflow_id` is not a UUID (the job is cancelled) |
 | `CircleCI pipeline does not match the deploy approval` | The pipeline builds another commit or repository, is a fork, or its repository can't be determined (the job is cancelled; approve the hold manually after checking) |
 | `deploy approval is no longer active` | The approval was rejected, expired or deployed before the job ran (the job is cancelled) |
 
 ### API Token Permissions
 
-If you see `403 Forbidden`:
+If you see `CircleCI API error (403)`:
 
-1. Token needs `write:builds` scope
+1. The token's user needs write access to the project (enough to approve a hold job in the CircleCI UI)
 2. Regenerate if necessary:
    - Visit https://app.circleci.com/settings/user/tokens
    - Create new token
@@ -403,20 +398,19 @@ If you see `403 Forbidden`:
 
 ### Token Permissions
 
-The CircleCI token can approve ANY workflow in your organization:
+The CircleCI token can do anything its user can, in every project that user can reach:
 
-- Use a dedicated service account
+- Use a dedicated machine user with access to only the projects you deploy
 - Monitor approval audit logs
-- Restrict token scope to `write:builds` only
 
 ### Approval Validation
 
-Gateway validates:
-- Request exists and is `pending`
-- API token has `cicd` role
-- Admin has `admin` role and passes MFA
-- CI metadata is valid
-- App settings are configured
+Before approving the hold job, the gateway checks:
+- The request is pending, and the approver is an admin who passes MFA
+- The app's `ci_provider` is `circleci`, `circleci_auto_approve_on_approval` is on, and `CIRCLECI_TOKEN` is set
+- The CI metadata is valid, and the app has a `circleci_approval_job_name`
+- The deploy approval is still approved and unexpired when the job runs
+- The workflow's pipeline builds the approved commit of `vcs_repo`, and isn't from a fork
 
 ## Next Steps
 

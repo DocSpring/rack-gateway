@@ -35,7 +35,7 @@ flowchart TB
     [Learn more →](/security/authentication/)
   </Card>
   <Card title="RBAC" icon="setting">
-    Four hierarchical roles with granular permissions controlling access to Convox operations.
+    Four hierarchical roles for people and a CI/CD role for API tokens, with granular permissions and per-permission MFA requirements.
 
     [Learn more →](/security/rbac/)
   </Card>
@@ -73,16 +73,19 @@ Users receive only the permissions they need:
 - **Ops**: Operational access without deployment capabilities
 - **Deployer**: Deployment access without administrative powers
 - **Admin**: Full access for administrators only
+- **CI/CD**: API tokens that request deploy approvals and deploy once approved
 
 ### Secure Defaults
 
 Rack Gateway ships with secure defaults:
 
+- MFA required for every user
 - Sessions expire after inactivity
 - HTTPS required in production
-- Secrets automatically redacted from logs
-- CSRF protection enabled
-- Secure cookie settings
+- Env var values redacted from audit logs unless an app lists them as visible
+- Nothing happens unless its audit entry was written first
+- CSRF protection, a strict Content Security Policy and secure cookies
+- Test-only bypasses compiled out of the published image
 
 ## Threat Model
 
@@ -96,7 +99,7 @@ Rack Gateway protects against common threats:
 | **Insider threats** | Audit logging, RBAC separation |
 | **Token leakage** | Short-lived sessions, API token scoping |
 | **Replay attacks** | Token validation, session tracking |
-| **Man-in-the-middle** | TLS required, certificate validation |
+| **Man-in-the-middle** | HTTPS to the gateway; the gateway reaches the rack API over the rack's private network |
 
 ## Security Sections
 

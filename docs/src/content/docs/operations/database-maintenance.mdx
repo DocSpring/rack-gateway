@@ -20,13 +20,19 @@ rack-gateway-api migrate
 ```
 
 This command:
-- Connects using `DATABASE_URL` or `PG*` environment variables
-- Applies migrations in `internal/gateway/db/migrations/`
+- Connects using the first of `RGW_DATABASE_URL`, `GATEWAY_DATABASE_URL` and `DATABASE_URL` that is set, or
+  else the `PG*` environment variables
+- Applies the migrations built into the binary (from `internal/gateway/db/migrations/`), each in its own
+  transaction
 - Uses `schema_migrations` table to track applied migrations
 - Is safe to run repeatedly (idempotent)
 
+Run it as the admin database user: on Convox, `convox run admin ./rack-gateway-api migrate -a rack-gateway` (the
+`admin` service sets `RGW_DATABASE_URL` to `ADMIN_DATABASE_URL`). The app user can't change the schema.
+
 <Aside type="tip">
-Run `rack-gateway-api migrate` as part of your deployment process to ensure the schema is up to date before starting the application.
+Production gateways never migrate on startup (only development builds do), so run `migrate` as part of every
+deploy, before promoting the new release. `scripts/deploy.sh` does this.
 </Aside>
 
 ### Reset Database
@@ -89,44 +95,99 @@ resource "aws_db_instance" "gateway" {
 }
 ```
 
+### Long-Term Retention (AWS Backup)
+
+RDS automated backups keep at most 35 days. For longer retention (for example 12 monthly and 7 yearly backups),
+add the instance to an AWS Backup plan, one per environment:
+
+```hcl
+resource "aws_backup_vault" "gateway" {
+  name        = "rack-gateway-backups"
+  kms_key_arn = aws_kms_key.backup.arn
+}
+
+resource "aws_backup_plan" "gateway" {
+  name = "rack-gateway"
+
+  rule {
+    rule_name         = "daily"
+    target_vault_name = aws_backup_vault.gateway.name
+    schedule          = "cron(0 3 * * ? *)"
+    lifecycle { delete_after = 7 }
+  }
+
+  rule {
+    rule_name         = "monthly"
+    target_vault_name = aws_backup_vault.gateway.name
+    schedule          = "cron(0 5 1 * ? *)"
+    lifecycle { delete_after = 365 }
+  }
+
+  rule {
+    rule_name         = "yearly"
+    target_vault_name = aws_backup_vault.gateway.name
+    schedule          = "cron(0 6 1 1 ? *)"
+    lifecycle { delete_after = 2555 }
+  }
+}
+
+resource "aws_backup_selection" "gateway_rds" {
+  name         = "rack-gateway-rds"
+  plan_id      = aws_backup_plan.gateway.id
+  iam_role_arn = aws_iam_role.backup.arn # a role AWS Backup can assume, with its RDS backup policy
+  resources    = [aws_db_instance.gateway.arn]
+}
+```
+
+Set the schedules and retention to your policy. The database is the only copy of the full audit log (the S3
+anchors hold hashes), so its backups are your audit log retention.
+
 ### Manual Backup
 
-Create a manual backup using `pg_dump`:
+Create a manual backup using `pg_dump` with the admin connection (the app user can't read every table):
 
 ```bash
 # Full database backup
-pg_dump $DATABASE_URL > rack_gateway_backup_$(date +%Y%m%d).sql
+pg_dump "$ADMIN_DATABASE_URL" > rack_gateway_backup_$(date +%Y%m%d).sql
 
 # Compressed backup
-pg_dump $DATABASE_URL | gzip > rack_gateway_backup_$(date +%Y%m%d).sql.gz
+pg_dump "$ADMIN_DATABASE_URL" | gzip > rack_gateway_backup_$(date +%Y%m%d).sql.gz
 ```
 
 ### Restore from Backup
+
+Prefer the RDS point-in-time restore to just before the problem. A restore to an earlier point loses the audit
+events written since, and the S3 anchors written after that point still name them: `verify-audit` then fails with
+`anchored event N is missing from the database`. Keep that report with your incident record.
 
 <Steps>
 
 1. **Stop the gateway service**
 
    ```bash
-   convox scale gateway --count 0
+   convox scale gateway --count 0 -a rack-gateway
    ```
 
 2. **Restore the database**
 
+   Restore the RDS snapshot, or load a dump as the admin user into a database with the audit roles already
+   created (`scripts/audit-roles.sql`, see [Database Users and Audit Roles](/deployment/database-setup/#database-users-and-audit-roles)):
+
    ```bash
-   psql $DATABASE_URL < rack_gateway_backup_20240115.sql
+   psql "$ADMIN_DATABASE_URL" < rack_gateway_backup_20240115.sql
    ```
 
 3. **Run any pending migrations**
 
    ```bash
-   rack-gateway-api migrate
+   convox run admin ./rack-gateway-api migrate -a rack-gateway
    ```
 
-4. **Restart the service**
+4. **Restart the service and verify the audit log**
 
    ```bash
-   convox scale gateway --count 2
+   convox scale gateway --count 1 -a rack-gateway
+   convox run admin ./rack-gateway-api verify-audit -a rack-gateway
    ```
 
 </Steps>
@@ -143,9 +204,10 @@ The database contains these main tables:
 | `mfa_methods` | User MFA enrollments |
 | `audit.audit_event` | Immutable audit log entries |
 | `mfa_backup_codes` | MFA backup codes |
-| `trusted_devices` | Trusted devices for step-up |
+| `trusted_devices` | Trusted devices (skip MFA at web login) |
 | `settings` | Gateway configuration |
-| `deploy_approval_requests` | Pending deploy approvals |
+| `deploy_approval_requests` | Deploy approval requests |
+| `river_job` | Background jobs (emails, Slack, CI, anchors) |
 
 ### Key Relationships
 
@@ -162,34 +224,31 @@ erDiagram
 
 ### Cleanup Old Sessions
 
-Sessions expire automatically, but you can manually clean up:
+Expired and revoked sessions stay in the table (nothing prunes them). To clear old ones, as the admin user:
 
 ```sql
--- Delete sessions older than 30 days
+-- Sessions that ended more than 30 days ago
 DELETE FROM user_sessions
-WHERE created_at < NOW() - INTERVAL '30 days';
+WHERE (revoked_at IS NOT NULL AND revoked_at < NOW() - INTERVAL '30 days')
+   OR expires_at < NOW() - INTERVAL '30 days';
 ```
 
-### Cleanup Old Audit Logs
+Don't delete by `created_at`: a CLI session stays valid as long as it's used every 90 days.
 
-Audit log retention is policy-driven. WORM anchors use `AUDIT_ANCHOR_RETENTION_DAYS`.
+### Audit Log Growth
+
+Audit events are never deleted. The database refuses `UPDATE` and `DELETE` on `audit.audit_event`, and the hash
+chain needs every event to verify. Plan storage for the log to grow (see
+[Database Setup](/deployment/database-setup/#audit-log-considerations)):
 
 ```sql
--- Check audit log volume
-SELECT COUNT(*), DATE(timestamp) as day
+-- Audit log volume per day
+SELECT COUNT(*), DATE(timestamp) AS day
 FROM audit.audit_event
 GROUP BY DATE(timestamp)
 ORDER BY day DESC
 LIMIT 10;
-
--- Manual cleanup (if needed)
-DELETE FROM audit.audit_event
-WHERE timestamp < NOW() - INTERVAL '400 days';
 ```
-
-<Aside type="caution">
-Be careful with audit log cleanup. These logs may be required for compliance. Always verify retention requirements before deleting.
-</Aside>
 
 ### Vacuum and Analyze
 
@@ -240,9 +299,10 @@ If a migration fails:
 
 1. Check the error message for the specific issue
 2. Fix the underlying problem (permissions, constraints, etc.)
-3. Re-run `rack-gateway migrate`
+3. Re-run `rack-gateway-api migrate`
 
-Migrations are transactional—partial failures won't leave the database in an inconsistent state.
+Each migration runs in a transaction with its `schema_migrations` row, so a failed migration leaves nothing
+behind and is retried on the next run.
 
 ### Connection Issues
 
@@ -311,11 +371,11 @@ docker exec -it rack-gateway-postgres-1 psql -U postgres -d gateway_dev
 
 ## Best Practices
 
-1. **Always run migrations before starting the app** - Include in deployment scripts
+1. **Always run migrations before promoting a release** - Include in deployment scripts
 2. **Use automated backups** - Configure RDS backup retention
 3. **Monitor connection usage** - Prevent connection exhaustion
-4. **Keep audit logs** - Don't delete before retention period expires
-5. **Test restore procedures** - Verify backups actually work
+4. **Keep audit logs** - They can't be deleted; plan storage for them
+5. **Test restore procedures** - Verify backups actually work, and run `verify-audit` on the restored copy
 
 ## Further Reading
 
