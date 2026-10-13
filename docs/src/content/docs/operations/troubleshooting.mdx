@@ -148,8 +148,9 @@ user's.
 ### Lost MFA Device
 
 1. Sign in with a backup code, then remove the lost method and enroll a new one under **Account Security**
-2. Without any method or backup code, an admin must delete the user and add them again. That deletes their API
-   tokens too, so CI using them needs new tokens
+2. Without any method or backup code, an admin chooses **Reset MFA** on the user's page (after confirming who's
+   asking). It removes their methods, backup codes and trusted devices and signs them out; their API tokens are kept.
+   They set up a new method when they next sign in. If the account was locked by failed attempts, unlock it too
 
 ## Database Issues
 

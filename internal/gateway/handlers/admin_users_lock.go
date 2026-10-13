@@ -64,7 +64,7 @@ func (h *AdminHandler) LockUser(c *gin.Context) {
 		return
 	}
 
-	user, adminUser, ok := h.validateLockUnlockUsers(c, userEmail, start, audit.ActionVerbLock)
+	user, adminUser, ok := h.loadUserAndAdmin(c, userEmail, start, audit.ActionVerbLock)
 	if !ok {
 		return
 	}
@@ -134,7 +134,7 @@ func (h *AdminHandler) UnlockUser(c *gin.Context) {
 		return
 	}
 
-	user, adminUser, ok := h.validateLockUnlockUsers(c, userEmail, start, audit.ActionVerbUnlock)
+	user, adminUser, ok := h.loadUserAndAdmin(c, userEmail, start, audit.ActionVerbUnlock)
 	if !ok {
 		return
 	}
@@ -169,7 +169,7 @@ func (h *AdminHandler) UnlockUser(c *gin.Context) {
 	)
 }
 
-func (h *AdminHandler) validateLockUnlockUsers(
+func (h *AdminHandler) loadUserAndAdmin(
 	c *gin.Context,
 	userEmail string,
 	start time.Time,

@@ -15,6 +15,7 @@ const (
 	GlobalSettingAllowDestructiveActions GlobalSettingKey = iota
 	GlobalSettingDefaultCIProvider
 	GlobalSettingDefaultVCSProvider
+	GlobalSettingDeployApprovalRequireDifferentApprover
 	GlobalSettingDeployApprovalsEnabled
 	GlobalSettingDeployApprovalWindowMinutes
 	GlobalSettingMFARequireAllUsers
@@ -26,20 +27,22 @@ const (
 // Global setting key strings. GlobalSettingStepUpWindowMinutes and AppSettingSecretEnvVars have no Key constant:
 // gosec reads those names as hardcoded credentials. Use their String().
 const (
-	KeyAllowDestructiveActions     = "allow_destructive_actions"
-	KeyDefaultCIProvider           = "default_ci_provider"
-	KeyDefaultVCSProvider          = "default_vcs_provider"
-	KeyDeployApprovalsEnabled      = "deploy_approvals_enabled"
-	KeyDeployApprovalWindowMinutes = "deploy_approval_window_minutes"
-	KeyMFARequireAllUsers          = "mfa_require_all_users"
-	KeySessionTimeoutMinutes       = "session_timeout_minutes"
-	KeyTrustedDeviceTTLDays        = "mfa_trusted_device_ttl_days"
+	KeyAllowDestructiveActions                = "allow_destructive_actions"
+	KeyDefaultCIProvider                      = "default_ci_provider"
+	KeyDefaultVCSProvider                     = "default_vcs_provider"
+	KeyDeployApprovalRequireDifferentApprover = "deploy_approval_require_different_approver"
+	KeyDeployApprovalsEnabled                 = "deploy_approvals_enabled"
+	KeyDeployApprovalWindowMinutes            = "deploy_approval_window_minutes"
+	KeyMFARequireAllUsers                     = "mfa_require_all_users"
+	KeySessionTimeoutMinutes                  = "session_timeout_minutes"
+	KeyTrustedDeviceTTLDays                   = "mfa_trusted_device_ttl_days"
 )
 
 var globalSettingKeyToString = [...]string{
 	KeyAllowDestructiveActions,
 	KeyDefaultCIProvider,
 	KeyDefaultVCSProvider,
+	KeyDeployApprovalRequireDifferentApprover,
 	KeyDeployApprovalsEnabled,
 	KeyDeployApprovalWindowMinutes,
 	KeyMFARequireAllUsers,
@@ -176,6 +179,7 @@ var DefaultGlobalSettings = map[string]interface{}{
 	KeyAllowDestructiveActions:                false,
 	KeyDefaultCIProvider:                      "circleci",
 	KeyDefaultVCSProvider:                     "github",
+	KeyDeployApprovalRequireDifferentApprover: false,
 	KeyDeployApprovalsEnabled:                 true,
 	KeyDeployApprovalWindowMinutes:            DefaultDeployApprovalWindowMinutes,
 	KeyMFARequireAllUsers:                     true,

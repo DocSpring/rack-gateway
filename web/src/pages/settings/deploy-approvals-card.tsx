@@ -23,40 +23,48 @@ type DeployApprovalsCardProps = {
   disabled: boolean
 }
 
+type DeployApprovalValues = {
+  deploy_approvals_enabled: boolean
+  deploy_approval_window_minutes: number
+  deploy_approval_require_different_approver: boolean
+}
+
+const DEFAULTS: DeployApprovalValues = {
+  deploy_approvals_enabled: true,
+  deploy_approval_window_minutes: 15,
+  deploy_approval_require_different_approver: false,
+}
+
+const KEYS = Object.keys(DEFAULTS) as (keyof DeployApprovalValues)[]
+
 export function DeployApprovalsCard({ settings, disabled }: DeployApprovalsCardProps) {
   const qc = useQueryClient()
   const { handleStepUpError } = useStepUp()
-  const [enabled, setEnabled] = useState<boolean | null>(null)
-  const [windowMinutes, setWindowMinutes] = useState<number | null>(null)
+  const [pending, setPending] = useState<Partial<DeployApprovalValues>>({})
 
-  const currentEnabled = getSettingValue(settings?.deploy_approvals_enabled, true)
-  const currentWindowMinutes = getSettingValue(settings?.deploy_approval_window_minutes, 15)
+  const display = <K extends keyof DeployApprovalValues>(key: K): DeployApprovalValues[K] =>
+    pending[key] ?? getSettingValue(settings?.[key], DEFAULTS[key])
+  const change = <K extends keyof DeployApprovalValues>(key: K, value: DeployApprovalValues[K]) =>
+    setPending((current) => ({ ...current, [key]: value }))
+  const isLocked = (key: keyof DeployApprovalValues) => disabled || isSetByEnv(settings?.[key])
+  const hasChanges = Object.keys(pending).length > 0
+  const storedKeys = KEYS.filter((key) => hasStoredValue(settings?.[key]))
 
-  const displayEnabled = enabled ?? currentEnabled
-  const displayWindowMinutes = windowMinutes ?? currentWindowMinutes
-  const hasChanges = enabled !== null || windowMinutes !== null
-
-  const updateMutation = useMutation({
-    mutationFn: async () => {
-      const updates: Record<string, unknown> = {}
-      if (enabled !== null) {
-        updates.deploy_approvals_enabled = enabled
-      }
-      if (windowMinutes !== null) {
-        updates.deploy_approval_window_minutes = windowMinutes
-      }
-      return await api.put<Record<string, SettingsSetting>>(
-        '/api/v1/settings/deploy-approvals',
-        updates
-      )
-    },
-    onSuccess: (updatedSettings) => {
+  const applyUpdatedSettings = (updatedSettings: Record<string, SettingsSetting> | undefined) => {
+    if (updatedSettings) {
       qc.setQueryData(['globalSettings'], (old: GlobalSettingsResponse | undefined) => ({
         ...old,
         ...updatedSettings,
       }))
-      setEnabled(null)
-      setWindowMinutes(null)
+    }
+    setPending({})
+  }
+
+  const updateMutation = useMutation({
+    mutationFn: async () =>
+      await api.put<Record<string, SettingsSetting>>('/api/v1/settings/deploy-approvals', pending),
+    onSuccess: (updatedSettings) => {
+      applyUpdatedSettings(updatedSettings)
       toast.success('Deploy approval settings updated')
     },
     onError: (error: unknown) => {
@@ -66,29 +74,15 @@ export function DeployApprovalsCard({ settings, disabled }: DeployApprovalsCardP
 
   const clearMutation = useMutation({
     mutationFn: async () => {
-      const keys: string[] = []
-      if (hasStoredValue(settings?.deploy_approvals_enabled)) {
-        keys.push('deploy_approvals_enabled')
-      }
-      if (hasStoredValue(settings?.deploy_approval_window_minutes)) {
-        keys.push('deploy_approval_window_minutes')
-      }
-      if (keys.length > 0) {
-        const params = keys.map((key) => `key=${key}`).join('&')
+      if (storedKeys.length > 0) {
+        const params = storedKeys.map((key) => `key=${key}`).join('&')
         return await api.delete<Record<string, SettingsSetting>>(
           `/api/v1/settings/deploy-approvals?${params}`
         )
       }
     },
     onSuccess: (updatedSettings) => {
-      if (updatedSettings) {
-        qc.setQueryData(['globalSettings'], (old: GlobalSettingsResponse | undefined) => ({
-          ...old,
-          ...updatedSettings,
-        }))
-      }
-      setEnabled(null)
-      setWindowMinutes(null)
+      applyUpdatedSettings(updatedSettings)
       toast.success('Deploy approval settings cleared')
     },
     onError: (error: unknown) => {
@@ -96,18 +90,11 @@ export function DeployApprovalsCard({ settings, disabled }: DeployApprovalsCardP
     },
   })
 
-  const handleCancel = () => {
-    setEnabled(null)
-    setWindowMinutes(null)
-  }
-
   const handleSave = async () => {
     try {
       await updateMutation.mutateAsync()
     } catch (error) {
-      if (handleStepUpError(error, () => updateMutation.mutateAsync())) {
-        return
-      }
+      handleStepUpError(error, () => updateMutation.mutateAsync())
     }
   }
 
@@ -115,15 +102,9 @@ export function DeployApprovalsCard({ settings, disabled }: DeployApprovalsCardP
     try {
       await clearMutation.mutateAsync()
     } catch (error) {
-      if (handleStepUpError(error, () => clearMutation.mutateAsync())) {
-        return
-      }
+      handleStepUpError(error, () => clearMutation.mutateAsync())
     }
   }
-
-  const hasDbSettings =
-    hasStoredValue(settings?.deploy_approvals_enabled) ||
-    hasStoredValue(settings?.deploy_approval_window_minutes)
 
   return (
     <Card>
@@ -138,9 +119,9 @@ export function DeployApprovalsCard({ settings, disabled }: DeployApprovalsCardP
 
         <label className="flex items-center gap-3">
           <input
-            checked={displayEnabled}
-            disabled={disabled || isSetByEnv(settings?.deploy_approvals_enabled)}
-            onChange={(event) => setEnabled(event.target.checked)}
+            checked={display('deploy_approvals_enabled')}
+            disabled={isLocked('deploy_approvals_enabled')}
+            onChange={(event) => change('deploy_approvals_enabled', event.target.checked)}
             type="checkbox"
           />
           <span className="font-medium text-sm">Enable deploy approvals</span>
@@ -152,17 +133,17 @@ export function DeployApprovalsCard({ settings, disabled }: DeployApprovalsCardP
           <div className="flex items-center gap-2">
             <Input
               className="w-24"
-              disabled={disabled || isSetByEnv(settings?.deploy_approval_window_minutes)}
+              disabled={isLocked('deploy_approval_window_minutes')}
               id="approval-window"
               min={1}
               onChange={(event) => {
                 const value = Number.parseInt(event.target.value, 10)
                 if (!Number.isNaN(value) && value >= 1) {
-                  setWindowMinutes(value)
+                  change('deploy_approval_window_minutes', value)
                 }
               }}
               type="number"
-              value={displayWindowMinutes}
+              value={display('deploy_approval_window_minutes')}
             />
             <SourceIndicator setting={settings?.deploy_approval_window_minutes} />
           </div>
@@ -171,8 +152,27 @@ export function DeployApprovalsCard({ settings, disabled }: DeployApprovalsCardP
           </p>
         </div>
 
+        <div>
+          <label className="flex items-center gap-3">
+            <input
+              checked={display('deploy_approval_require_different_approver')}
+              disabled={isLocked('deploy_approval_require_different_approver')}
+              onChange={(event) =>
+                change('deploy_approval_require_different_approver', event.target.checked)
+              }
+              type="checkbox"
+            />
+            <span className="font-medium text-sm">Require a different approver</span>
+            <SourceIndicator setting={settings?.deploy_approval_require_different_approver} />
+          </label>
+          <p className="mt-1 text-muted-foreground text-xs">
+            Nobody can approve or extend a deploy they requested: the person who created the
+            request, or the owner of its API token
+          </p>
+        </div>
+
         <div className="flex justify-end gap-2">
-          {hasDbSettings && (
+          {storedKeys.length > 0 && (
             <Button
               disabled={disabled || clearMutation.isPending}
               onClick={handleClear}
@@ -184,7 +184,12 @@ export function DeployApprovalsCard({ settings, disabled }: DeployApprovalsCardP
           )}
           {hasChanges && (
             <>
-              <Button disabled={disabled} onClick={handleCancel} size="sm" variant="outline">
+              <Button
+                disabled={disabled}
+                onClick={() => setPending({})}
+                size="sm"
+                variant="outline"
+              >
                 Cancel
               </Button>
               <Button

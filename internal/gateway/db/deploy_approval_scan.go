@@ -24,6 +24,7 @@ SELECT
     dr.target_api_token_id,
     target_token.public_id,
     target_token.name,
+    target_token.user_id,
     dr.approved_by_user_id,
     approved_user.email,
     approved_user.name,
@@ -61,6 +62,7 @@ type deployApprovalNullables struct {
 	createdTokenName   sql.NullString
 	targetTokenPublic  sql.NullString
 	targetTokenName    sql.NullString
+	targetUserID       sql.NullInt64
 	approvedByUserID   sql.NullInt64
 	approvedByEmail    sql.NullString
 	approvedByName     sql.NullString
@@ -90,7 +92,7 @@ func scanDeployApprovalRequest(scanner rowScanner) (*DeployApprovalRequest, erro
 		&dr.ID, &dr.PublicID, &dr.Message, &dr.Status, &dr.CreatedAt, &dr.UpdatedAt,
 		&n.createdByUserID, &n.createdByEmail, &n.createdByName,
 		&n.createdByTokenID, &n.createdTokenPublic, &n.createdTokenName,
-		&dr.TargetAPITokenID, &n.targetTokenPublic, &n.targetTokenName,
+		&dr.TargetAPITokenID, &n.targetTokenPublic, &n.targetTokenName, &n.targetUserID,
 		&n.approvedByUserID, &n.approvedByEmail, &n.approvedByName,
 		&n.approvedAt, &n.approvalExpiresAt,
 		&n.rejectedByUserID, &n.rejectedByEmail, &n.rejectedByName, &n.rejectedAt,
@@ -139,6 +141,9 @@ func applyCreatorFields(dr *DeployApprovalRequest, n *deployApprovalNullables) {
 	}
 	if n.targetTokenName.Valid {
 		dr.TargetAPITokenName = n.targetTokenName.String
+	}
+	if n.targetUserID.Valid {
+		dr.TargetUserID = &n.targetUserID.Int64
 	}
 }
 

@@ -1,31 +1,32 @@
 package settings
 
-// GetAllowDestructiveActions returns whether destructive actions are allowed.
-func (s *Service) GetAllowDestructiveActions() (bool, error) {
-	setting, err := s.GetGlobalSetting(KeyAllowDestructiveActions, false)
+// globalBool returns a boolean global setting, or defaultValue when it isn't a boolean. On error it returns
+// defaultValue with the error, so the caller decides whether to fail closed.
+func (s *Service) globalBool(key string, defaultValue bool) (bool, error) {
+	setting, err := s.GetGlobalSetting(key, defaultValue)
 	if err != nil {
-		return false, err
+		return defaultValue, err
 	}
-
 	if val, ok := setting.Value.(bool); ok {
 		return val, nil
 	}
+	return defaultValue, nil
+}
 
-	return false, nil
+// GetAllowDestructiveActions returns whether destructive actions are allowed.
+func (s *Service) GetAllowDestructiveActions() (bool, error) {
+	return s.globalBool(KeyAllowDestructiveActions, false)
 }
 
 // GetDeployApprovalsEnabled returns whether deploy approvals are enabled.
 func (s *Service) GetDeployApprovalsEnabled() (bool, error) {
-	setting, err := s.GetGlobalSetting(KeyDeployApprovalsEnabled, true)
-	if err != nil {
-		return true, err
-	}
+	return s.globalBool(KeyDeployApprovalsEnabled, true)
+}
 
-	if val, ok := setting.Value.(bool); ok {
-		return val, nil
-	}
-
-	return true, nil
+// GetDeployApprovalRequireDifferentApprover returns whether a deploy approval must be approved (and extended) by
+// someone other than the user who requested it or owns its API token.
+func (s *Service) GetDeployApprovalRequireDifferentApprover() (bool, error) {
+	return s.globalBool(KeyDeployApprovalRequireDifferentApprover, false)
 }
 
 // GetDeployApprovalWindowMinutes returns the deploy approval window in minutes.

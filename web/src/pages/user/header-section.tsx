@@ -1,4 +1,4 @@
-import { Edit2, Lock, RefreshCw, Trash2, Unlock } from 'lucide-react'
+import { Edit2, KeyRound, Lock, RefreshCw, Trash2, Unlock } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import type { GatewayUser } from '@/lib/api'
@@ -17,6 +17,9 @@ type UserHeaderProps = {
   unlockPending: boolean
   locked: boolean
   onLock: () => void
+  // Reset MFA is offered for another user who has MFA.
+  canResetMFA: boolean
+  onResetMFA: () => void
   onSignOutEverywhere: () => void
   signOutPending: boolean
   hasSessions: boolean
@@ -33,9 +36,11 @@ type AccountAdminActionsProps = {
   unlockPending: boolean
   locked: boolean
   onLock: () => void
+  canResetMFA: boolean
+  onResetMFA: () => void
 }
 
-// Edit, lock and unlock, shown only to callers who can manage other users.
+// Edit, lock, unlock and Reset MFA, shown only to callers who can manage other users.
 function AccountAdminActions({
   userLoading,
   userMissing,
@@ -45,6 +50,8 @@ function AccountAdminActions({
   unlockPending,
   locked,
   onLock,
+  canResetMFA,
+  onResetMFA,
 }: AccountAdminActionsProps) {
   const handleUnlockClick = () => {
     onUnlock().catch(() => {
@@ -80,6 +87,12 @@ function AccountAdminActions({
           Lock Account
         </Button>
       )}
+      {canResetMFA && (
+        <Button disabled={userLoading} onClick={onResetMFA} variant="secondary">
+          <KeyRound className="mr-2 h-4 w-4" />
+          Reset MFA
+        </Button>
+      )}
     </>
   )
 }
@@ -96,6 +109,8 @@ export function UserHeaderSection({
   unlockPending,
   locked,
   onLock,
+  canResetMFA,
+  onResetMFA,
   onSignOutEverywhere,
   signOutPending,
   hasSessions,
@@ -120,10 +135,12 @@ export function UserHeaderSection({
       <div className="flex flex-wrap items-center gap-2 md:justify-end">
         {canManage && (
           <AccountAdminActions
+            canResetMFA={canResetMFA}
             isEditBusy={isEditBusy}
             locked={locked}
             onEdit={onEdit}
             onLock={onLock}
+            onResetMFA={onResetMFA}
             onUnlock={onUnlock}
             unlockPending={unlockPending}
             userLoading={userLoading}

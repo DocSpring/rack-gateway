@@ -142,11 +142,16 @@ The review UI shows:
 
    Server validates the MFA response
 
-4. **Request marked approved**
+4. **Approver checked**
+
+   With [Require a different approver](/integrations/deploy-approvals/#different-approver-optional) on, the
+   request's creator and its API token's owner are refused with 403
+
+5. **Request marked approved**
 
    Status changes, expiration timer starts
 
-5. **CI auto-approval triggered**
+6. **CI auto-approval triggered**
 
    If configured, gateway calls CI API
 

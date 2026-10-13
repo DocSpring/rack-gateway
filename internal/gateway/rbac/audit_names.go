@@ -25,6 +25,7 @@ type revealRoute struct {
 var auditActions = map[string]string{
 	"POST /api/v1/users/:email/lock":                       "user.lock",
 	"POST /api/v1/users/:email/unlock":                     "user.unlock",
+	"POST /api/v1/users/:email/mfa/reset":                  "user.mfa_reset",
 	"POST /api/v1/users/:email/sessions/:sessionID/revoke": "user.sessions.revoke",
 	"POST /api/v1/users/:email/sessions/revoke_all":        "user.sessions.revoke_all",
 	"POST /api/v1/deploy-approval-requests/:id/reject":     "deploy_approval_request.reject",
