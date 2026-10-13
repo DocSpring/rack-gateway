@@ -78,44 +78,9 @@ func (c *Client) ListChannels() ([]Channel, error) {
 	cursor := ""
 
 	for {
-		req, err := http.NewRequest("GET", fmt.Sprintf("%s/conversations.list", slackAPIBase), nil)
+		result, err := c.listChannelsPage(cursor)
 		if err != nil {
 			return nil, err
-		}
-
-		q := req.URL.Query()
-		// Only request public channels - bot needs to be invited to private channels
-		q.Add("types", "public_channel")
-		q.Add("exclude_archived", "true")
-		q.Add("limit", "200")
-		if cursor != "" {
-			q.Add("cursor", cursor)
-		}
-		req.URL.RawQuery = q.Encode()
-
-		req.Header.Set("Authorization", "Bearer "+c.botToken)
-		req.Header.Set("Content-Type", "application/json")
-
-		resp, err := c.httpClient.Do(req)
-		if err != nil {
-			return nil, err
-		}
-
-		if resp.StatusCode != http.StatusOK {
-			body, _ := io.ReadAll(resp.Body)
-			resp.Body.Close() //nolint:errcheck,gosec // G104: cleanup
-			return nil, fmt.Errorf("slack API returned %d: %s", resp.StatusCode, string(body))
-		}
-
-		var result ListChannelsResponse
-		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-			resp.Body.Close() //nolint:errcheck,gosec // G104: cleanup
-			return nil, err
-		}
-		resp.Body.Close() //nolint:errcheck,gosec // G104: cleanup
-
-		if !result.OK {
-			return nil, fmt.Errorf("slack API error: %s", result.Error)
 		}
 
 		allChannels = append(allChannels, result.Channels...)
@@ -128,6 +93,46 @@ func (c *Client) ListChannels() ([]Channel, error) {
 	}
 
 	return allChannels, nil
+}
+
+func (c *Client) listChannelsPage(cursor string) (*ListChannelsResponse, error) {
+	req, err := http.NewRequest("GET", fmt.Sprintf("%s/conversations.list", slackAPIBase), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	q := req.URL.Query()
+	// Only request public channels - bot needs to be invited to private channels
+	q.Add("types", "public_channel")
+	q.Add("exclude_archived", "true")
+	q.Add("limit", "200")
+	if cursor != "" {
+		q.Add("cursor", cursor)
+	}
+	req.URL.RawQuery = q.Encode()
+
+	req.Header.Set("Authorization", "Bearer "+c.botToken)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("slack API returned %d: %s", resp.StatusCode, string(body))
+	}
+
+	var result ListChannelsResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+	if !result.OK {
+		return nil, fmt.Errorf("slack API error: %s", result.Error)
+	}
+	return &result, nil
 }
 
 // PostMessage sends a message to a Slack channel. Links aren't unfurled: a message can link to a URL from CI (such
@@ -161,7 +166,7 @@ func (c *Client) PostMessage(channelID, text string, blocks []map[string]interfa
 	if err != nil {
 		return fmt.Errorf("HTTP request failed: %w", err)
 	}
-	defer resp.Body.Close() //nolint:errcheck,gosec // G104: cleanup
+	defer func() { _ = resp.Body.Close() }()
 
 	// Read body for better error logging
 	bodyBytes, err := io.ReadAll(resp.Body)
@@ -210,7 +215,7 @@ func ExchangeOAuthCode(clientID, clientSecret, code, redirectURI string) (*OAuth
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close() //nolint:errcheck,gosec // G104: cleanup
+	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {

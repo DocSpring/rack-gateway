@@ -41,7 +41,7 @@ func (c *Client) doRequest(method, url string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
-	defer resp.Body.Close() //nolint:errcheck,gosec // G104: cleanup
+	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {

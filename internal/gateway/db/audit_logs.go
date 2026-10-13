@@ -49,7 +49,7 @@ func (d *Database) GetAuditLogs(
 	if err != nil {
 		return nil, fmt.Errorf("failed to query audit logs: %w", err)
 	}
-	defer rows.Close() //nolint:errcheck // best-effort close
+	defer func() { _ = rows.Close() }()
 
 	return scanAuditLogs(rows)
 }

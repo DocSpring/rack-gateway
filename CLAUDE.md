@@ -44,9 +44,15 @@ IMPORTANT: Read [docs/legacy/CONVOX_REFERENCE.md](docs/legacy/CONVOX_REFERENCE.m
 
 - **Comprehensive linter set** - 20+ linters enabled
 - **Line length: 120 characters maximum**
-- **NEW (as of 2025-10-30): For Go struct tag lines that cannot be broken without invalidating formatting (where gofmt/goimports always rejoin them, and a field+tag line exceeds 120 chars), you MAY add `//nolint:lll` at the end of that line to disable the lll rule.**
-- **This is the ONLY context where any //nolint comment is allowed.**
-- **NO `//nolint` comments allowed** - fix the code, don't suppress warnings
+- **NO `//nolint` comments** - fix the code, don't suppress warnings. The one exception: `//nolint:lll` on a struct
+  whose tag lines gofmt aligns past 120 characters (gofmt rejoins any break), at the end of the line or as a
+  directive on the type.
+- **gosec exceptions name the rule and give the reason:** `// #nosec G402 -- racks have no public CA chain`, on the
+  statement or the line before it. Never a bare `#nosec` or `//nolint:gosec`. Use one only when the code is right
+  and gosec can't see why (pinned self-signed rack certificates, `unsafe` access the Convox CLI needs), never to
+  skip work. Reviewers check each one
+- `nolintlint` reports unused or non-specific `//nolint` directives, and `task go:lint` runs
+  `scripts/check_go_nolint.sh`, which fails on any other `//nolint` or a `#nosec` without a rule and reason
 - **NO disabling linting rules** - if code doesn't pass, refactor it
 - Forbidden patterns:
   - `panic` - use error returns
@@ -74,6 +80,7 @@ IMPORTANT: Read [docs/legacy/CONVOX_REFERENCE.md](docs/legacy/CONVOX_REFERENCE.m
 - Code duplication check (`task duplication`)
 - File length check (`task file-length`)
 - Zero biome-ignore comments (`task web:check-ignores`)
+- Go lint suppressions limited to `//nolint:lll` and `#nosec Gxxx -- reason` (`scripts/check_go_nolint.sh`)
 
 **There is no pre-push hook, and no hook runs the Go, web or E2E test suites.** The full suite (lint, Go unit and integration tests, web
 tests, web and CLI E2E, builds) is too slow to run locally on every push. CI runs it on GitHub for every push, and

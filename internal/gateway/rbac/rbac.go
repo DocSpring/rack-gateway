@@ -30,7 +30,7 @@ type DBManager struct {
 	domain   string
 }
 
-//nolint:lll
+// Casbin joins a line ending in a backslash with the next one.
 const modelConf = `
 [request_definition]
 r = sub, obj, act
@@ -45,7 +45,9 @@ g = _, _
 e = some(where (p.eft == allow))
 
 [matchers]
-m = g(r.sub, p.sub) && (p.obj == "convox:*:*" || p.obj == r.obj || keyMatch3(r.obj, p.obj)) && (p.act == "*" || r.act == p.act)
+m = g(r.sub, p.sub) && \
+    (p.obj == "convox:*:*" || p.obj == r.obj || keyMatch3(r.obj, p.obj)) && \
+    (p.act == "*" || r.act == p.act)
 `
 
 // NewDBManager creates a new RBAC manager using the database

@@ -21,7 +21,7 @@ func TestRateLimiter(t *testing.T) {
 	// Create a test handler
 	testHandler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK")) //nolint:errcheck,gosec // G104: test response
+		_, _ = w.Write([]byte("OK"))
 	})
 
 	// Wrap with rate limiter middleware
@@ -111,7 +111,7 @@ func TestAuthEndpointsOnly(t *testing.T) {
 	// Create a test handler
 	testHandler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK")) //nolint:errcheck,gosec // G104: test response
+		_, _ = w.Write([]byte("OK"))
 	})
 
 	// Wrap with auth-only rate limiter

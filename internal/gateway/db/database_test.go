@@ -300,7 +300,7 @@ func TestDatabaseAuditAggregationNoTimeWindow(t *testing.T) {
 
 func TestGetAuditLogsPaged(t *testing.T) {
 	db := dbtest.NewDatabase(t)
-	defer db.Close() //nolint:errcheck,gosec // G104: test cleanup
+	defer func() { _ = db.Close() }()
 
 	base := time.Now().UTC()
 
@@ -387,7 +387,7 @@ func TestGetAuditLogsPaged(t *testing.T) {
 
 func TestGetAuditLogByIDHandlesNulls(t *testing.T) {
 	db := dbtest.NewDatabase(t)
-	defer db.Close() //nolint:errcheck,gosec // G104: test cleanup
+	defer func() { _ = db.Close() }()
 
 	// Create a minimal audit log with several nullable fields omitted
 	log := &gwdb.AuditLog{
@@ -423,7 +423,7 @@ func TestGetAuditLogByIDHandlesNulls(t *testing.T) {
 
 func TestCreateAuditLogHandlesNullThenInet(t *testing.T) {
 	db := dbtest.NewDatabase(t)
-	defer db.Close() //nolint:errcheck,gosec // G104: test cleanup
+	defer func() { _ = db.Close() }()
 
 	initial := &gwdb.AuditLog{
 		UserEmail:      "sequence@example.com",
@@ -456,7 +456,7 @@ func TestCreateAuditLogHandlesNullThenInet(t *testing.T) {
 
 func TestListUsersIncludesCreatorMetadata(t *testing.T) {
 	db := dbtest.NewDatabase(t)
-	defer db.Close() //nolint:errcheck,gosec // G104: test cleanup
+	defer func() { _ = db.Close() }()
 
 	creator, err := db.CreateUser("admin@example.com", "Admin", []string{"admin"})
 	require.NoError(t, err)
@@ -483,7 +483,7 @@ func TestListUsersIncludesCreatorMetadata(t *testing.T) {
 
 func TestAuditLogIndexes(t *testing.T) {
 	db := dbtest.NewDatabase(t)
-	defer db.Close() //nolint:errcheck,gosec // G104: test cleanup
+	defer func() { _ = db.Close() }()
 
 	indexes := []string{
 		"audit.idx_audit_event_status",
@@ -510,12 +510,11 @@ func TestDatabaseInitialization(t *testing.T) {
 	_, err = db1.CreateUser("user@example.com", "User", []string{"viewer"})
 	require.NoError(t, err)
 	// Close the first connection before creating another instance (connection pool reuse)
-	//nolint:errcheck,gosec // G104: closing during cleanup; failure handled in subsequent operations
-	db1.Close()
+	require.NoError(t, db1.Close())
 
 	db2, err := gwdb.NewFromEnv()
 	require.NoError(t, err)
-	defer db2.Close() //nolint:errcheck,gosec // G104: test cleanup
+	defer func() { _ = db2.Close() }()
 	users, err := db2.ListUsers()
 	require.NoError(t, err)
 	assert.GreaterOrEqual(t, len(users), 2)
@@ -523,7 +522,7 @@ func TestDatabaseInitialization(t *testing.T) {
 
 func TestDeployApprovalShortCommitHashMatching(t *testing.T) {
 	db := dbtest.NewDatabase(t)
-	defer db.Close() //nolint:errcheck,gosec // G104: test cleanup
+	defer func() { _ = db.Close() }()
 
 	// Create a user and API token for the deploy approval request
 	user, err := db.CreateUser("deployer@example.com", "Deployer", []string{"deployer"})

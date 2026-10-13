@@ -210,7 +210,7 @@ func fetchAppEnv(_ *cobra.Command, app string, query url.Values) (map[string]str
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch env: %w", err)
 	}
-	defer resp.Body.Close() //nolint:errcheck
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		var errResp struct {

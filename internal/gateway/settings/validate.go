@@ -18,18 +18,18 @@ var ErrInvalidSettingValue = errors.New("invalid setting value")
 // (the gateway then treats every env var as secret and protected, and allows no deploy commands), so a value of
 // another shape is refused before it is saved.
 var stringListKeys = map[string]bool{
-	KeyApprovedDeployCommands: true,
-	KeyAuditVisibleEnvVars:    true,
-	KeyProtectedEnvVars:       true,
-	KeySecretEnvVars:          true,
+	KeyApprovedDeployCommands:        true,
+	KeyAuditVisibleEnvVars:           true,
+	KeyProtectedEnvVars:              true,
+	AppSettingSecretEnvVars.String(): true,
 }
 
 // envVarNameKeys are the string lists that name env vars. A name that isn't a valid env var name (one with quotes
 // in it, say) matches no key, so the list would quietly protect, mask or show nothing.
 var envVarNameKeys = map[string]bool{
-	KeyAuditVisibleEnvVars: true,
-	KeyProtectedEnvVars:    true,
-	KeySecretEnvVars:       true,
+	KeyAuditVisibleEnvVars:           true,
+	KeyProtectedEnvVars:              true,
+	AppSettingSecretEnvVars.String(): true,
 }
 
 // ValidateAppSettingValue checks the shape of an app setting value before it is saved.

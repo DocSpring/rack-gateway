@@ -240,6 +240,7 @@ tasks:
       # second run lints just that package's testbypass files.
       - golangci-lint run ./cmd/... ./internal/... ./tools/...
       - golangci-lint run --build-tags testbypass ./internal/gateway/testbypass/...
+      - scripts/check_go_nolint.sh
 
   lint:fix:
     desc: Auto-fix Go formatting and lint issues
@@ -253,6 +254,7 @@ tasks:
     cmds:
       - golangci-lint run --fix ./cmd/... ./internal/... ./tools/...
       - golangci-lint run --fix --build-tags testbypass ./internal/gateway/testbypass/...
+      - scripts/check_go_nolint.sh
 
   lint:config:
     desc: Verify golangci-lint configuration

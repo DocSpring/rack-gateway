@@ -16,7 +16,8 @@ import (
 func TestAppSecretEnvVarsAreSecretsOnTheProxy(t *testing.T) {
 	h, database, _ := newProxyForEnvTest(t)
 	app := "app"
-	require.NoError(t, database.UpsertSetting(&app, settings.KeySecretEnvVars, []string{"BILLING_ID"}, nil))
+	secretEnvVars := settings.AppSettingSecretEnvVars.String()
+	require.NoError(t, database.UpsertSetting(&app, secretEnvVars, []string{"BILLING_ID"}, nil))
 	deployer := createUserWithRole(t, database, "deployer@test.com", "deployer")
 
 	form := url.Values{"env": {"BILLING_ID=changed\nPORT=3000"}}

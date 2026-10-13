@@ -76,7 +76,8 @@ func TestEnvVarListSettingsRefuseInvalidNames(t *testing.T) {
 
 	all, err := handler.settingsService.GetAllAppSettings("web")
 	require.NoError(t, err)
-	for _, key := range []string{settings.KeyProtectedEnvVars, settings.KeySecretEnvVars, settings.KeyDefaultBranch} {
+	secretEnvVars := settings.AppSettingSecretEnvVars.String()
+	for _, key := range []string{settings.KeyProtectedEnvVars, secretEnvVars, settings.KeyDefaultBranch} {
 		require.Equalf(t, settings.SourceDefault, all[key].Source, "%s: a refused update saves nothing", key)
 	}
 }

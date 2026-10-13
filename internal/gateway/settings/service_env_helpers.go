@@ -12,7 +12,7 @@ func (s *Service) GetProtectedEnvVars(appName string) ([]string, error) {
 
 // GetSecretEnvVars returns secret environment variables for an app.
 func (s *Service) GetSecretEnvVars(appName string) ([]string, error) {
-	return s.getEnvVarList(appName, KeySecretEnvVars)
+	return s.getEnvVarList(appName, AppSettingSecretEnvVars.String())
 }
 
 // GetAuditVisibleEnvVars returns the env vars whose values an app's audit log entries may show.

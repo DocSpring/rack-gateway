@@ -378,10 +378,10 @@ func applySystemParameterUpdates(updates map[string]string) {
 func getSystemProcesses(w http.ResponseWriter, _ *http.Request) {
 	procs := []Process{
 		{
-			Id:       "api-677dbf86db-699qf",
+			ID:       "api-677dbf86db-699qf",
 			App:      "system",
 			Command:  "api",
-			Cpu:      10.0,
+			CPU:      10.0,
 			Host:     "10.0.0.10",
 			Image:    "convox/api:latest",
 			Instance: "i-1234567890abcdef0",
@@ -393,10 +393,10 @@ func getSystemProcesses(w http.ResponseWriter, _ *http.Request) {
 			Status:   "running",
 		},
 		{
-			Id:       "resolver-7c445f959c-l8t5p",
+			ID:       "resolver-7c445f959c-l8t5p",
 			App:      "system",
 			Command:  "resolver",
-			Cpu:      5.0,
+			CPU:      5.0,
 			Host:     "10.0.0.11",
 			Image:    "convox/resolver:latest",
 			Instance: "i-0987654321fedcba0",
@@ -408,10 +408,10 @@ func getSystemProcesses(w http.ResponseWriter, _ *http.Request) {
 			Status:   "running",
 		},
 		{
-			Id:       "ingress-nginx-6bcbb5dbb4-5xbxx",
+			ID:       "ingress-nginx-6bcbb5dbb4-5xbxx",
 			App:      "system",
 			Command:  "/nginx-ingress-controller ...",
-			Cpu:      15.0,
+			CPU:      15.0,
 			Host:     "10.0.0.12",
 			Image:    "nginx/ingress-controller:latest",
 			Instance: "i-0abcdeffedcba9876",

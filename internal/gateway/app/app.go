@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"os"
 	"time"
 
@@ -10,6 +11,7 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/config"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	"github.com/DocSpring/rack-gateway/internal/gateway/deps"
+	gtwlog "github.com/DocSpring/rack-gateway/internal/gateway/logging"
 	"github.com/DocSpring/rack-gateway/internal/gateway/testbypass"
 )
 
@@ -39,16 +41,14 @@ func New() (*App, error) {
 		return nil, err
 	}
 	if err := database.EnsureEnvironment(cfg.DevMode); err != nil {
-		database.Close() //nolint:errcheck,gosec // G104: cleanup on init failure
-		return nil, err
+		return nil, errors.Join(err, database.Close())
 	}
 	dbEnvironment, err := database.CurrentEnvironment()
 	if err == nil {
 		err = checkProductionSafety(dbEnvironment, !testbypass.Compiled, os.Getenv)
 	}
 	if err != nil {
-		database.Close() //nolint:errcheck,gosec // G104: cleanup on init failure
-		return nil, err
+		return nil, errors.Join(err, database.Close())
 	}
 
 	// Initialize dependencies
@@ -62,8 +62,7 @@ func New() (*App, error) {
 
 	// Initialize services
 	if err := app.initializeServices(); err != nil {
-		database.Close() //nolint:errcheck,gosec // G104: cleanup on init failure
-		return nil, err
+		return nil, errors.Join(err, database.Close())
 	}
 
 	// Set up router
@@ -86,9 +85,13 @@ func (a *App) Cleanup() {
 	if a.JobsClient != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		a.JobsClient.Stop(ctx) //nolint:errcheck,gosec // G104: application shutdown
+		if err := a.JobsClient.Stop(ctx); err != nil {
+			gtwlog.Errorf("app: stop background jobs: %v", err)
+		}
 	}
 	if a.Database != nil {
-		a.Database.Close() //nolint:errcheck,gosec // G104: application shutdown
+		if err := a.Database.Close(); err != nil {
+			gtwlog.Errorf("app: close database: %v", err)
+		}
 	}
 }

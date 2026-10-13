@@ -162,7 +162,7 @@ func (h *Handler) createAuditLogIfNeeded(
 	}
 
 	auditLog := h.requestAuditEntry(r, authUser, path)
-	auditLog.Status = h.auditLogger.MapHttpStatusToStatus(status)
+	auditLog.Status = h.auditLogger.MapHTTPStatusToStatus(status)
 	auditLog.HTTPStatus = status
 	auditLog.ResponseTimeMs = int(time.Since(start).Milliseconds())
 	if dbErr := h.logAudit(r, auditLog); dbErr != nil {
