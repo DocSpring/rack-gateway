@@ -207,6 +207,16 @@ A restore to before the upgrade loses the audit events written since; see
 
 ## Release Notes That Need Action
 
+### `users.suspended` dropped (v0.1.12)
+
+This release's migration drops the unused `users.suspended` column. v0.1.10 and earlier still read it, so they
+can't load users once you've migrated.
+
+1. **Upgrade through v0.1.11 first.** Migrations run before the promote, while the old release is still serving
+   (see [Zero-Downtime Upgrades](#zero-downtime-upgrades)), and only v0.1.11 or later keeps working against the new
+   schema.
+2. **Don't roll back past v0.1.11** after migrating.
+
 ### Anchor bucket retention checked at startup (v0.1.11)
 
 `AUDIT_ANCHOR_RETENTION_DAYS` is now checked: the gateway reads the anchor bucket's Object Lock configuration at
