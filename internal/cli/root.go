@@ -83,11 +83,6 @@ Rack management:
 		LogsCommand(),
 		RackCommand(),
 		InstancesCommand(),
-
-		// Resources
-		ResourcesCommand(),
-		CertificatesCommand(),
-		RegistriesCommand(),
 	)
 
 	return rootCmd.Execute()

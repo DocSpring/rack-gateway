@@ -5425,6 +5425,8 @@ export interface components {
             preferred_method?: string;
             recent_step_up_expires_at?: string;
             required: boolean;
+            /** @description TrustedDeviceTTLDays is how long a trusted device skips the login MFA challenge. */
+            trusted_device_ttl_days: number;
             trusted_devices: components["schemas"]["handlers.TrustedDeviceResponse"][];
             webauthn_available: boolean;
         };

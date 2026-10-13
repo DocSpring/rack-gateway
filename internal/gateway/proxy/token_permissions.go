@@ -98,22 +98,22 @@ func (h *Handler) evaluateAPITokenPermission(
 		return false, nil, fmt.Errorf("database unavailable for deploy approvals")
 	}
 
-	app, ok := h.resolveAppOrDeny(r.URL.Path, deny)
-	if !ok {
-		return false, nil, nil
+	app := extractAppFromPath(r.URL.Path)
+	if app == "" {
+		return deny()
 	}
 
 	req, err := h.findDeployApprovalForResource(r, deny, *authUser.TokenID, app, resource, action)
 	if err != nil {
 		if errors.Is(err, db.ErrDeployApprovalRequestNotFound) {
 			gtwlog.DebugTopicf(gtwlog.TopicDeployApproval, "deploy approval lookup failed: not found")
-			return deny()
+			return false, nil, h.approvalDenial(resource, action, *authUser.TokenID, app)
 		}
 		gtwlog.DebugTopicf(gtwlog.TopicDeployApproval, "deploy approval lookup failed: %v", err)
 		return false, nil, err
 	}
-	if ok := commonApprovalChecks(req, deny); !ok {
-		return false, nil, nil
+	if !usableApproval(req, time.Now()) {
+		return false, nil, h.approvalDenial(resource, action, *authUser.TokenID, app)
 	}
 
 	tracker := &deployApprovalTracker{
@@ -179,19 +179,10 @@ func approvalsGloballyDisabled(h *Handler) bool {
 	return !enabled
 }
 
-func (_ *Handler) resolveAppOrDeny(path string, deny denyFunc) (string, bool) {
-	app := extractAppFromPath(path)
-	if app == "" {
-		_, _, _ = deny()
-		return "", false
-	}
-	return app, true
-}
-
-func commonApprovalChecks(req *db.DeployApprovalRequest, deny denyFunc) bool {
+// usableApproval reports whether the approval the request resolved to is approved and inside its window.
+func usableApproval(req *db.DeployApprovalRequest, now time.Time) bool {
 	if req == nil {
 		gtwlog.DebugTopicf(gtwlog.TopicDeployApproval, "deploy approval lookup returned nil request")
-		_, _, _ = deny()
 		return false
 	}
 	gtwlog.DebugTopicf(
@@ -199,9 +190,8 @@ func commonApprovalChecks(req *db.DeployApprovalRequest, deny denyFunc) bool {
 		"deploy approval found: id=%s status=%s process_ids=%v",
 		req.PublicID, req.Status, req.ProcessIDs,
 	)
-	if req.ApprovalExpiresAt != nil && time.Now().After(*req.ApprovalExpiresAt) {
+	if req.ApprovalExpiresAt != nil && now.After(*req.ApprovalExpiresAt) {
 		gtwlog.DebugTopicf(gtwlog.TopicDeployApproval, "deploy approval expired")
-		_, _, _ = deny()
 		return false
 	}
 	if req.Status != db.DeployApprovalRequestStatusApproved {
@@ -210,7 +200,6 @@ func commonApprovalChecks(req *db.DeployApprovalRequest, deny denyFunc) bool {
 			"deploy approval status check failed: expected=approved actual=%s",
 			req.Status,
 		)
-		_, _, _ = deny()
 		return false
 	}
 	return true

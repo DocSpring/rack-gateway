@@ -56,55 +56,5 @@ func InstancesCommand() *cobra.Command {
 		}),
 	}
 
-	// Add subcommands
-	cmd.AddCommand(instancesKeyrollCommand())
-	cmd.AddCommand(instancesTerminateCommand())
-
-	return cmd
-}
-
-func instancesKeyrollCommand() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "keyroll",
-		Short: "roll SSH keys",
-		Args:  cobra.NoArgs,
-		RunE: SilenceOnError(func(cobraCmd *cobra.Command, args []string) error {
-			mfaAuth, err := checkMFAAndGetAuth(cobraCmd, "instances keyroll")
-			if err != nil {
-				return err
-			}
-
-			client, ctx, err := SetupConvoxCommandWithMFA(cobraCmd, args, mfaAuth)
-			if err != nil {
-				return err
-			}
-			return cli.InstancesKeyroll(client, ctx)
-		}),
-	}
-
-	cmd.Flags().Bool("wait", false, "wait for keyroll to complete")
-
-	return cmd
-}
-
-func instancesTerminateCommand() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "terminate <id>",
-		Short: "terminate an instance",
-		Args:  cobra.ExactArgs(1),
-		RunE: SilenceOnError(func(cobraCmd *cobra.Command, args []string) error {
-			mfaAuth, err := checkMFAAndGetAuth(cobraCmd, "instances terminate")
-			if err != nil {
-				return err
-			}
-
-			client, ctx, err := SetupConvoxCommandWithMFA(cobraCmd, args, mfaAuth)
-			if err != nil {
-				return err
-			}
-			return cli.InstancesTerminate(client, ctx)
-		}),
-	}
-
 	return cmd
 }

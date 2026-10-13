@@ -2,6 +2,7 @@ import type { MutableRefObject, ReactNode } from 'react'
 import { LoadingSpinner } from '@/components/loading-spinner'
 import { MFAInput } from '@/components/mfa-input'
 import { Button } from '@/components/ui/button'
+import { trustLabel } from '@/lib/time'
 import { BackupCodeForm } from './backup-code-form'
 
 const DIGITS_ONLY_REGEX = /^\d+$/
@@ -11,6 +12,8 @@ export type FormView = 'loading' | 'totp' | 'webauthn' | 'backup'
 
 export type RenderProps = {
   showTrustDevice: boolean
+  // How long a trusted device skips the login MFA challenge, once the MFA status has loaded.
+  trustDeviceDays?: number
   trustDevice: boolean
   setTrustDevice: (value: boolean) => void
   isVerifying: boolean
@@ -34,7 +37,7 @@ export type RenderProps = {
 }
 
 function TrustDeviceOption(
-  props: Pick<RenderProps, 'showTrustDevice' | 'trustDevice' | 'setTrustDevice'>
+  props: Pick<RenderProps, 'showTrustDevice' | 'trustDevice' | 'setTrustDevice' | 'trustDeviceDays'>
 ) {
   if (!props.showTrustDevice) {
     return null
@@ -47,7 +50,7 @@ function TrustDeviceOption(
           onChange={(event) => props.setTrustDevice(event.target.checked)}
           type="checkbox"
         />
-        Trust this device for 30 days
+        {trustLabel('device', props.trustDeviceDays)}
       </label>
     </div>
   )
@@ -91,7 +94,7 @@ function renderLoadingState(props: Pick<RenderProps, 'showTrustDevice'>) {
         <div className="flex justify-center">
           <label className="invisible flex items-center gap-2 text-muted-foreground text-sm">
             <input disabled type="checkbox" />
-            Trust this device for 30 days
+            {trustLabel('device')}
           </label>
         </div>
       )}

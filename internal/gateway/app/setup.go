@@ -85,12 +85,11 @@ func (a *App) initializeServices() error {
 		return err
 	}
 
-	adminEmails := a.collectAdminEmails()
 	a.configureAuditEnqueuer(auditLogger)
 	if err := a.startJobsWorker(); err != nil {
 		return err
 	}
-	a.initSecurityNotifier(auditLogger, adminEmails)
+	a.initSecurityNotifier(auditLogger)
 
 	rackName, rackAlias := a.deriveRackIdentity()
 	a.initProxyHandler(auditLogger, rackName, rackAlias)
@@ -323,26 +322,6 @@ func (a *App) initMFAService(cfg *mfaRuntimeConfig) error {
 	return nil
 }
 
-func (a *App) collectAdminEmails() []string {
-	users, err := a.Database.ListUsers()
-	if err != nil {
-		return nil
-	}
-	var emails []string
-	for _, user := range users {
-		if strings.TrimSpace(user.Email) == "" {
-			continue
-		}
-		for _, role := range user.Roles {
-			if role == "admin" {
-				emails = append(emails, user.Email)
-				break
-			}
-		}
-	}
-	return emails
-}
-
 func (a *App) configureAuditEnqueuer(logger *audit.Logger) {
 	logger.SetAuditEventEnqueuer(jobs.NewAuditEventEnqueuer(a.JobsClient))
 }
@@ -355,8 +334,8 @@ func (a *App) startJobsWorker() error {
 	return nil
 }
 
-func (a *App) initSecurityNotifier(logger *audit.Logger, adminEmails []string) {
-	a.SecurityNotifier = security.NewNotifier(a.EmailSender, logger, a.Database, adminEmails, a.JobsClient)
+func (a *App) initSecurityNotifier(logger *audit.Logger) {
+	a.SecurityNotifier = security.NewNotifier(a.EmailSender, logger, a.Database, a.JobsClient)
 }
 
 func (a *App) deriveRackIdentity() (string, string) {

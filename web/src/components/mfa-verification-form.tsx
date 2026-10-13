@@ -248,6 +248,7 @@ export function MFAVerificationForm({
 
   const renderProps: RenderProps = {
     showTrustDevice,
+    trustDeviceDays: mfaStatus?.trusted_device_ttl_days,
     trustDevice,
     setTrustDevice,
     isVerifying,

@@ -16,6 +16,8 @@ export interface HandlersMFAStatusResponse {
   preferred_method?: string;
   recent_step_up_expires_at?: string;
   required: boolean;
+  /** TrustedDeviceTTLDays is how long a trusted device skips the login MFA challenge. */
+  trusted_device_ttl_days: number;
   trusted_devices: HandlersTrustedDeviceResponse[];
   webauthn_available: boolean;
 }

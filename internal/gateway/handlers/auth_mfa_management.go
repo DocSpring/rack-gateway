@@ -102,6 +102,7 @@ func (h *AuthHandler) GetMFAStatus(c *gin.Context) {
 		RecentStepUpExpiresAt: recentExpires,
 		PreferredMethod:       ctx.userRecord.PreferredMFAMethod,
 		WebAuthnAvailable:     h.mfaService.IsWebAuthnConfigured(),
+		TrustedDeviceTTLDays:  int(current.TrustedDeviceTTL() / (24 * time.Hour)),
 	}
 	c.JSON(http.StatusOK, response)
 }
