@@ -71,7 +71,7 @@ Available Commands:
   web         Open the Rack Gateway web UI
 
 Flags:
-      --config string   Config directory (default "$HOME/.config/rack-gateway")
+      --config string   Config directory (default "/home/user/.config/rack-gateway")
   -h, --help            help for rack-gateway
       --rack string     Rack to use (overrides current rack)
 
