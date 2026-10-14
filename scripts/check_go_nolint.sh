@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Go lint suppressions (see "Linting" in CLAUDE.md):
+# Go lint suppressions (see "Linting" in AGENTS.md):
 # - The only //nolint allowed is //nolint:lll, for struct tag lines gofmt won't break.
 # - A gosec exception names its rule and says why: "#nosec G402 -- reason". Never a bare #nosec.
 

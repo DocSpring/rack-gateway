@@ -9,7 +9,7 @@ The high-level workflow looks like this:
    ```bash
    scripts/new-agent-worktree.sh <task-id> "short description"
    ```
-   This creates a new branch under `agents/<task-id>-<slug>` and a worktree in `/Users/ndbroadbent/code/rack-gateway-worktrees/<task-id>-<slug>`.
+   This creates a new branch under `agents/<task-id>-<slug>` and a worktree in `../rack-gateway-worktrees/<task-id>-<slug>` (next to the repo).
 3. **Launch Claude Code** inside the worktree and feed it the relevant prompt template:
    ```bash
    claude code --prompt-file ai_automation/agents/worker_prompt_template.txt

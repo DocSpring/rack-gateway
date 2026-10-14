@@ -106,7 +106,7 @@ check_file() {
 
     # Some file types get 1000 line limit even for non-tests
     if [[ "$file" == *Taskfile* ]] || \
-       [[ "$file" == *CLAUDE.md ]] || \
+       [[ "$file" == *AGENTS.md ]] || \
        [[ "$file" == *README.md ]]; then
       max_lines=1000
     fi

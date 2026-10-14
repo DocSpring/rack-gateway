@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Create the audit roles (scripts/audit-roles.sql) for dev/test databases.
-# In production these are created by Terraform (see reference/convox_racks_terraform)
+# In production, create them when you provision the database (see docs: deployment/database-setup).
 
 # Try DATABASE_URL first, fall back to E2E_DATABASE_URL, then TEST_DATABASE_URL, then default
 DATABASE_URL="${DATABASE_URL:-${E2E_DATABASE_URL:-${TEST_DATABASE_URL:-postgres://postgres:postgres@localhost:55432/gateway_test?sslmode=disable}}}"
