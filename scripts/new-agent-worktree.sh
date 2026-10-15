@@ -8,7 +8,7 @@ Usage: $0 <task-id> "short description"
 Creates a new git worktree for an agent branch rooted at origin/main.
 
 Environment variables:
-  WORKTREE_ROOT  Override default worktree directory (default: /Users/ndbroadbent/code/rack-gateway-worktrees)
+  WORKTREE_ROOT  Override default worktree directory (default: rack-gateway-worktrees next to the repo)
 USAGE
 }
 
@@ -40,10 +40,9 @@ if [ -z "$SLUG" ]; then
 fi
 
 BRANCH="agents/${TASK_ID}-${SLUG}"
-WORKTREE_ROOT=${WORKTREE_ROOT:-/Users/ndbroadbent/code/rack-gateway-worktrees}
-WORKTREE_PATH="${WORKTREE_ROOT}/${TASK_ID}-${SLUG}"
-
 ROOT_DIR=$(git rev-parse --show-toplevel)
+WORKTREE_ROOT=${WORKTREE_ROOT:-$(dirname "$ROOT_DIR")/rack-gateway-worktrees}
+WORKTREE_PATH="${WORKTREE_ROOT}/${TASK_ID}-${SLUG}"
 
 if [ ! -d "$WORKTREE_ROOT" ]; then
   mkdir -p "$WORKTREE_ROOT"
@@ -70,6 +69,11 @@ cat > "$MISE_LOCAL" <<EOF
 [env]
 RGW_SHARED_DB_PROJECT = "$(basename "$ROOT_DIR")"
 EOF
+
+# Gitignored deployment notes that AGENTS.md imports.
+if [ -f "$ROOT_DIR/AGENTS.local.md" ]; then
+  cp "$ROOT_DIR/AGENTS.local.md" "$WORKTREE_PATH/AGENTS.local.md"
+fi
 
 echo "Created worktree: $WORKTREE_PATH"
 echo "Branch: $BRANCH"

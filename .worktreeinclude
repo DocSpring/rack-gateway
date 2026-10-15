@@ -1,0 +1,2 @@
+# Gitignored files Claude Code copies into the worktrees it creates.
+AGENTS.local.md

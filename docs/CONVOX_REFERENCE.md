@@ -8,7 +8,7 @@ The following Convox repositories are available for reference in `./reference/`:
 
 - `reference/convox/` - The Convox CLI source code (github.com/convox/convox)
 - `reference/convox_rack/` - The Convox Rack API server (github.com/convox/rack)
-- `reference/convox_racks_terraform/` - Our Terraform configurations for self-hosted racks
+- `reference/convox_racks_terraform/` - (optional) Terraform configuration for the racks you deploy to
 
 ## Rack Gateway Architecture
 
@@ -102,7 +102,7 @@ But it's completely optional - the gateway speaks the same API as a real Convox 
      "api": {
        "sensitive": true,
        "type": "string",
-       "value": "https://convox:<auth-token>@api.af6a420efa1ea995.convox.cloud"
+       "value": "https://convox:<auth-token>@api.<rack-id>.convox.cloud"
      }
    }
    ```

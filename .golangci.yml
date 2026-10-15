@@ -60,7 +60,7 @@ linters:
         - G704
         - G703
     nolintlint:
-      # The only //nolint allowed is lll on a struct tag line gofmt won't break (see CLAUDE.md). gosec exceptions use
+      # The only //nolint allowed is lll on a struct tag line gofmt won't break (see AGENTS.md). gosec exceptions use
       # rule-specific "#nosec Gxxx -- reason" comments instead.
       require-explanation: false
       require-specific: true

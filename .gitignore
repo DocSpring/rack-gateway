@@ -33,6 +33,10 @@ docker-compose.override.yml
 
 mise.local.toml
 
+# Notes about the racks you deploy to, imported by AGENTS.md. Not CLAUDE.local.md: Claude Code would load that
+# instead of AGENTS.md.
+AGENTS.local.md
+
 # Logs
 *.log
 

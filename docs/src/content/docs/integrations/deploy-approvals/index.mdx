@@ -264,7 +264,7 @@ pending request can be approved; one that is already approved or deployed counts
 
 ```bash
 # Every listed app's request for the commit, on every listed rack
-rack-gateway deploy-approval approve --app docspring,api-proxy --commit <sha> --rack us,eu
+rack-gateway deploy-approval approve --app web,worker --commit <sha> --rack us,eu
 
 # Every app's request for the commit
 rack-gateway deploy-approval approve --all-apps --commit <sha> --rack staging

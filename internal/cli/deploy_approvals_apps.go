@@ -9,7 +9,7 @@ import (
 )
 
 // approvalApps is the set of apps whose deploy approval requests a command acts on: a list of app names, or
-// every app (--all-apps). CI deploys several apps for one commit (e.g. docspring and api-proxy), each with its
+// every app (--all-apps). CI deploys several apps for one commit (e.g. web and worker), each with its
 // own request.
 type approvalApps struct {
 	names []string // sorted and deduplicated; empty when all is set

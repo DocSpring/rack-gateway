@@ -9,7 +9,6 @@
     "**/playwright-report/**",
     "**/coverage/**",
     "**/AGENTS.md",
-    "**/CLAUDE.md",
     "**/*_test.go",
     "**/*.sql"
   ],

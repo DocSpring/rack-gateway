@@ -1,4 +1,4 @@
-# Formatting, linting and quick checks only. Tests run in CI on every push (see CLAUDE.md "Git Hooks").
+# Formatting, linting and quick checks only. Tests run in CI on every push (see AGENTS.md "Git Hooks").
 pre-commit:
   parallel: true
   commands:
