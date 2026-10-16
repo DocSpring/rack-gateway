@@ -4,9 +4,9 @@ go 1.26.9
 
 require (
 	github.com/GeertJohan/yubigo v0.0.0-20190917122436-175bc097e60e
-	github.com/aws/aws-sdk-go-v2 v1.47.2
-	github.com/aws/aws-sdk-go-v2/config v1.33.7
-	github.com/aws/aws-sdk-go-v2/service/s3 v1.114.2
+	github.com/aws/aws-sdk-go-v2 v1.47.3
+	github.com/aws/aws-sdk-go-v2/config v1.33.9
+	github.com/aws/aws-sdk-go-v2/service/s3 v1.114.3
 	github.com/casbin/casbin/v2 v2.135.0
 	github.com/convox/convox v0.0.0-20251023182947-1ddac03d0705
 	github.com/convox/stdcli v0.0.0-20240813092220-8beeb2dc2420
@@ -27,7 +27,7 @@ require (
 	github.com/keys-pub/go-libfido2 v1.5.4-0.20250104233141-2534349bd685
 	github.com/lib/pq v1.12.3
 	github.com/pquerna/otp v1.5.0
-	github.com/rickb777/servefiles/v3 v3.9.27
+	github.com/rickb777/servefiles/v3 v3.9.28
 	github.com/riverqueue/river v0.49.0
 	github.com/riverqueue/river/riverdriver/riverpgxv5 v0.49.0
 	github.com/riverqueue/river/rivertype v0.49.0
@@ -37,8 +37,8 @@ require (
 	github.com/swaggo/swag v1.16.6
 	github.com/tkrajina/typescriptify-golang-structs v0.2.0
 	golang.org/x/oauth2 v0.37.0
-	golang.org/x/sync v0.23.0
-	golang.org/x/term v0.46.0
+	golang.org/x/sync v0.24.0
+	golang.org/x/term v0.47.0
 	golang.org/x/time v0.16.0
 	gopkg.in/yaml.v3 v3.0.1
 )
@@ -73,24 +73,24 @@ require (
 	github.com/MakeNowJust/heredoc v1.0.0 // indirect
 	github.com/adrg/xdg v0.2.1 // indirect
 	github.com/aws/aws-sdk-go v1.51.21 // indirect
-	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.21 // indirect
-	github.com/aws/aws-sdk-go-v2/credentials v1.20.7 // indirect
-	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.20.1 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/configsources v1.5.5 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.8.5 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/v4a v1.5.5 // indirect
+	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.22 // indirect
+	github.com/aws/aws-sdk-go-v2/credentials v1.20.9 // indirect
+	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.20.3 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/configsources v1.5.6 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.8.6 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/v4a v1.5.6 // indirect
 	github.com/aws/aws-sdk-go-v2/service/ec2 v1.163.0 // indirect
 	github.com/aws/aws-sdk-go-v2/service/elasticache v1.40.1 // indirect
-	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.13.20 // indirect
-	github.com/aws/aws-sdk-go-v2/service/internal/checksum v1.11.6 // indirect
-	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.14.5 // indirect
-	github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.20.5 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.13.21 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/checksum v1.11.7 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.14.6 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.20.6 // indirect
 	github.com/aws/aws-sdk-go-v2/service/rds v1.79.4 // indirect
-	github.com/aws/aws-sdk-go-v2/service/signin v1.10.2 // indirect
-	github.com/aws/aws-sdk-go-v2/service/sso v1.38.2 // indirect
-	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.43.2 // indirect
-	github.com/aws/aws-sdk-go-v2/service/sts v1.51.2 // indirect
-	github.com/aws/smithy-go v1.28.4 // indirect
+	github.com/aws/aws-sdk-go-v2/service/signin v1.10.4 // indirect
+	github.com/aws/aws-sdk-go-v2/service/sso v1.38.4 // indirect
+	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.43.4 // indirect
+	github.com/aws/aws-sdk-go-v2/service/sts v1.51.4 // indirect
+	github.com/aws/smithy-go v1.28.5 // indirect
 	github.com/bearsh/hid v1.6.0 // indirect
 	github.com/blang/semver/v4 v4.0.0 // indirect
 	github.com/bmatcuk/doublestar/v4 v4.9.1 // indirect
@@ -236,7 +236,7 @@ require (
 	golang.org/x/crypto v0.57.0 // indirect
 	golang.org/x/mod v0.41.0 // indirect
 	golang.org/x/net v0.60.0 // indirect
-	golang.org/x/sys v0.48.0 // indirect
+	golang.org/x/sys v0.49.0 // indirect
 	golang.org/x/text v0.42.0 // indirect
 	golang.org/x/tools v0.49.0 // indirect
 	google.golang.org/api v0.278.0 // indirect
