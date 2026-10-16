@@ -29,6 +29,6 @@
     "bun-types": "^1.4.2",
     "supertest": "^7.3.1",
     "typescript": "^5.9.3",
-    "ultracite": "^6.5.1"
+    "ultracite": "^8.0.0"
   }
 }
