@@ -4,10 +4,10 @@ description: Install a pinned, checksum-verified Task (taskfile.dev) binary into
 inputs:
   version:
     description: Task release version
-    default: "3.53.1"
+    default: "3.54.0"
   sha256:
     description: SHA-256 of task_linux_amd64.tar.gz for that version (from task_checksums.txt)
-    default: a54a408f6861ff921f6e87774180db31bacd8c1e7c944ca696db9fea49a82fc7
+    default: 680859dbb4d881a9c72d4d9a8f510825450849af8567deacd7302c01124416fb
 
 runs:
   using: composite

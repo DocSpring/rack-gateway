@@ -42,7 +42,7 @@ graph TB
 resource "aws_db_instance" "gateway" {
   identifier     = "rack-gateway-${var.environment}"
   engine         = "postgres"
-  engine_version = "16.1"
+  engine_version = "17.11"
 
   # Instance sizing
   instance_class = var.db_instance_class  # e.g., "db.t3.medium"

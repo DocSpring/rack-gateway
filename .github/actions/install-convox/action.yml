@@ -4,10 +4,10 @@ description: Install a pinned, checksum-verified Convox CLI (linux amd64) into /
 inputs:
   version:
     description: Convox CLI release version
-    default: "3.25.7"
+    default: "3.25.10"
   sha256:
     description: SHA-256 of the convox-linux asset for that version
-    default: 6a0ffe6faf269302c311c2f8e4d1cdc116902c933c7d91f461c47d8a25190759
+    default: de7e6d257ece38bc459d038925d363a3bab60d498c218d4ffa5dad11fe7a1168
 
 runs:
   using: composite

@@ -50,7 +50,7 @@ docker run -d \
   -e POSTGRES_PASSWORD=your-secure-password \
   -e POSTGRES_DB=rack_gateway \
   -v pgdata:/var/lib/postgresql/data \
-  postgres:16
+  postgres:17
 ```
 
 ### 3. Create the audit roles
@@ -122,7 +122,7 @@ To try the published image locally with Docker Compose:
 # docker-compose.yml
 services:
   postgres:
-    image: postgres:16
+    image: postgres:17
     environment:
       POSTGRES_USER: rack_gateway
       POSTGRES_PASSWORD: development

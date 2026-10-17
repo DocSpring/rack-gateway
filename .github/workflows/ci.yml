@@ -163,8 +163,8 @@ jobs:
 
       - name: Install TruffleHog
         env:
-          TRUFFLEHOG_VERSION: "3.97.9"
-          TRUFFLEHOG_SHA256: 40377e6572495412fb9ba0bc21c9401f73b72f1d2afd11b9931bc4a5ed622866
+          TRUFFLEHOG_VERSION: "3.99.2"
+          TRUFFLEHOG_SHA256: 3c7b0d1dc4278294269bfdd7594bca8bb28c78da0a4a06ad202ded37b48deca4
         run: |
           set -euo pipefail
           tmp="$(mktemp -d)"
@@ -193,12 +193,12 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: "24"
+          node-version: "26"
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          bun-version: "1.4.2"
+          bun-version: "1.4.3"
 
       - name: Install NPM packages
         working-directory: web
@@ -228,7 +228,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          bun-version: "1.4.2"
+          bun-version: "1.4.3"
 
       - name: Install Task
         uses: ./.github/actions/install-task
