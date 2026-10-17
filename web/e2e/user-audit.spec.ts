@@ -118,7 +118,6 @@ test.describe('User Audit Logs', () => {
   })
 
   const testWith404 = test.extend<{ expectedErrors: ExpectedError[] }>({
-    // biome-ignore lint/correctness/noEmptyPattern: Playwright fixture signature requires empty destructure
     expectedErrors: async ({}, use) => {
       await use([
         {

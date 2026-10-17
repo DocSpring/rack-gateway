@@ -16,13 +16,13 @@ import { Label } from './ui/label'
 
 export type UserEditDialogMode = 'create' | 'edit'
 
-export type UserEditDialogValues = {
+export interface UserEditDialogValues {
   email: string
   name: string
   role: RoleName
 }
 
-type UserEditDialogProps = {
+interface UserEditDialogProps {
   open: boolean
   mode: UserEditDialogMode
   initialEmail: string
@@ -86,7 +86,7 @@ export function UserEditDialog({
     try {
       await onSubmit({ email: email.trim(), name: name.trim(), role })
       onOpenChange(false)
-    } catch (_error) {
+    } catch {
       // Parent is responsible for surfacing the error; keep dialog open.
     } finally {
       setSubmitting(false)

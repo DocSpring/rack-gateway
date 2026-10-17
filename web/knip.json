@@ -6,7 +6,6 @@
     "src/contexts/step-up-debug.ts",
     "src/lib/api.ts",
     "src/api/schemas/**",
-    "src/api/types.generated.ts",
     "src/components/ui/**"
   ],
   "ignoreDependencies": ["@radix-ui/react-tabs"]

@@ -6,7 +6,7 @@ import { api } from '@/lib/api'
 import { DEFAULT_PER_PAGE } from '@/lib/constants'
 import { QUERY_KEYS } from '@/lib/query-keys'
 
-type UserAuditLogsState = {
+interface UserAuditLogsState {
   logs: AuditLogRecord[]
   totalCount: number
   currentPage: number

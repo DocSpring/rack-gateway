@@ -3,7 +3,7 @@ import { createContext, useCallback, useContext, useEffect, useState } from 'rea
 import type { User } from '../lib/auth'
 import { authService } from '../lib/auth'
 
-type AuthContextType = {
+interface AuthContextType {
   user: User | null
   isLoading: boolean
   isAuthenticated: boolean
@@ -36,7 +36,7 @@ const isLoginRoute = () => {
     const loginPath = normalizePathname(`${normalizedBase}login`)
     const current = normalizePathname(window.location.pathname)
     return current === loginPath
-  } catch (_error) {
+  } catch {
     return false
   }
 }

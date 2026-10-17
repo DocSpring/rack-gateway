@@ -1,5 +1,5 @@
 import type { Locator, Page } from '@playwright/test'
-import { authenticator } from 'otplib'
+import { generateSync } from 'otplib'
 import { WebRoute } from '@/lib/routes'
 import { clearMfaAttempts, getUserMfaSecret } from './db'
 import { expect, test } from './fixtures'
@@ -31,21 +31,12 @@ function cardByTitle(page: Page, title: string): Locator {
  * Generates a set of valid TOTP codes (current, previous, and next time windows).
  */
 function getValidTotpCodes(secret: string): Set<string> {
-  const generateCodeForTime = (timeOffset: number) => {
-    const originalDate = Date.now
-    const originalTime = originalDate()
-    try {
-      Date.now = () => originalTime + timeOffset * 1000
-      return authenticator.generate(secret)
-    } finally {
-      Date.now = originalDate
-    }
-  }
+  const now = Math.floor(Date.now() / 1000)
 
   return new Set([
-    authenticator.generate(secret), // Current window
-    generateCodeForTime(-30), // Previous window
-    generateCodeForTime(30), // Next window
+    generateSync({ secret, epoch: now }), // Current window
+    generateSync({ secret, epoch: now - 30 }), // Previous window
+    generateSync({ secret, epoch: now + 30 }), // Next window
   ])
 }
 
@@ -369,7 +360,7 @@ test.describe('Account security', () => {
     }
 
     // Type code digit by digit
-    const code = authenticator.generate(secret)
+    const code = generateSync({ secret })
     await typeOtpCode(page, page, code)
 
     await page.waitForURL((url) => !isOnMfaChallengeUrl(url), { timeout: 15_000 })
@@ -679,7 +670,7 @@ test.describe('Account security', () => {
     const errorToasts2 = page.locator('[role="status"]', { hasText: /Invalid|MFA|code|failed/i })
     await expect(errorToasts2).toHaveCount(0)
 
-    const validCode = authenticator.generate(secret)
+    const validCode = generateSync({ secret })
     await typeOtpCode(page, stepUpDialog, validCode)
 
     await page.waitForResponse(

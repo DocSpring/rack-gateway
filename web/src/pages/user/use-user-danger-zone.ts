@@ -12,12 +12,12 @@ import {
   toggleDeleteDialog,
 } from '@/pages/user/user-dialog-actions'
 
-type ToastApi = {
+interface ToastApi {
   error: (message: string) => void
   success: (message: string) => void
 }
 
-type UseUserDangerZoneArgs = {
+interface UseUserDangerZoneArgs {
   decodedEmail: string
   user: GatewayUser | undefined
   currentUserEmail: string | null

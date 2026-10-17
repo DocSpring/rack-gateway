@@ -1,6 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 
-type AuditStatsCardsProps = {
+interface AuditStatsCardsProps {
   totalCount: number
   successfulEvents: number
   totalEvents: number

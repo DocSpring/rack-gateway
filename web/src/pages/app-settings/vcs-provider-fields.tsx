@@ -3,7 +3,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import type { AppSettingsResponse } from '@/pages/app-settings/types'
 
-type VcsProviderFieldsProps = {
+interface VcsProviderFieldsProps {
   disabled: boolean
   githubAvailable: boolean
   circleciAvailable: boolean

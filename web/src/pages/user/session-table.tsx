@@ -13,7 +13,7 @@ import type { UserSessionSummary } from '@/lib/api'
 
 export type SessionId = NonNullable<UserSessionSummary['id']>
 
-type SessionTableProps = {
+interface SessionTableProps {
   sessions: UserSessionSummary[]
   onRevoke: (sessionId: SessionId) => void
   pendingSessionId: SessionId | null

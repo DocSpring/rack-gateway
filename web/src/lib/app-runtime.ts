@@ -1,7 +1,7 @@
 import { api } from './api'
 import { apiPath } from './api-path'
 
-type RawProcess = {
+interface RawProcess {
   id: string
   service?: string
   name?: string
@@ -10,14 +10,14 @@ type RawProcess = {
   started?: string
 }
 
-type RawService = {
+interface RawService {
   name: string
   count?: number
   cpu?: number
   memory?: number
 }
 
-type AppProcess = {
+interface AppProcess {
   id: string
   service: string
   status: string
@@ -25,7 +25,7 @@ type AppProcess = {
   started?: string
 }
 
-type AppService = {
+interface AppService {
   name: string
   count: number
   cpu: number

@@ -2,7 +2,10 @@ import { RefreshCcw } from 'lucide-react'
 import { AuthResultCard } from '@/components/auth-result-card'
 import { Button } from '@/components/ui/button'
 
-type LoginError = { title: string; description: string }
+interface LoginError {
+  title: string
+  description: string
+}
 
 // Reason codes the gateway sends a failed web login here with (see webLoginError in
 // internal/gateway/handlers/auth_web_errors.go). The code only selects a message and is never

@@ -5,7 +5,7 @@ import { APIRoute } from './routes'
 
 export const SESSION_EXPIRED_MESSAGE = 'Session expired. Please sign in again.'
 
-export type User = {
+export interface User {
   email: string
   name: string
   roles: string[]
@@ -46,7 +46,7 @@ class AuthService {
       const response = await axios.get<HandlersInfoResponse>(APIRoute('info'), {
         withCredentials: true,
       })
-      const data = response.data
+      const { data } = response
       const userInfo = data?.user
 
       const rack: User['rack'] = normalizeRack(data?.rack)
@@ -80,7 +80,7 @@ class AuthService {
         if (status === 401 && !options.suppressAuthError) {
           sessionStorage.setItem('auth_error', SESSION_EXPIRED_MESSAGE)
         }
-      } catch (_e) {
+      } catch {
         /* ignore */
       }
       return null

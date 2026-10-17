@@ -27,7 +27,7 @@ describe('AppSettingsPage', () => {
   beforeEach(() => {
     params.app = 'web'
     mockGet.mockImplementation((url: string) => {
-      const app = url.split('/')[4]
+      const [, , , , app] = url.split('/')
       return Promise.resolve({
         circleci_auto_approve_on_approval: { value: autoApproveFor[app], source: 'db' },
       })

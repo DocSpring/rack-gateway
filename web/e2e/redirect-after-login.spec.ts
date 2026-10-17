@@ -241,8 +241,8 @@ test.describe('Redirect after login', () => {
     const secret = await getUserMfaSecret('admin@example.com')
     if (!secret) throw new Error('No MFA secret found for admin@example.com')
 
-    const { authenticator } = await import('otplib')
-    const code = authenticator.generate(secret)
+    const { generateSync } = await import('otplib')
+    const code = generateSync({ secret })
     await typeOtpCode(page, page, code)
 
     // Auto-submits when all 6 digits are entered, wait for redirect to target page

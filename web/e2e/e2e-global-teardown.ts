@@ -23,7 +23,6 @@ export default async function globalTeardown(_config: FullConfig) {
     if (originalUrl) {
       process.env.E2E_DATABASE_URL = originalUrl
     } else {
-      // biome-ignore lint/performance/noDelete: Need to delete env var to prevent "undefined" string
       delete process.env.E2E_DATABASE_URL
     }
   } catch (error) {

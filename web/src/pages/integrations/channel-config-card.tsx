@@ -9,7 +9,7 @@ import { NativeSelect } from '@/components/ui/native-select'
 
 import type { ChannelConfig, SlackChannel } from '@/pages/integrations/slack-types'
 
-type ChannelConfigCardProps = {
+interface ChannelConfigCardProps {
   configKey: string
   config: ChannelConfig
   channels: SlackChannel[]
@@ -60,7 +60,7 @@ export function ChannelConfigCard({
 
   const handleChannelChange = useCallback(
     (event: ChangeEvent<HTMLSelectElement>) => {
-      const value = event.target.value
+      const { value } = event.target
       const channel = channels.find((c) => c.id === value)
       if (channel) {
         onUpdateChannel(configKey, channel.id, channel.name)

@@ -1,6 +1,9 @@
 import { isAxiosError } from 'axios'
 
-type MfaHeaders = { 'X-MFA-TOTP'?: string; 'X-MFA-WebAuthn'?: string }
+interface MfaHeaders {
+  'X-MFA-TOTP'?: string
+  'X-MFA-WebAuthn'?: string
+}
 
 let currentMFAHeaders: MfaHeaders = {}
 

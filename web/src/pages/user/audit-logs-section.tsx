@@ -1,7 +1,7 @@
 import type { AuditLogRecord } from '@/components/audit-logs-pane'
 import { AuditLogsPane } from '@/components/audit-logs-pane'
 
-type UserAuditLogsProps = {
+interface UserAuditLogsProps {
   logs: AuditLogRecord[]
   totalCount: number
   totalPages: number

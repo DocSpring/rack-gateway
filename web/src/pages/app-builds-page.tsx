@@ -17,7 +17,7 @@ import { apiPath } from '../lib/api-path'
 import { DEFAULT_PER_PAGE } from '../lib/constants'
 import { formatElapsed } from '../lib/time'
 
-type Build = {
+interface Build {
   id: string
   description: string
   status: string
@@ -50,7 +50,7 @@ export function AppBuildsPage() {
             }
           }
         }
-      } catch (_e) {
+      } catch {
         // ignore errors
       }
       return items

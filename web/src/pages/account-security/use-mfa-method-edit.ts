@@ -5,7 +5,7 @@ import type { MFAStatusResponse } from '@/lib/api'
 
 type MFAMethodRecord = NonNullable<MFAStatusResponse['methods']>[number]
 
-type UseMFAMethodEditResult = {
+interface UseMFAMethodEditResult {
   editingMethod: { id: number; label: string; type: string; cliCapable: boolean } | null
   editLabel: string
   setEditLabel: (label: string) => void

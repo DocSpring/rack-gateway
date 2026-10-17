@@ -16,7 +16,7 @@ import { api } from '@/lib/api'
 import { toastAPIError } from '@/lib/error-utils'
 import type { GlobalSettingsResponse } from '@/pages/settings/types'
 
-type DestructiveActionsCardProps = {
+interface DestructiveActionsCardProps {
   settings: GlobalSettingsResponse | undefined
   disabled: boolean
 }
@@ -85,9 +85,7 @@ export function DestructiveActionsCard({ settings, disabled }: DestructiveAction
     try {
       await updateMutation.mutateAsync()
     } catch (error) {
-      if (handleStepUpError(error, () => updateMutation.mutateAsync())) {
-        return
-      }
+      handleStepUpError(error, () => updateMutation.mutateAsync())
     }
   }
 
@@ -95,9 +93,7 @@ export function DestructiveActionsCard({ settings, disabled }: DestructiveAction
     try {
       await clearMutation.mutateAsync()
     } catch (error) {
-      if (handleStepUpError(error, () => clearMutation.mutateAsync())) {
-        return
-      }
+      handleStepUpError(error, () => clearMutation.mutateAsync())
     }
   }
 

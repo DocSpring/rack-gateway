@@ -74,7 +74,11 @@ const mockUsers = [
 const ADMIN_PERMISSIONS = ['convox:*:*', 'gateway:*:*', 'security:*:*']
 const VIEWER_PERMISSIONS = ['convox:app:list', 'gateway:user:list', 'gateway:api_token:read']
 
-type MockUser = { email: string; roles: string[]; permissions: string[] }
+interface MockUser {
+  email: string
+  roles: string[]
+  permissions: string[]
+}
 
 const createWrapper = (
   user: MockUser = { email: 'admin@example.com', roles: ['admin'], permissions: ADMIN_PERMISSIONS }

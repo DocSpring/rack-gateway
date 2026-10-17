@@ -2,14 +2,14 @@
 
 ## Tech Stack
 
-- **Framework**: React 18 with TypeScript
-- **Build Tool**: Vite 7
+- **Framework**: React 19 with TypeScript 7
+- **Build Tool**: Vite 8
 - **Routing**: TanStack Router
 - **State Management**: TanStack Query (React Query)
 - **Styling**: Tailwind CSS
 - **UI Components**: Custom components built on Radix UI primitives
 - **Testing**: Vitest (unit) + Playwright (E2E)
-- **Linting**: Biome
+- **Linting**: Biome with the Ultracite core preset (see [Linting](#linting))
 
 ## Testing
 
@@ -143,6 +143,21 @@ bun run typecheck
 | `task web:lint:typecheck` | TypeScript type checking only                         |
 
 **Never use `task web:lint`** - always use `task web:lint:fix` instead.
+
+## Linting
+
+`biome.json` extends Ultracite's core preset and turns off only what is wrong for this codebase. Never add a
+`biome-ignore` comment; change the code, or turn a rule off in `biome.json` with a reason recorded here.
+
+- `useSortedKeys` and `useSortedInterfaceMembers` (assists): object key order is meaningful where code iterates an
+  object (display order, request bodies in tests), and type members stay in the order of the Go structs they mirror.
+- `noJsxPropsBind`: inline arrow functions in JSX props are fine in modern React (DeepSource's `react/jsx-no-bind` is
+  off for the same reason).
+- `noAwaitInLoops`: many loops must run in order (polling, typing OTP digits, deleting MFA methods one step-up at a
+  time).
+- `noUnnecessaryConditions`: it relies on Biome's own type inference, which gets enum switches, refs and generic
+  defaults wrong, and API types don't show that Go sends `null` for empty slices.
+- `noEmptyPattern` in `e2e/`: Playwright fixtures must destructure `{}` as their first argument.
 
 ## Content Security Policy (CSP)
 

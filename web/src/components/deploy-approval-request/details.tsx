@@ -10,7 +10,7 @@ import type { DeployApprovalRequest } from '@/lib/api'
 
 const PLACEHOLDER_VALUE = '—'
 
-type DetailRowProps = {
+interface DetailRowProps {
   label: string
   value: ReactNode
   valueClassName?: string
@@ -60,7 +60,7 @@ function formatCreatedBy(request: DeployApprovalRequest): string {
   return formatUser(request.created_by_name, request.created_by_email)
 }
 
-type RequestHeaderProps = {
+interface RequestHeaderProps {
   request: DeployApprovalRequest
   circleCIPipelineUrl: string | null
   circleCIMetadata: { pipelineNumber?: string | number } | null
@@ -109,7 +109,7 @@ export function RequestHeader({
   )
 }
 
-type ActionButtonsProps = {
+interface ActionButtonsProps {
   approveMutationPending: boolean
   extendMutationPending: boolean
   rejectMutationPending: boolean
@@ -172,7 +172,7 @@ export function ActionButtons({
   )
 }
 
-type RequestDetailsCardProps = {
+interface RequestDetailsCardProps {
   request: DeployApprovalRequest
 }
 

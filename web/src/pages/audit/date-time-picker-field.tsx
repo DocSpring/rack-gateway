@@ -9,7 +9,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 
 import { combineDateTime, parseDateTime, splitDateTime } from '@/pages/audit/utils'
 
-type DateTimePickerFieldProps = {
+interface DateTimePickerFieldProps {
   label: string
   value: string
   onChange: (next: string) => void
@@ -66,7 +66,7 @@ export function DateTimePickerField({
         <Popover onOpenChange={setOpen} open={open}>
           <PopoverTrigger asChild>
             <Button
-              className="-translate-y-1/2 absolute top-1/2 right-2 h-8 w-8 p-0 text-muted-foreground hover:bg-transparent focus-visible:ring-1 dark:text-muted-foreground"
+              className="absolute top-1/2 right-2 h-8 w-8 -translate-y-1/2 p-0 text-muted-foreground hover:bg-transparent focus-visible:ring-1 dark:text-muted-foreground"
               variant="ghost"
             >
               <CalendarIcon className="h-4 w-4" />
@@ -80,7 +80,7 @@ export function DateTimePickerField({
             sideOffset={8}
           >
             <Calendar
-              initialFocus
+              autoFocus
               mode="single"
               month={month}
               onMonthChange={setMonth}

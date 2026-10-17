@@ -50,7 +50,7 @@ function handleEnrollmentRedirect(
   }
 }
 
-type AccountSecurityMutationsDeps = {
+interface AccountSecurityMutationsDeps {
   closeEnrollmentModal: () => void
   invalidateStatus: () => Promise<unknown> | undefined
   refreshUser: () => Promise<unknown>

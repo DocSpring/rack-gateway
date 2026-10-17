@@ -18,7 +18,7 @@ import { apiPath } from '@/lib/api-path'
 import type { AppSettingsResponse } from '@/pages/app-settings/types'
 import { extractErrorMessage } from '@/pages/app-settings/utils'
 
-type ServiceImagePatternsCardProps = {
+interface ServiceImagePatternsCardProps {
   app: string
   settings: AppSettingsResponse | undefined
   disabled: boolean
@@ -49,12 +49,13 @@ export function ServiceImagePatternsCard({
       if (value === null) {
         return
       }
+      let parsed: unknown
       try {
-        const parsed = JSON.parse(value)
-        await api.put(apiPath`/api/v1/apps/${app}/settings/service-image-patterns`, parsed)
-      } catch {
-        throw new Error('Invalid JSON format')
+        parsed = JSON.parse(value)
+      } catch (error) {
+        throw new Error('Invalid JSON format', { cause: error })
       }
+      await api.put(apiPath`/api/v1/apps/${app}/settings/service-image-patterns`, parsed)
     },
     onSuccess: async () => {
       // Refetch before dropping local edits, so the card never shows the old cached value

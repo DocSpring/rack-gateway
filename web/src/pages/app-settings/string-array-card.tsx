@@ -17,7 +17,7 @@ import { apiPath } from '@/lib/api-path'
 import type { AppSettingsResponse } from '@/pages/app-settings/types'
 import { extractErrorMessage } from '@/pages/app-settings/utils'
 
-type StringArrayCardProps = {
+interface StringArrayCardProps {
   app: string
   settings: AppSettingsResponse | undefined
   disabled: boolean

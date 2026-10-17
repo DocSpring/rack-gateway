@@ -8,7 +8,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 
-type StepUpDialogProps = {
+interface StepUpDialogProps {
   isOpen: boolean
   onOpenChange: (open: boolean) => void
   onVerify: (params: {

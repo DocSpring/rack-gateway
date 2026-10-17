@@ -14,7 +14,7 @@ const STATUS_STYLES = {
   },
 }
 
-type AuthResultCardProps = {
+interface AuthResultCardProps {
   status: 'success' | 'error'
   title: string
   description?: ReactNode

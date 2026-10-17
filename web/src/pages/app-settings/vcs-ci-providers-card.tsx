@@ -21,12 +21,12 @@ import { extractErrorMessage } from '@/pages/app-settings/utils'
 import { VcsProviderFields } from '@/pages/app-settings/vcs-provider-fields'
 import { VerificationSettingsFields } from '@/pages/app-settings/verification-settings-fields'
 
-type IntegrationAvailability = {
+interface IntegrationAvailability {
   github: boolean
   circleci: boolean
 }
 
-type VCSCIProvidersCardProps = {
+interface VCSCIProvidersCardProps {
   app: string
   settings: AppSettingsResponse | undefined
   disabled: boolean
@@ -87,10 +87,10 @@ function buildUpdatePayload(overrides: OverrideState) {
 }
 
 function mergeOverride<T>(overrideValue: T | null, currentValue: T): T {
-  return overrideValue !== null ? overrideValue : currentValue
+  return overrideValue === null ? currentValue : overrideValue
 }
 
-type VcsCiDisplayValues = {
+interface VcsCiDisplayValues {
   vcsProvider: string
   vcsRepo: string
   ciProvider: string
@@ -103,7 +103,7 @@ type VcsCiDisplayValues = {
   circleCIApprovalJobName: string
 }
 
-type VcsCiFormState = {
+interface VcsCiFormState {
   overrides: OverrideState
   display: VcsCiDisplayValues
   hasChanges: boolean

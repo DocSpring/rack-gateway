@@ -12,14 +12,13 @@ const parseList = (value?: string) =>
     : []
 
 // Type for expected errors that tests can specify
-export type ExpectedError = {
+export interface ExpectedError {
   pattern: RegExp
   description?: string
 }
 
 export const test = base.extend<{ expectedErrors: ExpectedError[] }>({
   // Allow tests to specify expected console errors that should be ignored
-  // biome-ignore lint/correctness/noEmptyPattern: Playwright fixture signature requires empty destructure
   expectedErrors: async ({}, use) => {
     await use([])
   },
@@ -27,7 +26,6 @@ export const test = base.extend<{ expectedErrors: ExpectedError[] }>({
   // Override baseURL per worker for parallel test shards
   // Only uses multiple ports when E2E_GATEWAY_PORTS is set (by task web:e2e)
   // When running tests manually, uses single port on 9447
-  // biome-ignore lint/correctness/noEmptyPattern: Playwright fixture signature requires empty destructure
   baseURL: async ({}, use, testInfo) => {
     // console.log('[FIXTURE baseURL] Starting baseURL fixture')
     const ports = parseList(process.env.E2E_GATEWAY_PORTS)
@@ -65,7 +63,6 @@ export const test = base.extend<{ expectedErrors: ExpectedError[] }>({
     if (originalDatabaseUrl) {
       process.env.E2E_DATABASE_URL = originalDatabaseUrl
     } else {
-      // biome-ignore lint/performance/noDelete: Need to delete env var to prevent "undefined" string
       delete process.env.E2E_DATABASE_URL
     }
   },
@@ -94,7 +91,17 @@ export const test = base.extend<{ expectedErrors: ExpectedError[] }>({
                 userHandle: null,
               },
               getClientExtensionResults: () => ({}),
-              toJSON: () => ({ id: 'e2e-mock-credential-id', type: 'public-key' }),
+              toJSON: () => ({
+                id: 'e2e-mock-credential-id',
+                type: 'public-key',
+                rawId: 'AQIDBAUGBwg',
+                clientExtensionResults: {},
+                response: {
+                  clientDataJSON: 'CgsMDQ',
+                  authenticatorData: 'FBUWFw',
+                  signature: 'Hh8gIQ',
+                },
+              }),
             } as PublicKeyCredential
             return Promise.resolve(mockCredential)
           }
@@ -114,7 +121,19 @@ export const test = base.extend<{ expectedErrors: ExpectedError[] }>({
                 attestationObject: new Uint8Array([20, 21, 22, 23]).buffer,
               },
               getClientExtensionResults: () => ({}),
-              toJSON: () => ({ id: 'e2e-mock-credential-id', type: 'public-key' }),
+              toJSON: () => ({
+                id: 'e2e-mock-credential-id',
+                type: 'public-key',
+                rawId: 'AQIDBAUGBwg',
+                clientExtensionResults: {},
+                response: {
+                  clientDataJSON: 'CgsMDQ',
+                  attestationObject: 'FBUWFw',
+                  authenticatorData: 'FBUWFw',
+                  publicKeyAlgorithm: -7,
+                  transports: [],
+                },
+              }),
             } as PublicKeyCredential
             return Promise.resolve(mockCredential)
           }
@@ -133,18 +152,9 @@ export const test = base.extend<{ expectedErrors: ExpectedError[] }>({
       window.fetch = async (...args) => {
         const response = await originalFetch(...args)
         try {
-          const requestInfo = args[0]
-          let url = ''
-          if (typeof requestInfo === 'string') {
-            url = requestInfo
-          } else if (requestInfo instanceof Request) {
-            url = requestInfo.url
-          }
-          if (
-            typeof url === 'string' &&
-            url.includes('/auth/mfa/enroll/totp/start') &&
-            response.ok
-          ) {
+          const [requestInfo] = args
+          const url = requestInfo instanceof Request ? requestInfo.url : String(requestInfo)
+          if (url.includes('/auth/mfa/enroll/totp/start') && response.ok) {
             response
               .clone()
               .json()

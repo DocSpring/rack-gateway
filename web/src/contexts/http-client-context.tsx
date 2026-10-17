@@ -4,7 +4,7 @@ import { createContext, type PropsWithChildren, useContext, useEffect, useMemo }
 import { getCsrfToken } from '@/lib/csrf'
 import { APIRoute } from '@/lib/routes'
 
-type HttpClientContextValue = {
+interface HttpClientContextValue {
   client: AxiosInstance
 }
 

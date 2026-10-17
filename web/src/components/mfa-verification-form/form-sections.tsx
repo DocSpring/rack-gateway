@@ -10,7 +10,7 @@ const SIX_DIGITS_REGEX = /^\d{6}$/
 
 export type FormView = 'loading' | 'totp' | 'webauthn' | 'backup'
 
-export type RenderProps = {
+export interface RenderProps {
   showTrustDevice: boolean
   // How long a trusted device skips the login MFA challenge, once the MFA status has loaded.
   trustDeviceDays?: number

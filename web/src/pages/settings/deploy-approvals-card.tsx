@@ -18,12 +18,12 @@ import { api } from '@/lib/api'
 import { toastAPIError } from '@/lib/error-utils'
 import type { GlobalSettingsResponse } from '@/pages/settings/types'
 
-type DeployApprovalsCardProps = {
+interface DeployApprovalsCardProps {
   settings: GlobalSettingsResponse | undefined
   disabled: boolean
 }
 
-type DeployApprovalValues = {
+interface DeployApprovalValues {
   deploy_approvals_enabled: boolean
   deploy_approval_window_minutes: number
   deploy_approval_require_different_approver: boolean

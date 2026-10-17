@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 
-type StringArrayInputProps = {
+interface StringArrayInputProps {
   value: string[]
   onChange: (value: string[]) => void
   placeholder?: string

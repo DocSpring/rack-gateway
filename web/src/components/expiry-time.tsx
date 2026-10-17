@@ -1,7 +1,7 @@
 import { format, formatDistanceToNow, isPast } from 'date-fns'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip'
 
-type ExpiryTimeProps = {
+interface ExpiryTimeProps {
   date?: string | Date | null
 }
 

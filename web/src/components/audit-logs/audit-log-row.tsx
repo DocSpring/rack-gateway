@@ -18,7 +18,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { TableCell, TableRow } from '@/components/ui/table'
 
-type AuditLogRowProps = {
+interface AuditLogRowProps {
   log: AuditLogRecord
   index: number
   onClick: (log: AuditLogRecord) => void

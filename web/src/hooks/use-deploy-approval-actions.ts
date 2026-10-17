@@ -18,7 +18,7 @@ function toNotesPayload(notes: string): UpdateDeployApprovalRequestStatusRequest
   return trimmed ? { notes: trimmed } : undefined
 }
 
-type DeployActionsArgs = {
+interface DeployActionsArgs {
   id: string
   queryClient: ReturnType<typeof useQueryClient>
   handleStepUpError: ReturnType<typeof useStepUp>['handleStepUpError']

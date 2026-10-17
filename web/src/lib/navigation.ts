@@ -21,7 +21,7 @@ export function normalizeRedirectPath(value: string | null): string | null {
       const resolved = new URL(value, window.location.origin)
       const path = `${resolved.pathname}${resolved.search}${resolved.hash}`
       return coercePath(path)
-    } catch (_error) {
+    } catch {
       // fall back to plain string handling
     }
   }

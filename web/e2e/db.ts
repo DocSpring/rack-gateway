@@ -62,7 +62,7 @@ function resolveConnectionString() {
     return getFallbackDatabaseUrl()
   }
 
-  const selected = candidates[0]
+  const [selected] = candidates
   if (defaultPlaceholder.test(selected)) {
     return getFallbackDatabaseUrl()
   }
@@ -102,7 +102,7 @@ export async function cleanupE2eArtifacts() {
     const { rows } = await client.query<{ fn: string | null }>(
       `SELECT to_regprocedure('audit.reset_for_tests()') AS fn`
     )
-    const resetFnExists = rows[0]?.fn != null
+    const resetFnExists = Boolean(rows[0]?.fn)
 
     if (resetFnExists) {
       await client.query("SET audit.allow_reset = 'on';")
@@ -141,7 +141,7 @@ export async function ensureAdminUser(): Promise<void> {
   })
 }
 
-type AggregatedAuditSeed = {
+interface AggregatedAuditSeed {
   firstEventId: number
   lastEventId: number
   eventCount: number
@@ -354,7 +354,10 @@ export async function clearMfaAttempts() {
   })
 }
 
-type StoredMfaSecret = { user_id: string; secret: string | null }
+interface StoredMfaSecret {
+  user_id: string
+  secret: string | null
+}
 
 // TOTP seeds are stored encrypted and bound to the user (see column-crypto.ts).
 function decryptStoredSecret(row?: StoredMfaSecret): string | null {

@@ -2,12 +2,12 @@
 export type { DbSlackIntegration as SlackIntegration } from '@/api/schemas/dbSlackIntegration'
 
 // Frontend-only types for Slack integration UI
-export type SlackChannel = {
+export interface SlackChannel {
   id: string
   name: string
 }
 
-export type ChannelConfig = {
+export interface ChannelConfig {
   id: string | null
   name: string
   actions: string[]

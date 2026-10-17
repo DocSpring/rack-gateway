@@ -17,12 +17,12 @@ import {
   submitUserEdits,
 } from '@/pages/user/edit-plan'
 
-type ToastApi = {
+interface ToastApi {
   error: (message: string) => void
   success: (message: string) => void
 }
 
-type UseUserEditingArgs = {
+interface UseUserEditingArgs {
   decodedEmail: string
   user: GatewayUser | undefined
   currentPrimaryRole: RoleName

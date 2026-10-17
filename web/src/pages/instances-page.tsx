@@ -14,7 +14,7 @@ import {
 import { api } from '../lib/api'
 import { DEFAULT_PER_PAGE } from '../lib/constants'
 
-type Instance = {
+interface Instance {
   id: string
   status: string
   private_ip?: string
@@ -23,7 +23,10 @@ type Instance = {
 }
 
 export function InstancesPage() {
-  type RackInfo = { provider?: string; region?: string }
+  interface RackInfo {
+    provider?: string
+    region?: string
+  }
   const { data: rack } = useQuery({
     queryKey: ['rack-info'],
     queryFn: async () => api.get<RackInfo>('/api/v1/rack'),

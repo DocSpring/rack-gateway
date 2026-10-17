@@ -17,8 +17,10 @@ import { api } from '../lib/api'
 import { apiPath } from '../lib/api-path'
 import { DEFAULT_PER_PAGE } from '../lib/constants'
 
-type App = { name: string }
-type Release = {
+interface App {
+  name: string
+}
+interface Release {
   id: string
   description?: string
   version?: number
@@ -60,7 +62,7 @@ export function AllReleasesPage() {
             }
           }
         }
-      } catch (_e) {
+      } catch {
         // ignore
       }
       return items

@@ -18,7 +18,7 @@ import {
 } from 'lucide-react'
 import { hasPermission, PERMISSIONS } from '../lib/permissions'
 
-export type NavigationItem = {
+export interface NavigationItem {
   name: string
   icon: LucideIcon
   href?: string
@@ -26,7 +26,7 @@ export type NavigationItem = {
   disabled?: boolean
 }
 
-type NavigationUser = {
+interface NavigationUser {
   email?: string
   roles?: string[]
   permissions?: string[]

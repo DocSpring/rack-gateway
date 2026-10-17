@@ -7,7 +7,7 @@ import {
 } from '@/components/ui/dialog'
 import { CodeBlockCopy } from './code-block-copy'
 
-type CliSetupDialogProps = {
+interface CliSetupDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   rackAlias: string

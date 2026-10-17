@@ -19,7 +19,7 @@ export function LoginPage() {
         toast.error(msg)
         sessionStorage.removeItem('auth_error')
       }
-    } catch (_e) {
+    } catch {
       /* ignore */
     }
   }, [])
@@ -31,7 +31,7 @@ export function LoginPage() {
       const params = new URLSearchParams(window.location.search)
       const returnTo = params.get('returnTo') ?? undefined
       await login(returnTo)
-    } catch (_error) {
+    } catch {
       setIsLoading(false)
     }
   }
@@ -47,7 +47,7 @@ export function LoginPage() {
             <img
               alt="Rack Gateway Logo"
               aria-hidden
-              className="-ml-1 mb-4"
+              className="mb-4 -ml-1"
               height={52}
               src="/app/logo.svg"
               width={52}

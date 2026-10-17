@@ -16,7 +16,7 @@ import { QUERY_KEYS } from '@/lib/query-keys'
 
 const MASKED_SECRET = '********************'
 
-type EnvRowState = {
+interface EnvRowState {
   id: string
   key: string
   value: string
@@ -55,13 +55,13 @@ function getErrorMessage(error: unknown, fallback: string): string {
   return fallback
 }
 
-type EnvChangesSuccess = {
+interface EnvChangesSuccess {
   success: true
   setPayload: Record<string, string>
   finalRemove: string[]
 }
 
-type EnvChangesError = {
+interface EnvChangesError {
   success: false
   message: string
 }
@@ -75,7 +75,7 @@ function prepareEnvChanges(rows: EnvRowState[], removedKeys: string[]): EnvChang
 
   for (const row of rows) {
     const trimmedKey = row.key.trim()
-    const value = row.value
+    const { value } = row
 
     if (row.new && trimmedKey === '' && value === '') {
       continue
@@ -112,7 +112,7 @@ function prepareEnvChanges(rows: EnvRowState[], removedKeys: string[]): EnvChang
   return { success: true, setPayload, finalRemove }
 }
 
-type EnvRowProps = {
+interface EnvRowProps {
   row: EnvRowState
   canEdit: boolean
   isSaving: boolean
@@ -408,7 +408,7 @@ export function AppEnvPage() {
 
   const isSaving = saveMutation.isPending
   const saveDisabled = !(canEdit && hasChanges) || isSaving
-  const isLoading = envQuery.isLoading
+  const { isLoading } = envQuery
   const envError = envQuery.error as Error | null
 
   return (

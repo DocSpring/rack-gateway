@@ -1,6 +1,6 @@
 export type StepUpAction = (() => Promise<unknown>) | (() => unknown) | null
 
-export type StepUpRequest = {
+export interface StepUpRequest {
   action?: StepUpAction
   onResolve?: (value?: unknown) => void
   onReject?: (error: unknown) => void
@@ -41,7 +41,7 @@ export class StepUpQueue {
   }
 }
 
-type RetryOptions = {
+interface RetryOptions {
   run: (action: StepUpAction) => Promise<unknown>
   isMFAError: (error: unknown) => boolean
   requeue: (request: StepUpRequest) => void

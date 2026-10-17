@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 
-type AddChannelButtonProps = {
+interface AddChannelButtonProps {
   onAdd: (channelName: string) => void
   isUpdating: boolean
 }

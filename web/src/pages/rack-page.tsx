@@ -3,7 +3,7 @@ import { CardGrid } from '../components/card-grid'
 import { PageLayout } from '../components/page-layout'
 import { api } from '../lib/api'
 
-type RackInfo = {
+interface RackInfo {
   name?: string
   domain?: string
   provider?: string

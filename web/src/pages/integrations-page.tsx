@@ -266,7 +266,7 @@ export function IntegrationsPage() {
   )
 }
 
-type DisconnectDialogProps = {
+interface DisconnectDialogProps {
   open: boolean
   onCancel: () => void
   onConfirm: () => void

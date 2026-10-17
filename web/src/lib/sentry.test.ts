@@ -69,6 +69,22 @@ describe('initSentry', () => {
     expect(browserTracingIntegrationMock).toHaveBeenCalled()
   })
 
+  it('stops sentry collecting cookies, headers, bodies, query params and user info', () => {
+    setEnv('rgw-sentry-dsn', 'https://examplePublicKey@o0.ingest.sentry.io/0')
+
+    initSentry()
+
+    const options = initMock.mock.calls[0]?.[0] as { dataCollection?: Record<string, unknown> }
+    expect(options.dataCollection).toEqual({
+      userInfo: false,
+      cookies: false,
+      httpHeaders: false,
+      httpBodies: [],
+      urlQueryParams: false,
+      stackFrameVariables: false,
+    })
+  })
+
   it('passes release fallback through to sentry', () => {
     setEnv('rgw-sentry-dsn', 'https://examplePublicKey@o0.ingest.sentry.io/0')
     setEnv('rgw-sentry-release', 'v2024.01.01')

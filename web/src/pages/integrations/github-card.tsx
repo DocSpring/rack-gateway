@@ -3,7 +3,7 @@ import { CheckCircle2, Circle } from 'lucide-react'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 
-type GitHubCardProps = {
+interface GitHubCardProps {
   enabled: boolean
 }
 

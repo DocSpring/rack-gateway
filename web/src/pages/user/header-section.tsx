@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import type { GatewayUser } from '@/lib/api'
 import { RoleBadges } from '@/pages/user/role-badges'
 
-type UserHeaderProps = {
+interface UserHeaderProps {
   user: GatewayUser | undefined
   // Edit, lock and unlock need user-admin permissions; deleting needs user:delete.
   canManage: boolean
@@ -27,7 +27,7 @@ type UserHeaderProps = {
   deletePending: boolean
 }
 
-type AccountAdminActionsProps = {
+interface AccountAdminActionsProps {
   userLoading: boolean
   userMissing: boolean
   onEdit: () => void

@@ -66,7 +66,10 @@ const normalizePath = (path: string): string => {
 }
 
 export type GatewayUser = DbUser
-export type UserConfig = { name: string; roles: string[] }
+export interface UserConfig {
+  name: string
+  roles: string[]
+}
 export type CreateUserRequest = HandlersCreateUserRequest
 export type UpdateUserRequest = HandlersUpdateUserRequest
 export type UpdateUserNameRequest = HandlersUpdateUserNameRequest
@@ -103,11 +106,11 @@ export type DeployApprovalRequestList = HandlersDeployApprovalRequestList
 export type UpdateDeployApprovalRequestStatusRequest =
   HandlersUpdateDeployApprovalRequestStatusRequest
 
-type EnvValuesResponseShape = {
+interface EnvValuesResponseShape {
   env?: EnvValuesMap
 }
 
-type UpdateEnvResponseShape = {
+interface UpdateEnvResponseShape {
   env?: EnvValuesMap
   release_id?: string
 }

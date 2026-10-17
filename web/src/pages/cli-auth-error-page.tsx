@@ -1,6 +1,9 @@
 import { AuthResultCard } from '@/components/auth-result-card'
 
-type CLILoginError = { title: string; description: string }
+interface CLILoginError {
+  title: string
+  description: string
+}
 
 // Error codes a failed CLI login ends with: the gateway's codes (delivered to the CLI's loopback
 // listener) and the CLI's own. The code only selects a message and is never shown, so a crafted link

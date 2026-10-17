@@ -167,8 +167,7 @@ export const registerRoutes = (app: Express): void => {
     "/dev/select-user",
     (req: Request<unknown, unknown, unknown, UserSelectionParams>, res: Response) => {
       const users = Object.values(mockUsers);
-      const query = req.query ?? {};
-      const queryParams = new URLSearchParams(query as Record<string, string>);
+      const queryParams = new URLSearchParams(req.query as Record<string, string>);
       res.type("html").send(renderUserSelectionPage(users, queryParams.toString()));
     }
   );

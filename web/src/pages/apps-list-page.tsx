@@ -14,7 +14,7 @@ import {
 import { api } from '../lib/api'
 import { DEFAULT_PER_PAGE } from '../lib/constants'
 
-type App = {
+interface App {
   name: string
   status: string
   generation?: string
@@ -44,7 +44,7 @@ export function AppsListPage() {
             }
           }
         }
-      } catch (_e) {
+      } catch {
         // ignore errors
       }
       return items

@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Eye, RotateCw, X } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from '@/components/ui/use-toast'
-import type { components } from '../../api/types.generated'
+import type { HandlersJobListResponse, HandlersJobResponse } from '../../api/schemas'
 import { TablePane } from '../../components/table-pane'
 import { Badge } from '../../components/ui/badge'
 import { Button } from '../../components/ui/button'
@@ -24,9 +24,6 @@ import {
 import { api } from '../../lib/api'
 import { apiPath } from '../../lib/api-path'
 
-type JobListResponse = components['schemas']['handlers.JobListResponse']
-type JobResponse = components['schemas']['handlers.JobResponse']
-
 export function JobsPage() {
   return <JobsPageInner />
 }
@@ -35,7 +32,7 @@ function JobsPageInner() {
   const [stateFilter, setStateFilter] = useState<string>('')
   const [queueFilter, setQueueFilter] = useState<string>('')
   const [kindFilter, setKindFilter] = useState<string>('')
-  const [selectedJob, setSelectedJob] = useState<JobResponse | null>(null)
+  const [selectedJob, setSelectedJob] = useState<HandlersJobResponse | null>(null)
   const queryClient = useQueryClient()
 
   // Track cursor stack for back navigation
@@ -60,7 +57,7 @@ function JobsPageInner() {
       }
       const queryString = params.toString()
       const url = `/api/v1/jobs${queryString ? `?${queryString}` : ''}`
-      const response = await api.get<JobListResponse>(url)
+      const response = await api.get<HandlersJobListResponse>(url)
       return response
     },
   })
@@ -217,7 +214,7 @@ function JobsPageInner() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {jobs.map((job: JobResponse) => (
+            {jobs.map((job: HandlersJobResponse) => (
               <TableRow className="cursor-pointer" key={job.id} onClick={() => setSelectedJob(job)}>
                 <TableCell className="font-mono text-sm">{job.id}</TableCell>
                 <TableCell className="font-mono text-xs">{job.kind}</TableCell>
@@ -326,8 +323,8 @@ function JobsPageInner() {
   )
 }
 
-type JobDetailDialogProps = {
-  job: JobResponse | null
+interface JobDetailDialogProps {
+  job: HandlersJobResponse | null
   onClose: () => void
 }
 

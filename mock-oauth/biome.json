@@ -1,6 +1,14 @@
 {
   "$schema": "https://biomejs.dev/schemas/2.5.15/schema.json",
-  "extends": ["ultracite/core"],
+  "extends": ["ultracite/biome/core"],
+  "assist": {
+    "actions": {
+      "source": {
+        "useSortedKeys": "off",
+        "useSortedInterfaceMembers": "off"
+      }
+    }
+  },
   "formatter": {
     "enabled": true,
     "indentStyle": "space",

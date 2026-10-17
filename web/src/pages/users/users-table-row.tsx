@@ -7,7 +7,7 @@ import { UserMetaCell } from '@/components/user-meta-cell'
 import { UserActions } from '@/pages/users/user-actions'
 import { AVAILABLE_ROLES, isUserLocked, type User } from '@/pages/users/user-utils'
 
-type UsersTableRowProps = {
+interface UsersTableRowProps {
   user: User
   canManage: boolean
   canOpenProfile: boolean

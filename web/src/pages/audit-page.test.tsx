@@ -28,7 +28,7 @@ vi.mock('@tanstack/react-router', () => ({
   useNavigate: () => vi.fn(),
   useLocation: () => ({
     pathname: '/',
-    search: typeof window !== 'undefined' ? window.location.search : '',
+    search: typeof window === 'undefined' ? '' : window.location.search,
     hash: '',
   }),
 }))
