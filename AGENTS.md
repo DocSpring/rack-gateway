@@ -133,6 +133,8 @@ DeepSource runs additional static analysis in CI. Key points:
 - **To disable a DeepSource JS rule**, add it to `web/.eslintrc.json` rules (not `.deepsource.toml`)
 - Example: `"react/jsx-no-bind": "off"` disables the arrow-functions-in-JSX-props rule
 - The `react/jsx-no-bind` rule is intentionally disabled - it's outdated advice for modern React
+- `jsx-a11y/no-autofocus` ignores components (`ignoreNonDOM`), like Biome's `noAutofocus`: a component's `autoFocus`
+  prop does what the component says, e.g. the date picker's calendar focuses the selected day when it opens
 
 ## 🌐 PUBLIC REPOSITORY
 

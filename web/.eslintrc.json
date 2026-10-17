@@ -2,9 +2,10 @@
   "$schema": "https://json.schemastore.org/eslintrc",
   "root": true,
   "parser": "@typescript-eslint/parser",
-  "plugins": ["@typescript-eslint", "react"],
+  "plugins": ["@typescript-eslint", "react", "jsx-a11y"],
   "rules": {
     "consistent-return": "off",
+    "jsx-a11y/no-autofocus": ["error", { "ignoreNonDOM": true }],
     "react/jsx-no-bind": "off"
   }
 }
