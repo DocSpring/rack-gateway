@@ -145,6 +145,21 @@ verify_rgw_command_failure() {
     verify_command_status_and_output "$1" "1" "${@:2}"
 }
 
+# Fails when a command's output contains any of the given strings, e.g. an error the CLI logs and then carries on.
+refute_rgw_output() {
+    local command="$1"
+    shift
+    local output
+    output=$(eval "${WRAPPER_CMD:-./bin/rack-gateway} $command" 2>&1 </dev/null || true)
+    for unexpected in "$@"; do
+        if echo "$output" | grep -q -F "$unexpected"; then
+            echo -e "${RED}$command showed unexpected output: $unexpected${NC}" >&2
+            echo -e "${RED}Output: $output${NC}" >&2
+            exit 1
+        fi
+    done
+}
+
 logout_cli() {
     echo -e "${YELLOW}Logging out...${NC}"
     verify_rgw_command "logout" "Logged out from e2e" "the session is ended on the gateway"

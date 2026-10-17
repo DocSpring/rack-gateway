@@ -126,7 +126,8 @@ func execProcess(w http.ResponseWriter, r *http.Request) {
 		} else {
 			_ = conn.WriteMessage(websocket.TextMessage, []byte("(mock output)\n"))
 		}
-		_ = conn.WriteMessage(websocket.TextMessage, []byte("Exit code: 0\n"))
 	}
-	_ = conn.WriteMessage(websocket.TextMessage, []byte("Session closed.\n"))
+	// A rack ends every exec stream with this marker and the exit code. The CLI strips the line, exits with the
+	// code, and fails when the marker is missing.
+	_ = conn.WriteMessage(websocket.TextMessage, []byte(execExitMarker+"0\n"))
 }
