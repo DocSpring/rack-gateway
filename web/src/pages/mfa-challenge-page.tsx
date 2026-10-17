@@ -20,7 +20,7 @@ import { resolveWebRedirect, WebRoute } from '@/lib/routes'
 
 type ChallengeMode = 'cli' | 'web'
 
-type CLICompletion = {
+interface CLICompletion {
   redirect: string
 }
 

@@ -146,7 +146,7 @@ export function MFAVerificationForm({
       return
     }
 
-    if (!pending || pending.length !== 6 || !DIGITS_ONLY_REGEX.test(pending)) {
+    if (pending?.length !== 6 || !DIGITS_ONLY_REGEX.test(pending)) {
       return
     }
     if (lastSubmittedCodeRef.current === pending) {

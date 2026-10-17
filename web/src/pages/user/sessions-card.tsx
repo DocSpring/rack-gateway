@@ -3,7 +3,7 @@ import type { UserSessionSummary } from '@/lib/api'
 import type { SessionId } from '@/pages/user/session-table'
 import { SessionTable } from '@/pages/user/session-table'
 
-type UserSessionsCardProps = {
+interface UserSessionsCardProps {
   sessions: UserSessionSummary[]
   sessionsError: Error | null
   sessionsLoading: boolean

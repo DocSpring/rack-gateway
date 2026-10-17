@@ -51,7 +51,7 @@ function toNotesPayload(notes: string): UpdateDeployApprovalRequestStatusRequest
   return trimmed ? { notes: trimmed } : undefined
 }
 
-type PaginationResult<T> = {
+interface PaginationResult<T> {
   page: number
   setPage: (value: number | ((prev: number) => number)) => void
   total: number
@@ -324,7 +324,7 @@ export function DeployApprovalRequestsPage() {
   )
 }
 
-type DeployApprovalRequestRowProps = {
+interface DeployApprovalRequestRowProps {
   request: DeployApprovalRequest
   approveDisabled: boolean
   approvingId: string | null
@@ -346,7 +346,7 @@ function DeployApprovalRequestRow({
   onSelect,
 }: DeployApprovalRequestRowProps) {
   const publicId = request.public_id
-  const message = request.message
+  const { message } = request
   const tokenName = request.target_api_token_name ?? 'Unknown token'
   const tokenId = request.target_api_token_id
   const status = request.status ?? 'unknown'
@@ -379,7 +379,7 @@ function DeployApprovalRequestRow({
     }
   }
 
-  const shortCommit = request.git_commit_hash.substring(0, 7)
+  const shortCommit = request.git_commit_hash.slice(0, 7)
   const gitBranch = request.git_branch ?? '—'
 
   return (

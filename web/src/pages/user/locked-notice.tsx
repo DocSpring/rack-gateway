@@ -2,7 +2,7 @@ import { Lock } from 'lucide-react'
 import { TimeAgo } from '@/components/time-ago'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 
-type LockedNoticeProps = {
+interface LockedNoticeProps {
   lockedAt?: string | null
   lockedByName?: string | null
   lockedByEmail?: string | null

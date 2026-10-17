@@ -12,7 +12,7 @@ import {
 import { Label } from './ui/label'
 import { Textarea } from './ui/textarea'
 
-type DeployApprovalRejectDialogProps = {
+interface DeployApprovalRejectDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   onSubmit: (notes: string) => void

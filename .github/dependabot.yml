@@ -1,10 +1,14 @@
 version: 2
 
+# Every ecosystem waits 7 days after a release before proposing it, so a compromised or broken release has time to be
+# caught and pulled first. Security updates are not delayed. Manual upgrades follow the same rule (see AGENTS.md).
 updates:
   - package-ecosystem: gomod
     directory: /
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     ignore:
       # Replaced by the local modules in internal/shims (see go.mod replace directives)
       - dependency-name: github.com/docker/docker
@@ -20,6 +24,8 @@ updates:
       - /mock-oauth
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     groups:
       bun-minor-patch:
         update-types: [minor, patch]
@@ -28,6 +34,8 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     groups:
       actions-minor-patch:
         update-types: [minor, patch]
@@ -36,8 +44,11 @@ updates:
     directories:
       - /
       - /mock-oauth
+      - /web
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     groups:
       docker-minor-patch:
         update-types: [minor, patch]

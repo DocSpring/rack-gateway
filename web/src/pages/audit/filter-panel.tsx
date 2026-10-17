@@ -8,7 +8,7 @@ import { NativeSelect } from '@/components/ui/native-select'
 import { DateTimePickerField } from '@/pages/audit/date-time-picker-field'
 import { ACTION_TYPES, RESOURCE_TYPES, STATUS_TYPES } from '@/pages/audit/utils'
 
-type AuditFilterPanelProps = {
+interface AuditFilterPanelProps {
   searchTerm: string
   onSearchChange: (value: string) => void
   actionType: string
@@ -178,7 +178,7 @@ export function AuditFilterPanel({
   )
 }
 
-type AuditSelectFieldProps = {
+interface AuditSelectFieldProps {
   id: string
   label: string
   value: string

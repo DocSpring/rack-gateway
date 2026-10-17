@@ -16,7 +16,7 @@ import { api } from '../lib/api'
 import { apiPath } from '../lib/api-path'
 import { DEFAULT_PER_PAGE } from '../lib/constants'
 
-type Release = {
+interface Release {
   id: string
   description?: string
   version?: number
@@ -46,7 +46,7 @@ export function AppReleasesPage() {
             }
           }
         }
-      } catch (_e) {
+      } catch {
         // ignore
       }
       return items

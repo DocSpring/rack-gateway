@@ -13,7 +13,7 @@ own database, with an admin user for migrations and a separate, narrower app use
 
 | Requirement | Minimum | Recommended |
 |-------------|---------|-------------|
-| **PostgreSQL version** | 16 (what development and CI run) | 16 |
+| **PostgreSQL version** | 17 (what development and CI run) | 17 |
 | **Storage** | 10GB | 50GB+ (scales with audit logs) |
 | **Memory** | 256MB | 1GB+ |
 | **Connections** (`max_connections`) | 60 (default pools, see below) | 100+ |
@@ -91,7 +91,7 @@ Create an RDS PostgreSQL instance:
 resource "aws_db_instance" "gateway" {
   identifier     = "rack-gateway"
   engine         = "postgres"
-  engine_version = "16.1"
+  engine_version = "17.11"
   instance_class = "db.t3.medium"
 
   allocated_storage     = 50
@@ -122,13 +122,13 @@ resource "aws_db_instance" "gateway" {
 
 For local development:
 
-The repository's `docker-compose.yml` runs `postgres:16-alpine` and the `task` helpers create the audit roles
+The repository's `docker-compose.yml` runs `postgres:17-alpine` and the `task` helpers create the audit roles
 for you (`scripts/audit-roles.sql`). For your own container:
 
 ```yaml
 services:
   postgres:
-    image: postgres:16
+    image: postgres:17
     environment:
       POSTGRES_USER: rack_gateway
       POSTGRES_PASSWORD: development

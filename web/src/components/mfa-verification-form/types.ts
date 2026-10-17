@@ -18,7 +18,7 @@ type VerificationParams =
       assertion_response: string
     }
 
-export type MFAVerificationFormProps = {
+export interface MFAVerificationFormProps {
   onVerify: (params: VerificationParams) => Promise<void>
   onSuccess?: () => void | Promise<void>
   onError?: (error: unknown) => void

@@ -1,6 +1,6 @@
 import { isAxiosError } from 'axios'
 
-type SettingsErrorPayload = {
+interface SettingsErrorPayload {
   error?: string
 }
 
@@ -17,5 +17,4 @@ export function extractErrorMessage(error: unknown): string | undefined {
   if (error instanceof Error) {
     return error.message
   }
-  return
 }

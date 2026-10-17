@@ -4,12 +4,12 @@ import { api } from '@/lib/api'
 import { QUERY_KEYS } from '@/lib/query-keys'
 import type { SessionId } from '@/pages/user/session-table'
 
-type ToastApi = {
+interface ToastApi {
   error: (message: string) => void
   success: (message: string) => void
 }
 
-type UseUserSessionsControlArgs = {
+interface UseUserSessionsControlArgs {
   decodedEmail: string
   queryClient: import('@tanstack/react-query').QueryClient
   toastApi: ToastApi

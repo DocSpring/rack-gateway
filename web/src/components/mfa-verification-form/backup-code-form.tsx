@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { isValidBackupCode, normalizeBackupCode } from './backup-code'
 
-type BackupCodeFormProps = {
+interface BackupCodeFormProps {
   focusOnMount: boolean
   isVerifying: boolean
   backLabel: string

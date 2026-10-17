@@ -5,7 +5,7 @@ import type { MFAStatusResponse } from '@/lib/api'
 
 type TrustedDevice = NonNullable<MFAStatusResponse['trusted_devices']>[number]
 
-type TrustedDevicesCardProps = {
+interface TrustedDevicesCardProps {
   devices: TrustedDevice[]
   onRevoke: (device: TrustedDevice) => void
   onTrustCurrentDevice: () => void

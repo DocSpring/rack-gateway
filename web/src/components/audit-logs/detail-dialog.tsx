@@ -10,7 +10,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 
-type AuditLogDetailDialogProps = {
+interface AuditLogDetailDialogProps {
   entry: AuditLogRecord | null
   onClose: () => void
 }

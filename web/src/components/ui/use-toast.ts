@@ -2,12 +2,12 @@ import { Check, CircleAlert, Info, TriangleAlert } from 'lucide-react'
 import { createElement } from 'react'
 import hotToast from 'react-hot-toast'
 
-type ToastOptions = {
+interface ToastOptions {
   description?: string
   duration?: number
 }
 
-type ToastHandlers = {
+interface ToastHandlers {
   (title: string, options?: ToastOptions): string
   success: (title: string, options?: ToastOptions) => string
   error: (title: string, options?: ToastOptions) => string

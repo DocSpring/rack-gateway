@@ -32,11 +32,11 @@ import { getMfaRequirementForRequest } from '@/lib/mfa-preflight'
 
 const STEP_UP_BUFFER_MS = 10_000
 
-type StepUpContextValue = {
+interface StepUpContextValue {
   openStepUp: (request?: StepUpRequest) => void
   requireStepUp: (action: NonNullable<StepUpAction>) => void
   handleStepUpError: (error: unknown, action: NonNullable<StepUpAction>) => boolean
-  runWithMFAGuard<T>(fn: () => Promise<T>): Promise<T>
+  runWithMFAGuard: <T>(fn: () => Promise<T>) => Promise<T>
   closeStepUp: () => void
   isOpen: boolean
   isVerifying: boolean

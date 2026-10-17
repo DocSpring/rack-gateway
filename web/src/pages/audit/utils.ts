@@ -44,13 +44,13 @@ export const DEFAULT_DATE_RANGE = '7d'
 const DATE_SPLIT_PATTERN = /[T\s]/
 const TIME_PATTERN = /^[0-9]{2}:[0-9]{2}$/
 
-type PaginationOptions = {
+interface PaginationOptions {
   page?: number
   limit?: number
   includeDefaultPagination: boolean
 }
 
-type RangeOptions = {
+interface RangeOptions {
   range: string
   customStart?: string
   customEnd?: string

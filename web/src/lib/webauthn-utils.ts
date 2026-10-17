@@ -29,7 +29,7 @@ function arrayBufferToBase64url(buffer: ArrayBuffer): string {
   for (const byte of bytes) {
     binary += String.fromCharCode(byte)
   }
-  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '')
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/[=]/g, '')
 }
 
 /**
@@ -78,7 +78,7 @@ export function prepareRequestOptions(options: unknown): PublicKeyCredentialRequ
   } as PublicKeyCredentialRequestOptions
 }
 
-type SerializedCredential = {
+interface SerializedCredential {
   id: string
   rawId: string
   type: string

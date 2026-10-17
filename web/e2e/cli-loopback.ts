@@ -4,9 +4,12 @@ import type { AddressInfo } from 'node:net'
 import type { APIRequestContext } from '@playwright/test'
 import { APIRoute, WebRoute } from '@/lib/routes'
 
-type CliCompletion = { status: number; token?: string }
+interface CliCompletion {
+  status: number
+  token?: string
+}
 
-export type CliLoopbackLogin = {
+export interface CliLoopbackLogin {
   /** Identity provider URL the CLI would open in the browser. */
   authUrl: string
   /** Resolves once the CLI has redeemed the login code the browser delivered to its loopback listener. */

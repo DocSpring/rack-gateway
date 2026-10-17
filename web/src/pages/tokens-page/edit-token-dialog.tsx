@@ -1,5 +1,5 @@
 // Minimal field API type for permissions field
-type PermissionsFieldApi = {
+interface PermissionsFieldApi {
   state: { value: string[]; meta: { errors: unknown[] } }
   setValue: (next: string[]) => void
   [key: string]: unknown

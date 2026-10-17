@@ -10,6 +10,8 @@ const (
 	mockUsername = "convox"
 	// #nosec G101 -- the mock rack's published test token (mise.toml, docker-compose.yml).
 	mockRackToken = "mock-rack-token-12345"
+	// execExitMarker precedes the exit code on the last line of a rack's exec stream (convox pkg/api).
+	execExitMarker = "F1E49A85-0AD7-4AEF-A618-C249C6E6568D:"
 )
 
 type App struct {

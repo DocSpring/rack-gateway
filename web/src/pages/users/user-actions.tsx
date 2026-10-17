@@ -11,7 +11,7 @@ import {
 import type { User } from '@/pages/users/user-utils'
 import { canModifyUser, isUserLocked } from '@/pages/users/user-utils'
 
-type UserActionsProps = {
+interface UserActionsProps {
   user: User
   currentUserEmail?: string
   isUnlocking: boolean

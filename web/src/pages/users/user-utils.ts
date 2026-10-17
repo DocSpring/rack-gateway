@@ -1,6 +1,6 @@
 import type { RoleName, UpdateUserRequest } from '@/lib/api'
 
-export type User = {
+export interface User {
   id?: number
   email: string
   name: string

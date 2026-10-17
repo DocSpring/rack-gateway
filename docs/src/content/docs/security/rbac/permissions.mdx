@@ -421,7 +421,7 @@ These are the only rack API routes the gateway forwards (under `/api/v1/rack-pro
 
 | Route | Permission |
 |-------|------------|
-| `GET /apps`, `GET /apps/{name}`, `GET /apps/{app}/services` | `convox:app:list`, `convox:app:read` |
+| `GET /apps`, `GET /apps/{name}`, `GET /apps/{app}/services`, `GET /apps/{app}/budget`, `GET /apps/{app}/budget/shutdown-state` | `convox:app:list`, `convox:app:read` |
 | `POST /apps` | `convox:app:create` |
 | `PUT /apps/{name}`, `PUT /apps/{app}/services/{name}` | `convox:app:update` |
 | `POST /apps/{app}/restart` | `convox:app:restart` |

@@ -255,7 +255,7 @@ export function UsersPage() {
     }
     try {
       await deleteUserMutation.mutateAsync(userToDelete.email)
-    } catch (_err) {
+    } catch {
       // Errors are surfaced via mutation onError toast; keep dialog open for retry.
     }
   }
@@ -279,7 +279,7 @@ export function UsersPage() {
   const handleUnlockUser = async (user: User) => {
     try {
       await unlockUserMutation.mutateAsync(user.email)
-    } catch (_err) {
+    } catch {
       // Error is surfaced via mutation onError toast
     }
   }

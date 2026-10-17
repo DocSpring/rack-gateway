@@ -17,7 +17,10 @@ const NONCE_BYTES = 12
 const TAG_BYTES = 16
 const KEY_BYTES = 32
 
-type ColumnScope = { column: string; row: string }
+interface ColumnScope {
+  column: string
+  row: string
+}
 
 /**
  * The scope of mfa_methods.secret: the method's user and type. A pending WebAuthn method has the type of a

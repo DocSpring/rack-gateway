@@ -1,7 +1,7 @@
 import type { UserEditDialogValues } from '@/components/user-edit-dialog'
 import type { GatewayUser, RoleName } from '@/lib/api'
 
-export type EditPlan = {
+export interface EditPlan {
   originalEmail: string
   routeEmail: string
   trimmedEmail: string
@@ -14,18 +14,18 @@ export type EditPlan = {
 
 type EditPlanResult = { plan: EditPlan } | { error: string }
 
-type UpdateProfileVariables = {
+interface UpdateProfileVariables {
   originalEmail: string
   email: string
   name: string
 }
 
-type UpdateRoleVariables = {
+interface UpdateRoleVariables {
   email: string
   roles: string[]
 }
 
-type EditPlanExecutionDeps = {
+interface EditPlanExecutionDeps {
   applyProfileUpdate: (
     shouldUpdate: boolean,
     originalEmail: string,
@@ -142,7 +142,7 @@ export async function executeEditPlan(plan: EditPlan, deps: EditPlanExecutionDep
   }
 }
 
-type SubmitUserEditsArgs = {
+interface SubmitUserEditsArgs {
   user?: GatewayUser
   decodedEmail: string
   values: UserEditDialogValues

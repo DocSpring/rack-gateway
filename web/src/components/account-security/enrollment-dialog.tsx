@@ -13,7 +13,7 @@ import type { MFAStatusResponse } from '@/lib/api'
 import { trustLabel } from '@/lib/time'
 import type { EnrollmentState, MFAMethodType } from './types'
 
-type EnrollmentDialogProps = {
+interface EnrollmentDialogProps {
   open: boolean
   enrollmentStep: 'method-selection' | 'totp-setup'
   onOpenChange: (open: boolean) => void

@@ -134,6 +134,7 @@ func registerAppRoutes(r *mux.Router) {
 	r.HandleFunc("/apps/{app}", getApp).Methods("GET")
 	r.HandleFunc("/apps", createApp).Methods("POST")
 	r.HandleFunc("/apps/{app}", deleteApp).Methods("DELETE")
+	r.HandleFunc("/apps/{app}/budget", getAppBudget).Methods("GET")
 
 	r.HandleFunc("/apps/{app}/processes", getProcesses).Methods("GET")
 	r.HandleFunc("/apps/{app}/processes/{id}", getProcess).Methods("GET")

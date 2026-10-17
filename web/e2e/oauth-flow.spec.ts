@@ -30,7 +30,7 @@ test('full OAuth login flow succeeds and /info returns user', async ({ page }) =
 
   // Now the cookie should be set; /api/v1/info should return the current user
   const infoEndpoint = APIRoute('info')
-  type InfoResult = {
+  interface InfoResult {
     ok: boolean
     status: number
     data: { user?: { email?: string | null } } | null

@@ -163,6 +163,11 @@ var rackRouteSpecs = []RouteSpec{
 	newRackRoute("POST", "/apps/{app}/restart", ResourceApp, ActionRestart),
 	newRackRoute("DELETE", "/apps/{name}", ResourceApp, ActionDelete),
 
+	// Budgets: ps, scale and services read the app's budget to flag an app at its spending cap. Changing a budget
+	// isn't routed.
+	newRackRoute("GET", "/apps/{app}/budget", ResourceApp, ActionRead),
+	newRackRoute("GET", "/apps/{app}/budget/shutdown-state", ResourceApp, ActionRead),
+
 	// Services
 	newRackRoute("PUT", "/apps/{app}/services/{name}", ResourceApp, ActionUpdate),
 	newRackRoute("GET", "/apps/{app}/services", ResourceApp, ActionRead),

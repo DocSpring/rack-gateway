@@ -1,7 +1,7 @@
 import type { getMFAStatus } from '@/lib/api'
 import type { MFAMethod } from './types'
 
-type DetermineMethodArgs = {
+interface DetermineMethodArgs {
   mfaStatus: Awaited<ReturnType<typeof getMFAStatus>> | undefined
   preferredMethod: MFAMethod | 'auto'
   hasTOTP: boolean

@@ -18,8 +18,10 @@ import { apiPath } from '../lib/api-path'
 import { DEFAULT_PER_PAGE } from '../lib/constants'
 import { formatElapsed } from '../lib/time'
 
-type App = { name: string }
-type Build = {
+interface App {
+  name: string
+}
+interface Build {
   id: string
   description?: string
   status: string
@@ -64,7 +66,7 @@ export function AllBuildsPage() {
             }
           }
         }
-      } catch (_e) {
+      } catch {
         // ignore
       }
       return items

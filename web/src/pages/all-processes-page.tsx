@@ -17,8 +17,10 @@ import { api } from '../lib/api'
 import { apiPath } from '../lib/api-path'
 import { DEFAULT_PER_PAGE } from '../lib/constants'
 
-type App = { name: string }
-type Proc = {
+interface App {
+  name: string
+}
+interface Proc {
   id: string
   service: string
   name?: string
@@ -75,7 +77,7 @@ export function AllProcessesPage() {
           app: p.app || 'system',
           service: p.service ?? p.name ?? '',
         })) as Proc[]
-      } catch (_e) {
+      } catch {
         // ignore if rack doesn't provide system processes
       }
       return lists.flat().concat(systemProcs)

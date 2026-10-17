@@ -8,7 +8,7 @@ import { Table, TableBody, TableHead, TableHeader, TableRow } from '@/components
 
 export type { AuditLogRecord } from '@/components/audit-logs/types'
 
-type AuditLogsPaneProps = {
+interface AuditLogsPaneProps {
   title: string
   logs: AuditLogRecord[]
   totalCount: number

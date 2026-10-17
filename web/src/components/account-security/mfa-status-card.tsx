@@ -4,7 +4,7 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/componen
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import type { MFAStatusResponse } from '@/lib/api'
 
-type MfaStatusCardProps = {
+interface MfaStatusCardProps {
   status?: MFAStatusResponse
   hasBothMethods: boolean
   preferredMethod?: string | null

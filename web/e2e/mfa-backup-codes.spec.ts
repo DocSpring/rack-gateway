@@ -4,7 +4,7 @@
  * page, and each one works once.
  */
 import type { Page } from '@playwright/test'
-import { authenticator } from 'otplib'
+import { generateSync } from 'otplib'
 import { APIRoute, WebRoute } from '@/lib/routes'
 import { clearMfaAttempts, getUserMfaSecret } from './db'
 import { expect, test } from './fixtures'
@@ -33,7 +33,7 @@ async function regenerateBackupCodes(page: Page): Promise<string[]> {
       })
       return { status: response.status, body: await response.json() }
     },
-    { url: APIRoute('auth/mfa/backup-codes/regenerate'), code: authenticator.generate(secret) }
+    { url: APIRoute('auth/mfa/backup-codes/regenerate'), code: generateSync({ secret }) }
   )
   expect(result.status, JSON.stringify(result.body)).toBe(200)
   return (result.body as { backup_codes: string[] }).backup_codes

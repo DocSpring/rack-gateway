@@ -69,7 +69,7 @@ function normalizePathname(locationPathname: string): string {
 }
 
 function handleAuthRedirect(pathname: string): void {
-  const redirectTarget = pathname !== '/' ? `/app${pathname}` : undefined
+  const redirectTarget = pathname === '/' ? undefined : `/app${pathname}`
   const loginUrl = redirectTarget
     ? `/app/login?returnTo=${encodeURIComponent(redirectTarget)}`
     : '/app/login'
@@ -79,7 +79,7 @@ function handleAuthRedirect(pathname: string): void {
 }
 
 function buildMfaEnrollmentUrl(pathname: string, search?: string): string {
-  let redirectTarget = pathname !== '/' ? pathname : undefined
+  let redirectTarget = pathname === '/' ? undefined : pathname
 
   // If we are on the login page, prefer the returnTo param as the redirect target
   if (pathname.endsWith('/login') && search) {
@@ -291,7 +291,7 @@ export function Layout() {
 
         {/* User section */}
         <div className="relative shrink-0 bg-card px-5 pt-3 pb-4">
-          <div className="-top-[43px] pointer-events-none absolute left-0 h-[42px] w-full bg-gradient-to-t from-card via-card/5 to-transparent" />
+          <div className="pointer-events-none absolute -top-[43px] left-0 h-[42px] w-full bg-gradient-to-t from-card via-card/5 to-transparent" />
           <UserSection currentUserHref={currentUserHref} user={user} />
           {user?.rack && (
             <div className="mb-1 text-muted-foreground text-xs">

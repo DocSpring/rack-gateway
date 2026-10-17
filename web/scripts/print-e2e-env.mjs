@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 const pad = (k) => `${k}:`.padEnd(24, ' ')
-const env = process.env
+const { env } = process
 
 const parseList = (value) =>
   value

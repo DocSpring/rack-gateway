@@ -14,7 +14,7 @@ import { getDefaultLabelForType, MFA_METHOD_TYPE_LABELS } from './types'
 
 type MfaMethod = NonNullable<MFAStatusResponse['methods']>[number]
 
-type MfaMethodsTableProps = {
+interface MfaMethodsTableProps {
   methods: MfaMethod[]
   onAddMethod: () => void
   addMethodDisabled: boolean

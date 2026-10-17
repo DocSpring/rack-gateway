@@ -3,7 +3,7 @@ import type { ReactNode } from 'react'
 import { toast } from '@/components/ui/use-toast'
 import { Button } from './ui/button'
 
-type CodeBlockCopyProps = {
+interface CodeBlockCopyProps {
   children: ReactNode
   code: string
 }

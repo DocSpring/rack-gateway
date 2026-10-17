@@ -1,8 +1,8 @@
-type ToastHandlers = {
+interface ToastHandlers {
   error: (message: string) => void
 }
 
-type LockUserRequest = {
+interface LockUserRequest {
   currentUserEmail: string | null
   targetEmail: string
   userLoaded: boolean
@@ -30,7 +30,7 @@ export function requestLockUser({
   setIsLockDialogOpen(true)
 }
 
-type DeleteUserRequest = {
+interface DeleteUserRequest {
   currentUserEmail: string | null
   targetEmail: string
   userLoaded: boolean

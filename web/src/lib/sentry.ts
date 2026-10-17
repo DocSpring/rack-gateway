@@ -51,6 +51,16 @@ export function initSentry(): boolean {
     release,
     integrations,
     tracesSampleRate,
+    // Sentry collects all of these unless told otherwise. Requests carry session cookies, CSRF and MFA headers,
+    // OAuth codes in query strings, and secrets in bodies, so none of them may leave the browser.
+    dataCollection: {
+      userInfo: false,
+      cookies: false,
+      httpHeaders: false,
+      httpBodies: [],
+      urlQueryParams: false,
+      stackFrameVariables: false,
+    },
   })
 
   sentryEnabled = true

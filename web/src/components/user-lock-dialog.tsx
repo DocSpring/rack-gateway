@@ -16,7 +16,7 @@ import {
 import { Label } from './ui/label'
 import { Textarea } from './ui/textarea'
 
-type UserLockDialogProps = {
+interface UserLockDialogProps {
   userEmail: string
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -37,7 +37,7 @@ export function UserLockDialog({ userEmail, open, onOpenChange }: UserLockDialog
       setLockReason('')
     },
     onError: (error: Error) => {
-      const message = error.message
+      const { message } = error
       toast.error(message || 'Failed to lock user account')
     },
   })
@@ -115,7 +115,7 @@ export function useUnlockUser() {
       queryClient.invalidateQueries({ queryKey: [...QUERY_KEYS.USER, email] })
     },
     onError: (error: Error) => {
-      const message = error.message
+      const { message } = error
       toast.error(message || 'Failed to unlock user account')
     },
   })

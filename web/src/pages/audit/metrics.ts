@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 
 import type { AuditLogRecord } from '@/components/audit-logs-pane'
 
-type AuditStats = {
+interface AuditStats {
   total: number
   success: number
   failed: number
@@ -10,14 +10,14 @@ type AuditStats = {
   avgResponseTime: number
 }
 
-type AuditPagination = {
+interface AuditPagination {
   totalPages: number
   currentPage: number
   firstRowIndex: number
   lastRowIndex: number
 }
 
-type AuditMetrics = {
+interface AuditMetrics {
   stats: AuditStats
   pagination: AuditPagination
 }

@@ -79,9 +79,7 @@ export function UserPage() {
     )
   }
 
-  const dialogInitialEmail = editing.dialogInitialEmail
-  const dialogInitialName = editing.dialogInitialName
-  const dialogInitialRole = editing.dialogInitialRole
+  const { dialogInitialEmail, dialogInitialName, dialogInitialRole } = editing
 
   return (
     <div className="space-y-8 p-8">

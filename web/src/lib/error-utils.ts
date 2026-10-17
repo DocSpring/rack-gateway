@@ -44,13 +44,11 @@ function resolveErrorMessage(error: unknown): string | undefined {
   }
 
   if (typeof error === 'object' && error !== null) {
-    const message = (error as { message?: string }).message
+    const { message } = error as { message?: string }
     if (typeof message === 'string' && message.trim() !== '') {
       return message
     }
   }
-
-  return
 }
 
 function messageFromAxios(error: unknown): string | undefined {
@@ -63,7 +61,7 @@ function messageFromAxios(error: unknown): string | undefined {
     | undefined
 
   if (typeof data === 'string') {
-    return data.trim() !== '' ? data : undefined
+    return data.trim() === '' ? undefined : data
   }
 
   if (data && typeof data === 'object') {
@@ -72,6 +70,4 @@ function messageFromAxios(error: unknown): string | undefined {
       return message
     }
   }
-
-  return
 }

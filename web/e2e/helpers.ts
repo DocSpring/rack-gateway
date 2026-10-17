@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test'
-import { authenticator } from 'otplib'
+import { generateSync } from 'otplib'
 import { WebRoute } from '@/lib/routes'
 import {
   clearMfaAttempts,
@@ -21,7 +21,7 @@ type E2EWindow = Window &
     __e2e_clipboardStubbed?: boolean
   }
 
-type LoginOptions = {
+interface LoginOptions {
   /**
    * Display text of the mock OAuth user card to select.
    * Defaults to "Admin User" when omitted.
@@ -155,7 +155,7 @@ export async function completeMfaChallenge(
     }
   }
 
-  await typeOtpCode(page, page, authenticator.generate(secret))
+  await typeOtpCode(page, page, generateSync({ secret }))
   await page.waitForURL((url) => !isOnMfaChallengeUrl(url), { timeout: 30_000 })
 }
 
@@ -326,7 +326,7 @@ export async function satisfyMFAStepUpModal(
     }
   }
 
-  const code = authenticator.generate(secret)
+  const code = generateSync({ secret })
   await typeOtpCode(page, dialog, code)
 
   const confirmButton = dialog.getByRole('button', { name: /Confirm|Verify|Continue/i })
@@ -439,7 +439,7 @@ export async function startTotpEnrollmentViaUi(
     throw new Error(`Failed to retrieve pending TOTP secret during enrollment for ${email}`)
   }
 
-  const code = authenticator.generate(secret)
+  const code = generateSync({ secret })
   await typeOtpCode(page, enrollmentDialog, code)
 
   // Click the Confirm button (enrollment doesn't have auto-submit)

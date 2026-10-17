@@ -18,7 +18,7 @@ import { api } from '@/lib/api'
 import { toastAPIError } from '@/lib/error-utils'
 import type { GlobalSettingsResponse } from '@/pages/settings/types'
 
-type SessionTimeoutCardProps = {
+interface SessionTimeoutCardProps {
   settings: GlobalSettingsResponse | undefined
   disabled: boolean
 }
@@ -92,9 +92,7 @@ export function SessionTimeoutCard({ settings, disabled }: SessionTimeoutCardPro
     try {
       await updateMutation.mutateAsync()
     } catch (error) {
-      if (handleStepUpError(error, () => updateMutation.mutateAsync())) {
-        return
-      }
+      handleStepUpError(error, () => updateMutation.mutateAsync())
     }
   }
 
@@ -102,9 +100,7 @@ export function SessionTimeoutCard({ settings, disabled }: SessionTimeoutCardPro
     try {
       await clearMutation.mutateAsync()
     } catch (error) {
-      if (handleStepUpError(error, () => clearMutation.mutateAsync())) {
-        return
-      }
+      handleStepUpError(error, () => clearMutation.mutateAsync())
     }
   }
 

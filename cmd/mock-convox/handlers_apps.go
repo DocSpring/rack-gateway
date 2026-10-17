@@ -146,3 +146,8 @@ func listRacks(w http.ResponseWriter, _ *http.Request) {
 		mclog.Errorf("failed to write racks response: %v", err)
 	}
 }
+
+// getAppBudget answers like a rack whose app has no budget: ps, scale and services read it to flag a capped app.
+func getAppBudget(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, map[string]any{"config": nil, "state": nil})
+}

@@ -102,6 +102,28 @@ CI runs all three on every push. The nightly Security Scan workflow (`.github/wo
 show up when nobody pushes. Fix a failing scan by upgrading the package (refresh its `bun.lock` entry if it's a
 transitive dependency).
 
+### Upgrading Dependencies
+
+Only take versions published at least 7 days ago, in every ecosystem: Go modules, bun packages, GitHub Actions,
+Docker base images and the pinned tools (Go, Node, Bun, golangci-lint, Task, Trivy, the Convox CLI). A compromised or
+broken release is usually caught and pulled within days. Dependabot has a matching `cooldown`. A security fix is the
+exception: take the fixed version straight away.
+
+- Check the publish date before you pick a version (npm registry `time`, `proxy.golang.org/<module>/@v/<version>.info`,
+  GitHub release dates, Docker Hub tag dates). `bun install` keeps any version already in `bun.lock`, so regenerate a
+  lockfile from scratch when you need every transitive package re-resolved.
+- The CLI embeds the Convox CLI (`github.com/convox/convox/pkg/cli`), which pulls in Kubernetes and cloud provider
+  SDKs. `go get -u ./...` moves them past what Convox's code compiles against, so upgrade the other modules one by
+  one. The `k8s.io/*` modules move together, with a matching `sigs.k8s.io/controller-runtime` (Kubernetes 0.36 needs
+  controller-runtime 0.24). Keep the Azure SDKs and `github.com/prometheus/client_golang` where Convox has them. Raise
+  Kubernetes past Convox's own requirement only for a security fix (keda 2.20 needs 0.36).
+- Pin `github.com/convox/convox` to a Convox release tag (`go get github.com/convox/convox@3.25.10`) and keep it on the
+  same release as the Convox CLI in `.github/actions/install-convox`.
+- A new Convox release can call rack API routes the gateway doesn't forward: the gateway answers those with 404 and
+  audits a denial. Diff the rack endpoints in Convox's `sdk/methods.go` between the two releases, and route
+  (`internal/gateway/rbac/http_routes.go`) any that everyday commands call, such as the budget read behind `ps`. The
+  mock rack (`cmd/mock-convox`) has to answer the same way a real rack does, or the CLI E2E tests miss it.
+
 ### 7. DeepSource Static Analysis
 
 DeepSource runs additional static analysis in CI. Key points:

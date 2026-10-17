@@ -22,11 +22,11 @@ tasks:
   generate:
     dir: web
     desc: Generate code
-    deps: [":go:generate", generate:openapi, generate:types, generate:client]
+    deps: [":go:generate", generate:openapi, generate:client]
 
   generate:openapi:
     dir: web
-    desc: Convert swagger.json to OpenAPI client + TS types
+    desc: Convert swagger.json to the OpenAPI 3 spec the API client is generated from
     deps: [deps, ":go:generate"]
     sources:
       - ../Taskfile.web.yml
@@ -34,17 +34,6 @@ tasks:
     generates:
       - src/api/openapi.json
     cmds: [bun run generate:openapi]
-
-  generate:types:
-    dir: web
-    desc: Generate TypeScript types from OpenAPI schema
-    deps: [generate:openapi]
-    sources:
-      - ../Taskfile.web.yml
-      - src/api/openapi.json
-    generates:
-      - src/api/types.generated.ts
-    cmds: [bun run generate:types]
 
   generate:client:
     dir: web

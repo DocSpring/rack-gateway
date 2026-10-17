@@ -20,7 +20,7 @@ function auditLogsPath(userEmail: string): string {
   return userEmail ? apiPath`/api/v1/users/${userEmail}/audit-logs` : '/api/v1/audit-logs'
 }
 
-type AuditPageProps = {
+interface AuditPageProps {
   userId?: string
   userEmail?: string
   // The gateway-wide log also shows the latest scheduled verification of the audit chain, to

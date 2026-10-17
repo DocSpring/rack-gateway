@@ -8,7 +8,7 @@ export function pickPrimaryRole(roles: string[] = []): RoleName {
       return role
     }
   }
-  const first = roles[0]
+  const [first] = roles
   if (first && ROLE_PRIORITY.includes(first as RoleName)) {
     return first as RoleName
   }

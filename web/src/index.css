@@ -152,22 +152,22 @@
   }
   /* Global text selection colors across themes */
   ::selection {
-    background-color: var(--primary);
     color: #fff;
+    background-color: var(--primary);
   }
   ::-moz-selection {
-    background-color: var(--primary);
     color: #fff;
+    background-color: var(--primary);
   }
 
   /* Toast text selection - dark semi-transparent background for visibility on colored toasts */
   [data-rht-toaster] ::selection {
-    background-color: rgba(0, 0, 0, 0.3) !important;
     color: #fff !important;
+    background-color: rgba(0, 0, 0, 0.3) !important;
   }
   [data-rht-toaster] ::-moz-selection {
-    background-color: rgba(0, 0, 0, 0.3) !important;
     color: #fff !important;
+    background-color: rgba(0, 0, 0, 0.3) !important;
   }
 
   /* Cursor pointer for interactive elements */

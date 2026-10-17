@@ -26,7 +26,6 @@ EXCLUSIONS=(
   "*/generated/*"
   "web/src/api/openapi.json"
   "web/src/api/generated.ts"
-  "web/src/api/types.generated.ts"
   "web/src/lib/generated/*"
   "internal/gateway/openapi/generated/*"
   # Binary file extensions

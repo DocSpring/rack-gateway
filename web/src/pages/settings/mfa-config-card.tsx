@@ -18,7 +18,7 @@ import { api } from '@/lib/api'
 import { toastAPIError } from '@/lib/error-utils'
 import type { GlobalSettingsResponse } from '@/pages/settings/types'
 
-type MfaConfigCardProps = {
+interface MfaConfigCardProps {
   settings: GlobalSettingsResponse | undefined
   disabled: boolean
 }
@@ -118,9 +118,7 @@ export function MfaConfigCard({ settings, disabled }: MfaConfigCardProps) {
     try {
       await updateMutation.mutateAsync()
     } catch (error) {
-      if (handleStepUpError(error, () => updateMutation.mutateAsync())) {
-        return
-      }
+      handleStepUpError(error, () => updateMutation.mutateAsync())
     }
   }
 
@@ -128,9 +126,7 @@ export function MfaConfigCard({ settings, disabled }: MfaConfigCardProps) {
     try {
       await clearMutation.mutateAsync()
     } catch (error) {
-      if (handleStepUpError(error, () => clearMutation.mutateAsync())) {
-        return
-      }
+      handleStepUpError(error, () => clearMutation.mutateAsync())
     }
   }
 

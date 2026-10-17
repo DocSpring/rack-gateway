@@ -1,18 +1,25 @@
 {
-  "$schema": "https://biomejs.dev/schemas/2.3.2/schema.json",
+  "$schema": "https://biomejs.dev/schemas/2.5.15/schema.json",
   "files": {
     "includes": [
       "**/*.{js,ts,jsx,tsx}",
       "*.{js,ts,jsx,tsx}",
       "!src/lib/generated/**/*.ts",
       "!src/api/generated.ts",
-      "!src/api/types.generated.ts",
       "!src/api/schemas/**/*.ts",
       "!src/api/openapi.json",
       "!index.html",
       "!test-results",
       "!playwright-report"
     ]
+  },
+  "assist": {
+    "actions": {
+      "source": {
+        "useSortedKeys": "off",
+        "useSortedInterfaceMembers": "off"
+      }
+    }
   },
   "formatter": {
     "enabled": true,
@@ -24,7 +31,7 @@
   "linter": {
     "enabled": true,
     "rules": {
-      "recommended": true,
+      "preset": "recommended",
       "complexity": {
         "noImplicitCoercions": "error",
         "noUselessFragments": "error"
@@ -34,24 +41,25 @@
         "noUnusedTemplateLiteral": "error",
         "useBlockStatements": "off",
         "useNamingConvention": "off",
-        "noMagicNumbers": "off"
+        "noMagicNumbers": "off",
+        "noIncrementDecrement": "off"
       },
       "performance": {
         "noImgElement": "off",
-        "noNamespaceImport": "off"
+        "noNamespaceImport": "off",
+        "noJsxPropsBind": "off",
+        "noAwaitInLoops": "off"
       },
       "suspicious": {
         "noExplicitAny": "error",
         "noEmptyBlockStatements": "error",
         "noUnknownAtRules": "off",
-        "noAlert": "error"
+        "noAlert": "error",
+        "noUnnecessaryConditions": "off"
       },
       "a11y": {
         "noAutofocus": "error",
         "useValidAnchor": "error"
-      },
-      "nursery": {
-        "noIncrementDecrement": "off"
       }
     }
   },
@@ -80,6 +88,9 @@
           },
           "complexity": {
             "noExcessiveCognitiveComplexity": "off"
+          },
+          "correctness": {
+            "noEmptyPattern": "off"
           }
         }
       }
@@ -95,5 +106,5 @@
       }
     }
   ],
-  "extends": ["./node_modules/ultracite/config/core/biome.jsonc"]
+  "extends": ["ultracite/biome/core"]
 }

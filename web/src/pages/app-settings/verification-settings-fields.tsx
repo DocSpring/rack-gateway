@@ -3,7 +3,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import type { AppSettingsResponse } from '@/pages/app-settings/types'
 
-type VerificationSettingsFieldsProps = {
+interface VerificationSettingsFieldsProps {
   disabled: boolean
   githubAvailable: boolean
   settings: AppSettingsResponse | undefined

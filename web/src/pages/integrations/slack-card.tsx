@@ -13,7 +13,7 @@ import type {
   SlackIntegration,
 } from '@/pages/integrations/slack-types'
 
-type SlackCardProps = {
+interface SlackCardProps {
   integration: SlackIntegration | null | undefined
   channels: SlackChannel[] | undefined
   slackConfigured: boolean

@@ -78,4 +78,3 @@ if (modulePath === invokedPath && process.env.SKIP_AUTOSTART !== "true") {
 }
 
 export const loggerInstance = logger;
-export default createApp;

@@ -12,7 +12,7 @@ function getGitCommitHash(): string {
   // First check for COMMIT_SHA env var (used in Docker builds)
   const envHash = process.env.COMMIT_SHA?.trim()
   if (envHash) {
-    return envHash.substring(0, 7)
+    return envHash.slice(0, 7)
   }
 
   // Fall back to git command (local development)
@@ -122,7 +122,6 @@ export default defineConfig(() => {
             proxy.on('proxyReq', (_proxyReq, req) => {
               try {
                 const target = (options as { target?: string } | undefined)?.target ?? '(unknown)'
-                // biome-ignore lint/suspicious/noConsole: helpful during local proxy debugging
                 console.log(`[vite-proxy] >> ${req.method} ${req.url} -> ${target}`)
               } catch {
                 // Ignore logging errors
@@ -130,7 +129,6 @@ export default defineConfig(() => {
             })
             proxy.on('proxyRes', (proxyRes, req) => {
               try {
-                // biome-ignore lint/suspicious/noConsole: helpful during local proxy debugging
                 console.log(`[vite-proxy] << ${req.method} ${req.url} ${proxyRes.statusCode}`)
               } catch {
                 // Ignore logging errors
@@ -138,7 +136,6 @@ export default defineConfig(() => {
             })
             proxy.on('error', (err, req) => {
               try {
-                // biome-ignore lint/suspicious/noConsole: helpful during local proxy debugging
                 console.error(`[vite-proxy] !! ${req.method} ${req.url} error: ${err.message}`)
               } catch {
                 // Ignore logging errors

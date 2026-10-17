@@ -7,7 +7,6 @@ version = 1
 # Generated code (Biome skips the same files)
 exclude_patterns = [
   "web/src/api/generated.ts",
-  "web/src/api/types.generated.ts",
   "web/src/api/schemas/**",
   "web/src/lib/generated/**"
 ]

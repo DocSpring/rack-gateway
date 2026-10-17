@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import type { MFAStatusResponse } from '@/lib/api'
 
-type BackupCodesCardProps = {
+interface BackupCodesCardProps {
   backupSummary: MFAStatusResponse['backup_codes'] | undefined
   recentBackupCodes: string[] | null
   onRegenerate: () => void

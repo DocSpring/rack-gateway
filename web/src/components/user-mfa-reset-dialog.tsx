@@ -13,7 +13,7 @@ import {
   DialogTitle,
 } from './ui/dialog'
 
-type UserMFAResetDialogProps = {
+interface UserMFAResetDialogProps {
   userEmail: string
   open: boolean
   onOpenChange: (open: boolean) => void

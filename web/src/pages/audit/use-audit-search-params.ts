@@ -19,7 +19,7 @@ export function useAuditSearchParams(userId?: string, userEmail?: string) {
   const location = useLocation()
 
   const initialSearchParams = useMemo(
-    () => (typeof window !== 'undefined' ? new URLSearchParams(location.search) : undefined),
+    () => (typeof window === 'undefined' ? undefined : new URLSearchParams(location.search)),
     [location.search]
   )
   const initialRangeParam = initialSearchParams?.get('range')
@@ -182,14 +182,14 @@ export function useAuditSearchParams(userId?: string, userEmail?: string) {
   useEffect(() => {
     try {
       localStorage.setItem('audit_date_range', dateRange)
-    } catch (_e) {
+    } catch {
       /* ignore */
     }
   }, [dateRange])
   useEffect(() => {
     try {
       localStorage.setItem('audit_per_page', String(perPage))
-    } catch (_e) {
+    } catch {
       /* ignore */
     }
   }, [perPage])
@@ -204,7 +204,7 @@ export function useAuditSearchParams(userId?: string, userEmail?: string) {
       } else {
         localStorage.removeItem('audit_custom_start')
       }
-    } catch (_e) {
+    } catch {
       /* ignore */
     }
   }, [customStart, dateRange])
@@ -219,7 +219,7 @@ export function useAuditSearchParams(userId?: string, userEmail?: string) {
       } else {
         localStorage.removeItem('audit_custom_end')
       }
-    } catch (_e) {
+    } catch {
       /* ignore */
     }
   }, [customEnd, dateRange])
@@ -240,7 +240,7 @@ export function useAuditSearchParams(userId?: string, userEmail?: string) {
       if (storedEnd) {
         setCustomEnd(storedEnd)
       }
-    } catch (_e) {
+    } catch {
       /* ignore */
     }
   }, [customStart, customEnd, dateRange])

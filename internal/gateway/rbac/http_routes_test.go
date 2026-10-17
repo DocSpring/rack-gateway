@@ -1,6 +1,7 @@
 package rbac
 
 import (
+	"net/http"
 	"testing"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/settings"
@@ -103,6 +104,22 @@ func TestReadRoutesDoNotRequireInlineMFA(t *testing.T) {
 		}
 		if level := spec.GetMFALevel(); level == MFAAlways {
 			t.Errorf("GET %s requires MFAAlways via %v", spec.Pattern, spec.Permissions)
+		}
+	}
+}
+
+// ps, scale and services read the app's budget (Convox 3.25+), so a viewer's ps has to reach it. Changing a budget
+// isn't a route: those requests are refused like any other unknown rack path.
+func TestBudgetReadsAreAppReads(t *testing.T) {
+	for _, path := range []string{"/apps/web/budget", "/apps/web/budget/shutdown-state"} {
+		resource, action, ok := MatchRackRoute(http.MethodGet, path)
+		if !ok || resource != ResourceApp || action != ActionRead {
+			t.Errorf("GET %s = %v %v %v, want app read", path, resource, action, ok)
+		}
+	}
+	for _, method := range []string{http.MethodPost, http.MethodDelete} {
+		if _, _, ok := MatchRackRoute(method, "/apps/web/budget"); ok {
+			t.Errorf("%s /apps/web/budget is routed", method)
 		}
 	}
 }

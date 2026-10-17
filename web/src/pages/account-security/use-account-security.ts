@@ -21,7 +21,7 @@ import { useMFAMethodEdit } from '@/pages/account-security/use-mfa-method-edit'
 type MFAMethodRecord = NonNullable<MFAStatusResponse['methods']>[number]
 type TrustedDeviceRecord = NonNullable<MFAStatusResponse['trusted_devices']>[number]
 
-type UseAccountSecurityPageResult = {
+interface UseAccountSecurityPageResult {
   status?: MFAStatusResponse
   user: ReturnType<typeof useAuth>['user']
   methods: MFAMethodRecord[]

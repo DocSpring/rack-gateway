@@ -15,7 +15,7 @@
  * See: https://github.com/DocSpring/rack-gateway/issues/12
  */
 import type { APIRequestContext, Page } from '@playwright/test'
-import { authenticator } from 'otplib'
+import { generateSync } from 'otplib'
 import { APIRoute, WebRoute } from '@/lib/routes'
 import { type CliLoopbackLogin, startCliLoopbackLogin } from './cli-loopback'
 import {
@@ -166,7 +166,7 @@ test.describe('CLI login to WebUI flow', () => {
       // complete MFA for that browser session.
       await page.waitForURL((url) => isOnMfaChallengeUrl(url), { timeout: 10_000 })
       await clearMfaAttempts()
-      await typeOtpCode(page, page, authenticator.generate(secret as string))
+      await typeOtpCode(page, page, generateSync({ secret: secret as string }))
       await expectCliLoginApproved(page, cli)
 
       await page.goto(WebRoute('rack'))
@@ -187,7 +187,7 @@ async function approveDeployRequestWithInlineMfa(page: Page, secret: string, csr
     // The approve endpoint requires inline MFA with every request (MFAAlways). Other tests on this
     // shard may have used admin's current TOTP time step, so clear replay state first.
     await clearMfaAttempts()
-    const totpCode = authenticator.generate(secret)
+    const totpCode = generateSync({ secret })
     const approveResponse = await page.evaluate(
       async ({ endpoint, publicId, code, csrf }) => {
         const response = await fetch(`${endpoint}/${publicId}/approve`, {

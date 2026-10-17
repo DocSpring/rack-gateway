@@ -2,7 +2,7 @@ import QRCode from 'qrcode'
 import { useCallback, useEffect, useState } from 'react'
 import type { EnrollmentState, MFAMethodType } from '@/components/account-security/types'
 
-type UseMFAEnrollmentResult = {
+interface UseMFAEnrollmentResult {
   enrollmentModalOpen: boolean
   enrollmentStep: 'method-selection' | 'totp-setup'
   enrollment: EnrollmentState | null
@@ -75,12 +75,7 @@ export function useMFAEnrollment(): UseMFAEnrollmentResult {
 
   // Generate QR code when TOTP enrollment starts
   useEffect(() => {
-    if (
-      !enrollment ||
-      enrollment.enrollmentType !== 'totp' ||
-      !('uri' in enrollment) ||
-      !enrollment.uri
-    ) {
+    if (enrollment?.enrollmentType !== 'totp' || !('uri' in enrollment) || !enrollment.uri) {
       setQrDataUrl(null)
       return
     }

@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 
-type UserMeta = {
+interface UserMeta {
   name?: string | null
   email?: string | null
 }

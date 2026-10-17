@@ -1,7 +1,7 @@
 [tools]
 go = "1.27.2"
-node = "22.19.0"
-bun = "1.4.2"
+node = "26.11.1"
+bun = "1.4.3"
 # Matches GOLANGCI_LINT_VERSION in .github/workflows/ci.yml; it must be built with a Go at least as new as ours
 golangci-lint = "2.14.0"
 

@@ -3,7 +3,7 @@ import type { UserConfig } from '../lib/api'
 import { AVAILABLE_ROLES } from '../lib/api'
 import { toFieldErrorMap, userFormSchema } from '../lib/validation'
 
-type UserEditModalProps = {
+interface UserEditModalProps {
   email: string
   user: UserConfig
   isNew: boolean

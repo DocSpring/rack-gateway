@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { spawn } from 'node:child_process'
 
-const env = process.env
+const { env } = process
 
 const toInt = (value, fallback) => {
   if (value === undefined || value === null || value === '') {

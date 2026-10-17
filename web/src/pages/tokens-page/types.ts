@@ -2,14 +2,14 @@ import type { APIToken as APITokenModel } from '../../lib/generated/gateway-type
 
 export type APIToken = APITokenModel
 
-export type TokenRoleInfo = {
+export interface TokenRoleInfo {
   name: string
   label: string
   description: string
   permissions: string[]
 }
 
-export type TokenPermissionMetadata = {
+export interface TokenPermissionMetadata {
   permissions: string[]
   roles: TokenRoleInfo[]
   default_permissions: string[]
@@ -17,14 +17,14 @@ export type TokenPermissionMetadata = {
   user_permissions: string[]
 }
 
-export type PermissionOption = {
+export interface PermissionOption {
   value: string
   title: string
   description: string
   sortKey: string
 }
 
-export type PermissionGroup = {
+export interface PermissionGroup {
   key: string
   label: string
   sortKey: string
