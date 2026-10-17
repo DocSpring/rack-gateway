@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/casbin/casbin/v2/model"
+	"github.com/casbin/casbin/v3/model"
 	"github.com/stretchr/testify/require"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"

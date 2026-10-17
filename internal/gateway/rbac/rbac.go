@@ -6,8 +6,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/casbin/casbin/v2"
-	"github.com/casbin/casbin/v2/model"
+	"github.com/casbin/casbin/v3"
+	"github.com/casbin/casbin/v3/model"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 )
