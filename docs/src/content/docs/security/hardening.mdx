@@ -156,9 +156,13 @@ Restrict administrative access:
 
 Mark sensitive environment variables in each app's settings (or pin them with `RGW_APP_<APP>_SETTING_*`):
 
-- **`secret_env_vars`**: values masked unless the caller holds `convox:secret:read` and asks to reveal them.
-  Names containing `SECRET` or `TOKEN`, or ending in `_KEY`, are secrets already; `CONVOX_SECRET_ENV_VARS` adds names
+- **`secret_env_vars`**: values masked unless the caller holds `convox:secret:read` and asks to reveal them, and
+  changed only with `convox:secret:set`. Names containing `SECRET`, `TOKEN`, `PASSWORD`, `PASSWD`, `PASSPHRASE` or
+  `CREDENTIAL`, or ending in `_KEY`, `_KEY_ID` or `_PASS`, are secrets already; `CONVOX_SECRET_ENV_VARS` adds names
   for every app.
+- A value with credentials in it, such as `postgres://app:password@db/app` or a connection string with `password=`,
+  is masked the same way whatever its name. Changing it still needs only `convox:env:set`, so a deployer can replace
+  a `DATABASE_URL` they can't read.
 - **`protected_env_vars`**: values masked, and changed only by an admin with `--allow-protected` and MFA.
 
 Changing either list needs MFA on that request, even within the step-up window, as changing a protected value does.

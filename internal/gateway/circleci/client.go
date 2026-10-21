@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -62,45 +63,58 @@ type ApprovalMetadata struct {
 	ApprovalJobName string `json:"approval_job_name"`
 }
 
-// ApproveJob approves the hold job named jobName in a CircleCI workflow.
-// The workflow's pipeline must be building the approved revision of the expected repository;
-// otherwise ErrPipelineMismatch is returned and nothing is approved.
-// If the workflow was rerun, the hold job in the newest rerun is approved instead (see approvalTarget).
-func (c *Client) ApproveJob(workflowID, pipelineNumber, jobName string, expect ApprovalExpectation) error {
+// ApprovalTarget is a hold job PrepareApproval verified, ready to approve.
+type ApprovalTarget struct {
+	// WorkflowID and JobID name the hold job: the requested workflow's, or its newest rerun's.
+	WorkflowID string
+	JobID      string
+	// PipelineID and PipelineNumber are the verified pipeline's.
+	PipelineID     string
+	PipelineNumber string
+}
+
+// PrepareApproval finds the hold job named jobName in a CircleCI workflow, after checking that the workflow's
+// pipeline is the one the request named and builds the approved revision of the expected repository; otherwise it
+// returns ErrPipelineMismatch. If the workflow was rerun, the target is the hold job in the newest rerun (see
+// approvalTarget). Nothing is approved until Approve is called with the target.
+func (c *Client) PrepareApproval(workflowID, jobName string, expect ApprovalExpectation) (*ApprovalTarget, error) {
 	if err := ValidateWorkflowID(workflowID); err != nil {
-		return err
-	}
-	if pipelineNumber == "" {
-		return fmt.Errorf("pipeline_number is required")
+		return nil, err
 	}
 	if jobName == "" {
-		return fmt.Errorf("job_name is required")
+		return nil, fmt.Errorf("job_name is required")
 	}
 
 	original, err := c.getWorkflowDetails(workflowID)
 	if err != nil {
-		return fmt.Errorf("failed to get workflow details: %w", err)
+		return nil, fmt.Errorf("failed to get workflow details: %w", err)
 	}
 
 	pipeline, err := c.getPipeline(original.PipelineID)
 	if err != nil {
-		return fmt.Errorf("failed to get pipeline: %w", err)
+		return nil, fmt.Errorf("failed to get pipeline: %w", err)
 	}
 	if err := verifyPipeline(pipeline, expect); err != nil {
-		return err
+		return nil, err
 	}
 
 	targetWorkflowID, jobID, err := c.approvalTarget(original, jobName)
 	if err != nil {
-		return err
+		return nil, err
 	}
+	return &ApprovalTarget{
+		WorkflowID:     targetWorkflowID,
+		JobID:          jobID,
+		PipelineID:     pipeline.ID,
+		PipelineNumber: strconv.FormatInt(pipeline.Number, 10),
+	}, nil
+}
 
-	url := fmt.Sprintf("%s/workflow/%s/approve/%s", c.BaseURL, targetWorkflowID, jobID)
-	if _, err := c.doRequest(http.MethodPost, url); err != nil {
-		return err
-	}
-
-	return nil
+// Approve approves the hold job PrepareApproval found.
+func (c *Client) Approve(target *ApprovalTarget) error {
+	url := fmt.Sprintf("%s/workflow/%s/approve/%s", c.BaseURL, target.WorkflowID, target.JobID)
+	_, err := c.doRequest(http.MethodPost, url)
+	return err
 }
 
 // approvalTarget returns the workflow and hold job to approve. While the original workflow's hold job is on hold,

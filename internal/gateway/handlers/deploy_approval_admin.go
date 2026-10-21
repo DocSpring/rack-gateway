@@ -18,6 +18,7 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	"github.com/DocSpring/rack-gateway/internal/gateway/jobs"
 	jobcircleci "github.com/DocSpring/rack-gateway/internal/gateway/jobs/circleci"
+	"github.com/DocSpring/rack-gateway/internal/gateway/logutil"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 	"github.com/DocSpring/rack-gateway/internal/gateway/settings"
 )
@@ -305,16 +306,17 @@ func (h *AdminHandler) enqueueCircleCIApprovalJob(c *gin.Context, record *db.Dep
 		return
 	}
 
-	// The worker only approves the hold job if the workflow's pipeline builds the approved commit
-	// of the app's repository; ci_metadata is supplied by the requester and isn't trusted on its own.
-	vcsRepo, err := getAppSettingString(h.settingsService, record.App, settings.KeyVCSRepo, "")
+	// The worker only approves the hold job if the workflow's pipeline builds the approved commit of the app's
+	// repository; ci_metadata is supplied by the requester and isn't trusted on its own. Without the repository,
+	// the commit alone doesn't tie a pipeline to the app, so nothing is queued.
+	repo, err := h.appRepoIdentity(record.App)
 	if err != nil {
-		log.Printf("WARN: Failed to get vcs_repo setting: %v", err)
+		log.Printf("WARN: CircleCI auto-approve skipped for app %s: %v", logutil.SanitizeForLog(record.App), err)
 		return
 	}
 
 	if h.jobsClient != nil {
-		args := circleCIApprovalJobArgs(record, circleciMetadata, vcsRepo)
+		args := circleCIApprovalJobArgs(record, circleciMetadata, repo)
 		_, err := h.jobsClient.Insert(c.Request.Context(), args, &river.InsertOpts{
 			Queue:       jobs.QueueIntegrations,
 			MaxAttempts: jobs.MaxAttemptsNotification,
@@ -325,12 +327,29 @@ func (h *AdminHandler) enqueueCircleCIApprovalJob(c *gin.Context, record *db.Dep
 	}
 }
 
+// appRepoIdentity returns the app's repository as "host/owner/repo", from its vcs_provider and vcs_repo settings.
+func (h *AdminHandler) appRepoIdentity(app string) (string, error) {
+	repo, err := getAppSettingString(h.settingsService, app, settings.KeyVCSRepo, "")
+	if err != nil {
+		return "", fmt.Errorf("failed to get vcs_repo setting: %w", err)
+	}
+	if strings.TrimSpace(repo) == "" {
+		return "", errors.New("the app has no vcs_repo")
+	}
+	provider, err := getAppSettingString(h.settingsService, app, settings.KeyVCSProvider, "github")
+	if err != nil {
+		return "", fmt.Errorf("failed to get vcs_provider setting: %w", err)
+	}
+	return circleci.RepoIdentity(provider, repo)
+}
+
 // circleCIApprovalJobArgs binds the CircleCI approval job to the deploy approval: the worker re-checks the
-// approval and only approves a pipeline building its commit from the app's repository.
+// approval and only approves a workflow in the pipeline the request named, building its commit from the app's
+// repository (repo, as "host/owner/repo").
 func circleCIApprovalJobArgs(
 	record *db.DeployApprovalRequest,
 	metadata *circleci.ApprovalMetadata,
-	vcsRepo string,
+	repo string,
 ) jobcircleci.ApproveJobArgs {
 	return jobcircleci.ApproveJobArgs{
 		WorkflowID:              metadata.WorkflowID,
@@ -338,7 +357,7 @@ func circleCIApprovalJobArgs(
 		ApprovalJobName:         metadata.ApprovalJobName,
 		DeployApprovalRequestID: record.ID,
 		ExpectedRevision:        record.GitCommitHash,
-		ExpectedRepo:            vcsRepo,
+		ExpectedRepo:            repo,
 	}
 }
 

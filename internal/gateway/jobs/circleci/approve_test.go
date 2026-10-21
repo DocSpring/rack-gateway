@@ -38,7 +38,7 @@ func TestApproveJobArgs_DoNotContainToken(t *testing.T) {
 
 // Test NewApproveJobWorker
 func TestNewApproveJobWorker(t *testing.T) {
-	worker := NewApproveJobWorker(nil, "token")
+	worker := NewApproveJobWorker(nil, "token", &fakeAuditLog{})
 	require.NotNil(t, worker)
 }
 
@@ -67,7 +67,7 @@ func TestApproveJobCancelledWhenApprovalNoLongerActive(t *testing.T) {
 		2: {PublicID: "expired", Status: db.DeployApprovalRequestStatusApproved, ApprovalExpiresAt: &past},
 		3: {PublicID: "deployed", Status: db.DeployApprovalRequestStatusDeployed, ApprovalExpiresAt: &future},
 	}
-	worker := NewApproveJobWorker(approvals, "token")
+	worker := NewApproveJobWorker(approvals, "token", &fakeAuditLog{})
 
 	for _, id := range []int64{1, 2, 3, 404, 0} {
 		job := &river.Job[ApproveJobArgs]{
@@ -83,7 +83,7 @@ func TestApproveJobCancelledWhenApprovalNoLongerActive(t *testing.T) {
 
 // Database errors are retried rather than canceling the job.
 func TestApproveJobRetriesWhenApprovalLookupFails(t *testing.T) {
-	worker := NewApproveJobWorker(failingApprovals{}, "token")
+	worker := NewApproveJobWorker(failingApprovals{}, "token", &fakeAuditLog{})
 	job := &river.Job[ApproveJobArgs]{JobRow: &rivertype.JobRow{}, Args: ApproveJobArgs{DeployApprovalRequestID: 1}}
 	err := worker.Work(context.Background(), job)
 	require.Error(t, err)

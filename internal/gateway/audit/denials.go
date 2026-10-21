@@ -3,6 +3,7 @@ package audit
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -13,8 +14,8 @@ import (
 const denialWindow = time.Minute
 
 // RecordDenial records a refused request. Denials are throttled so repeated attempts can't flood the log: the
-// first denial of an action for a user (or API token) is written at once, and its repeats in the next minute are
-// written as one entry when the minute is up, with event_count saying how many there were.
+// first denial of an action against a target for a user (or API token) is written at once, and its repeats in the
+// next minute are written as one entry when the minute is up, with event_count saying how many there were.
 //
 // A denied request never acts, so it's refused whether or not its denial is written. A failed write is reported
 // (logged, sent to Sentry and failing the health check) like any other.
@@ -54,8 +55,8 @@ func WithDetails(details string, fields map[string]interface{}) string {
 }
 
 // denialThrottle collapses repeated denials. A run starts with a denial, which is written at once. The same
-// principal's denials of the same action until the window is up are only counted, and then one entry records
-// them. The next denial after that starts a new run.
+// principal's denials of the same action against the same target (denialKey) until the window is up are only
+// counted, and then one entry records them. The next denial after that starts a new run.
 //
 // Runs are kept in memory. That's enough because a gateway runs as a single instance per rack (convox.yml scale
 // count 1); a restart loses at most one window's count of repeats, never a first denial.
@@ -69,7 +70,7 @@ type denialThrottle struct {
 	runs map[string]*denialRun
 }
 
-// denialRun is one window of a principal's denials of one action.
+// denialRun is one window of a principal's denials of one action against one target.
 type denialRun struct {
 	started time.Time
 	repeats int
@@ -176,11 +177,31 @@ func (t *denialThrottle) writeRepeats(run *denialRun) {
 	t.write(&entry)
 }
 
-// denialKey identifies the principal (an API token, or else a user) and the action a denial is about.
+// denialKey identifies a denial's principal (an API token, or else a user), its action and its target: the
+// resource, and for a proxied request its method and path. Only repeats against the same target are counted
+// together, so a denial against one target can't hide among denials against others.
 func denialKey(entry *db.AuditLog) string {
 	principal := entry.UserEmail
 	if entry.APITokenID != nil {
 		principal = fmt.Sprintf("token:%d", *entry.APITokenID)
 	}
-	return principal + "\x00" + entry.Action
+	method, path := detailsTarget(entry.Details)
+	return strings.Join([]string{
+		principal, entry.Action, entry.ResourceType, entry.Resource, entry.Command, method, path,
+	}, "\x00")
+}
+
+// detailsTarget returns the method and path a proxied request's details name, if any.
+func detailsTarget(details string) (method, path string) {
+	if details == "" {
+		return "", ""
+	}
+	var fields struct {
+		Method string `json:"method"`
+		Path   string `json:"path"`
+	}
+	if err := json.Unmarshal([]byte(details), &fields); err != nil {
+		return "", ""
+	}
+	return fields.Method, fields.Path
 }

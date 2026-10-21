@@ -296,7 +296,7 @@ func TestLogEnvDiffsLogsUnset(t *testing.T) {
 		req,
 		"user@example.com",
 		"default",
-		[]envutil.EnvDiff{{Key: "FOO", OldVal: "bar", NewVal: "", Secret: false}},
+		[]envutil.EnvDiff{{Key: "FOO", OldVal: "bar", Removed: true}},
 	)
 
 	logs, err := database.GetAuditLogs("user@example.com", time.Time{}, 10)
@@ -323,7 +323,7 @@ func TestLogEnvDiffsLogsSecretUnset(t *testing.T) {
 		req,
 		"user@example.com",
 		"default",
-		[]envutil.EnvDiff{{Key: "SECRET_KEY", OldVal: "value", NewVal: "", Secret: true}},
+		[]envutil.EnvDiff{{Key: "SECRET_KEY", OldVal: "value", Secret: true, Removed: true}},
 	)
 
 	logs, err := database.GetAuditLogs("user@example.com", time.Time{}, 10)

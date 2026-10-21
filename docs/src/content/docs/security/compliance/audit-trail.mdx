@@ -117,14 +117,18 @@ Values are redacted whatever the key's name: a password or a connection string u
 `DATABASE_URL` is redacted too. To see the values of harmless settings such as `PORT` or `RAILS_ENV` in the audit
 log and Slack, list them in the app's **Environment Variables Shown in Audit Logs** setting
 (`audit_visible_env_vars`, under **Apps → `{app}` → Settings**). Names match exactly, ignoring case. A listed key
-is still redacted when it is secret (its name contains `SECRET` or `TOKEN` or ends in `_KEY` or `_KEY_ID`, or it is
-in the app's `secret_env_vars` or `CONVOX_SECRET_ENV_VARS`) or protected (`protected_env_vars`).
+is still redacted when it is secret (its name contains `SECRET`, `TOKEN`, `PASSWORD`, `PASSWD`, `PASSPHRASE` or
+`CREDENTIAL` or ends in `_KEY`, `_KEY_ID` or `_PASS`, or it is in the app's `secret_env_vars` or
+`CONVOX_SECRET_ENV_VARS`), protected (`protected_env_vars`), or when its old or new value has credentials in it (a
+URL with a user or password, or `password=`). Only a removed key is an `unset`: a key set to an empty value is a
+`set`.
 
 <Aside type="caution">
 Earlier gateway versions logged the values of env vars that weren't secret or protected, and every rack
 parameter value (also emailed to admins). Those entries keep them: `details` is part of each entry's hash chain
 and the table is append-only, so they can't be rewritten. Slack messages and emails already sent keep them too. If
-a credential was changed under a name that didn't look secret (such as `DATABASE_URL` or `SMTP_PASSWORD`), or set
+a credential was changed under a name those versions didn't treat as secret (such as `DATABASE_URL` or
+`SMTP_PASSWORD`), or set
 as a rack parameter, rotate it.
 </Aside>
 
@@ -196,10 +200,12 @@ In the web UI, a request's row shows its attempt until the result arrives, then 
 
 Requests refused for lack of permission are recorded with `status: denied` and `rbac_decision: deny`, with the
 reason in `details`: gateway API requests and proxied rack requests, including rack requests refused by a deploy
-approval check or the destructive-actions policy.
+approval check or the destructive-actions policy, and requests for rack routes the gateway doesn't forward.
 
 Denials are throttled so a script retrying a refused request can't flood the log. The first denial of an action
-for a user (or API token) is written at once. Its repeats in the next minute are counted, and written as one entry
+against a target (the resource, and for a rack request its method and path) for a user (or API token) is written
+at once, so a denial against one target is never hidden among others. Its repeats against the same target in the
+next minute are counted, and written as one entry
 when the minute is up: `event_count` says how many there were, and `details.repeats_from` and
 `details.repeats_until` when. The next denial after that is written at once again. The counts are kept in memory,
 which works because a gateway runs as a single instance per rack: a restart can lose at most a minute's count of

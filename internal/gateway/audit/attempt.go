@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"sync/atomic"
 
+	"github.com/google/uuid"
+
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	gtwlog "github.com/DocSpring/rack-gateway/internal/gateway/logging"
 )
@@ -70,6 +72,26 @@ func (l *Logger) RecordAttempt(r *http.Request, entry *db.AuditLog) (context.Con
 	}
 	attempt := &Attempt{ID: entry.ID, RequestID: requestID}
 	return context.WithValue(r.Context(), attemptContextKey{}, attempt), nil
+}
+
+// RecordSystemAttempt writes entry as the attempt of something the gateway does by itself (a background job acting
+// on an outside service), before it acts. The entry gets a new request ID unless it has one; give the result entry
+// the same RequestID so the two are paired. Like RecordAttempt, the attempt isn't sent to Slack, and when it can't
+// be written the returned error wraps ErrAuditUnavailable and the caller must not act.
+func (l *Logger) RecordSystemAttempt(entry *db.AuditLog) error {
+	if l == nil {
+		reportWriteFailure(entry, errNoLogger)
+		return ErrAuditUnavailable
+	}
+	entry.Status = StatusAttempted
+	entry.RBACDecision = "allow"
+	if entry.RequestID == "" {
+		entry.RequestID = uuid.NewString()
+	}
+	if err := l.write(entry); err != nil {
+		return fmt.Errorf("%w: %w", ErrAuditUnavailable, err)
+	}
+	return nil
 }
 
 // LogRequestEntry writes an entry for the request whose context is ctx. When the request recorded an attempt,

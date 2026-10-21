@@ -31,10 +31,22 @@ func TestApproveJobApprovesMatchingPipeline(t *testing.T) {
 	client, fake := newFakeCircleCI(t, fakePipeline{
 		revision: approvedSHA, targetRepo: docspringRepo, originRepo: docspringRepo, slug: "gh/DocSpring/docspring",
 	})
-	err := client.ApproveJob(testWorkflowID, "100", "approve_deploy_us",
-		ApprovalExpectation{Revision: approvedSHA, Repo: "DocSpring/docspring"})
+	target, err := client.PrepareApproval(testWorkflowID, "approve_deploy_us", testExpectation)
 	require.NoError(t, err)
+	require.Equal(t, &ApprovalTarget{
+		WorkflowID: testWorkflowID, JobID: "hold-" + testWorkflowID, PipelineID: testPipelineID, PipelineNumber: "100",
+	}, target)
+	require.Empty(t, fake.approved(), "preparing an approval approves nothing")
+
+	require.NoError(t, client.Approve(target))
 	require.Equal(t, []string{testWorkflowID + "/hold-" + testWorkflowID}, fake.approved())
+}
+
+// The project slug names the repository when the pipeline has no repository URL.
+func TestApproveJobChecksTheProjectSlugWithoutARepositoryURL(t *testing.T) {
+	client, fake := newFakeCircleCI(t, fakePipeline{revision: approvedSHA, slug: "gh/DocSpring/docspring"})
+	require.NoError(t, approveWith(client, testWorkflowID, testExpectation))
+	require.Len(t, fake.approved(), 1)
 }
 
 func TestApproveJobRefusesMismatchedPipelines(t *testing.T) {
@@ -46,10 +58,15 @@ func TestApproveJobRefusesMismatchedPipelines(t *testing.T) {
 			revision: approvedSHA, targetRepo: "https://github.com/attacker/docspring",
 			originRepo: "https://github.com/attacker/docspring",
 		},
+		"same owner/repo on another host": {
+			revision: approvedSHA, targetRepo: "https://gitlab.com/DocSpring/docspring",
+			originRepo: "https://gitlab.com/DocSpring/docspring",
+		},
 		"fork pipeline": {
 			revision: approvedSHA, targetRepo: docspringRepo, originRepo: "https://github.com/attacker/docspring",
 		},
-		"different project slug": {revision: approvedSHA, slug: "gh/attacker/other"},
+		"different project slug":       {revision: approvedSHA, slug: "gh/attacker/other"},
+		"project slug on another host": {revision: approvedSHA, slug: "bb/DocSpring/docspring"},
 		// A GitHub App project slug doesn't name the repository; with no repository URL either, it
 		// can't be checked, so it isn't approved.
 		"unknown repository": {revision: approvedSHA, slug: "circleci/org-id/project-id"},
@@ -57,21 +74,54 @@ func TestApproveJobRefusesMismatchedPipelines(t *testing.T) {
 	for name, pipeline := range cases {
 		t.Run(name, func(t *testing.T) {
 			client, fake := newFakeCircleCI(t, pipeline)
-			err := client.ApproveJob(testWorkflowID, "100", "approve_deploy_us",
-				ApprovalExpectation{Revision: approvedSHA, Repo: "DocSpring/docspring"})
-			require.ErrorIs(t, err, ErrPipelineMismatch)
+			require.ErrorIs(t, approveWith(client, testWorkflowID, testExpectation), ErrPipelineMismatch)
 			require.Empty(t, fake.approved(), "nothing may be approved on a mismatch")
 		})
 	}
 }
 
+// The approver was shown the pipeline number the requester gave; a workflow in another pipeline of the same commit
+// and repository isn't approved.
+func TestApproveJobRefusesAWorkflowFromAnotherPipeline(t *testing.T) {
+	client, fake := newFakeCircleCI(t, matchingPipeline)
+	expect := testExpectation
+	expect.PipelineNumber = "99"
+	require.ErrorIs(t, approveWith(client, testWorkflowID, expect), ErrPipelineMismatch)
+	expect.PipelineNumber = ""
+	require.ErrorIs(t, approveWith(client, testWorkflowID, expect), ErrPipelineMismatch)
+	require.Empty(t, fake.approved())
+}
+
+// Without the app's repository, the commit alone doesn't tie the pipeline to the app, so nothing is approved.
+func TestApproveJobRequiresTheAppRepository(t *testing.T) {
+	client, fake := newFakeCircleCI(t, matchingPipeline)
+	expect := testExpectation
+	expect.Repo = ""
+	require.ErrorIs(t, approveWith(client, testWorkflowID, expect), ErrPipelineMismatch)
+	require.Empty(t, fake.approved())
+}
+
 func TestApproveJobRejectsNonUUIDWorkflowID(t *testing.T) {
 	client, fake := newFakeCircleCI(t, fakePipeline{revision: approvedSHA})
 	for _, id := range []string{"test-workflow-1", "../pipeline/x", ""} {
-		err := client.ApproveJob(id, "100", "approve_deploy_us", ApprovalExpectation{Revision: approvedSHA})
-		require.ErrorIs(t, err, ErrInvalidWorkflowID)
+		require.ErrorIs(t, approveWith(client, id, testExpectation), ErrInvalidWorkflowID)
 	}
 	require.Empty(t, fake.approved())
+}
+
+func TestRepoIdentity(t *testing.T) {
+	identity, err := RepoIdentity("github", "DocSpring/docspring")
+	require.NoError(t, err)
+	require.Equal(t, "github.com/DocSpring/docspring", identity)
+	identity, err = RepoIdentity("bitbucket", "team/app")
+	require.NoError(t, err)
+	require.Equal(t, "bitbucket.org/team/app", identity)
+
+	bad := [][2]string{{"gitlab", "a/b"}, {"github", ""}, {"github", "a"}, {"github", "a/b/c"}, {"github", "/b"}}
+	for _, bad := range bad {
+		_, err := RepoIdentity(bad[0], bad[1])
+		require.Error(t, err, "%q %q", bad[0], bad[1])
+	}
 }
 
 func TestParseMetadataRequiresUUIDWorkflowID(t *testing.T) {

@@ -17,11 +17,12 @@ func TestCircleCIApprovalJobArgsBindTheApproval(t *testing.T) {
 		WorkflowID: "11111111-2222-3333-4444-555555555555", PipelineNumber: "100", ApprovalJobName: "approve_deploy_us",
 	}
 
-	args := circleCIApprovalJobArgs(record, metadata, "DocSpring/docspring")
+	args := circleCIApprovalJobArgs(record, metadata, "github.com/DocSpring/docspring")
 
 	require.Equal(t, int64(42), args.DeployApprovalRequestID)
 	require.Equal(t, record.GitCommitHash, args.ExpectedRevision)
-	require.Equal(t, "DocSpring/docspring", args.ExpectedRepo)
+	require.Equal(t, "github.com/DocSpring/docspring", args.ExpectedRepo)
 	require.Equal(t, metadata.WorkflowID, args.WorkflowID)
+	require.Equal(t, "100", args.PipelineNumber)
 	require.Equal(t, "approve_deploy_us", args.ApprovalJobName)
 }

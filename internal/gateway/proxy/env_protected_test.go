@@ -355,7 +355,7 @@ func TestLogEnvDiffsRedactsProtectedValues(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/apps/my-app/releases", nil)
 	h.logEnvDiffs(req, "admin@test.com", "default", []envutil.EnvDiff{
 		{Key: "ADMIN_PASSWORD", OldVal: "old-value", NewVal: "new-value", Protected: true},
-		{Key: "DATABASE_URL", OldVal: "postgres://old", NewVal: "", Protected: true},
+		{Key: "DATABASE_URL", OldVal: "postgres://old", Protected: true, Removed: true},
 		{Key: "PORT", OldVal: "3000", NewVal: "4000"},
 	})
 

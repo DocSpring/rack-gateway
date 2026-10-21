@@ -71,7 +71,7 @@ func NewClient(pool *pgxpool.Pool, deps *Dependencies, auditAnchorConfig *AuditA
 	river.AddWorker(workers, jobslack.NewDeployApprovalWorker(deps.Database, deps.SlackNotifier))
 
 	// CI/GitHub workers
-	river.AddWorker(workers, jobcircleci.NewApproveJobWorker(deps.Database, deps.CircleCIToken))
+	river.AddWorker(workers, jobcircleci.NewApproveJobWorker(deps.Database, deps.CircleCIToken, deps.AuditLogger))
 	river.AddWorker(workers, jobgithub.NewPostPRCommentWorker(deps.GitHubToken, deps.GitHubAPIURL))
 
 	periodicJobs, err := setupPeriodicJobs(workers, deps, auditAnchorConfig)

@@ -80,3 +80,20 @@ func TestAppEnvKeysFailClosedOnMalformedStoredLists(t *testing.T) {
 	require.True(t, keys.isProtected("PORT"))
 	require.Equal(t, "PORT="+maskedSecret, maskSecretAndProtectedEnvVars("PORT=3000", keys))
 }
+
+// A value with credentials in it is masked whatever its key is called, in both the release env and the
+// environment map.
+func TestEnvFiltersMaskValuesWithCredentials(t *testing.T) {
+	h, database, mgr := newProxyForEnvTest(t)
+	require.NoError(t, mgr.SaveUser("admin@test.com", &rbac.UserConfig{Name: "Admin", Roles: []string{"admin"}}))
+	keys := h.loadAppEnvKeys("testapp")
+
+	masked := maskSecretAndProtectedEnvVars("CACHE_URL=redis://:hunter2@cache:6379\nQUEUE_URL=amqp://mq", keys)
+	require.Equal(t, "CACHE_URL="+maskedSecret+"\nQUEUE_URL=amqp://mq", masked)
+
+	body := []byte(`{"CACHE_URL":"redis://:hunter2@cache:6379","PG":"host=db password=hunter2","PORT":"3000"}`)
+	out := h.filterEnvironmentMapResponse(requestAs(t, database, "admin@test.com"), body, "testapp")
+	var env map[string]string
+	require.NoError(t, json.Unmarshal(out, &env))
+	require.Equal(t, map[string]string{"CACHE_URL": maskedSecret, "PG": maskedSecret, "PORT": "3000"}, env)
+}

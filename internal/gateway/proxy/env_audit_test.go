@@ -69,10 +69,10 @@ func logEnvAuditDetails(t *testing.T, h *Handler, database *db.Database, diffs [
 	return details
 }
 
-// ordinaryEnvDiffs change env vars that don't look secret by name, though DATABASE_PASSWORD and DATABASE_URL
-// usually hold credentials.
+// ordinaryEnvDiffs change env vars that don't look secret by name, though SENTRY_DSN and DATABASE_URL usually
+// hold credentials.
 var ordinaryEnvDiffs = []envutil.EnvDiff{
-	{Key: "DATABASE_PASSWORD", OldVal: "old-value", NewVal: "new-value"},
+	{Key: "SENTRY_DSN", OldVal: "old-value", NewVal: "new-value"},
 	{Key: "DATABASE_URL", OldVal: "postgres://old-host/app", NewVal: "postgres://new-host/app"},
 	{Key: "PORT", OldVal: "3000", NewVal: "4000"},
 	{Key: "RAILS_ENV", OldVal: "staging", NewVal: ""},
@@ -93,7 +93,7 @@ func TestLogEnvDiffsShowsAuditVisibleValues(t *testing.T) {
 	details := logEnvAuditDetails(t, h, database, ordinaryEnvDiffs)
 	require.Equal(t, `{"old":"3000","new":"4000"}`, details["PORT"])
 	require.Equal(t, `{"old":"staging","new":""}`, details["RAILS_ENV"])
-	require.Equal(t, redactedEnvDetails, details["DATABASE_PASSWORD"])
+	require.Equal(t, redactedEnvDetails, details["SENTRY_DSN"])
 	require.Equal(t, redactedEnvDetails, details["DATABASE_URL"])
 }
 

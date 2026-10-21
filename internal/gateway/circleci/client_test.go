@@ -80,7 +80,9 @@ func (f *fakeCircleCI) servePipeline(w http.ResponseWriter, path string) {
 			"target_repository_url": f.pipeline.targetRepo,
 			"origin_repository_url": f.pipeline.originRepo,
 		}
-		writeJSON(w, map[string]interface{}{"id": testPipelineID, "project_slug": f.pipeline.slug, "vcs": vcs})
+		writeJSON(w, map[string]interface{}{
+			"id": testPipelineID, "number": 100, "project_slug": f.pipeline.slug, "vcs": vcs,
+		})
 	case "/pipeline/" + testPipelineID + "/workflow":
 		f.mu.Lock()
 		f.listings++
@@ -120,9 +122,22 @@ func (f *fakeCircleCI) client(t *testing.T) *Client {
 
 func writeJSON(w http.ResponseWriter, v interface{}) { _ = json.NewEncoder(w).Encode(v) }
 
+// testExpectation is the approval the fake pipeline matches: pipeline 100 building approvedSHA of
+// github.com/DocSpring/docspring.
+var testExpectation = ApprovalExpectation{
+	Revision: approvedSHA, Repo: "github.com/DocSpring/docspring", PipelineNumber: "100",
+}
+
 func approveForTest(client *Client) error {
-	return client.ApproveJob(testWorkflowID, "100", "approve_deploy_us",
-		ApprovalExpectation{Revision: approvedSHA, Repo: "DocSpring/docspring"})
+	return approveWith(client, testWorkflowID, testExpectation)
+}
+
+func approveWith(client *Client, workflowID string, expect ApprovalExpectation) error {
+	target, err := client.PrepareApproval(workflowID, "approve_deploy_us", expect)
+	if err != nil {
+		return err
+	}
+	return client.Approve(target)
 }
 
 var matchingPipeline = fakePipeline{revision: approvedSHA, targetRepo: docspringRepo, originRepo: docspringRepo}

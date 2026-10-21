@@ -21,33 +21,6 @@ import (
 
 const proxyLogBodyLimit = 16384
 
-// attachedRunCommand is the placeholder command `convox run` starts before exec'ing the real command
-// into the process (default --timeout). The real command is checked on the exec path.
-const attachedRunCommand = "sleep 3600"
-
-func (h *Handler) validateProcessCommand(
-	r *http.Request,
-	original string,
-) error {
-	if r.Method != http.MethodPost ||
-		!rbac.KeyMatch3(original, "/apps/{app}/services/{service}/processes") {
-		return nil
-	}
-
-	tracker := getDeployApprovalTracker(r.Context())
-	if tracker == nil {
-		return nil
-	}
-
-	app := extractAppFromPath(original)
-	command := strings.TrimSpace(r.Header.Get("Command"))
-	if command != attachedRunCommand && !h.isCommandApproved(app, command) {
-		return fmt.Errorf("command not approved: %s", command)
-	}
-
-	return nil
-}
-
 func (h *Handler) processBufferedResponse(
 	r *http.Request,
 	resp *http.Response,
@@ -358,6 +331,9 @@ func (h *Handler) requestBodyForRack(r *http.Request, path string, authUser *aut
 		return rackRequestBody{}, err
 	}
 
+	if err := checkHeaderOnlyRequest(r, path, bodyBytes); err != nil {
+		return rackRequestBody{}, err
+	}
 	if err := h.validateBuildRequest(r, path, bodyBytes, authUser); err != nil {
 		return rackRequestBody{}, err
 	}

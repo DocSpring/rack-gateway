@@ -107,6 +107,27 @@ func TestDenialsAreThrottledPerPrincipalAndAction(t *testing.T) {
 	require.Equal(t, []int{1, 1, 1, 1, 1, 1}, h.counts(), "token 7's repeat")
 }
 
+// TestDenialsAgainstDifferentTargetsAreNotRepeats: a denial against another resource or rack path is written at
+// once, so denials against one target can't hide a denial against another.
+func TestDenialsAgainstDifferentTargetsAreNotRepeats(t *testing.T) {
+	h := newThrottleHarness()
+	proxied := func(resource, path string) *db.AuditLog {
+		return &db.AuditLog{
+			UserEmail: "viewer@example.com", Action: "env.read", Resource: resource,
+			Details: `{"method":"GET","path":"` + path + `"}`,
+		}
+	}
+	h.throttle.record(proxied("web", "/apps/web/environment"))
+	h.throttle.record(proxied("billing", "/apps/billing/environment"))
+	h.throttle.record(proxied("web", "/apps/web/environment"))
+	h.throttle.record(proxied("web", "/apps/web/releases"))
+
+	require.Equal(t, []int{1, 1, 1}, h.counts(), "each new target's first denial is written at once")
+	require.Contains(t, h.written[1].Details, "/apps/billing/environment")
+	h.fireTimers()
+	require.Equal(t, []int{1, 1, 1, 1}, h.counts(), "the repeat against web's environment")
+}
+
 func TestFlushWritesTheRepeatsBeingCounted(t *testing.T) {
 	h := newThrottleHarness()
 	h.deny("viewer@example.com", "user.create")

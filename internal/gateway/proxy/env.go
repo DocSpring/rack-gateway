@@ -90,6 +90,10 @@ func (h *Handler) prepareReleaseCreate(
 		return nil, err
 	}
 
+	// Held until ProxyToRack returns, after the rack has created the release.
+	if err := h.lockAppEnv(r, app); err != nil {
+		return nil, err
+	}
 	baseEnv, err := h.fetchBaseEnv(r, rack, app, bodyBuf)
 	if err != nil {
 		return nil, err
@@ -174,7 +178,7 @@ func (h *Handler) fetchBaseEnv(
 	if err != nil {
 		return nil, fmt.Errorf("failed to prepare rack TLS: %w", err)
 	}
-	baseEnv, err := envutil.FetchLatestEnvMap(rack, app, tlsCfg)
+	baseEnv, err := envutil.FetchLatestEnvMap(r.Context(), rack, app, tlsCfg)
 	if err != nil {
 		if fpErr, ok := rackcert.AsFingerprintMismatch(err); ok {
 			logRackTLSMismatch("env_fetch", fpErr)
@@ -277,7 +281,7 @@ func removedKeyDiffs(
 		if isSecret && !canSecretsSet {
 			return nil, secretsDenied([]string{key})
 		}
-		diffs = append(diffs, envutil.EnvDiff{Key: key, OldVal: base, NewVal: "", Secret: isSecret})
+		diffs = append(diffs, envutil.EnvDiff{Key: key, OldVal: base, Secret: isSecret, Removed: true})
 	}
 	return diffs, nil
 }
@@ -290,7 +294,7 @@ func recomposeEnvString(
 ) string {
 	removedKeys := make(map[string]struct{})
 	for _, d := range diffs {
-		if d.NewVal == "" {
+		if d.Removed {
 			removedKeys[d.Key] = struct{}{}
 		}
 	}
@@ -333,7 +337,7 @@ func (h *Handler) logEnvDiffs(r *http.Request, email, _ string, diffs []envutil.
 	app := extractAppFromPath(r.URL.Path)
 	visible := h.auditVisibleKeys(app)
 	for _, d := range diffs {
-		action, rtype := envDiffAuditAction(d)
+		action, rtype := audit.EnvChangeAction(d)
 		_ = h.logAudit(r, &db.AuditLog{
 			UserEmail:      email,
 			UserName:       userName,
@@ -349,25 +353,5 @@ func (h *Handler) logEnvDiffs(r *http.Request, email, _ string, diffs []envutil.
 			HTTPStatus:     200,
 			ResponseTimeMs: 0,
 		})
-	}
-}
-
-// envDiffAuditAction returns the audit action and resource type for an env change. Protected keys get their
-// own actions, so every protected change stands out in the audit log and can be routed to Slack.
-func envDiffAuditAction(d envutil.EnvDiff) (string, string) {
-	unset := strings.TrimSpace(d.NewVal) == ""
-	switch {
-	case d.Protected && unset:
-		return audit.BuildAction(rbac.ResourceEnv.String(), audit.ActionVerbUnsetProtected), "env"
-	case d.Protected:
-		return audit.BuildAction(rbac.ResourceEnv.String(), rbac.ActionSetProtected.String()), "env"
-	case d.Secret && unset:
-		return audit.BuildAction(rbac.ResourceSecret.String(), audit.ActionVerbUnset), "secret"
-	case d.Secret:
-		return audit.BuildAction(rbac.ResourceSecret.String(), rbac.ActionSet.String()), "secret"
-	case unset:
-		return audit.BuildAction(rbac.ResourceEnv.String(), audit.ActionVerbUnset), "env"
-	default:
-		return audit.BuildAction(rbac.ResourceEnv.String(), rbac.ActionSet.String()), "env"
 	}
 }

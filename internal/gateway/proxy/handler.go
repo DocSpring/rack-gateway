@@ -117,6 +117,8 @@ func (h *Handler) rackDisplay() string {
 // ProxyToRack handles proxying requests to the Convox rack with RBAC, MFA, and audit logging.
 func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
+	r, releaseEnvLock := withEnvLockHolder(r)
+	defer releaseEnvLock()
 
 	r, rackConfig, authUser, allowed, approvalTracker, envDiffs, err := h.prepareProxyRequest(w, r, start)
 	if err != nil {
@@ -215,7 +217,7 @@ func (h *Handler) prepareProxyRequest(
 	}
 
 	// From here on the request's path is the rack path it's authorized and forwarded as.
-	r, resource, action, err := h.resolveRackRoute(w, r, authUser.Email, rackConfig.Name, start)
+	r, resource, action, err := h.resolveRackRoute(w, r, authUser, rackConfig.Name, start)
 	if err != nil {
 		return r, config.RackConfig{}, nil, false, nil, nil, err
 	}
@@ -264,23 +266,28 @@ func (h *Handler) prepareProxyRequest(
 }
 
 // resolveRackRoute rewrites r to its canonical rack path and finds the RBAC resource and action for it. A path
-// that isn't an allowed rack route is answered with 404, and an unknown route is also audited as a denial.
+// that isn't an allowed rack route is answered with 404 and audited as a denial, so probing the rack for routes the
+// gateway doesn't forward leaves a record.
 func (h *Handler) resolveRackRoute(
 	w http.ResponseWriter,
 	r *http.Request,
-	userEmail, rackName string,
+	authUser *auth.User,
+	rackName string,
 	start time.Time,
 ) (*http.Request, rbac.Resource, rbac.Action, error) {
 	r, ok := canonicalRackRequest(r)
-	if !ok || !h.isAllowedConvoxRoute(r, r.URL.Path) {
-		http.NotFound(w, r)
-		return r, 0, 0, errors.New("not found")
-	}
 	method := h.determineMethod(r)
-	resource, action, ok := rbac.MatchRackRoute(method, r.URL.Path)
+	var resource rbac.Resource
+	var action rbac.Action
+	if ok && isSafeRackPath(r.URL.Path) {
+		resource, action, ok = rbac.MatchRackRoute(method, r.URL.Path)
+	} else {
+		ok = false
+	}
 	if !ok {
 		err := fmt.Errorf("unknown route: %s %s", method, r.URL.Path)
-		h.auditLogger.LogRequest(r, userEmail, rackName, "deny", http.StatusNotFound, time.Since(start), err)
+		h.auditLogger.LogRequest(r, authUser.Email, rackName, "deny", http.StatusNotFound, time.Since(start), err)
+		h.recordDenial(r, authUser, http.StatusNotFound, "the gateway doesn't forward this rack route")
 		http.NotFound(w, r)
 		return r, 0, 0, errors.New("unknown route")
 	}
@@ -311,15 +318,6 @@ func (h *Handler) handleForwardError(
 	status := bodyErrorStatus(err, http.StatusInternalServerError)
 	h.handleError(w, r, err.Error(), status, rackName, start)
 	return status
-}
-
-func (h *Handler) isAllowedConvoxRoute(r *http.Request, rackPath string) bool {
-	if !isSafeRackPath(rackPath) {
-		return false
-	}
-	methodForAllow := h.determineMethod(r)
-	_, _, ok := rbac.MatchRackRoute(methodForAllow, rackPath)
-	return ok
 }
 
 func (_ *Handler) determineMethod(r *http.Request) string {
@@ -429,6 +427,11 @@ func (h *Handler) prepareReleaseIfNeeded(
 		return diffs, nil
 	}
 	if writeEnvChangeRefusal(w, err) {
+		return nil, err
+	}
+	if errors.Is(err, db.ErrAppEnvLockBusy) {
+		h.handleError(w, r, "Another env change to this app is in progress. Try again.", http.StatusConflict,
+			rackConfig.Name, start)
 		return nil, err
 	}
 	if fpErr, ok := rackcert.AsFingerprintMismatch(err); ok {
