@@ -4,7 +4,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
@@ -16,7 +15,7 @@ import (
 )
 
 func checkMFAAndGetAuth(cmd *cobra.Command, commandName string) (string, error) {
-	if os.Getenv("RACK_GATEWAY_API_TOKEN") != "" {
+	if apiTokenOverride() != "" {
 		return "", nil
 	}
 
@@ -30,7 +29,7 @@ func checkMFAAndGetAuth(cmd *cobra.Command, commandName string) (string, error) 
 		return "", err
 	}
 
-	gatewayURL, bearer, err := gatewayAuthInfo(rack)
+	gatewayURL, bearer, err := LoadRackAuth(rack)
 	if err != nil {
 		return "", err
 	}

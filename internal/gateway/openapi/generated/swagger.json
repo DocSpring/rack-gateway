@@ -2758,8 +2758,14 @@
                         "in": "query"
                     },
                     {
+                        "type": "boolean",
+                        "description": "Only return the newest matching request of each app",
+                        "name": "newest_per_app",
+                        "in": "query"
+                    },
+                    {
                         "type": "integer",
-                        "description": "Maximum number of results",
+                        "description": "Maximum number of results (at most 200)",
                         "name": "limit",
                         "in": "query"
                     },

@@ -2,11 +2,15 @@ package cli
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/spf13/cobra"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -52,6 +56,43 @@ func TestLoadRackAuthUsesTheEnvGatewayURLWithAnAPIToken(t *testing.T) {
 	require.Equal(t, "rgw_token", token)
 }
 
+// --api-token is the API token for every command, ahead of RACK_GATEWAY_API_TOKEN and the stored session, and with
+// it RACK_GATEWAY_URL names the gateway. Convox commands skip the CLI's MFA prompt for it, as for the env var.
+func TestAPITokenFlagIsUsedByEveryCommand(t *testing.T) {
+	withLoggedInRack(t)
+	previous := APITokenFlag
+	t.Cleanup(func() { APITokenFlag = previous })
+	envToken, flagToken := testAPIToken("env"), testAPIToken("flag")
+	t.Setenv("RACK_GATEWAY_API_TOKEN", envToken)
+	APITokenFlag = " " + flagToken + " "
+
+	gatewayURL, token, err := LoadRackAuth("us")
+	require.NoError(t, err)
+	require.Equal(t, configTestGatewayURL, gatewayURL)
+	require.Equal(t, flagToken, token)
+
+	t.Setenv("RACK_GATEWAY_API_TOKEN", "")
+	t.Setenv("RACK_GATEWAY_URL", "https://gateway-ci.example.com")
+	gatewayURL, token, err = LoadRackAuth(rackFromEnvironment)
+	require.NoError(t, err)
+	require.Equal(t, "https://gateway-ci.example.com", gatewayURL)
+	require.Equal(t, flagToken, token)
+
+	mfaAuth, err := checkMFAAndGetAuth(&cobra.Command{}, "apps delete")
+	require.NoError(t, err)
+	require.Empty(t, mfaAuth)
+
+	status, err := ResolveRackStatus(time.Now())
+	require.NoError(t, err)
+	require.Equal(t, "https://gateway-ci.example.com", status.GatewayURL)
+	require.Empty(t, status.StatusLines)
+}
+
+// testAPIToken is a made-up API token.
+func testAPIToken(name string) string {
+	return "rgw_" + name
+}
+
 // The config holds session tokens: saving it takes away any group or other permissions it was given.
 func TestSaveConfigTightensLoosePermissions(t *testing.T) {
 	withLoggedInRack(t)
@@ -88,8 +129,11 @@ func TestSaveConfigReplacesTheFileAtomically(t *testing.T) {
 
 	entries, err := os.ReadDir(ConfigPath)
 	require.NoError(t, err)
-	require.Len(t, entries, 1, "only config.json is left")
-	require.Equal(t, "config.json", entries[0].Name())
+	names := make([]string, len(entries))
+	for i, entry := range entries {
+		names[i] = entry.Name()
+	}
+	require.Equal(t, []string{"config.json", "config.lock"}, names, "no temporary file is left")
 }
 
 // RACK_GATEWAY_URL can name the gateway of a rack that has none yet, but it can't repoint a configured rack:
@@ -112,8 +156,50 @@ func TestLoginGatewayURLNeverRepointsAConfiguredRack(t *testing.T) {
 	t.Setenv("RACK_GATEWAY_URL", "https://gateway-eu.example.com")
 	gatewayURL, err = resolveLoginGatewayURL("eu")
 	require.NoError(t, err)
-	require.Equal(t, "https://gateway-eu.example.com", gatewayURL)
-	saved, err := LoadGatewayURL("eu")
+	require.Equal(t, "https://gateway-eu.example.com", gatewayURL, "a new rack takes RACK_GATEWAY_URL")
+	_, err = LoadGatewayURL("eu")
+	require.Error(t, err, "the rack is only saved once the login succeeds")
+}
+
+// A login to the rack's own gateway keeps its settings; a login to another gateway starts the rack afresh.
+func TestSaveLoginKeepsSettingsForTheSameGateway(t *testing.T) {
+	withCLIConfig(t, Config{Current: "eu", Gateways: map[string]GatewayConfig{
+		"us": {URL: configTestGatewayURL + "/", Token: "old-session", MFAPreference: "totp"},
+	}})
+	login := &LoginResponse{Token: "new-session", Email: "dev@example.com", ExpiresAt: time.Now().Add(time.Hour)}
+
+	require.NoError(t, SaveLogin("us", configTestGatewayURL, login))
+	cfg, _, err := LoadConfig()
 	require.NoError(t, err)
-	require.Equal(t, "https://gateway-eu.example.com", saved, "a new rack takes RACK_GATEWAY_URL")
+	require.Equal(t, "us", cfg.Current)
+	require.Equal(t, "new-session", cfg.Gateways["us"].Token)
+	require.Equal(t, "totp", cfg.Gateways["us"].MFAPreference)
+
+	require.NoError(t, SaveLogin("us", "https://gateway-new.example.com", login))
+	cfg, _, err = LoadConfig()
+	require.NoError(t, err)
+	require.Equal(t, "https://gateway-new.example.com", cfg.Gateways["us"].URL)
+	require.Equal(t, "new-session", cfg.Gateways["us"].Token)
+	require.Empty(t, cfg.Gateways["us"].MFAPreference)
+}
+
+// Commands that change the config at the same time each apply their change to the latest file, so none is lost.
+func TestConcurrentConfigChangesAreAllKept(t *testing.T) {
+	withLoggedInRack(t)
+	const racks = 20
+	var wg sync.WaitGroup
+	for i := range racks {
+		wg.Go(func() {
+			login := &LoginResponse{Token: fmt.Sprintf("session-%d", i), ExpiresAt: time.Now().Add(time.Hour)}
+			assert.NoError(t, SaveLogin(fmt.Sprintf("rack-%d", i), configTestGatewayURL, login))
+		})
+	}
+	wg.Wait()
+
+	cfg, _, err := LoadConfig()
+	require.NoError(t, err)
+	require.Len(t, cfg.Gateways, racks+1)
+	for i := range racks {
+		require.Equal(t, fmt.Sprintf("session-%d", i), cfg.Gateways[fmt.Sprintf("rack-%d", i)].Token)
+	}
 }

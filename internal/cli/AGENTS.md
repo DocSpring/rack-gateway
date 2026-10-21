@@ -58,7 +58,11 @@ Structure:
 
 `SaveConfig` keeps the directory at `0700` and the file at `0600` (it takes away group and other permissions from
 an existing directory) and replaces the file atomically: it writes a `0600` temp file in the same directory, syncs it
-and renames it over `config.json`. Never write the config any other way.
+and renames it over `config.json`. Commands change the config only through `updateConfig` (`config_lock.go`): it
+holds an exclusive lock on `config.lock` while it reads the latest file, applies the change and saves, so two
+commands running at once never lose each other's changes. Never write the config any other way. Login saves
+nothing until it succeeds, then saves the rack's gateway and session in one change (`SaveLogin`), so a mistyped URL
+or a canceled login leaves the existing session alone.
 
 **Configuration Fields:**
 
@@ -114,7 +118,9 @@ Without `--commit`, deploy approval commands use the full SHA of `HEAD` (`git re
 for y/N on every request whose commit isn't exactly the full `--commit` (found by `--branch`, or by a short
 `--commit`); without a terminal it needs a full `--commit` up front.
 
-**`RACK_GATEWAY_URL`:** with `RACK_GATEWAY_API_TOKEN` it replaces the rack's URL (the rack name is only a label).
+**API tokens:** `--api-token`, else `RACK_GATEWAY_API_TOKEN`, replaces the stored session for every command
+(`apiTokenOverride` in `config.go`; never read the env var directly). **`RACK_GATEWAY_URL`:** with an API token it
+replaces the rack's URL (the rack name is only a label).
 Without an API token it must match the selected rack's configured URL (`LoadRackAuth` refuses otherwise), so a
 stored session token is only ever sent to the gateway that issued it. `--rack all` and rack lists are refused while
 it is set.

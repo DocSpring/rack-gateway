@@ -106,8 +106,8 @@ func runLoopbackLogin(rack, gatewayURL string, noOpen bool, authFile string) (*L
 	if err != nil {
 		return nil, fmt.Errorf("login failed: %w", err)
 	}
-	if err := finalizeLogin(rack, loginResp); err != nil {
-		return nil, err
+	if err := SaveLogin(rack, gatewayURL, loginResp); err != nil {
+		return nil, fmt.Errorf("failed to save login: %w", err)
 	}
 	loopback.finish("")
 	return loginResp, nil
@@ -149,9 +149,6 @@ func resolveLoginTarget(args []string) (string, string, error) {
 		if gatewayURL == "" {
 			return "", "", fmt.Errorf("gateway URL cannot be empty")
 		}
-		if err := SaveGatewayConfig(rack, gatewayURL); err != nil {
-			return "", "", fmt.Errorf("failed to save gateway config: %w", err)
-		}
 		return rack, gatewayURL, nil
 	default:
 		return "", "", fmt.Errorf("unexpected number of arguments")
@@ -182,9 +179,6 @@ func resolveLoginGatewayURL(rack string) (string, error) {
 	case envURL == "":
 		return configuredURL, err
 	case err != nil:
-		if err := SaveGatewayConfig(rack, envURL); err != nil {
-			return "", fmt.Errorf("failed to save gateway config: %w", err)
-		}
 		return envURL, nil
 	}
 	envNormalized, err := NormalizeGatewayURL(envURL)
@@ -250,14 +244,4 @@ func validateAuthURL(authURL, gatewayURL string) error {
 		return nil
 	}
 	return fmt.Errorf("gateway returned a login URL that is not https: %q", parsed.Redacted())
-}
-
-func finalizeLogin(rack string, loginResp *LoginResponse) error {
-	if err := SaveToken(rack, loginResp); err != nil {
-		return fmt.Errorf("failed to save token: %w", err)
-	}
-	if err := SetCurrentRack(rack); err != nil {
-		return fmt.Errorf("failed to set current rack: %w", err)
-	}
-	return nil
 }

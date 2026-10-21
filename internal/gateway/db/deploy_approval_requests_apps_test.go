@@ -200,3 +200,38 @@ func TestExtendRefusesExpiredPendingRequest(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, gwdb.DeployApprovalRequestStatusExpired, reloaded.Status)
 }
+
+// The CLI's approval search asks for the newest matching request of each app, so a long history can't push an
+// app's request off the first page.
+func TestListNewestRequestPerApp(t *testing.T) {
+	database, userID, tokenID := newApprovalTestFixture(t)
+
+	older, err := createApproval(t, database, userID, tokenID, "docspring")
+	require.NoError(t, err)
+	_, err = database.RejectDeployApprovalRequest(older.ID, userID, "")
+	require.NoError(t, err)
+	newer, err := createApproval(t, database, userID, tokenID, "docspring")
+	require.NoError(t, err)
+	apiProxy, err := createApproval(t, database, userID, tokenID, "api-proxy")
+	require.NoError(t, err)
+
+	newest, err := database.ListDeployApprovalRequests(gwdb.DeployApprovalRequestListOptions{NewestPerApp: true})
+	require.NoError(t, err)
+	require.Len(t, newest, 2)
+	require.Equal(t, apiProxy.ID, newest[0].ID)
+	require.Equal(t, newer.ID, newest[1].ID)
+
+	rejected, err := database.ListDeployApprovalRequests(gwdb.DeployApprovalRequestListOptions{
+		Status: gwdb.DeployApprovalRequestStatusRejected, NewestPerApp: true,
+	})
+	require.NoError(t, err)
+	require.Len(t, rejected, 1, "the filters choose the requests before the newest of each app is taken")
+	require.Equal(t, older.ID, rejected[0].ID)
+
+	page, err := database.ListDeployApprovalRequests(gwdb.DeployApprovalRequestListOptions{
+		NewestPerApp: true, Limit: 1, Offset: 1,
+	})
+	require.NoError(t, err)
+	require.Len(t, page, 1)
+	require.Equal(t, newer.ID, page[0].ID)
+}

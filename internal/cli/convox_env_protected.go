@@ -3,7 +3,6 @@ package cli
 import (
 	"errors"
 	"fmt"
-	"os"
 	"strconv"
 	"strings"
 
@@ -20,11 +19,10 @@ const (
 	allowProtectedHelp = "change protected env vars named in this command (admins only; asks for MFA every time)"
 )
 
-// errAPITokenCannotChangeProtected explains why --allow-protected fails with RACK_GATEWAY_API_TOKEN: the
-// gateway only lets people change protected env vars, after MFA on the request.
-var errAPITokenCannotChangeProtected = errors.New(
-	"API tokens can't change protected env vars; unset RACK_GATEWAY_API_TOKEN and run the command as an admin",
-)
+// errAPITokenCannotChangeProtected explains why --allow-protected fails with an API token: the gateway only lets
+// people change protected env vars, after MFA on the request.
+var errAPITokenCannotChangeProtected = errors.New("API tokens can't change protected env vars; " +
+	"drop --api-token and unset RACK_GATEWAY_API_TOKEN, then run the command as an admin")
 
 // errProtectedEnvAppNotExplicit explains why --allow-protected without a terminal needs --app.
 var errProtectedEnvAppNotExplicit = errors.New("without a terminal, --allow-protected needs an explicit --app, " +
@@ -68,7 +66,7 @@ func runEnvChange(cmd *cobra.Command, args []string, commandName string, keys []
 // line doesn't show.
 func envChangeMFAAuth(cmd *cobra.Command, commandName string, keys []string, allowProtected bool) (string, error) {
 	if allowProtected {
-		if os.Getenv("RACK_GATEWAY_API_TOKEN") != "" {
+		if apiTokenOverride() != "" {
 			return "", errAPITokenCannotChangeProtected
 		}
 		explicitApp, err := cmd.Flags().GetString("app")
@@ -118,7 +116,7 @@ func protectedEnvMFAAuth(cmd *cobra.Command, commandName string, keys []string) 
 	if err != nil {
 		return "", err
 	}
-	gatewayURL, bearer, err := gatewayAuthInfo(rack)
+	gatewayURL, bearer, err := LoadRackAuth(rack)
 	if err != nil {
 		return "", err
 	}

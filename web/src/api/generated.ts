@@ -223,7 +223,8 @@ export const getRackGatewayAPI = () => {
 
   /**
    * Applies environment variable changes for a Convox app by creating a new release.
-   * Secrets remain masked unless the user has secrets permissions.
+   * Secrets and values with credentials in them remain masked unless the user has secrets permissions.
+   * Answers 409 while another env change to the app is in progress.
    * @summary Update environment variables
    */
   const putAppsAppEnv = (
@@ -1326,7 +1327,8 @@ export const getRackGatewayAPI = () => {
   };
 
   /**
-   * Creates a new gateway user with the provided roles.
+   * Creates a new gateway user with the provided roles. An email already in use is a 409: this never
+   * changes an existing user.
    * @summary Create a user
    */
   const postUsers = (
@@ -1359,7 +1361,9 @@ export const getRackGatewayAPI = () => {
   };
 
   /**
-   * Updates a user's email, name, and/or roles in a single request.
+   * Updates a user's email, name, and/or roles in a single request. Every field is checked before
+   * anything is written, and the changes are written together. A new email signs the user out
+   * everywhere and deletes their API tokens.
    * @summary Update user
    */
   const putUsersEmail = (

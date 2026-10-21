@@ -303,15 +303,16 @@ func TestRunLoopbackLogin(t *testing.T) {
 	gateway := newFakeLoopbackGateway()
 	server := httptest.NewServer(gateway)
 	defer server.Close()
-	require.NoError(t, SaveGatewayConfig("staging", server.URL))
 
 	resp, err := runLoopbackLogin("staging", server.URL, true, "")
 	require.NoError(t, err)
 	require.Equal(t, "session-token", resp.Token)
 
-	// The session is saved before the browser is shown the success page.
+	// The rack, its gateway and the session are saved before the browser is shown the success page.
 	cfg, _, err := LoadConfig()
 	require.NoError(t, err)
+	require.Equal(t, "staging", cfg.Current)
+	require.Equal(t, server.URL, cfg.Gateways["staging"].URL)
 	require.Equal(t, "session-token", cfg.Gateways["staging"].Token)
 	requireResultPage(t, awaitVisit(t, gateway.browser), server.URL+"/app/cli/auth/success")
 
@@ -329,10 +330,17 @@ func TestRunLoopbackLoginShowsRedeemFailureInBrowser(t *testing.T) {
 	gateway.rejectComplete = true
 	server := httptest.NewServer(gateway)
 	defer server.Close()
-	require.NoError(t, SaveGatewayConfig("staging", server.URL))
+	existing := GatewayConfig{URL: "https://gateway-staging.example.com", Token: "existing-session"}
+	require.NoError(t, SaveConfig(&Config{Current: "us", Gateways: map[string]GatewayConfig{"staging": existing}}))
 
 	_, err := runLoopbackLogin("staging", server.URL, true, "")
 	require.ErrorContains(t, err, "login failed")
+
+	// A login to a new gateway that fails leaves the rack's existing session as it was.
+	cfg, _, err := LoadConfig()
+	require.NoError(t, err)
+	require.Equal(t, "us", cfg.Current)
+	require.Equal(t, existing, cfg.Gateways["staging"])
 	requireResultPage(t, awaitVisit(t, gateway.browser),
 		server.URL+"/app/cli/auth/error?error="+loginErrorIncomplete)
 }

@@ -98,6 +98,8 @@ type DeployApprovalRequestListOptions struct {
 	App           string
 	// OnlyApproved limits the list to approved, unexpired requests.
 	OnlyApproved bool
+	// NewestPerApp keeps only the newest matching request of each app.
+	NewestPerApp bool
 }
 
 // ListDeployApprovalRequests returns a paginated list of deploy approval requests matching the given options
@@ -138,10 +140,13 @@ func (d *Database) ListDeployApprovalRequests(opts DeployApprovalRequestListOpti
 	if limit <= 0 || limit > 200 {
 		limit = 200
 	}
-	query := deployApprovalRequestSelect + " WHERE " + strings.Join(
-		clauses,
-		" AND ",
-	) + " ORDER BY dr.created_at DESC, dr.id DESC LIMIT ? OFFSET ?"
+	where := strings.Join(clauses, " AND ")
+	if opts.NewestPerApp {
+		where = "dr.id IN (SELECT DISTINCT ON (dr.app) dr.id FROM deploy_approval_requests dr WHERE " + where +
+			" ORDER BY dr.app, dr.created_at DESC, dr.id DESC)"
+	}
+	query := deployApprovalRequestSelect + " WHERE " + where +
+		" ORDER BY dr.created_at DESC, dr.id DESC LIMIT ? OFFSET ?"
 	args = append(args, limit, opts.Offset)
 
 	rows, err := d.query(query, args...)

@@ -30,6 +30,7 @@ func parseDeployApprovalListOptions(c *gin.Context) (db.DeployApprovalRequestLis
 		GitBranch:     strings.TrimSpace(c.Query("git_branch")),
 		GitCommitHash: strings.TrimSpace(c.Query("git_commit")),
 		App:           strings.TrimSpace(c.Query("app")),
+		NewestPerApp:  strings.TrimSpace(c.Query("newest_per_app")) == "true",
 	}
 
 	limit, ok := parseNonNegativeInt(c, "limit")
@@ -70,7 +71,8 @@ func parseNonNegativeInt(c *gin.Context, param string) (int, bool) {
 // @Produce json
 // @Param status query string false "Filter by status (pending, approved, rejected, expired)"
 // @Param only_open query boolean false "Only return open requests (pending status)"
-// @Param limit query integer false "Maximum number of results"
+// @Param newest_per_app query boolean false "Only return the newest matching request of each app"
+// @Param limit query integer false "Maximum number of results (at most 200)"
 // @Param offset query integer false "Offset for pagination"
 // @Success 200 {object} DeployApprovalRequestList
 // @Failure 400 {object} ErrorResponse

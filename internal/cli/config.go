@@ -16,17 +16,32 @@ func configFile() string {
 	return filepath.Join(ConfigPath, "config.json")
 }
 
-// LoadConfig loads the CLI configuration from disk
+// LoadConfig loads the CLI configuration from disk. The bool reports whether the file existed. A config without a
+// machine ID or MFA preference gets the defaults, saved under the config lock.
 func LoadConfig() (*Config, bool, error) {
+	cfg, exists, err := readConfig()
+	if err != nil || !applyConfigDefaults(cfg) {
+		return cfg, exists, err
+	}
+	err = updateConfig(func(latest *Config) (bool, error) {
+		cfg = latest
+		return false, nil
+	})
+	if err != nil {
+		return nil, exists, err
+	}
+	return cfg, exists, nil
+}
+
+// readConfig reads config.json, or an empty config when there is none.
+func readConfig() (*Config, bool, error) {
 	cfg := &Config{}
 	data, err := fs.ReadFile(os.DirFS(ConfigPath), "config.json")
-	exists := true
-	if err != nil {
-		if !os.IsNotExist(err) {
-			return nil, false, err
-		}
-		exists = false
-	} else {
+	exists := err == nil
+	if err != nil && !os.IsNotExist(err) {
+		return nil, false, err
+	}
+	if exists {
 		if err := json.Unmarshal(data, cfg); err != nil {
 			return nil, false, err
 		}
@@ -34,26 +49,27 @@ func LoadConfig() (*Config, bool, error) {
 	if cfg.Gateways == nil {
 		cfg.Gateways = make(map[string]GatewayConfig)
 	}
-	dirty := false
-	if strings.TrimSpace(cfg.MachineID) == "" {
-		cfg.MachineID = uuid.NewString()
-		dirty = true
-	}
-	if cfg.MFAPreference == "" {
-		cfg.MFAPreference = "default" // Default to user's profile preference
-		dirty = true
-	}
-	if dirty {
-		if err := SaveConfig(cfg); err != nil {
-			return nil, exists, err
-		}
-	}
 	return cfg, exists, nil
 }
 
-// SaveConfig saves the CLI configuration to disk. The file holds session tokens, so it is only ever readable by
-// its owner: the directory is kept at 0700 and the file at 0600 (tightened if an earlier version or the user made
-// them looser), and the file is replaced atomically, so a crash or a concurrent command never leaves it truncated.
+// applyConfigDefaults fills in a missing machine ID and MFA preference, and reports whether it changed cfg.
+func applyConfigDefaults(cfg *Config) bool {
+	changed := false
+	if strings.TrimSpace(cfg.MachineID) == "" {
+		cfg.MachineID = uuid.NewString()
+		changed = true
+	}
+	if cfg.MFAPreference == "" {
+		cfg.MFAPreference = "default" // Default to user's profile preference
+		changed = true
+	}
+	return changed
+}
+
+// SaveConfig writes the CLI configuration to disk. Commands change the config through updateConfig, which holds the
+// config lock. The file holds session tokens, so it is only ever readable by its owner: the directory is kept at
+// 0700 and the file at 0600 (tightened if an earlier version or the user made them looser), and the file is
+// replaced atomically, so a crash never leaves it truncated.
 func SaveConfig(cfg *Config) error {
 	if err := ensurePrivateDir(ConfigPath); err != nil {
 		return err
@@ -119,26 +135,27 @@ func writeAndClose(file *os.File, data []byte) error {
 	return err
 }
 
-// SaveToken saves authentication token for a rack
-func SaveToken(rack string, loginResp *LoginResponse) error {
-	cfg, _, err := LoadConfig()
-	if err != nil {
-		return err
-	}
-	gateway, ok := cfg.Gateways[rack]
-	if !ok {
-		return fmt.Errorf("gateway not configured for rack: %s", rack)
-	}
-	gateway.Token = loginResp.Token
-	gateway.Email = loginResp.Email
-	gateway.ExpiresAt = loginResp.ExpiresAt
-	gateway.SessionID = loginResp.SessionID
-	gateway.Channel = loginResp.Channel
-	gateway.DeviceID = loginResp.DeviceID
-	gateway.DeviceName = loginResp.DeviceName
-	gateway.MFAVerified = loginResp.MFAVerified
-	cfg.Gateways[rack] = gateway
-	return SaveConfig(cfg)
+// SaveLogin saves a completed login: the rack's gateway URL and session, in one change that also makes it the
+// current rack. A rack that already uses this gateway keeps its settings. Nothing is saved before a login
+// succeeds, so a mistyped URL or a canceled login leaves the rack's existing session as it was.
+func SaveLogin(rack, gatewayURL string, loginResp *LoginResponse) error {
+	return updateConfig(func(cfg *Config) (bool, error) {
+		gateway, ok := cfg.Gateways[rack]
+		if configured, err := NormalizeGatewayURL(gateway.URL); !ok || err != nil || configured != gatewayURL {
+			gateway = GatewayConfig{URL: gatewayURL}
+		}
+		gateway.Token = loginResp.Token
+		gateway.Email = loginResp.Email
+		gateway.ExpiresAt = loginResp.ExpiresAt
+		gateway.SessionID = loginResp.SessionID
+		gateway.Channel = loginResp.Channel
+		gateway.DeviceID = loginResp.DeviceID
+		gateway.DeviceName = loginResp.DeviceName
+		gateway.MFAVerified = loginResp.MFAVerified
+		cfg.Gateways[rack] = gateway
+		cfg.Current = rack
+		return true, nil
+	})
 }
 
 // LoadToken loads the authentication token for a rack
@@ -165,16 +182,6 @@ func LoadToken(rack string) (*GatewayConfig, error) {
 	return &gateway, nil
 }
 
-// SaveGatewayConfig saves the gateway URL for a rack
-func SaveGatewayConfig(rack, gatewayURL string) error {
-	cfg, _, err := LoadConfig()
-	if err != nil {
-		return err
-	}
-	cfg.Gateways[rack] = GatewayConfig{URL: gatewayURL}
-	return SaveConfig(cfg)
-}
-
 // LoadGatewayURL loads the gateway URL for a rack
 func LoadGatewayURL(rack string) (string, error) {
 	cfg, exists, err := LoadConfig()
@@ -192,12 +199,22 @@ func LoadGatewayURL(rack string) (string, error) {
 	return gateway.URL, nil
 }
 
-// LoadRackAuth loads the gateway URL and token for a rack. With an API token (RACK_GATEWAY_API_TOKEN, for CI/CD),
-// RACK_GATEWAY_URL replaces the rack's configured URL. A stored session token is only ever sent to the gateway that
-// issued it, so without an API token RACK_GATEWAY_URL must match the rack's configured URL.
+// apiTokenOverride is the API token the command runs with: --api-token, else RACK_GATEWAY_API_TOKEN. Empty means
+// the rack's stored session.
+func apiTokenOverride() string {
+	if token := strings.TrimSpace(APITokenFlag); token != "" {
+		return token
+	}
+	return strings.TrimSpace(os.Getenv("RACK_GATEWAY_API_TOKEN"))
+}
+
+// LoadRackAuth loads the gateway URL and token for a rack. With an API token (--api-token or
+// RACK_GATEWAY_API_TOKEN, for CI/CD), RACK_GATEWAY_URL replaces the rack's configured URL. A stored session token
+// is only ever sent to the gateway that issued it, so without an API token RACK_GATEWAY_URL must match the rack's
+// configured URL.
 func LoadRackAuth(rack string) (string, string, error) {
 	envURL := strings.TrimSpace(os.Getenv("RACK_GATEWAY_URL"))
-	apiToken := os.Getenv("RACK_GATEWAY_API_TOKEN")
+	apiToken := apiTokenOverride()
 	if envURL != "" && apiToken != "" {
 		normalized, err := NormalizeGatewayURL(envURL)
 		if err != nil {
@@ -243,7 +260,7 @@ func checkGatewayURLOverride(envURL, rack, configuredURL string) error {
 	if override != configuredURL {
 		return fmt.Errorf(
 			"RACK_GATEWAY_URL (%s) is not the gateway of rack %s (%s), so its session token can't be sent there; "+
-				"unset RACK_GATEWAY_URL, or set RACK_GATEWAY_API_TOKEN to use it with an API token",
+				"unset RACK_GATEWAY_URL, or pass --api-token (or RACK_GATEWAY_API_TOKEN) to use it with an API token",
 			override, rack, configuredURL,
 		)
 	}
@@ -264,53 +281,28 @@ func GetCurrentRack() (string, error) {
 
 // SetCurrentRack sets the currently selected rack
 func SetCurrentRack(rack string) error {
-	cfg, _, err := LoadConfig()
-	if err != nil {
-		return err
-	}
-	cfg.Current = rack
-	return SaveConfig(cfg)
-}
-
-// UnsetCurrentRack removes the current rack selection
-func UnsetCurrentRack() error {
-	cfg, exists, err := LoadConfig()
-	if err != nil {
-		return err
-	}
-	if !exists || strings.TrimSpace(cfg.Current) == "" {
-		return nil
-	}
-	cfg.Current = ""
-	return SaveConfig(cfg)
+	return updateConfig(func(cfg *Config) (bool, error) {
+		cfg.Current = rack
+		return true, nil
+	})
 }
 
 // RemoveRack deletes the gateway config for a rack.
 // Returns true if the rack existed, false if nothing changed.
 func RemoveRack(rack string) (bool, error) {
-	cfg, exists, err := LoadConfig()
-	if err != nil {
-		return false, err
-	}
-	if !exists {
-		return false, nil
-	}
-	changed := false
-	if _, ok := cfg.Gateways[rack]; ok {
-		delete(cfg.Gateways, rack)
-		changed = true
-	}
-	if cfg.Current == rack {
-		cfg.Current = ""
-		changed = true
-	}
-	if !changed {
-		return false, nil
-	}
-	if err := SaveConfig(cfg); err != nil {
-		return false, err
-	}
-	return true, nil
+	removed := false
+	err := updateConfig(func(cfg *Config) (bool, error) {
+		if _, ok := cfg.Gateways[rack]; ok {
+			delete(cfg.Gateways, rack)
+			removed = true
+		}
+		if cfg.Current == rack {
+			cfg.Current = ""
+			removed = true
+		}
+		return removed, nil
+	})
+	return removed, err
 }
 
 // touchNotificationsEnabled reports whether to show a desktop notification each time a security key touch is
