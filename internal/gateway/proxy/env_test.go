@@ -66,11 +66,11 @@ func requestAs(t *testing.T, database *db.Database, userEmail string) *http.Requ
 func TestFilterReleaseEnvForUser(t *testing.T) {
 	h, database, mgr := newProxyForEnvTest(t)
 	// Users
-	require.NoError(t, mgr.SaveUser("admin@test.com", &rbac.UserConfig{Name: "Admin", Roles: []string{"admin"}}))
-	require.NoError(t, mgr.SaveUser("ops@test.com", &rbac.UserConfig{Name: "Ops", Roles: []string{"ops"}}))
+	require.NoError(t, mgr.CreateUser("admin@test.com", &rbac.UserConfig{Name: "Admin", Roles: []string{"admin"}}))
+	require.NoError(t, mgr.CreateUser("ops@test.com", &rbac.UserConfig{Name: "Ops", Roles: []string{"ops"}}))
 	require.NoError(
 		t,
-		mgr.SaveUser("deployer@test.com", &rbac.UserConfig{Name: "Deployer", Roles: []string{"deployer"}}),
+		mgr.CreateUser("deployer@test.com", &rbac.UserConfig{Name: "Deployer", Roles: []string{"deployer"}}),
 	)
 
 	// Body with env field
@@ -98,7 +98,7 @@ func TestFilterReleaseEnvForUser(t *testing.T) {
 
 func TestFilterReleaseEnv_NoEnvViewMasksAll(t *testing.T) {
 	h, database, mgr := newProxyForEnvTest(t)
-	require.NoError(t, mgr.SaveUser("viewer@test.com", &rbac.UserConfig{Name: "Viewer", Roles: []string{"viewer"}}))
+	require.NoError(t, mgr.CreateUser("viewer@test.com", &rbac.UserConfig{Name: "Viewer", Roles: []string{"viewer"}}))
 
 	body := `{"id":"R1","env":"DATABASE_URL=postgres://...\nSECRET_KEY=abc\nREDIS_URL=redis://...\nPORT=3000\n"}`
 
@@ -139,7 +139,7 @@ func TestProxyBlocksReleaseCreateWithSecretSetForDeployer(t *testing.T) {
 	h, database, mgr := newProxyForEnvTest(t)
 	require.NoError(
 		t,
-		mgr.SaveUser("deployer@test.com", &rbac.UserConfig{Name: "Deployer", Roles: []string{"deployer"}}),
+		mgr.CreateUser("deployer@test.com", &rbac.UserConfig{Name: "Deployer", Roles: []string{"deployer"}}),
 	)
 
 	// Build request with form-encoded body simulating CLI
@@ -292,7 +292,7 @@ func TestProxyBlocksProtectedEnvChangesAndAudits(t *testing.T) {
 	appName := "app"
 	require.NoError(t, database.UpsertSetting(&appName, "protected_env_vars", []string{"DATABASE_URL"}, nil))
 	// Admin user (even admin is blocked from protected changes without --allow-protected)
-	require.NoError(t, mgr.SaveUser("admin@test.com", &rbac.UserConfig{Name: "Admin", Roles: []string{"admin"}}))
+	require.NoError(t, mgr.CreateUser("admin@test.com", &rbac.UserConfig{Name: "Admin", Roles: []string{"admin"}}))
 
 	// Attempt to change protected key via releases form
 	form := url.Values{}
@@ -339,7 +339,7 @@ func TestEnvUnsetWithProtectedKeysFullFlow(t *testing.T) {
 	require.NoError(t, database.UpsertSetting(&appName, "protected_env_vars", protectedVars, nil))
 
 	// Admin user should be able to env unset without triggering protected key errors
-	require.NoError(t, mgr.SaveUser("admin@test.com", &rbac.UserConfig{Name: "Admin", Roles: []string{"admin"}}))
+	require.NoError(t, mgr.CreateUser("admin@test.com", &rbac.UserConfig{Name: "Admin", Roles: []string{"admin"}}))
 
 	// Step 1: Test that GET /apps/{app}/environment response masks protected keys
 	// using filterEnvironmentMapResponse (the fix)
@@ -400,7 +400,7 @@ func TestFilterEnvironmentEndpointResponse(t *testing.T) {
 	h, database, mgr := newProxyForEnvTest(t)
 
 	// Set up admin user with env:read permission
-	require.NoError(t, mgr.SaveUser("admin@test.com", &rbac.UserConfig{Name: "Admin", Roles: []string{"admin"}}))
+	require.NoError(t, mgr.CreateUser("admin@test.com", &rbac.UserConfig{Name: "Admin", Roles: []string{"admin"}}))
 
 	appName := "docspring"
 	require.NoError(t, database.UpsertSetting(&appName, "protected_env_vars", []string{"ADMIN_PASSWORD"}, nil))
@@ -431,7 +431,7 @@ func TestFilterReleaseEnvMasksAppSpecificProtectedKeys(t *testing.T) {
 	h, database, mgr := newProxyForEnvTest(t)
 
 	// Set up admin user with env:read permission
-	require.NoError(t, mgr.SaveUser("admin@test.com", &rbac.UserConfig{Name: "Admin", Roles: []string{"admin"}}))
+	require.NoError(t, mgr.CreateUser("admin@test.com", &rbac.UserConfig{Name: "Admin", Roles: []string{"admin"}}))
 
 	// Set ADMIN_PASSWORD as a protected key for the "docspring" app in the DATABASE
 	// This is the key difference from secretNames which are global config
@@ -470,7 +470,7 @@ func TestFilterEnvironmentMasksSecretKeys(t *testing.T) {
 	h, database, mgr := newProxyForEnvTest(t)
 
 	// Set up admin user with env:read permission
-	require.NoError(t, mgr.SaveUser("admin@test.com", &rbac.UserConfig{Name: "Admin", Roles: []string{"admin"}}))
+	require.NoError(t, mgr.CreateUser("admin@test.com", &rbac.UserConfig{Name: "Admin", Roles: []string{"admin"}}))
 
 	appName := "myapp"
 	// No protected env vars configured for this app

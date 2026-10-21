@@ -177,7 +177,7 @@ func TestCaptureResourceCreatorStoresMappings(t *testing.T) {
 	h, database, mgr := newProxyForCreatorTest(t)
 	require.NoError(
 		t,
-		mgr.SaveUser("creator@example.com", &rbac.UserConfig{Name: "Creator", Roles: []string{"deployer"}}),
+		mgr.CreateUser("creator@example.com", &rbac.UserConfig{Name: "Creator", Roles: []string{"deployer"}}),
 	)
 
 	cases := []struct {
@@ -217,7 +217,7 @@ func TestCaptureResourceCreatorRecordsReleaseFromBuild(t *testing.T) {
 	h, database, mgr := newProxyForCreatorTest(t)
 	require.NoError(
 		t,
-		mgr.SaveUser("creator@example.com", &rbac.UserConfig{Name: "Creator", Roles: []string{"deployer"}}),
+		mgr.CreateUser("creator@example.com", &rbac.UserConfig{Name: "Creator", Roles: []string{"deployer"}}),
 	)
 
 	req := httptest.NewRequest(http.MethodPost, "/apps/my-app/builds", nil)
@@ -249,6 +249,32 @@ func TestCaptureResourceCreatorRecordsReleaseFromBuild(t *testing.T) {
 	require.Empty(t, reqGet.Header.Values("X-Release-Created"))
 }
 
+// A build's release appears when the build finishes. Whoever reads the build then didn't create it: the release is
+// credited to the build's creator, and the read writes no release.create audit entry.
+func TestBuildReadsCreditTheReleaseToTheBuildCreator(t *testing.T) {
+	h, database, mgr := newProxyForCreatorTest(t)
+	builder := &rbac.UserConfig{Name: "Builder", Roles: []string{"deployer"}}
+	require.NoError(t, mgr.CreateUser("builder@example.com", builder))
+	viewer := &rbac.UserConfig{Name: "Viewer", Roles: []string{"viewer"}}
+	require.NoError(t, mgr.CreateUser("viewer@example.com", viewer))
+
+	create := httptest.NewRequest(http.MethodPost, "/apps/my-app/builds", nil)
+	h.captureResourceCreator(create, "/apps/my-app/builds", []byte(`{"id":"B1","release":""}`), "builder@example.com")
+
+	read := httptest.NewRequest(http.MethodGet, "/apps/my-app/builds/B1", nil)
+	h.captureResourceCreator(read, "/apps/my-app/builds/B1", []byte(`{"id":"B1","release":"R1"}`), "viewer@example.com")
+	require.Empty(t, read.Header.Values("X-Release-Created"))
+	assertResourceCreator(t, database, "build", "B1", "builder@example.com")
+	assertResourceCreator(t, database, "release", "R1", "builder@example.com")
+
+	// A build the gateway didn't see created has no creator, and neither does its release.
+	read = httptest.NewRequest(http.MethodGet, "/apps/my-app/builds/B2", nil)
+	h.captureResourceCreator(read, "/apps/my-app/builds/B2", []byte(`{"id":"B2","release":"R2"}`), "viewer@example.com")
+	creators, err := database.GetResourceCreators("release", []string{"R2"})
+	require.NoError(t, err)
+	require.Empty(t, creators)
+}
+
 func TestProxyToRackLogsReleaseAuditAndUserResource(t *testing.T) {
 	rackHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		require.Equal(t, "/apps/my-app/builds", r.URL.Path)
@@ -260,7 +286,7 @@ func TestProxyToRackLogsReleaseAuditAndUserResource(t *testing.T) {
 	defer cleanup()
 	require.NoError(
 		t,
-		mgr.SaveUser("creator@example.com", &rbac.UserConfig{Name: "Creator", Roles: []string{"deployer"}}),
+		mgr.CreateUser("creator@example.com", &rbac.UserConfig{Name: "Creator", Roles: []string{"deployer"}}),
 	)
 
 	req := httptest.NewRequest(http.MethodPost, "/apps/my-app/builds", strings.NewReader("git-sha=abc"))
@@ -353,7 +379,7 @@ func TestForwardRequestRecordsBuildCreator(t *testing.T) {
 	defer cleanup()
 	require.NoError(
 		t,
-		mgr.SaveUser("creator@example.com", &rbac.UserConfig{Name: "Creator", Roles: []string{"deployer"}}),
+		mgr.CreateUser("creator@example.com", &rbac.UserConfig{Name: "Creator", Roles: []string{"deployer"}}),
 	)
 
 	req := httptest.NewRequest(http.MethodPost, "/apps/my-app/builds", strings.NewReader("description=build"))

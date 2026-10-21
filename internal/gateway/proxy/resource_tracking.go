@@ -25,6 +25,18 @@ func (h *Handler) recordResourceCreator(resourceType, resourceID, email string) 
 	return created
 }
 
+// setResourceCreator records email's user as the creator of a resource the request just created, replacing the
+// record of an earlier resource with the same ID (an app deleted and created again).
+func (h *Handler) setResourceCreator(resourceType, resourceID, email string) {
+	u, err := h.rbacManager.GetUserWithID(email)
+	if err != nil || u == nil {
+		return
+	}
+	if err := h.database.SetResourceCreator(u.ID, resourceType, resourceID); err != nil {
+		gtwlog.Warnf("setResourceCreator: can't record the creator of %s %s: %v", resourceType, resourceID, err)
+	}
+}
+
 // captureResourceCreator persists the creator information for app/build/release create responses
 // and records the resource ID for audit logging.
 func (h *Handler) captureResourceCreator(r *http.Request, path string, body []byte, email string) {
@@ -58,7 +70,7 @@ func (h *Handler) captureResourceCreator(r *http.Request, path string, body []by
 	h.captureAppCreation(r, path, obj, email)
 	h.captureBuildCreation(r, path, obj, email)
 	h.captureObjectUpload(r, path, obj, email)
-	h.captureBuildDetails(r, path, obj, email)
+	h.captureBuildDetails(r, path, obj)
 	h.captureReleaseCreation(r, path, obj, email)
 	h.captureProcessResource(r, path, obj, email)
 }
@@ -94,7 +106,8 @@ func (h *Handler) captureAppCreation(
 ) {
 	if r.Method == http.MethodPost && rbac.KeyMatch3(path, "/apps") {
 		if name := extractJSONString(obj["name"]); name != "" {
-			h.setResourceWithAudit(r, "app", name, email, true)
+			r.Header.Set("X-Audit-Resource", name)
+			h.setResourceCreator("app", name, email)
 		}
 	}
 }
@@ -168,8 +181,13 @@ func (h *Handler) captureObjectUpload(
 		h.setResourceWithAudit(r, "object", key, email, false)
 	}
 
-	// Convox API returns "Url" with capital U (Go struct field name)
+	// Convox API returns "Url" with capital U (Go struct field name). Only a stored object answers with one.
 	objectURL := extractJSONString(obj["Url"])
+	if objectURL != "" && objectURL == uploadObjectURL(path) {
+		if err := h.database.MarkObjectUploaded(extractAppFromPath(path), uploadObjectKey(path)); err != nil {
+			gtwlog.Errorf("failed to record object upload: %v", err)
+		}
+	}
 	if objectURL != "" {
 		if err := h.updateObjectURLApprovalTracking(r, objectURL); err != nil {
 			gtwlog.Errorf("failed to update object URL tracking: %v", err)
@@ -188,26 +206,34 @@ func (_ *Handler) extractObjectKey(obj map[string]interface{}, segments []string
 	return key
 }
 
-func (h *Handler) captureBuildDetails(
-	r *http.Request,
-	path string,
-	obj map[string]interface{},
-	email string,
-) {
+// recordBuildRelease records the build's creator as the creator of its release. A build created outside the gateway
+// has no creator, and neither does its release.
+func (h *Handler) recordBuildRelease(buildID, releaseID string) {
+	creatorID, ok, err := h.database.GetResourceCreator("build", buildID)
+	if err != nil {
+		gtwlog.Warnf("recordBuildRelease: can't read the creator of build %s: %v", buildID, err)
+		return
+	}
+	if !ok {
+		return
+	}
+	if _, err := h.database.CreateUserResource(creatorID, "release", releaseID); err != nil {
+		gtwlog.Warnf("recordBuildRelease: can't record the creator of release %s: %v", releaseID, err)
+	}
+}
+
+// captureBuildDetails records a build's release once a read of the build shows it. The rack creates the release when
+// the build finishes, so whoever reads the build didn't create it: the release is credited to the build's creator,
+// and the read writes no release.create audit entry.
+func (h *Handler) captureBuildDetails(r *http.Request, path string, obj map[string]interface{}) {
 	if !rbac.KeyMatch3(path, "/apps/{app}/builds/{id}") {
 		return
 	}
 
 	buildID := extractJSONString(obj["id"])
 	releaseID := extractJSONString(obj["release"])
-
-	if buildID != "" {
-		h.recordResourceCreator("build", buildID, email)
-	}
-	if releaseID != "" {
-		if h.recordResourceCreator("release", releaseID, email) {
-			r.Header.Add("X-Release-Created", releaseID)
-		}
+	if buildID != "" && releaseID != "" {
+		h.recordBuildRelease(buildID, releaseID)
 
 		// Record the approval's release once its build has one. Every later read of the build skips this: the
 		// release is never replaced.

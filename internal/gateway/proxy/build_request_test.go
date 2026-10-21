@@ -121,7 +121,7 @@ func TestBuildResponsesNeverIncludeRepository(t *testing.T) {
 	rack := &buildRack{}
 	h, database, mgr, cleanup := newProxyWithRackServer(t, rack.handler)
 	t.Cleanup(cleanup)
-	require.NoError(t, mgr.SaveUser("admin@test.com", &rbac.UserConfig{Name: "Admin", Roles: []string{"admin"}}))
+	require.NoError(t, mgr.CreateUser("admin@test.com", &rbac.UserConfig{Name: "Admin", Roles: []string{"admin"}}))
 
 	requests := []struct{ method, path, body string }{
 		{http.MethodPost, "/apps/myapp/builds", "url=object://myapp/tmp/source.tgz"},

@@ -65,7 +65,11 @@ func (d *Database) CreateUser(email, name string, roles []string) (*User, error)
 
 	var id int64
 	query := "INSERT INTO users (email, name, roles) VALUES (?, ?, ?) RETURNING id"
-	if err := d.queryRow(query, email, name, string(rolesJSON)).Scan(&id); err != nil {
+	err = d.queryRow(query, email, name, string(rolesJSON)).Scan(&id)
+	if isUniqueViolation(err) {
+		return nil, ErrUserExists
+	}
+	if err != nil {
 		return nil, fmt.Errorf("failed to create user: %w", err)
 	}
 	return &User{
@@ -76,24 +80,6 @@ func (d *Database) CreateUser(email, name string, roles []string) (*User, error)
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	}, nil
-}
-
-// UpdateUserRoles updates a user's roles
-func (d *Database) UpdateUserRoles(email string, roles []string) error {
-	rolesJSON, err := json.Marshal(roles)
-	if err != nil {
-		return fmt.Errorf("failed to marshal roles: %w", err)
-	}
-
-	_, err = d.exec(
-		"UPDATE users SET roles = ?, updated_at = CURRENT_TIMESTAMP WHERE email = ?",
-		string(rolesJSON), email,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to update user roles: %w", err)
-	}
-
-	return nil
 }
 
 // DeleteUser removes a user from the database and revokes all their sessions.
@@ -115,13 +101,18 @@ func (d *Database) DeleteUser(email string) error {
 	if err != nil {
 		return fmt.Errorf("failed to delete user: %w", err)
 	}
+	// A user created later with the same email has its own creator.
+	_, err = d.exec("DELETE FROM user_resources WHERE resource_type = 'user' AND resource_id = ?", email)
+	if err != nil {
+		return fmt.Errorf("failed to delete the user's creator: %w", err)
+	}
 	return nil
 }
 
 // ListUsers returns all users
 func (d *Database) ListUsers() ([]*User, error) {
 	rows, err := d.query(
-		`SELECT u.id, u.email, u.name, u.roles, u.created_at, u.updated_at,
+		`SELECT u.id, u.email, u.name, u.roles, u.created_at, u.updated_at, u.mfa_enrolled,
 			u.locked_at, u.locked_reason, u.locked_by_user_id,
 			cu.id, cu.email, cu.name
 		FROM users u
@@ -142,17 +133,10 @@ func (d *Database) ListUsers() ([]*User, error) {
 		}
 		users = append(users, user)
 	}
-
-	return users, nil
-}
-
-// UpdateUserName updates a user's display name by email
-func (d *Database) UpdateUserName(email, name string) error {
-	_, err := d.exec("UPDATE users SET name = ?, updated_at = CURRENT_TIMESTAMP WHERE email = ?", name, email)
-	if err != nil {
-		return fmt.Errorf("failed to update user name: %w", err)
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to list users: %w", err)
 	}
-	return nil
+	return users, nil
 }
 
 // FillUserName sets a user's display name only when it's empty, so a name set in the gateway is never overwritten.
@@ -171,29 +155,6 @@ func (d *Database) FillUserName(email, name string) (bool, error) {
 		return false, fmt.Errorf("failed to fill user name: %w", err)
 	}
 	return rows > 0, nil
-}
-
-// UpdateUserEmail updates a user's email address
-func (d *Database) UpdateUserEmail(oldEmail, newEmail string) error {
-	user, err := d.GetUser(oldEmail)
-	if err != nil {
-		return err
-	}
-	if user == nil {
-		return fmt.Errorf("user %s not found", oldEmail)
-	}
-
-	count, err := d.RevokeAllUserSessions(user.ID, nil)
-	if err != nil {
-		return fmt.Errorf("failed to revoke sessions for user %s: %w", oldEmail, err)
-	}
-	log.Printf("Revoked %d sessions for user %s during email change", count, oldEmail)
-
-	_, err = d.exec("UPDATE users SET email = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", newEmail, user.ID)
-	if err != nil {
-		return fmt.Errorf("failed to update user email: %w", err)
-	}
-	return nil
 }
 
 // UpdatePreferredMFAMethod updates a user's preferred MFA method

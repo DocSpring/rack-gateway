@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"sort"
@@ -238,19 +239,11 @@ func (h *APIHandler) GetCreatedBy(c *gin.Context) {
 		return
 	}
 
-	parts := strings.Split(idsParam, ",")
-	ids := make([]string, 0, len(parts))
-	seen := map[string]struct{}{}
-	for _, p := range parts {
-		p = strings.TrimSpace(p)
-		if p == "" {
-			continue
-		}
-		if _, ok := seen[p]; ok {
-			continue
-		}
-		seen[p] = struct{}{}
-		ids = append(ids, p)
+	ids, ok := parseCreatedByIDs(idsParam)
+	if !ok {
+		message := fmt.Sprintf("ids takes at most %d IDs of up to %d characters", maxCreatedByIDs, maxCreatedByIDLength)
+		c.JSON(http.StatusBadRequest, gin.H{"error": message})
+		return
 	}
 
 	if len(ids) == 0 {
@@ -265,6 +258,38 @@ func (h *APIHandler) GetCreatedBy(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, creators)
+}
+
+// The web UI asks for the creators of every release or build it lists, across all apps.
+const (
+	maxCreatedByIDs      = 1000
+	maxCreatedByIDLength = 128
+)
+
+// parseCreatedByIDs returns the distinct IDs in a comma-separated list, or false when there are too many or one is
+// too long.
+func parseCreatedByIDs(param string) ([]string, bool) {
+	if len(param) > maxCreatedByIDs*(maxCreatedByIDLength+1) {
+		return nil, false
+	}
+	parts := strings.Split(param, ",")
+	ids := make([]string, 0, len(parts))
+	seen := map[string]struct{}{}
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		if len(p) > maxCreatedByIDLength {
+			return nil, false
+		}
+		if _, dup := seen[p]; dup {
+			continue
+		}
+		seen[p] = struct{}{}
+		ids = append(ids, p)
+	}
+	return ids, len(ids) <= maxCreatedByIDs
 }
 
 func normalizeStringSlice(value interface{}) []string {

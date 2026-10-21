@@ -422,8 +422,12 @@ func TestFinalizeEnrollment(t *testing.T) {
 
 func createVerifiedSession(t *testing.T, database *db.Database, userID int64, tokenHash string) *db.UserSession {
 	t.Helper()
+	user, err := database.GetUserByID(userID)
+	if err != nil {
+		t.Fatalf("load user: %v", err)
+	}
 	session, err := database.CreateUserSession(
-		userID, tokenHash, time.Now().Add(time.Hour), "web", "", "", "127.0.0.1", "test", nil, nil,
+		user, tokenHash, time.Now().Add(time.Hour), "web", "", "", "127.0.0.1", "test", nil, nil,
 	)
 	if err != nil {
 		t.Fatalf("create session: %v", err)

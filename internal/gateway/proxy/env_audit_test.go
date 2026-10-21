@@ -34,7 +34,7 @@ func newEnvAuditProxy(t *testing.T, rackURL string, mailer email.Sender) (*Handl
 	database := dbtest.NewDatabase(t)
 	mgr, err := rbac.NewDBManager(database, "example.com")
 	require.NoError(t, err)
-	require.NoError(t, mgr.SaveUser(envAuditActor, &rbac.UserConfig{Name: "Admin", Roles: []string{"admin"}}))
+	require.NoError(t, mgr.CreateUser(envAuditActor, &rbac.UserConfig{Name: "Admin", Roles: []string{"admin"}}))
 	cfg := &config.Config{Racks: map[string]config.RackConfig{
 		"default": {Name: "default", URL: rackURL, Username: "convox", APIKey: "token", Enabled: true},
 	}}

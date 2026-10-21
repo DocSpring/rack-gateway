@@ -85,7 +85,7 @@ func TestValidateSessionRejectsLockedUser(t *testing.T) {
 		t.Fatalf("create session: %v", err)
 	}
 
-	// Lock the user
+	// Lock the user: the lock revokes their sessions with it
 	if err := database.LockUser(user.ID, "test lock", nil); err != nil {
 		t.Fatalf("lock user: %v", err)
 	}
@@ -98,8 +98,8 @@ func TestValidateSessionRejectsLockedUser(t *testing.T) {
 	if result != nil {
 		t.Fatalf("expected nil result for locked user, got: %+v", result)
 	}
-	if err.Error() != "user locked" {
-		t.Fatalf("expected 'user locked' error, got: %v", err)
+	if err.Error() != "session revoked" {
+		t.Fatalf("expected 'session revoked' error, got: %v", err)
 	}
 
 	// Session should be revoked

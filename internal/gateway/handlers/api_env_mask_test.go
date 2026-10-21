@@ -76,7 +76,7 @@ func newDeployerEnvHandler(t *testing.T, rackURL string) (*handlers.APIHandler, 
 	database := dbtest.NewDatabase(t)
 	handler, rbacManager := newAPIHandler(t, database, rackURL)
 	cfg := &rbac.UserConfig{Name: "Deployer", Roles: []string{"deployer"}}
-	require.NoError(t, rbacManager.SaveUser("deployer@example.com", cfg))
+	require.NoError(t, rbacManager.CreateUser("deployer@example.com", cfg))
 	return handler, database
 }
 

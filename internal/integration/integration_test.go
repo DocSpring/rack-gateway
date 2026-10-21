@@ -440,7 +440,7 @@ func createTestSession(
 	// Create session in database
 	expiresAt := time.Now().Add(expiresIn)
 	session, err := database.CreateUserSession(
-		user.ID,
+		user,
 		tokenHash,
 		expiresAt,
 		"cli",
@@ -850,7 +850,7 @@ func testCLIWebAuthnMFA(t *testing.T, s *TestServers) {
 	// Create session in database
 	expiresAt := time.Now().Add(24 * time.Hour)
 	session, err := s.database.CreateUserSession(
-		user.ID,
+		user,
 		tokenHash,
 		expiresAt,
 		"cli",

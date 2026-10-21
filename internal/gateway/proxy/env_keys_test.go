@@ -36,8 +36,8 @@ func TestFilterEnvironmentMapResponseMasksByPermission(t *testing.T) {
 	h, database, mgr := newProxyForEnvTest(t)
 	app := "testapp"
 	require.NoError(t, database.UpsertSetting(&app, settings.KeyProtectedEnvVars, []string{"ADMIN_URL"}, nil))
-	require.NoError(t, mgr.SaveUser("viewer@test.com", &rbac.UserConfig{Name: "Viewer", Roles: []string{"viewer"}}))
-	require.NoError(t, mgr.SaveUser("admin@test.com", &rbac.UserConfig{Name: "Admin", Roles: []string{"admin"}}))
+	require.NoError(t, mgr.CreateUser("viewer@test.com", &rbac.UserConfig{Name: "Viewer", Roles: []string{"viewer"}}))
+	require.NoError(t, mgr.CreateUser("admin@test.com", &rbac.UserConfig{Name: "Admin", Roles: []string{"admin"}}))
 	body := []byte(`{"ADMIN_URL":"https://admin","DATABASE_URL":"postgres://db","PORT":"3000"}`)
 	filtered := func(email string) map[string]string {
 		out := h.filterEnvironmentMapResponse(requestAs(t, database, email), body, app)
@@ -85,7 +85,7 @@ func TestAppEnvKeysFailClosedOnMalformedStoredLists(t *testing.T) {
 // environment map.
 func TestEnvFiltersMaskValuesWithCredentials(t *testing.T) {
 	h, database, mgr := newProxyForEnvTest(t)
-	require.NoError(t, mgr.SaveUser("admin@test.com", &rbac.UserConfig{Name: "Admin", Roles: []string{"admin"}}))
+	require.NoError(t, mgr.CreateUser("admin@test.com", &rbac.UserConfig{Name: "Admin", Roles: []string{"admin"}}))
 	keys := h.loadAppEnvKeys("testapp")
 
 	masked := maskSecretAndProtectedEnvVars("CACHE_URL=redis://:hunter2@cache:6379\nQUEUE_URL=amqp://mq", keys)

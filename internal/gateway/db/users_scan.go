@@ -89,7 +89,7 @@ func scanUserWithCreator(scanner userScanner) (*User, error) {
 	var creatorID sql.NullInt64
 	var creatorEmail, creatorName sql.NullString
 
-	// Note: This scan pattern matches the ListUsers SELECT which excludes MFA fields
+	// The columns of the ListUsers SELECT
 	err := scanner.Scan(
 		&user.ID,
 		&user.Email,
@@ -97,6 +97,7 @@ func scanUserWithCreator(scanner userScanner) (*User, error) {
 		&rolesJSON,
 		&user.CreatedAt,
 		&user.UpdatedAt,
+		&user.MFAEnrolled,
 		&user.LockedAt,
 		&lockedReason,
 		&user.LockedByUserID,

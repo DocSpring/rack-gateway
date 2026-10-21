@@ -19,8 +19,10 @@ func newTestSession(t *testing.T, database *db.Database, userID int64) int64 {
 	buf := make([]byte, 32)
 	_, err := rand.Read(buf)
 	require.NoError(t, err)
+	user, err := database.GetUserByID(userID)
+	require.NoError(t, err)
 	session, err := database.CreateUserSession(
-		userID, hex.EncodeToString(buf), time.Now().Add(time.Hour), "web", "", "", "127.0.0.1", "test", nil, nil,
+		user, hex.EncodeToString(buf), time.Now().Add(time.Hour), "web", "", "", "127.0.0.1", "test", nil, nil,
 	)
 	require.NoError(t, err)
 	return session.ID

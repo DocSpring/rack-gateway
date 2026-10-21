@@ -427,6 +427,7 @@ func (d *Database) dropAllTables() error {
 		"webauthn_challenges",
 		"audit_verification_status",
 		"user_resources",
+		"rack_object_keys",
 		"deploy_approval_requests",
 		"api_tokens",
 		"cli_login_states",

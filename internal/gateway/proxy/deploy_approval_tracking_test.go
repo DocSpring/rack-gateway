@@ -444,7 +444,7 @@ func TestCaptureBuildCreation_CallsUpdateBuildApprovalTracking(t *testing.T) {
 	}
 
 	// Call captureBuildDetails - should save release_id
-	h.captureBuildDetails(req, "/apps/test-app/builds/"+buildID, completedBuildObj, "deployer@example.com")
+	h.captureBuildDetails(req, "/apps/test-app/builds/"+buildID, completedBuildObj)
 
 	// Verify release_id was saved
 	updated, err = database.FindDeployApprovalRequest(db.DeployApprovalLookup{

@@ -42,16 +42,9 @@ func TestDeployApprovalUploadClaim(t *testing.T) {
 	approval := approvedForClaims(t, database, userID, tokenID, "docspring")
 	const first, second = "object://docspring/tmp/a.tgz", "object://docspring/tmp/b.tgz"
 
-	bound, err := database.DeployApprovalObjectBound(first)
-	require.NoError(t, err)
-	require.False(t, bound)
-
 	claimed, err := database.ClaimDeployApprovalObjectUpload(approval.ID, first)
 	require.NoError(t, err)
 	require.True(t, claimed)
-	bound, err = database.DeployApprovalObjectBound(first)
-	require.NoError(t, err)
-	require.True(t, bound, "an upload in flight already holds its object")
 
 	claimed, err = database.ClaimDeployApprovalObjectUpload(approval.ID, second)
 	require.NoError(t, err)

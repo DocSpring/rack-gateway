@@ -32,9 +32,15 @@ const (
 // forwarded, and its response confirms it.
 func bindApprovalArchive(t *testing.T, database *db.Database, id int64, objectURL string) {
 	t.Helper()
-	claimed, err := database.ClaimDeployApprovalObjectUpload(id, objectURL)
+	app, key, ok := strings.Cut(strings.TrimPrefix(objectURL, "object://"), "/")
+	require.True(t, ok, objectURL)
+	claimed, err := database.ClaimObjectUpload(app, key)
 	require.NoError(t, err)
 	require.True(t, claimed)
+	claimed, err = database.ClaimDeployApprovalObjectUpload(id, objectURL)
+	require.NoError(t, err)
+	require.True(t, claimed)
+	require.NoError(t, database.MarkObjectUploaded(app, key))
 	require.NoError(t, database.UpdateDeployApprovalRequestObjectURL(id, objectURL))
 }
 
@@ -246,7 +252,8 @@ func TestUploadOverAnApprovalsArchiveIsRefusedForEveryone(t *testing.T) {
 	require.Equal(t, http.StatusOK, rr.Code, "other objects upload as before: %s", rr.Body.String())
 }
 
-// An upload the rack refuses releases its claim, so CI can retry it.
+// An upload the rack refuses releases the approval's claim, so CI can retry it. The retry uploads to a new key, as
+// the Convox CLI does: the failed upload's key stays claimed, since the rack may have stored it anyway.
 func TestFailedUploadReleasesItsClaim(t *testing.T) {
 	f := newClaimsFixture(t)
 	f.rack.setStatus(http.StatusInternalServerError)
@@ -256,8 +263,44 @@ func TestFailedUploadReleasesItsClaim(t *testing.T) {
 
 	f.rack.setStatus(0)
 	rr = f.post(f.ci, claimsUploadPath, "archive")
+	require.Equal(t, http.StatusConflict, rr.Code, rr.Body.String())
+	rr = f.post(f.ci, "/apps/test-app/objects/tmp/retry.tgz", "archive")
 	require.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
-	require.Equal(t, claimsObjectURL, f.reload(t).ObjectURL)
+	require.Equal(t, "object://test-app/tmp/retry.tgz", f.reload(t).ObjectURL)
+}
+
+// Object keys are write-once through the gateway: an archive can't be replaced after it's uploaded, or after a
+// build's manifest was checked against it.
+func TestObjectKeysAreWriteOnce(t *testing.T) {
+	f := newClaimsFixture(t)
+	rr := f.post(f.deployer, "/apps/test-app/objects/tmp/mine.tgz", "archive")
+	require.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
+	for _, user := range []*auth.User{f.deployer, f.admin} {
+		rr = f.post(user, "/apps/test-app/objects/tmp/mine.tgz", "replacement")
+		require.Equal(t, http.StatusConflict, rr.Code, "%s: %s", user.Email, rr.Body.String())
+	}
+	require.Equal(t, 1, f.rack.writeCount())
+
+	require.NoError(t, f.database.ClaimObjectForBuild("test-app", "tmp/checked.tgz"))
+	rr = f.post(f.admin, "/apps/test-app/objects/tmp/checked.tgz", "replacement")
+	require.Equal(t, http.StatusConflict, rr.Code, rr.Body.String())
+}
+
+// A build can't use an archive whose upload is still in flight: the gateway would check what the rack holds now,
+// and the rack build what the upload leaves.
+func TestBuildOfAnArchiveStillUploadingIsRefused(t *testing.T) {
+	f := newClaimsFixture(t)
+	f.allowApprovedImages(t)
+	upload := f.postHeld(t, f.deployer, "/apps/test-app/objects/tmp/slow.tgz", "archive")
+
+	rr := f.post(f.deployer, claimsBuildPath, "url=object://test-app/tmp/slow.tgz&git-sha="+approvedCommit)
+	require.Equal(t, http.StatusConflict, rr.Code, rr.Body.String())
+	require.Contains(t, rr.Body.String(), "upload hasn't finished")
+
+	f.rack.unblock()
+	require.Equal(t, http.StatusOK, (<-upload).Code)
+	rr = f.post(f.deployer, claimsBuildPath, "url=object://test-app/tmp/slow.tgz&git-sha="+approvedCommit)
+	require.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
 }
 
 // An approval creates one build. A second build while the first is in flight isn't forwarded, and once the first

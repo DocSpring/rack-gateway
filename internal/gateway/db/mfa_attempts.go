@@ -1,6 +1,7 @@
 package db
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -184,7 +185,12 @@ func (d *Database) CountRecentFailedMFAAttempts(userID int64, minutes int) (int,
 
 // LockUser locks a user account
 func (d *Database) LockUser(userID int64, reason string, lockedByUserID *int64) error {
-	_, err := d.exec(`
+	tx, err := d.db.Begin()
+	if err != nil {
+		return fmt.Errorf("failed to begin user lock: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	_, err = d.execTx(tx, `
         UPDATE users
         SET locked_at = NOW(), locked_reason = ?, locked_by_user_id = ?, updated_at = NOW()
         WHERE id = ? AND locked_at IS NULL
@@ -192,7 +198,32 @@ func (d *Database) LockUser(userID int64, reason string, lockedByUserID *int64) 
 	if err != nil {
 		return fmt.Errorf("failed to lock user: %w", err)
 	}
+	if _, err := d.revokeUserSessionsTx(tx, userID, lockedByUserID); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit user lock: %w", err)
+	}
 	return nil
+}
+
+// revokeUserSessionsTx revokes all of a user's sessions in tx and returns how many it revoked. A lock revokes them
+// with it: a session left alive while the user is locked would work again once they're unlocked.
+func (d *Database) revokeUserSessionsTx(tx *sql.Tx, userID int64, revokedBy *int64) (int64, error) {
+	var revokedByVal interface{}
+	if revokedBy != nil {
+		revokedByVal = *revokedBy
+	}
+	res, err := d.execTx(tx, `UPDATE user_sessions SET revoked_at = NOW(), revoked_by_user_id = ?, updated_at = NOW()
+		WHERE user_id = ? AND revoked_at IS NULL`, revokedByVal, userID)
+	if err != nil {
+		return 0, fmt.Errorf("failed to revoke the user's sessions: %w", err)
+	}
+	count, err := res.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("failed to revoke the user's sessions: %w", err)
+	}
+	return count, nil
 }
 
 // UnlockUser unlocks a user account by clearing the lock fields.

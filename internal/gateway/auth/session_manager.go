@@ -131,7 +131,7 @@ func (m *SessionManager) CreateSession(user *db.User, meta SessionMetadata) (str
 	extra["ttl_seconds"] = ttl.Seconds()
 
 	session, err := m.db.CreateUserSession(
-		user.ID,
+		user,
 		tokenHash,
 		expiresAt,
 		chanVal,

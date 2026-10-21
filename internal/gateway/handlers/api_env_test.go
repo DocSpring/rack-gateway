@@ -105,7 +105,7 @@ func TestUpdateEnvValuesSuccess(t *testing.T) {
 	handler, rbacManager := newAPIHandler(t, database, server.URL)
 
 	userCfg := &rbac.UserConfig{Name: "Deployer", Roles: []string{"deployer"}}
-	if err := rbacManager.SaveUser("deployer@example.com", userCfg); err != nil {
+	if err := rbacManager.CreateUser("deployer@example.com", userCfg); err != nil {
 		t.Fatalf("failed to seed user: %v", err)
 	}
 
@@ -167,7 +167,7 @@ func TestUpdateEnvValuesRequiresEnvSetPermission(t *testing.T) {
 	handler, rbacManager := newAPIHandler(t, database, server.URL)
 
 	viewerCfg := &rbac.UserConfig{Name: "Viewer", Roles: []string{"viewer"}}
-	if err := rbacManager.SaveUser("viewer@example.com", viewerCfg); err != nil {
+	if err := rbacManager.CreateUser("viewer@example.com", viewerCfg); err != nil {
 		t.Fatalf("failed to seed viewer: %v", err)
 	}
 
@@ -207,7 +207,7 @@ func TestUpdateEnvValuesSecretRequiresPermission(t *testing.T) {
 	handler, rbacManager := newAPIHandler(t, database, server.URL)
 
 	deployerCfg := &rbac.UserConfig{Name: "Deployer", Roles: []string{"deployer"}}
-	if err := rbacManager.SaveUser("deployer@example.com", deployerCfg); err != nil {
+	if err := rbacManager.CreateUser("deployer@example.com", deployerCfg); err != nil {
 		t.Fatalf("failed to seed deployer: %v", err)
 	}
 
@@ -251,7 +251,7 @@ func TestUpdateEnvValuesMaskedSecretWithoutExistingValueFails(t *testing.T) {
 	handler, rbacManager := newAPIHandler(t, database, server.URL)
 
 	adminCfg := &rbac.UserConfig{Name: "Admin", Roles: []string{"admin"}}
-	if err := rbacManager.SaveUser("admin@example.com", adminCfg); err != nil {
+	if err := rbacManager.CreateUser("admin@example.com", adminCfg); err != nil {
 		t.Fatalf("failed to seed admin: %v", err)
 	}
 
@@ -301,7 +301,7 @@ func TestUpdateEnvValuesProtectedKeyDenied(t *testing.T) {
 	handler, rbacManager := newAPIHandler(t, database, server.URL)
 
 	adminCfg2 := &rbac.UserConfig{Name: "Admin", Roles: []string{"admin"}}
-	if err := rbacManager.SaveUser("admin@example.com", adminCfg2); err != nil {
+	if err := rbacManager.CreateUser("admin@example.com", adminCfg2); err != nil {
 		t.Fatalf("failed to seed admin: %v", err)
 	}
 
@@ -334,7 +334,7 @@ func TestUpdateEnvValuesLogsAuditEvenWhenNoChanges(t *testing.T) {
 	handler, rbacManager := newAPIHandler(t, database, server.URL)
 
 	deployerCfg2 := &rbac.UserConfig{Name: "Deployer", Roles: []string{"deployer"}}
-	if err := rbacManager.SaveUser("deployer@example.com", deployerCfg2); err != nil {
+	if err := rbacManager.CreateUser("deployer@example.com", deployerCfg2); err != nil {
 		t.Fatalf("failed to seed user: %v", err)
 	}
 

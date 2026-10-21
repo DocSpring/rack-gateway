@@ -82,10 +82,6 @@ func (h *AdminHandler) LockUser(c *gin.Context) {
 		return
 	}
 
-	if h.sessions != nil {
-		_, _ = h.sessions.RevokeAllForUser(user.ID, &adminUser.ID)
-	}
-
 	h.sendLockEmail(user.Email, req.Reason)
 
 	details := map[string]interface{}{

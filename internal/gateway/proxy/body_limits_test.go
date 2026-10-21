@@ -86,7 +86,7 @@ func TestOversizedRequestBodyIsRefused(t *testing.T) {
 		_, _ = io.WriteString(w, `{"id":"B1"}`)
 	})
 	t.Cleanup(cleanup)
-	require.NoError(t, mgr.SaveUser("admin@test.com", &rbac.UserConfig{Name: "Admin", Roles: []string{"admin"}}))
+	require.NoError(t, mgr.CreateUser("admin@test.com", &rbac.UserConfig{Name: "Admin", Roles: []string{"admin"}}))
 
 	cases := []struct {
 		name          string
@@ -198,7 +198,7 @@ func TestOversizedRackResponseIsRefused(t *testing.T) {
 		_, _ = io.WriteString(w, "["+strings.Repeat(" ", size-2)+"]")
 	})
 	t.Cleanup(cleanup)
-	require.NoError(t, mgr.SaveUser("admin@test.com", &rbac.UserConfig{Name: "Admin", Roles: []string{"admin"}}))
+	require.NoError(t, mgr.CreateUser("admin@test.com", &rbac.UserConfig{Name: "Admin", Roles: []string{"admin"}}))
 
 	rr := httptest.NewRecorder()
 	h.ProxyToRack(rr, withPath(requestAs(t, database, "admin@test.com"), http.MethodGet, "/apps/myapp/releases"))
@@ -226,7 +226,7 @@ func TestInterruptedResponseIsNotAppendedTo(t *testing.T) {
 		}
 	})
 	t.Cleanup(cleanup)
-	require.NoError(t, mgr.SaveUser("admin@test.com", &rbac.UserConfig{Name: "Admin", Roles: []string{"admin"}}))
+	require.NoError(t, mgr.CreateUser("admin@test.com", &rbac.UserConfig{Name: "Admin", Roles: []string{"admin"}}))
 
 	rr := httptest.NewRecorder()
 	h.ProxyToRack(rr, withPath(requestAs(t, database, "admin@test.com"), http.MethodGet, "/apps/myapp/builds/B1.tgz"))

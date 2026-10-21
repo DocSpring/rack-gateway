@@ -32,17 +32,21 @@ func isBuildCreate(r *http.Request, pth string) bool {
 
 // uploadObjectURL is the URL the rack gives an archive uploaded to pth (/apps/{app}/objects/tmp/{name}).
 func uploadObjectURL(pth string) string {
-	name := pth[strings.LastIndex(pth, "/")+1:]
-	return fmt.Sprintf("object://%s/tmp/%s", extractAppFromPath(pth), name)
+	return fmt.Sprintf("object://%s/%s", extractAppFromPath(pth), uploadObjectKey(pth))
+}
+
+// uploadObjectKey is the key of an archive uploaded to pth (/apps/{app}/objects/tmp/{name}).
+func uploadObjectKey(pth string) string {
+	return "tmp/" + pth[strings.LastIndex(pth, "/")+1:]
 }
 
 func hasApproval(tracker *deployApprovalTracker) bool {
 	return tracker != nil && tracker.request != nil
 }
 
-// claimDeployApprovalStep claims the approval step of a request that's about to be forwarded. It also refuses an
-// upload, from anyone, to an object that holds an approval's archive: the rack would overwrite it, and the build
-// would then use an archive the gateway never checked.
+// claimDeployApprovalStep claims the approval step of a request that's about to be forwarded. Every upload also
+// claims its object key, which is never released (db.ClaimObjectUpload): the rack would overwrite an object uploaded
+// again, and a build would then use an archive the gateway never checked.
 func (h *Handler) claimDeployApprovalStep(r *http.Request, pth string, tracker *deployApprovalTracker) error {
 	if h.database == nil {
 		return nil
@@ -59,17 +63,20 @@ func (h *Handler) claimDeployApprovalStep(r *http.Request, pth string, tracker *
 
 func (h *Handler) claimObjectUpload(pth string, tracker *deployApprovalTracker) error {
 	objectURL := uploadObjectURL(pth)
-	bound, err := h.database.DeployApprovalObjectBound(objectURL)
+	claimed, err := h.database.ClaimObjectUpload(extractAppFromPath(pth), uploadObjectKey(pth))
 	if err != nil {
 		return err
 	}
-	if bound {
-		return objectBoundError(objectURL)
+	if !claimed {
+		return &deployApprovalError{
+			status:  http.StatusConflict,
+			message: fmt.Sprintf("%s has already been uploaded: upload the archive to a new key", objectURL),
+		}
 	}
 	if !hasApproval(tracker) {
 		return nil
 	}
-	claimed, err := h.database.ClaimDeployApprovalObjectUpload(tracker.request.ID, objectURL)
+	claimed, err = h.database.ClaimDeployApprovalObjectUpload(tracker.request.ID, objectURL)
 	if errors.Is(err, db.ErrDeployApprovalObjectBound) {
 		return objectBoundError(objectURL)
 	}

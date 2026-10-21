@@ -392,7 +392,7 @@
                         "CSRFToken": []
                     }
                 ],
-                "description": "Applies environment variable changes for a Convox app by creating a new release.\nSecrets remain masked unless the user has secrets permissions.",
+                "description": "Applies environment variable changes for a Convox app by creating a new release.\nSecrets and values with credentials in them remain masked unless the user has secrets permissions.\nAnswers 409 while another env change to the app is in progress.",
                 "consumes": [
                     "application/json"
                 ],
@@ -436,6 +436,12 @@
                     },
                     "403": {
                         "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
                         "schema": {
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
@@ -3673,7 +3679,7 @@
                         "CSRFToken": []
                     }
                 ],
-                "description": "Creates a new gateway user with the provided roles.",
+                "description": "Creates a new gateway user with the provided roles. An email already in use is a 409: this never\nchanges an existing user.",
                 "consumes": [
                     "application/json"
                 ],
@@ -3783,7 +3789,7 @@
                         "CSRFToken": []
                     }
                 ],
-                "description": "Updates a user's email, name, and/or roles in a single request.",
+                "description": "Updates a user's email, name, and/or roles in a single request. Every field is checked before\nanything is written, and the changes are written together. A new email signs the user out\neverywhere and deletes their API tokens.",
                 "consumes": [
                     "application/json"
                 ],

@@ -23,7 +23,7 @@ func serveProxyAsAdmin(t *testing.T, rackHandler http.HandlerFunc) string {
 	t.Helper()
 	h, database, mgr, cleanup := newProxyWithRackServer(t, rackHandler)
 	t.Cleanup(cleanup)
-	require.NoError(t, mgr.SaveUser("admin@example.com", &rbac.UserConfig{Name: "Admin", Roles: []string{"admin"}}))
+	require.NoError(t, mgr.CreateUser("admin@example.com", &rbac.UserConfig{Name: "Admin", Roles: []string{"admin"}}))
 	dbUser, err := database.GetUser("admin@example.com")
 	require.NoError(t, err)
 	admin := &auth.User{Email: dbUser.Email, Name: dbUser.Name, Roles: dbUser.Roles, DBUser: dbUser}

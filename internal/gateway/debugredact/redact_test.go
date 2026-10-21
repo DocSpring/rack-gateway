@@ -44,6 +44,19 @@ func TestHeaderValueRedactsURLs(t *testing.T) {
 		HeaderValue("Refresh", "0; url=https://gateway.example.com/?login_code=hidden-code"))
 }
 
+// The URL pattern's [^\s...] is the whitespace class, so a URL runs on past an "s" in its host, user or path.
+func TestURLsWithAnSAreRedactedWhole(t *testing.T) {
+	require.Equal(t,
+		`see <https://docs.example.com/sso?token=`+redactedQueryValue+`>`,
+		HeaderValue("Link", `see <https://docs.example.com/sso?token=hidden-token>`))
+	require.JSONEq(t,
+		`{"note":"see https://docs.example.com/sso?token=`+redactedQueryValue+`"}`,
+		Body([]byte(`{"note":"see https://docs.example.com/sso?token=hidden-token"}`), 1000))
+	require.JSONEq(t,
+		`{"note":"[REDACTED]"}`,
+		Body([]byte(`{"note":"pull from https://sam:hidden-secret@registry.example.com/images"}`), 1000))
+}
+
 func TestHeadersAreSortedAndRedacted(t *testing.T) {
 	headers := http.Header{}
 	headers.Set("X-Request-Id", "req-1")

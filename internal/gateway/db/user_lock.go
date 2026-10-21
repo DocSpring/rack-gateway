@@ -14,9 +14,10 @@ type LockedUser struct {
 	Reason string
 }
 
-// LockUserAudited locks the user unless they're already locked. The lock's audit event, entry(user), is appended in
-// the same transaction, so the user is never locked without it: when the append fails, nothing is locked and the
-// error wraps ErrAuditAppend. It returns the user it locked (nil when they already were) and the stored events.
+// LockUserAudited locks the user unless they're already locked, and revokes their sessions. The lock's audit event,
+// entry(user), is appended in the same transaction, so the user is never locked without it: when the append fails,
+// nothing is locked and the error wraps ErrAuditAppend. It returns the user it locked (nil when they already were)
+// and the stored events.
 func (d *Database) LockUserAudited(
 	userID int64,
 	reason string,
@@ -44,6 +45,9 @@ func (d *Database) LockUserAudited(
 	}
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to lock user: %w", err)
+	}
+	if _, err := d.revokeUserSessionsTx(tx, userID, nil); err != nil {
+		return nil, nil, err
 	}
 	event := entry(locked)
 	if err := appendAuditLogTx(ctx, tx, event); err != nil {

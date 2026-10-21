@@ -14,6 +14,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 )
 
 const (
@@ -40,6 +42,13 @@ func (h *Handler) validateBuildManifest(ctx context.Context, app string, vals ur
 	objectKey, err := objectKeyForApp(objectURL, app)
 	if err != nil {
 		return refuse(http.StatusBadRequest, err)
+	}
+	// Once checked, the archive can't be uploaded again, so the rack builds the archive checked here.
+	if err := h.database.ClaimObjectForBuild(app, objectKey); err != nil {
+		if errors.Is(err, db.ErrObjectUploadInProgress) {
+			return refuse(http.StatusConflict, fmt.Errorf("%s: %w", objectURL, err))
+		}
+		return err
 	}
 
 	tarball, err := h.fetchObject(ctx, app, objectKey)

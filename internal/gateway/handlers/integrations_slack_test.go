@@ -54,7 +54,7 @@ func (_ *denyAllRBAC) GetUsers() (map[string]*rbac.UserConfig, error) {
 	return nil, nil
 }
 
-func (_ *denyAllRBAC) SaveUser(_ string, _ *rbac.UserConfig) error {
+func (_ *denyAllRBAC) CreateUser(_ string, _ *rbac.UserConfig) error {
 	return nil
 }
 

@@ -46,6 +46,18 @@ or Tailscale (`tailscale serve`). Set `DOMAIN` to the host name clients use; the
 DOMAIN=gateway.example.com
 ```
 
+### The Rack Connection
+
+The gateway calls the rack API over TLS with the rack's API key, but it can't authenticate the rack: the Convox rack
+API serves a self-signed certificate that it generates again every time it starts, and no CA signs it. The
+connection is encrypted, and an attacker would have to intercept traffic inside the rack's network to impersonate
+the rack and capture the key. Run the gateway as an app on the rack it protects, so the connection stays inside
+the cluster, and keep anything you don't trust off that network.
+
+`ENABLE_RACK_TLS_PINNING=true` pins the first certificate the gateway sees and refuses any other until the pin is
+refreshed. It narrows the window to first use and refreshes, but each rack update replaces the certificate and needs
+a refresh.
+
 ### Firewall Rules
 
 Restrict network access:

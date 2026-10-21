@@ -69,7 +69,9 @@ func newGinContext(method, path string, body []byte) (*gin.Context, *httptest.Re
 	return c, w
 }
 
-func attachUserContext(c *gin.Context, email, name string) {
+// attachAdminContext makes admin@example.com the request's caller.
+func attachAdminContext(c *gin.Context) {
+	const email, name = "admin@example.com", "Admin"
 	c.Set("user_email", email)
 	c.Set("user_name", name)
 	ctx := context.WithValue(c.Request.Context(), auth.UserContextKey, &auth.User{Email: email, Name: name})
@@ -91,11 +93,11 @@ func TestUpdateUser_AllowsEmailNameAndRoleChanges(t *testing.T) {
 	handler, database, rbacManager := newAdminHandler(t)
 
 	adminCfg := &rbac.UserConfig{Name: "Admin", Roles: []string{"admin"}}
-	if err := rbacManager.SaveUser("admin@example.com", adminCfg); err != nil {
+	if err := rbacManager.CreateUser("admin@example.com", adminCfg); err != nil {
 		t.Fatalf("failed to seed admin: %v", err)
 	}
 	userCfg := &rbac.UserConfig{Name: "Original User", Roles: []string{"viewer"}}
-	if err := rbacManager.SaveUser("user@example.com", userCfg); err != nil {
+	if err := rbacManager.CreateUser("user@example.com", userCfg); err != nil {
 		t.Fatalf("failed to seed user: %v", err)
 	}
 
@@ -107,7 +109,7 @@ func TestUpdateUser_AllowsEmailNameAndRoleChanges(t *testing.T) {
 	body, _ := json.Marshal(payload)
 	c, w := newGinContext(http.MethodPut, "/api/v1/users/user@example.com", body)
 	c.Params = gin.Params{{Key: "email", Value: "user@example.com"}}
-	attachUserContext(c, "admin@example.com", "Admin User")
+	attachAdminContext(c)
 
 	handler.UpdateUser(c)
 
@@ -134,11 +136,11 @@ func TestUpdateUserName_OnlyUpdatesName(t *testing.T) {
 	handler, database, rbacManager := newAdminHandler(t)
 
 	adminCfg := &rbac.UserConfig{Name: "Admin", Roles: []string{"admin"}}
-	if err := rbacManager.SaveUser("admin@example.com", adminCfg); err != nil {
+	if err := rbacManager.CreateUser("admin@example.com", adminCfg); err != nil {
 		t.Fatalf("failed to seed admin: %v", err)
 	}
 	userCfg := &rbac.UserConfig{Name: "Original User", Roles: []string{"viewer"}}
-	if err := rbacManager.SaveUser("user@example.com", userCfg); err != nil {
+	if err := rbacManager.CreateUser("user@example.com", userCfg); err != nil {
 		t.Fatalf("failed to seed user: %v", err)
 	}
 
@@ -148,7 +150,7 @@ func TestUpdateUserName_OnlyUpdatesName(t *testing.T) {
 	body, _ := json.Marshal(payload)
 	c, w := newGinContext(http.MethodPut, "/api/v1/users/user@example.com/name", body)
 	c.Params = gin.Params{{Key: "email", Value: "user@example.com"}}
-	attachUserContext(c, "admin@example.com", "Admin User")
+	attachAdminContext(c)
 
 	handler.UpdateUserName(c)
 
@@ -186,7 +188,7 @@ func TestUpdateUser_PreventsSelfRoleChange(t *testing.T) {
 	handler, _, rbacManager := newAdminHandler(t)
 
 	adminCfg := &rbac.UserConfig{Name: "Admin", Roles: []string{"admin"}}
-	if err := rbacManager.SaveUser("admin@example.com", adminCfg); err != nil {
+	if err := rbacManager.CreateUser("admin@example.com", adminCfg); err != nil {
 		t.Fatalf("failed to seed admin: %v", err)
 	}
 
@@ -196,7 +198,7 @@ func TestUpdateUser_PreventsSelfRoleChange(t *testing.T) {
 	body, _ := json.Marshal(payload)
 	c, w := newGinContext(http.MethodPut, "/api/v1/users/admin@example.com", body)
 	c.Params = gin.Params{{Key: "email", Value: "admin@example.com"}}
-	attachUserContext(c, "admin@example.com", "Admin User")
+	attachAdminContext(c)
 
 	handler.UpdateUser(c)
 

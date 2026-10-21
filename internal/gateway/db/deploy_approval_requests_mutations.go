@@ -151,7 +151,7 @@ func (d *Database) handleDeployApprovalInsertError(
 	tokenID int64,
 	normalizedGitCommitHash, app string,
 ) (*DeployApprovalRequest, error) {
-	if !isUniqueConstraintViolation(err) {
+	if !isUniqueViolation(err) {
 		return nil, fmt.Errorf("failed to create deploy approval request: %w", err)
 	}
 
@@ -165,12 +165,6 @@ func (d *Database) handleDeployApprovalInsertError(
 		return nil, &DeployApprovalRequestConflictError{Request: existing}
 	}
 	return nil, ErrDeployApprovalRequestActive
-}
-
-func isUniqueConstraintViolation(err error) bool {
-	errMsg := err.Error()
-	return strings.Contains(errMsg, "idx_deploy_approval_requests_active_commit") ||
-		strings.Contains(errMsg, "duplicate key value violates unique constraint")
 }
 
 // updateApprovalStatus updates the status of a deploy approval request.
@@ -351,7 +345,7 @@ func (d *Database) ExtendDeployApprovalRequestExpiry(
 		newExpiresAt,
 	)
 	if err != nil {
-		if isUniqueConstraintViolation(err) {
+		if isUniqueViolation(err) {
 			return nil, ErrDeployApprovalRequestActive
 		}
 		return nil, fmt.Errorf("failed to extend deploy approval expiry: %w", err)

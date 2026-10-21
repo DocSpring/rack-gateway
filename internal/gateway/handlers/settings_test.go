@@ -608,7 +608,7 @@ func TestUpdateGlobalSettings_Boolean(t *testing.T) {
 
 func testUpdateSettingsSingleBoolean(t *testing.T) {
 	handler, database, mgr := setupSettingsHandler(t)
-	require.NoError(t, mgr.SaveUser("admin@example.com", &rbac.UserConfig{
+	require.NoError(t, mgr.CreateUser("admin@example.com", &rbac.UserConfig{
 		Name:  "Admin",
 		Roles: []string{"admin"},
 	}))
@@ -643,7 +643,7 @@ func testUpdateSettingsSingleBoolean(t *testing.T) {
 
 func testUpdateSettingsMultiple(t *testing.T) {
 	handler, database, mgr := setupSettingsHandler(t)
-	require.NoError(t, mgr.SaveUser("admin@example.com", &rbac.UserConfig{
+	require.NoError(t, mgr.CreateUser("admin@example.com", &rbac.UserConfig{
 		Name:  "Admin",
 		Roles: []string{"admin"},
 	}))
@@ -687,7 +687,7 @@ func testUpdateSettingsMultiple(t *testing.T) {
 
 func testUpdateSettingsClearRevertsToDefault(t *testing.T) {
 	handler, database, mgr := setupSettingsHandler(t)
-	require.NoError(t, mgr.SaveUser("admin@example.com", &rbac.UserConfig{
+	require.NoError(t, mgr.CreateUser("admin@example.com", &rbac.UserConfig{
 		Name:  "Admin",
 		Roles: []string{"admin"},
 	}))
