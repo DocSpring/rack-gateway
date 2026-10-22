@@ -68,12 +68,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await authService.startLogin(returnTo)
   }
 
+  // A successful logout has already sent the browser to the login page. Clearing the user here would make the
+  // layout start a second navigation (to the login page with a returnTo) that aborts it.
   const logout = async () => {
-    if (await authService.logout()) {
-      setUser(null)
-      return
+    if (!(await authService.logout())) {
+      toast.error(LOGOUT_FAILED_MESSAGE)
     }
-    toast.error(LOGOUT_FAILED_MESSAGE)
   }
 
   const refresh = useCallback(async () => fetchUser({ suppressAuthError: true }), [fetchUser])

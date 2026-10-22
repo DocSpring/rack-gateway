@@ -416,6 +416,21 @@ export async function getUserMfaEnrolled(email: string): Promise<boolean> {
   })
 }
 
+// Whether the user prefers a security key and has one, so the MFA challenge page starts it by itself.
+export async function getUserPrefersWebAuthn(email: string): Promise<boolean> {
+  return await withDbClient(async (client) => {
+    const result = await client.query(
+      `SELECT u.preferred_mfa_method = 'webauthn' AND EXISTS (
+         SELECT 1 FROM mfa_methods m
+         WHERE m.user_id = u.id AND m.type = 'webauthn' AND m.confirmed_at IS NOT NULL
+       ) AS prefers_webauthn
+       FROM users u WHERE u.email = $1;`,
+      [email]
+    )
+    return result.rows[0]?.prefers_webauthn ?? false
+  })
+}
+
 // The TOTP seed E2E helpers enroll (scripts/lib/cli-e2e/mfa.sh uses the same one for admin).
 const E2E_TOTP_SECRET = 'K745D33R6A3NCWP5C3NYDQMBQF5ZFFHU'
 

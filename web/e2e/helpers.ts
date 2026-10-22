@@ -8,6 +8,7 @@ import {
   expireStepUpForAllSessions,
   getPendingTotpSecret,
   getUserMfaSecret,
+  getUserPrefersWebAuthn,
   markSessionsMfaVerified,
   resetMfaForUser,
   setupBothMfaMethodsForUser,
@@ -103,19 +104,28 @@ export async function login(page: Page, options: LoginOptions = {}) {
 
   await page.waitForURL(/app(?:\/|$)/, { timeout: 15_000 })
 
-  // A user who already has MFA lands on the challenge page. Complete it like a real user would,
-  // otherwise the session stays unverified and every API call is refused.
   if (isOnMfaChallenge(page)) {
-    const secret = await getUserMfaSecret(email)
-    if (!secret) {
-      throw new Error(`Login for ${email} reached the MFA challenge but no TOTP secret exists`)
-    }
-    await completeMfaChallenge(page, secret)
+    await passLoginMfaChallenge(page, email)
   }
 
   if (autoEnrollMfa) {
     await ensureMfaEnrollment(page, { email })
   }
+}
+
+// A user who already has MFA lands on the challenge page. Complete it like a real user would, otherwise the session
+// stays unverified and every API call is refused. For a user who prefers a security key, the page starts the key by
+// itself (E2E mode mocks it) and moves on, so switching to a TOTP code would race it.
+async function passLoginMfaChallenge(page: Page, email: string) {
+  if (await getUserPrefersWebAuthn(email)) {
+    await page.waitForURL((url) => !isOnMfaChallengeUrl(url), { timeout: 30_000 })
+    return
+  }
+  const secret = await getUserMfaSecret(email)
+  if (!secret) {
+    throw new Error(`Login for ${email} reached the MFA challenge but no TOTP secret exists`)
+  }
+  await completeMfaChallenge(page, secret)
 }
 
 export function isOnMfaChallengeUrl(url: URL): boolean {
