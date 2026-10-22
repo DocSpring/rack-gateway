@@ -2,6 +2,7 @@ package auth
 
 import (
 	"crypto/sha256"
+	"encoding/hex"
 	"net/http"
 	"strings"
 	"sync"
@@ -18,7 +19,7 @@ const (
 )
 
 // knownCredentials are the session and API tokens that authenticated recently, and the sessions the gateway just
-// created, kept by their SHA-256. A request with one isn't refused for its address's failed attempts: another
+// created, kept by their credentialKey. A request with one isn't refused for its address's failed attempts: another
 // client behind the same NAT or proxy may have made them. Its credential is still checked in full, and one that's
 // refused is forgotten, and counts as a failed attempt.
 type knownCredentials struct {
@@ -27,11 +28,18 @@ type knownCredentials struct {
 
 	mu sync.Mutex
 	// seen is when each credential last authenticated.
-	seen map[[sha256.Size]byte]time.Time
+	seen map[string]time.Time
 }
 
 func newKnownCredentials() *knownCredentials {
-	return &knownCredentials{now: time.Now, max: maxKnownCredentials, seen: make(map[[sha256.Size]byte]time.Time)}
+	return &knownCredentials{now: time.Now, max: maxKnownCredentials, seen: make(map[string]time.Time)}
+}
+
+// credentialKey is what a credential is known, and its attempts limited, by: its SHA-256, so the credential itself
+// isn't kept.
+func credentialKey(credential string) string {
+	sum := sha256.Sum256([]byte(credential))
+	return hex.EncodeToString(sum[:])
 }
 
 // has reports whether credential authenticated within knownCredentialTTL. A nil set knows nothing.
@@ -39,7 +47,7 @@ func (k *knownCredentials) has(credential string) bool {
 	if k == nil || credential == "" {
 		return false
 	}
-	key := sha256.Sum256([]byte(credential))
+	key := credentialKey(credential)
 	k.mu.Lock()
 	defer k.mu.Unlock()
 	at, ok := k.seen[key]
@@ -51,7 +59,7 @@ func (k *knownCredentials) remember(credential string) {
 	if k == nil || credential == "" {
 		return
 	}
-	key := sha256.Sum256([]byte(credential))
+	key := credentialKey(credential)
 	k.mu.Lock()
 	defer k.mu.Unlock()
 	now := k.now()
@@ -69,7 +77,7 @@ func (k *knownCredentials) forget(credential string) {
 	if k == nil || credential == "" {
 		return
 	}
-	key := sha256.Sum256([]byte(credential))
+	key := credentialKey(credential)
 	k.mu.Lock()
 	defer k.mu.Unlock()
 	delete(k.seen, key)

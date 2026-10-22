@@ -34,20 +34,17 @@ type Service struct {
 	sessions     *SessionManager
 	// auditLogger records refused API tokens, as throttled denials.
 	auditLogger *audit.Logger
-	// failures limits each client's failed attempts (see AuthenticateHTTPRequest); retryAfter is how many seconds
-	// one takes to come back.
-	failures   *ratelimit.FailureLimiter
-	retryAfter string
+	// failures limits each client's failed attempts, and knownFailures each known credential's (see beginAttempt);
+	// retryAfter is how many seconds one takes to come back.
+	failures      *ratelimit.FailureLimiter
+	knownFailures *ratelimit.FailureLimiter
+	retryAfter    string
 	// known are the credentials that get past their address's failed attempts (see AuthenticateHTTPRequest).
 	known *knownCredentials
 }
 
 // ErrMissingAuthorization is returned for a request without credentials.
 var ErrMissingAuthorization = errors.New("missing authorization")
-
-// ErrTooManyFailedAttempts is returned, without checking its credentials, for a request from a client that has
-// used up its failed attempts.
-var ErrTooManyFailedAttempts = errors.New("too many failed authentication attempts, try again later")
 
 // User represents an authenticated user from either session or API token
 type User struct {
@@ -71,8 +68,9 @@ type User struct {
 	DBUser             *db.User        `json:"-"`
 }
 
-// NewAuthService creates a new authentication service. Each client may make AUTH_FAILURE_LIMIT_BURST failed
-// attempts (default 30), which come back at AUTH_FAILURE_LIMIT_PER_MINUTE (default 30).
+// NewAuthService creates a new authentication service. Each client, and each known credential, may make
+// AUTH_FAILURE_LIMIT_BURST failed attempts (default 30), which come back at AUTH_FAILURE_LIMIT_PER_MINUTE
+// (default 30).
 func NewAuthService(
 	tokenService *token.Service,
 	database *db.Database,
@@ -80,6 +78,7 @@ func NewAuthService(
 	auditLogger *audit.Logger,
 ) *Service {
 	perMinute := ratelimit.PositiveEnv("AUTH_FAILURE_LIMIT_PER_MINUTE", 30)
+	burst := int(ratelimit.PositiveEnv("AUTH_FAILURE_LIMIT_BURST", 30))
 	known := newKnownCredentials()
 	if sessions != nil {
 		// A session the gateway creates is known from the start: its first request may come from an address
@@ -87,21 +86,15 @@ func NewAuthService(
 		sessions.known = known
 	}
 	return &Service{
-		tokenService: tokenService,
-		database:     database,
-		sessions:     sessions,
-		auditLogger:  auditLogger,
-		failures: ratelimit.NewFailureLimiter(
-			perMinute/60, int(ratelimit.PositiveEnv("AUTH_FAILURE_LIMIT_BURST", 30)),
-		),
-		retryAfter: strconv.Itoa(int(math.Ceil(60 / perMinute))),
-		known:      known,
+		tokenService:  tokenService,
+		database:      database,
+		sessions:      sessions,
+		auditLogger:   auditLogger,
+		failures:      ratelimit.NewFailureLimiter(perMinute/60, burst),
+		knownFailures: ratelimit.NewFailureLimiter(perMinute/60, burst),
+		retryAfter:    strconv.Itoa(int(math.Ceil(60 / perMinute))),
+		known:         known,
 	}
-}
-
-// RetryAfter is the Retry-After value (seconds) for a request refused with ErrTooManyFailedAttempts.
-func (a *Service) RetryAfter() string {
-	return a.retryAfter
 }
 
 // Middleware handles session token and API token authentication
@@ -171,40 +164,6 @@ func (_ *Service) writeUnauthorized(w http.ResponseWriter, r *http.Request, reas
 		logging.DebugTopicf(logging.TopicAuth, "[auth:401] %s %s src=%s reason=%s", r.Method, r.URL.Path, src, reason)
 	}
 	http.Error(w, reason, http.StatusUnauthorized)
-}
-
-// AuthenticateHTTPRequest attempts to authenticate the provided request, returning the user and auth source label.
-// A client's failed attempts are limited, so credentials can't be guessed, or used to load the database, at the rate
-// requests arrive: once a client has used them up, its requests are refused with ErrTooManyFailedAttempts before
-// their credentials are checked, until they come back. A request without credentials isn't a failed attempt.
-//
-// A credential that authenticated recently, or a session the gateway just created (knownCredentials), isn't refused
-// for its address's failed attempts, so a client sharing an address (a NAT, a proxy) isn't locked out by someone
-// else's. It's still checked in full.
-func (a *Service) AuthenticateHTTPRequest(r *http.Request) (*User, string, error) {
-	clientIP := netutil.ClientIP(r)
-	credential := presentedCredential(r)
-	end := func(failed bool) {
-		if failed {
-			a.failures.Fail(clientIP)
-		}
-	}
-	if !a.known.has(credential) {
-		var ok bool
-		if end, ok = a.failures.Begin(clientIP); !ok {
-			return nil, "none", ErrTooManyFailedAttempts
-		}
-	}
-	user, source, err := a.authenticate(r)
-	failed := err != nil && !errors.Is(err, ErrMissingAuthorization)
-	end(failed)
-	switch {
-	case err == nil:
-		a.known.remember(credential)
-	case failed:
-		a.known.forget(credential)
-	}
-	return user, source, err
 }
 
 func (a *Service) authenticate(r *http.Request) (*User, string, error) {

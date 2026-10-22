@@ -151,7 +151,8 @@ Key files:
 
 - `audit/logger.go` - Audit log creation
 - `audit/attempt.go`, `audit/denials.go` - Attempt/result pairing, throttled denials
-- `audit/redaction.go` - Query string redaction
+- `audit/redaction.go` - Query string and command redaction (`RedactCommand`: an exec's command, wherever it's
+  recorded)
 - `envutil/audit.go` - Env change audit details
 - `db/audit_append.go`, `db/audit_hash.go`, `db/audit_normalize.go` - Hash-chained append (hash v2). The row is
   normalized to its stored form, hashed, then stored, so the stored row always re-hashes to `event_hash`. Never

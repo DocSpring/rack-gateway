@@ -227,7 +227,8 @@ deploy.
 5. **Rate limits on failures and approvals.** Each client IP gets `AUTH_FAILURE_LIMIT_BURST` (30) refused sign-ins,
    refilled at `AUTH_FAILURE_LIMIT_PER_MINUTE` (30). A session or API token that signed in within the last 24
    hours, or a session just created, still gets through when its IP is refused, so clients sharing an address
-   aren't locked out by one of them. Each user can create `DEPLOY_APPROVAL_LIMIT_BURST` (20) deploy approval
+   aren't locked out by one of them. It has the same limit of its own, which caps how many requests with it are
+   checked at once. Each user can create `DEPLOY_APPROVAL_LIMIT_BURST` (20) deploy approval
    requests, across all their API tokens, refilled at `DEPLOY_APPROVAL_LIMIT_PER_HOUR` (60). Raise that if CI
    creates more requests than that. A request that repeats an open one gets `409` with that request and doesn't
    count.
@@ -248,7 +249,8 @@ deploy.
 - **A promote whose outcome the gateway couldn't see keeps its approval's claim**: CI needs a new approval to promote
   again.
 - **A build, object or process the rack created but the approval couldn't record gets `503`**, naming what to do
-  again (create the build again, upload to a new key, start a new process).
+  again (create the build again, upload to a new key, start a new process). So does an upload the rack says it
+  stored at a different key.
 - **Exec and log sessions are rechecked every minute** and end when the user, session, token, permission or approval
   is gone, or when a recheck can't finish within 30 seconds. A session lasts at most 12 hours, so a long
   `convox logs -f` reconnects.
@@ -257,7 +259,9 @@ deploy.
 **Logs and audit:**
 
 - An exec's command is audited with the credentials a command line commonly carries redacted: a URL's password, the
-  value of a secret-named assignment or flag (`DB_PASSWORD=...`, `--token ...`) and a `Bearer` value.
+  value of a secret-named assignment or flag (`DB_PASSWORD=...`, `--token ...`), the value of a credential header
+  (`Authorization`, `Cookie`, `X-API-Key: ...`) and a `Bearer` value. A deploy approval request's record of the
+  commands run under it, and the refusal of a `convox run` command it doesn't approve, are redacted the same way.
 - Request log lines say `rbac_decision` `deny` for every 401, 403 and 429, `error` when the permission check failed,
   and `not_evaluated` when no check ran. Update CloudWatch filters that relied on the old values.
 - A deploy approval request's approve, reject and extend entries use the resource type `deploy_approval_request` (it

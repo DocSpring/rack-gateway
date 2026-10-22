@@ -375,8 +375,11 @@ func (h *Handler) validateExecCommand(w http.ResponseWriter, r *http.Request, or
 	}
 
 	// The exec runs only once it's on its approval's record. An approval rejected since it was looked up records
-	// nothing, and neither does a database that can't be reached: either way the exec is refused.
-	err := h.database.AppendExecCommandToDeployApprovalRequest(tracker.request.ID, processID, command)
+	// nothing, and neither does a database that can't be reached: either way the exec is refused. The record keeps
+	// the command as the audit log does, without the credentials it may carry.
+	err := h.database.AppendExecCommandToDeployApprovalRequest(
+		tracker.request.ID, processID, audit.RedactCommand(command),
+	)
 	if errors.Is(err, db.ErrDeployApprovalNotRecordable) {
 		http.Error(w, "the deploy approval request is no longer approved", http.StatusForbidden)
 		return http.StatusForbidden

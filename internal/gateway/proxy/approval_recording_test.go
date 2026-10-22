@@ -2,8 +2,10 @@ package proxy
 
 import (
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -102,6 +104,25 @@ func TestAnUploadThatCantBeMarkedFinishedIsRefused(t *testing.T) {
 	require.Equal(t, http.StatusServiceUnavailable, rr.Code, rr.Body.String())
 	require.Contains(t, rr.Body.String(), "the rack stored "+claimsObjectURL)
 	require.Contains(t, rr.Body.String(), retryUpload)
+}
+
+// An upload the rack says it stored at another key leaves the key it was sent to unmarked, and a build of that key
+// would be refused, so it isn't passed on as a success, with or without an approval.
+func TestAnUploadAnsweredWithAnotherObjectsURLIsRefused(t *testing.T) {
+	gateway := serveProxyAsAdmin(t, func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.Copy(io.Discard, r.Body)
+		answerStoredObject(w, "object://app/tmp/other.tgz")
+	})
+
+	resp, err := http.Post(gateway+"/apps/app/objects/tmp/source.tgz", "application/octet-stream",
+		strings.NewReader("archive"))
+	require.NoError(t, err)
+	defer func() { _ = resp.Body.Close() }()
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusServiceUnavailable, resp.StatusCode, string(body))
+	require.Contains(t, string(body), "another object's URL, object://app/tmp/other.tgz")
+	require.Contains(t, string(body), retryUpload)
 }
 
 // A successful answer that doesn't say what the rack created can't be recorded, so it isn't passed on as a
