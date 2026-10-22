@@ -1,9 +1,14 @@
 package db
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 )
+
+// ErrDeployApprovalNotRecordable is returned when a step can't be recorded in a deploy approval because it isn't
+// approved (or was never found).
+var ErrDeployApprovalNotRecordable = errors.New("deployment approval not found or not approved")
 
 // recordableApproval matches an approval that was approved, whether or not it has expired since. A step the
 // approval authorized records its result (a build, a process, an exec command) even when the approval expired while
@@ -64,7 +69,7 @@ func (d *Database) AppendProcessIDToDeployApprovalRequest(id int64, processID st
 		return fmt.Errorf("failed to append process ID to deploy approval request: %w", err)
 	}
 	if rows == 0 {
-		return fmt.Errorf("deployment approval not found or not approved")
+		return ErrDeployApprovalNotRecordable
 	}
 	return nil
 }
@@ -94,7 +99,7 @@ func (d *Database) AppendExecCommandToDeployApprovalRequest(id int64, processID,
 		return fmt.Errorf("failed to append exec command to deploy approval request: %w", err)
 	}
 	if rows == 0 {
-		return fmt.Errorf("deployment approval not found or not approved")
+		return ErrDeployApprovalNotRecordable
 	}
 	return nil
 }
@@ -120,7 +125,7 @@ func (d *Database) MarkDeployApprovalAsDeployed(id int64) error {
 		return fmt.Errorf("failed to mark deploy approval as deployed: %w", err)
 	}
 	if rows == 0 {
-		return fmt.Errorf("deployment approval not found or not approved")
+		return ErrDeployApprovalNotRecordable
 	}
 	return nil
 }

@@ -8,7 +8,11 @@
 
 export type GetDeployApprovalRequestsIdAuditLogsParams = {
   /**
-   * Maximum number of results (default: 100)
+   * Page number (default: 1)
+   */
+  page?: number;
+  /**
+   * Page size (default: 100, at most 200)
    */
   limit?: number;
 };

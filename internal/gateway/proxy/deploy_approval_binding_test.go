@@ -346,28 +346,71 @@ func TestApprovedDeployCommandsAllowOnlyListedCommands(t *testing.T) {
 	require.False(t, h.isCommandApproved("docspring", "bin/pre_release_checks migrate; bin/rails console"))
 }
 
-// An exec under a deploy approval may only run an approved command. One without a command is refused too, rather
-// than let through unchecked.
-func TestApprovalExecMustRunAnApprovedCommand(t *testing.T) {
+// approvalExecHarness runs validateExecCommand for execs under an approved deploy approval for docspring, whose
+// approved command is bin/pre_release_checks migrate.
+type approvalExecHarness struct {
+	h        *Handler
+	database *db.Database
+	approval *db.DeployApprovalRequest
+	approver int64
+}
+
+func newApprovalExecHarness(t *testing.T) *approvalExecHarness {
+	t.Helper()
 	h, database := newProxyForDeployApprovalTest(t)
 	app := "docspring"
 	require.NoError(t, database.UpsertSetting(
 		&app, "approved_deploy_commands", []string{"bin/pre_release_checks migrate"}, nil,
 	))
-	tracker := &deployApprovalTracker{request: &db.DeployApprovalRequest{ID: 1}, app: app}
-	exec := func(command string) int {
-		r := httptest.NewRequest(http.MethodGet, "/apps/docspring/processes/p1/exec", nil)
-		if command != "" {
-			r.Header.Set("Command", command)
-		}
-		r = r.WithContext(context.WithValue(r.Context(), deployApprovalContextKey, tracker))
-		return h.validateExecCommand(httptest.NewRecorder(), r, r.URL.Path)
+	deployer := createUserWithRole(t, database, "deployer@example.com", "deployer")
+	token, err := database.CreateAPIToken(strings.Repeat("e", 64), "ci", deployer.ID, nil, nil, nil)
+	require.NoError(t, err)
+	approval, err := database.CreateDeployApprovalRequest("Deploy", app,
+		"abc123def4567890abc123def4567890abc123de", "main", "", nil, deployer.ID, nil, token.ID)
+	require.NoError(t, err)
+	approval, err = database.ApproveDeployApprovalRequest(approval.ID, deployer.ID, time.Now().Add(time.Hour), "")
+	require.NoError(t, err)
+	return &approvalExecHarness{h: h, database: database, approval: approval, approver: deployer.ID}
+}
+
+func (e *approvalExecHarness) exec(command string) int {
+	tracker := &deployApprovalTracker{request: e.approval, app: "docspring"}
+	r := httptest.NewRequest(http.MethodGet, "/apps/docspring/processes/p1/exec", nil)
+	if command != "" {
+		r.Header.Set("Command", command)
+	}
+	r = r.WithContext(context.WithValue(r.Context(), deployApprovalContextKey, tracker))
+	return e.h.validateExecCommand(httptest.NewRecorder(), r, r.URL.Path)
+}
+
+// An exec under a deploy approval may only run an approved command. One without a command is refused too, rather
+// than let through unchecked.
+func TestApprovalExecMustRunAnApprovedCommand(t *testing.T) {
+	e := newApprovalExecHarness(t)
+	require.Zero(t, e.exec("bin/pre_release_checks migrate"))
+	for _, command := range []string{"", "   ", "bin/rails console"} {
+		require.Equal(t, http.StatusForbidden, e.exec(command), "command %q", command)
 	}
 
-	require.Zero(t, exec("bin/pre_release_checks migrate"))
-	for _, command := range []string{"", "   ", "bin/rails console"} {
-		require.Equal(t, http.StatusForbidden, exec(command), "command %q", command)
-	}
+	recorded, err := e.database.GetDeployApprovalRequest(e.approval.ID)
+	require.NoError(t, err)
+	require.Contains(t, string(recorded.ExecCommands), "bin/pre_release_checks migrate")
+}
+
+// An exec runs only once it's on its approval's record: one whose approval was rejected after it was looked up is
+// refused, and so is one the database can't record.
+func TestApprovalExecIsRefusedWhenItCantBeRecorded(t *testing.T) {
+	e := newApprovalExecHarness(t)
+	_, err := e.database.RejectDeployApprovalRequest(e.approval.ID, e.approver, "not now")
+	require.NoError(t, err)
+	require.Equal(t, http.StatusForbidden, e.exec("bin/pre_release_checks migrate"))
+
+	// The update fails (as it would with the database unreachable), though the approval is still approved.
+	e = newApprovalExecHarness(t)
+	_, err = e.database.DB().Exec(
+		"ALTER TABLE deploy_approval_requests RENAME COLUMN exec_commands TO exec_commands_unavailable")
+	require.NoError(t, err)
+	require.Equal(t, http.StatusServiceUnavailable, e.exec("bin/pre_release_checks migrate"))
 }
 
 // The rack substitutes ${NAME} before it parses the manifest, so an env value can change what the lines after it

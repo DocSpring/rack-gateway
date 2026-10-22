@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"sort"
 	"strings"
 	"time"
@@ -20,6 +21,54 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/rackcert"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 )
+
+// rackParamsUpdate is a rack parameter update (PUT /system) being proxied: the parameters before it (nil when they
+// couldn't be read) and the names it asks to set, read from its body when it's forwarded.
+type rackParamsUpdate struct {
+	before    map[string]string
+	requested []string
+}
+
+type rackParamsUpdateKey struct{}
+
+// captureRackParamsIfNeeded reads the rack's parameters before a parameter update, and returns r carrying the
+// update (see noteRequestedRackParams). Other requests get nil.
+func (h *Handler) captureRackParamsIfNeeded(
+	r *http.Request,
+	rackPath string,
+	rackConfig config.RackConfig,
+) (*http.Request, *rackParamsUpdate) {
+	if r.Method != http.MethodPut || !rbac.KeyMatch3(rackPath, "/system") {
+		return r, nil
+	}
+	update := &rackParamsUpdate{}
+	if params, err := h.fetchSystemParams(r.Context(), rackConfig); err == nil {
+		update.before = params
+	}
+	return r.WithContext(context.WithValue(r.Context(), rackParamsUpdateKey{}, update)), update
+}
+
+// noteRequestedRackParams records the parameter names a rack parameter update's body asks to set. The Convox SDK
+// sends them form encoded, as one "parameters" field that is itself a form-encoded list of names and values.
+func noteRequestedRackParams(r *http.Request, body []byte) {
+	update, ok := r.Context().Value(rackParamsUpdateKey{}).(*rackParamsUpdate)
+	if !ok {
+		return
+	}
+	form, err := url.ParseQuery(string(body))
+	if err != nil {
+		return
+	}
+	params, err := url.ParseQuery(form.Get("parameters"))
+	if err != nil {
+		return
+	}
+	update.requested = make([]string, 0, len(params))
+	for name := range params {
+		update.requested = append(update.requested, name)
+	}
+	sort.Strings(update.requested)
+}
 
 func (h *Handler) fetchSystemParams(ctx context.Context, rack config.RackConfig) (map[string]string, error) {
 	base := strings.TrimRight(rack.URL, "/")
@@ -68,7 +117,8 @@ func (h *Handler) fetchSystemParams(ctx context.Context, rack config.RackConfig)
 	return out, nil
 }
 
-// changedParams returns the names of the rack parameters whose values differ, sorted.
+// changedParams returns the names of the rack parameters added, removed or given a new value, sorted. A parameter
+// added or removed with an empty value counts.
 func changedParams(before, after map[string]string) []string {
 	if after == nil {
 		return nil
@@ -82,7 +132,9 @@ func changedParams(before, after map[string]string) []string {
 	}
 	changed := make([]string, 0, len(keys))
 	for k := range keys {
-		if before[k] != after[k] {
+		old, wasSet := before[k]
+		value, isSet := after[k]
+		if wasSet != isSet || old != value {
 			changed = append(changed, k)
 		}
 	}
@@ -107,8 +159,9 @@ func (h *Handler) notifyRackParamsChanged(actor string, keys []string) {
 	_ = h.emailer.SendMany(admins, subject, text, html)
 }
 
-// auditRackParamsChanged logs the changed rack parameters, with their values redacted.
-func (h *Handler) auditRackParamsChanged(r *http.Request, actor string, keys []string) {
+// auditRackParamsChanged logs the changed rack parameters, with their values redacted. fromRequest marks names
+// taken from the update request, because the rack's parameters couldn't be read to compare.
+func (h *Handler) auditRackParamsChanged(r *http.Request, actor string, keys []string, fromRequest bool) {
 	if h.database == nil || len(keys) == 0 {
 		return
 	}
@@ -117,7 +170,11 @@ func (h *Handler) auditRackParamsChanged(r *http.Request, actor string, keys []s
 	for _, key := range keys {
 		changes[key] = redacted
 	}
-	b, _ := json.Marshal(map[string]interface{}{"changes": changes})
+	details := map[string]interface{}{"changes": changes}
+	if fromRequest {
+		details["from_request"] = true
+	}
+	b, _ := json.Marshal(details)
 	_ = h.logAudit(r, &db.AuditLog{
 		UserEmail:    actor,
 		UserName:     r.Header.Get("X-User-Name"),

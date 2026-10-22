@@ -120,7 +120,8 @@ func (h *APIHandler) verifyGitHubCommit(
 		return githubVerification{}, false
 	}
 
-	if ok := h.checkDefaultBranchRestriction(c, app, gitBranch); !ok {
+	client := github.NewClient(h.config.GitHubToken, h.config.GitHubAPIURL)
+	if ok := h.checkDefaultBranchRestriction(c, client, owner, repo, app, gitBranch); !ok {
 		return githubVerification{}, false
 	}
 
@@ -129,7 +130,6 @@ func (h *APIHandler) verifyGitHubCommit(
 		return githubVerification{}, false
 	}
 
-	client := github.NewClient(h.config.GitHubToken, h.config.GitHubAPIURL)
 	opts := github.VerifyCommitOptions{
 		RequirePR: requirePR,
 		Mode:      verifyMode,
@@ -173,9 +173,14 @@ func (v githubVerification) logPassed(app, gitBranch, gitCommitHash string) {
 	)
 }
 
-// checkDefaultBranchRestriction checks if deploying from the default branch is allowed.
-// Returns false if deployment from default branch is disabled and the branch matches the default.
-func (h *APIHandler) checkDefaultBranchRestriction(c *gin.Context, app, gitBranch string) bool {
+// checkDefaultBranchRestriction refuses gitBranch, unless the app allows deploys from the default branch, when it's
+// the app's default_branch setting or the repository's default branch on GitHub (the setting defaults to main,
+// which a repository may not use). Returns false after writing an error response.
+func (h *APIHandler) checkDefaultBranchRestriction(
+	c *gin.Context,
+	client *github.Client,
+	owner, repo, app, gitBranch string,
+) bool {
 	allowDefault, err := getAppSettingBool(
 		h.settingsService,
 		app,
@@ -199,13 +204,27 @@ func (h *APIHandler) checkDefaultBranchRestriction(c *gin.Context, app, gitBranc
 		return false
 	}
 
-	if !allowDefault && gitBranch == defaultBranch {
+	if allowDefault {
+		return true
+	}
+	if gitBranch != defaultBranch {
+		repoDefault, err := client.DefaultBranch(owner, repo)
+		if err != nil {
+			gtwlog.Warnf("deploy approvals: couldn't read the default branch of %s/%s app=%s: %v",
+				owner, repo, app, err)
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf(
+				"GitHub verification failed: couldn't read the repository's default branch: %s", err.Error(),
+			)})
+			return false
+		}
+		defaultBranch = repoDefault
+	}
+	if gitBranch == defaultBranch {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": fmt.Sprintf("deploying from default branch '%s' is not allowed", defaultBranch),
 		})
 		return false
 	}
-
 	return true
 }
 

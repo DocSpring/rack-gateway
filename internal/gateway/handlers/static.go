@@ -198,34 +198,17 @@ func (h *StaticHandler) setupDevProxyIfNeeded(cfg *config.Config) {
 	h.devProxy = h.createDevProxy(target)
 }
 
+// createDevProxy proxies the web UI to the Vite dev server at target, keeping the request's Host. A ReverseProxy
+// with a Rewrite must have no Director, so it isn't built with NewSingleHostReverseProxy.
 func (h *StaticHandler) createDevProxy(target *url.URL) http.Handler {
-	proxy := httputil.NewSingleHostReverseProxy(target)
-	proxy.Rewrite = createProxyRewriter(target)
-	proxy.ModifyResponse = h.createProxyResponseModifier()
-	proxy.ErrorHandler = createProxyErrorHandler()
-	return proxy
-}
-
-func createProxyRewriter(target *url.URL) func(*httputil.ProxyRequest) {
-	return func(pr *httputil.ProxyRequest) {
-		pr.Out.URL.Scheme = target.Scheme
-		pr.Out.URL.Host = target.Host
-		pr.Out.URL.Path = singleJoiningSlash(target.Path, pr.In.URL.Path)
-		pr.Out.Header.Set("X-Gateway-Proxy", "true")
-	}
-}
-
-func singleJoiningSlash(a, b string) string {
-	aslash := strings.HasSuffix(a, "/")
-	bslash := strings.HasPrefix(b, "/")
-
-	switch {
-	case aslash && bslash:
-		return a + b[1:]
-	case !aslash && !bslash:
-		return a + "/" + b
-	default:
-		return a + b
+	return &httputil.ReverseProxy{
+		Rewrite: func(pr *httputil.ProxyRequest) {
+			pr.SetURL(target)
+			pr.Out.Host = pr.In.Host
+			pr.Out.Header.Set("X-Gateway-Proxy", "true")
+		},
+		ModifyResponse: h.createProxyResponseModifier(),
+		ErrorHandler:   createProxyErrorHandler(),
 	}
 }
 

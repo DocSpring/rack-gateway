@@ -197,7 +197,7 @@ func TestCaptureResourceCreatorStoresMappings(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodPost, tc.path, nil)
 			req.Header = make(http.Header)
-			h.captureResourceCreator(req, tc.path, []byte(tc.body), "creator@example.com")
+			require.NoError(t, h.captureResourceCreator(req, tc.path, []byte(tc.body), "creator@example.com"))
 
 			creators, err := database.GetResourceCreators(tc.typeExpect, []string{tc.idExpect})
 			require.NoError(t, err)
@@ -223,12 +223,12 @@ func TestCaptureResourceCreatorRecordsReleaseFromBuild(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/apps/my-app/builds", nil)
 	req.Header = make(http.Header)
 
-	h.captureResourceCreator(
+	require.NoError(t, h.captureResourceCreator(
 		req,
 		"/apps/my-app/builds",
 		[]byte(`{"id":"B123","release":"R456"}`),
 		"creator@example.com",
-	)
+	))
 
 	creators, err := database.GetResourceCreators("release", []string{"R456"})
 	require.NoError(t, err)
@@ -240,12 +240,12 @@ func TestCaptureResourceCreatorRecordsReleaseFromBuild(t *testing.T) {
 	// Subsequent GET for the same build should not enqueue duplicates
 	reqGet := httptest.NewRequest(http.MethodGet, "/apps/my-app/builds/B123", nil)
 	reqGet.Header = make(http.Header)
-	h.captureResourceCreator(
+	require.NoError(t, h.captureResourceCreator(
 		reqGet,
 		"/apps/my-app/builds/B123",
 		[]byte(`{"id":"B123","release":"R456"}`),
 		"creator@example.com",
-	)
+	))
 	require.Empty(t, reqGet.Header.Values("X-Release-Created"))
 }
 
@@ -259,17 +259,20 @@ func TestBuildReadsCreditTheReleaseToTheBuildCreator(t *testing.T) {
 	require.NoError(t, mgr.CreateUser("viewer@example.com", viewer))
 
 	create := httptest.NewRequest(http.MethodPost, "/apps/my-app/builds", nil)
-	h.captureResourceCreator(create, "/apps/my-app/builds", []byte(`{"id":"B1","release":""}`), "builder@example.com")
+	build := []byte(`{"id":"B1","release":""}`)
+	require.NoError(t, h.captureResourceCreator(create, "/apps/my-app/builds", build, "builder@example.com"))
 
 	read := httptest.NewRequest(http.MethodGet, "/apps/my-app/builds/B1", nil)
-	h.captureResourceCreator(read, "/apps/my-app/builds/B1", []byte(`{"id":"B1","release":"R1"}`), "viewer@example.com")
+	finished := []byte(`{"id":"B1","release":"R1"}`)
+	require.NoError(t, h.captureResourceCreator(read, "/apps/my-app/builds/B1", finished, "viewer@example.com"))
 	require.Empty(t, read.Header.Values("X-Release-Created"))
 	assertResourceCreator(t, database, "build", "B1", "builder@example.com")
 	assertResourceCreator(t, database, "release", "R1", "builder@example.com")
 
 	// A build the gateway didn't see created has no creator, and neither does its release.
 	read = httptest.NewRequest(http.MethodGet, "/apps/my-app/builds/B2", nil)
-	h.captureResourceCreator(read, "/apps/my-app/builds/B2", []byte(`{"id":"B2","release":"R2"}`), "viewer@example.com")
+	unseen := []byte(`{"id":"B2","release":"R2"}`)
+	require.NoError(t, h.captureResourceCreator(read, "/apps/my-app/builds/B2", unseen, "viewer@example.com"))
 	creators, err := database.GetResourceCreators("release", []string{"R2"})
 	require.NoError(t, err)
 	require.Empty(t, creators)

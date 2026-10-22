@@ -81,52 +81,44 @@ func extractAppFromPath(p string) string {
 	return ""
 }
 
-// extractReleaseIDFromPath extracts the release ID from a path
+// appResourcePath splits a rack path /apps/{app}/{resource}/{id}[/...] into its segments, or returns nil when path
+// isn't one. The ID is read at its fixed position: an app can be named "releases", "builds" or "processes", so the
+// first segment with the resource's name isn't necessarily the resource.
+func appResourcePath(path, resource string) []string {
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	if len(parts) < 4 || parts[0] != "apps" || parts[2] != resource || parts[3] == "" {
+		return nil
+	}
+	return parts
+}
+
+// appResourceID returns the {id} of a rack path /apps/{app}/{resource}/{id}[/...], or "" when path isn't one.
+func appResourceID(path, resource string) string {
+	if parts := appResourcePath(path, resource); parts != nil {
+		return parts[3]
+	}
+	return ""
+}
+
+// extractReleaseIDFromPath returns the release ID of /apps/{app}/releases/{id}[/...].
 func extractReleaseIDFromPath(path string) string {
-	parts := strings.Split(strings.Trim(path, "/"), "/")
-	for i, seg := range parts {
-		if seg == "releases" && i+1 < len(parts) {
-			return parts[i+1]
-		}
-	}
-	return ""
+	return appResourceID(path, "releases")
 }
 
-// extractBuildIDFromPath extracts the build ID from a path
+// extractBuildIDFromPath returns the build ID of /apps/{app}/builds/{id}[/...].
 func extractBuildIDFromPath(path string) string {
-	parts := strings.Split(strings.Trim(path, "/"), "/")
-	for i, seg := range parts {
-		if seg == "builds" && i+1 < len(parts) {
-			return parts[i+1]
-		}
-	}
-	return ""
+	return appResourceID(path, "builds")
 }
 
-// isBuildLogPath checks if the path is a build log request
+// isBuildLogPath reports whether path is a build's logs, /apps/{app}/builds/{id}/logs.
 func isBuildLogPath(path string) bool {
-	parts := strings.Split(strings.Trim(path, "/"), "/")
-	// /apps/{app}/builds/{id}/logs
-	if len(parts) >= 4 {
-		for i, seg := range parts {
-			if seg == "builds" && i+2 < len(parts) && parts[i+2] == "logs" {
-				return true
-			}
-		}
-	}
-	return false
+	parts := appResourcePath(path, "builds")
+	return len(parts) == 5 && parts[4] == "logs"
 }
 
-// extractProcessIDFromPath extracts the process ID from a path
+// extractProcessIDFromPath returns the process ID of /apps/{app}/processes/{id}[/...].
 func extractProcessIDFromPath(path string) string {
-	parts := strings.Split(strings.Trim(path, "/"), "/")
-	// /apps/{app}/processes/{id}/exec or /apps/{app}/processes/{id}
-	for i, seg := range parts {
-		if seg == "processes" && i+1 < len(parts) {
-			return parts[i+1]
-		}
-	}
-	return ""
+	return appResourceID(path, "processes")
 }
 
 // extractJSONString safely extracts a string from a JSON interface value

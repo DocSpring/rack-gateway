@@ -204,21 +204,19 @@ func envDuration(key string, def time.Duration) time.Duration {
 	return def
 }
 
-// NewFromEnv builds a Postgres DSN from env if DATABASE_URL is unset.
-// Automatically runs migrations only in dev mode (a testbypass build with DEV_MODE=true).
-// In production, run migrations manually using the "migrate" command.
+// NewFromEnv opens the database, building a Postgres DSN from env if DATABASE_URL is unset. It doesn't migrate:
+// the server migrates a development database on startup (Migrate) once it has checked it isn't production, and a
+// deploy runs the "migrate" command.
 func NewFromEnv() (*Database, error) {
-	autoMigrate := testbypass.DevMode()
-
 	// A few variations supported to support different Convox resource names
 	if dsn := os.Getenv("RGW_DATABASE_URL"); dsn != "" {
-		return NewWithPoolConfigAndMigration(dsn, nil, autoMigrate)
+		return NewWithPoolConfig(dsn, nil)
 	}
 	if dsn := os.Getenv("GATEWAY_DATABASE_URL"); dsn != "" {
-		return NewWithPoolConfigAndMigration(dsn, nil, autoMigrate)
+		return NewWithPoolConfig(dsn, nil)
 	}
 	if dsn := os.Getenv("DATABASE_URL"); dsn != "" {
-		return NewWithPoolConfigAndMigration(dsn, nil, autoMigrate)
+		return NewWithPoolConfig(dsn, nil)
 	}
 	// Build from libpq-like env if present
 	host := os.Getenv("PGHOST")
@@ -243,10 +241,10 @@ func NewFromEnv() (*Database, error) {
 	// Respect PGSSLMODE if present; otherwise omit sslmode from DSN
 	if ssl := strings.TrimSpace(os.Getenv("PGSSLMODE")); ssl != "" {
 		dsn := fmt.Sprintf("postgres://%s@%s:%s/%s?sslmode=%s", user, host, port, dbname, ssl)
-		return NewWithPoolConfigAndMigration(dsn, nil, autoMigrate)
+		return NewWithPoolConfig(dsn, nil)
 	}
 	dsn := fmt.Sprintf("postgres://%s@%s:%s/%s", user, host, port, dbname)
-	return NewWithPoolConfigAndMigration(dsn, nil, autoMigrate)
+	return NewWithPoolConfig(dsn, nil)
 }
 
 // rebind converts ? placeholders to $1, $2 for Postgres driver

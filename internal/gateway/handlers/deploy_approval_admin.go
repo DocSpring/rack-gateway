@@ -369,7 +369,8 @@ func circleCIApprovalJobArgs(
 // @Tags Deploy Approvals
 // @Produce json
 // @Param id path string true "Deploy approval request public ID"
-// @Param limit query integer false "Maximum number of results (default: 100)"
+// @Param page query integer false "Page number (default: 1)"
+// @Param limit query integer false "Page size (default: 100, at most 200)"
 // @Success 200 {object} RawAuditLogsResponse
 // @Failure 404 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
@@ -390,23 +391,20 @@ func (h *AdminHandler) GetDeployApprovalRequestAuditLogs(c *gin.Context) {
 		return
 	}
 
-	limit := 100
-	if limitStr := strings.TrimSpace(c.Query("limit")); limitStr != "" {
-		if parsedLimit, err := strconv.Atoi(limitStr); err == nil && parsedLimit > 0 {
-			limit = parsedLimit
-		}
-	}
-
-	logs, err := h.database.GetAuditLogsByDeployApprovalRequestID(record.ID, limit)
+	page, limit := parsePaginationParams(c)
+	logs, total, err := h.database.GetDeployApprovalAuditLogsPaged(record.ID, limit, (page-1)*limit)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch audit logs"})
 		return
 	}
+	if logs == nil {
+		logs = []*db.AuditLog{}
+	}
 
 	c.JSON(http.StatusOK, RawAuditLogsResponse{
 		Logs:  logs,
-		Total: len(logs),
-		Page:  1,
+		Total: total,
+		Page:  page,
 		Limit: limit,
 	})
 }
@@ -432,7 +430,7 @@ func (h *AdminHandler) finishApprovalAction(
 		input.userEmail,
 		input.approver.Name,
 		audit.BuildAction(rbac.ResourceDeployApprovalRequest.String(), action),
-		fmt.Sprintf("%d", record.ID),
+		record.ID,
 		auditDetails(auditData),
 		"success",
 		http.StatusOK,

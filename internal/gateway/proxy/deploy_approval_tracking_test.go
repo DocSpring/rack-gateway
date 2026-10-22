@@ -212,9 +212,9 @@ func TestUpdateBuildApprovalTracking_WithTracker(t *testing.T) {
 	releaseID := "RTEST456"
 
 	// First call: save build_id only (release is empty initially)
-	h.updateBuildApprovalTracking(req, buildID, "")
+	require.NoError(t, h.updateBuildApprovalTracking(req, buildID, ""))
 	// Another build can't be recorded, and a build can't take another build's release.
-	h.updateBuildApprovalTracking(req, "BOTHER", "ROTHER")
+	require.Error(t, h.updateBuildApprovalTracking(req, "BOTHER", "ROTHER"))
 
 	// Verify build_id was saved
 	updated, err := database.FindDeployApprovalRequest(db.DeployApprovalLookup{
@@ -227,7 +227,7 @@ func TestUpdateBuildApprovalTracking_WithTracker(t *testing.T) {
 	require.Equal(t, "", updated.ReleaseID, "release_id should still be empty after first call")
 
 	// Second call: save release_id (build completes)
-	h.updateBuildApprovalTracking(req, buildID, releaseID)
+	require.NoError(t, h.updateBuildApprovalTracking(req, buildID, releaseID))
 
 	// Verify release_id was saved
 	updated, err = database.FindDeployApprovalRequest(db.DeployApprovalLookup{
@@ -248,11 +248,8 @@ func TestUpdateBuildApprovalTracking_WithoutTracker(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/apps/test-app/builds", nil)
 	// NO tracker in context
 
-	// Call the function under test - should log error but not panic
-	buildID := "BTEST123"
-	releaseID := "RTEST456"
-	h.updateBuildApprovalTracking(req, buildID, releaseID)
-	// If this doesn't panic, the test passes (it should log an error)
+	// Without an approval there's nothing to record.
+	require.NoError(t, h.updateBuildApprovalTracking(req, "BTEST123", "RTEST456"))
 }
 
 // TestCaptureObjectUpload_CallsUpdateObjectURLApprovalTracking tests the integration
@@ -323,7 +320,9 @@ func TestCaptureObjectUpload_CallsUpdateObjectURLApprovalTracking(t *testing.T) 
 	}
 
 	// Call captureObjectUpload
-	h.captureObjectUpload(req, "/apps/test-app/objects/tmp/source.tgz", responseObj, "deployer@example.com")
+	require.NoError(t, h.captureObjectUpload(
+		req, "/apps/test-app/objects/tmp/source.tgz", responseObj, "deployer@example.com",
+	))
 
 	// Verify object_url was saved
 	updated, err := database.FindDeployApprovalRequest(db.DeployApprovalLookup{
@@ -414,7 +413,7 @@ func TestCaptureBuildCreation_CallsUpdateBuildApprovalTracking(t *testing.T) {
 	}
 
 	// Call captureBuildCreation - should save build_id only
-	h.captureBuildCreation(req, "/apps/test-app/builds", responseObj, "deployer@example.com")
+	require.NoError(t, h.captureBuildCreation(req, "/apps/test-app/builds", responseObj, "deployer@example.com"))
 
 	// Verify build_id was saved but release_id is still empty
 	updated, err := database.FindDeployApprovalRequest(db.DeployApprovalLookup{
@@ -444,7 +443,7 @@ func TestCaptureBuildCreation_CallsUpdateBuildApprovalTracking(t *testing.T) {
 	}
 
 	// Call captureBuildDetails - should save release_id
-	h.captureBuildDetails(req, "/apps/test-app/builds/"+buildID, completedBuildObj)
+	require.NoError(t, h.captureBuildDetails(req, "/apps/test-app/builds/"+buildID, completedBuildObj))
 
 	// Verify release_id was saved
 	updated, err = database.FindDeployApprovalRequest(db.DeployApprovalLookup{

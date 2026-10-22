@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -100,18 +101,7 @@ func (d *Database) GetAuditLogsPaged(filters AuditLogFilters) ([]*AuditLog, int,
 		return nil, 0, fmt.Errorf("failed to count audit logs: %w", err)
 	}
 
-	// Get paginated results
-	query := `
-        SELECT "id", "timestamp", "chain_index", "previous_hash", "event_hash",
-               "checkpoint_id", "checkpoint_hash",
-               "user_email", COALESCE("user_name", ''), "api_token_id", "api_token_name",
-               "action_type", "action",
-               COALESCE("command", ''), COALESCE("resource", ''), COALESCE("resource_type", ''),
-               COALESCE("details", ''), COALESCE("request_id", ''),
-               COALESCE(host("ip_address"::inet), ''), COALESCE("user_agent", ''),
-               "status", COALESCE("rbac_decision", ''), COALESCE("http_status", 0),
-               "response_time_ms", "event_count", "deploy_approval_request_id"
-        FROM "audit"."audit_event" ` + whereClause + `
+	query := auditLogSelect + whereClause + `
         ORDER BY "timestamp" DESC
 		LIMIT ? OFFSET ?`
 
@@ -125,6 +115,19 @@ func (d *Database) GetAuditLogsPaged(filters AuditLogFilters) ([]*AuditLog, int,
 	return logs, total, nil
 }
 
+// auditLogSelect selects audit events in the column order scanAuditLog reads.
+const auditLogSelect = `
+        SELECT "id", "timestamp", "chain_index", "previous_hash", "event_hash",
+               "checkpoint_id", "checkpoint_hash",
+               "user_email", COALESCE("user_name", ''), "api_token_id", "api_token_name",
+               "action_type", "action",
+               COALESCE("command", ''), COALESCE("resource", ''), COALESCE("resource_type", ''),
+               COALESCE("details", ''), COALESCE("request_id", ''),
+               COALESCE(host("ip_address"::inet), ''), COALESCE("user_agent", ''),
+               "status", COALESCE("rbac_decision", ''), COALESCE("http_status", 0),
+               "response_time_ms", "event_count", "deploy_approval_request_id"
+        FROM "audit"."audit_event" `
+
 // queryAuditLogs executes a query and scans the results into AuditLog structs
 func (d *Database) queryAuditLogs(query string, args []interface{}) ([]*AuditLog, error) {
 	rows, err := d.query(query, args...)
@@ -136,40 +139,31 @@ func (d *Database) queryAuditLogs(query string, args []interface{}) ([]*AuditLog
 	return scanAuditLogs(rows)
 }
 
-// GetAuditLogsByDeployApprovalRequestID retrieves audit logs for a specific deploy approval request
-func (d *Database) GetAuditLogsByDeployApprovalRequestID(
-	deployApprovalRequestID int64,
-	limit int,
-) ([]*AuditLog, error) {
-	if limit <= 0 {
-		limit = 100
+// deployApprovalAuditWhere matches the audit events about a deploy approval request (its ID twice: the column, then
+// as text). Its own lifecycle entries (created, approved, rejected, extended, expired) name it as their resource;
+// ones written before they also set deploy_approval_request_id carry it only there, some with the resource type
+// spelled deploy-approval-request. Audit entries can't be rewritten, so the match covers both.
+const deployApprovalAuditWhere = `WHERE "deploy_approval_request_id" = ?
+        OR ("resource_type" IN ('deploy_approval_request', 'deploy-approval-request') AND "resource" = ?)`
+
+// GetDeployApprovalAuditLogsPaged returns a page of the audit events about a deploy approval request, newest
+// first, and how many there are in all.
+func (d *Database) GetDeployApprovalAuditLogsPaged(approvalID int64, limit, offset int) ([]*AuditLog, int, error) {
+	args := []interface{}{approvalID, strconv.FormatInt(approvalID, 10)}
+	var total int
+	countQuery := `SELECT COUNT(*) FROM "audit"."audit_event" ` + deployApprovalAuditWhere
+	if err := d.queryRow(countQuery, args...).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("failed to count deploy approval audit logs: %w", err)
 	}
 
-	query := `
-        SELECT "id", "timestamp", "chain_index", "previous_hash", "event_hash",
-               "checkpoint_id", "checkpoint_hash",
-               "user_email", COALESCE("user_name", ''), "api_token_id", "api_token_name",
-               "action_type", "action",
-               COALESCE("command", ''), COALESCE("resource", ''), COALESCE("resource_type", ''),
-               COALESCE("details", ''),
-               COALESCE("request_id", ''), COALESCE(host("ip_address"::inet), ''),
-               COALESCE("user_agent", ''),
-               "status", COALESCE("rbac_decision", ''), COALESCE("http_status", 0),
-               "response_time_ms",
-               "event_count", "deploy_approval_request_id"
-        FROM "audit"."audit_event"
-        WHERE "deploy_approval_request_id" = ?
+	query := auditLogSelect + deployApprovalAuditWhere + `
         ORDER BY "timestamp" DESC
-        LIMIT ?
-    `
-
-	rows, err := d.query(query, deployApprovalRequestID, limit)
+        LIMIT ? OFFSET ?`
+	logs, err := d.queryAuditLogs(query, append(args, limit, offset))
 	if err != nil {
-		return nil, fmt.Errorf("failed to query audit logs by deploy approval request ID: %w", err)
+		return nil, 0, err
 	}
-	defer func() { _ = rows.Close() }()
-
-	return scanAuditLogs(rows)
+	return logs, total, nil
 }
 
 func scanAuditLogs(rows *sql.Rows) ([]*AuditLog, error) {

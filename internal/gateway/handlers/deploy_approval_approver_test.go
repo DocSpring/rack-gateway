@@ -119,6 +119,9 @@ func TestDifferentApproverRequired(t *testing.T) {
 	require.NotEmpty(t, logs)
 	require.Equal(t, "deploy_approval_request.approve", logs[0].Action)
 	require.Contains(t, logs[0].Details, `"different_approver_required":"true"`)
+	// The request's own audit history finds it.
+	require.Equal(t, "deploy_approval_request", logs[0].ResourceType)
+	require.Equal(t, &req.ID, logs[0].DeployApprovalRequestID)
 }
 
 func TestDifferentApproverRequiredToExtend(t *testing.T) {

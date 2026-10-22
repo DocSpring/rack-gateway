@@ -2,9 +2,12 @@ package proxy
 
 import (
 	"io"
+	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
+
+	gtwlog "github.com/DocSpring/rack-gateway/internal/gateway/logging"
 )
 
 // Message size limits for a proxied websocket session (an exec or a log stream).
@@ -18,6 +21,8 @@ const (
 	maxRackMessageBytes = 16 << 20
 	// pingWriteWait bounds writing one ping to the client.
 	pingWriteWait = 10 * time.Second
+	// messageWriteWait is how long forwarding one message may take (sessionOptions.writeWait).
+	messageWriteWait = time.Minute
 )
 
 // clientKeepalive is how the gateway checks that a websocket client is still there.
@@ -31,26 +36,54 @@ type clientKeepalive struct {
 
 var defaultClientKeepalive = clientKeepalive{pingPeriod: 30 * time.Second, pongWait: 60 * time.Second}
 
-// proxyWebSocketMessages copies messages both ways until either connection fails or closes. The caller then closes
-// both connections, which stops the other direction.
+// sessionOptions are how a proxied websocket session runs.
+type sessionOptions struct {
+	keepalive clientKeepalive
+	// writeWait bounds forwarding one message. A side that doesn't take a message in that time (a rack that never
+	// reads, a client that stopped reading) ends the session, rather than holding it and its connections forever.
+	writeWait time.Duration
+	// clientInput says whether the client's messages go to the rack. An exec's do (they're its stdin). A log
+	// stream's are read and dropped: the rack never reads them, so they'd only fill its connection.
+	clientInput bool
+	// recheck, when set, reports why the session must end (its caller's access is gone), or nil. It runs every
+	// recheckEvery.
+	recheck      func() error
+	recheckEvery time.Duration
+	// maxLifetime, when set, ends the session that long after it started.
+	maxLifetime time.Duration
+}
+
+// proxyWebSocketMessages copies messages both ways until either connection fails or closes, or the session is ended
+// (see superviseSession). The caller then closes both connections, which stops the other direction.
 //
 // gorilla clears the server's read and write deadlines when it upgrades a connection, so without a liveness check a
 // client that vanished without closing its TCP connection would hold its session, and the rack connection, forever.
 // The gateway pings the client and ends the session when the client stops answering. The rack connection gets no
 // such check: while it streams logs the rack never reads from its websocket, so it never answers a ping, and a
 // quiet log stream would be cut. The session ends when the client's connection does, and the rack's with it.
-func proxyWebSocketMessages(clientConn, upstreamConn *websocket.Conn, keepalive clientKeepalive) {
+func proxyWebSocketMessages(clientConn, upstreamConn *websocket.Conn, opts sessionOptions) {
 	clientConn.SetReadLimit(maxClientMessageBytes)
 	upstreamConn.SetReadLimit(maxRackMessageBytes)
-	clientAlive := watchClientLiveness(clientConn, keepalive.pongWait)
+	clientAlive := watchClientLiveness(clientConn, opts.keepalive.pongWait)
 
+	var endOnce sync.Once
+	end := func() {
+		endOnce.Do(func() {
+			_ = clientConn.Close()
+			_ = upstreamConn.Close()
+		})
+	}
 	done := make(chan struct{})
 	defer close(done)
-	go pingClient(clientConn, keepalive.pingPeriod, done)
+	go superviseSession(clientConn, opts, end, done)
 
 	errc := make(chan error, 2)
-	go forwardMessages(clientConn, upstreamConn, clientAlive, errc)
-	go forwardMessages(upstreamConn, clientConn, func() {}, errc)
+	toRack := upstreamConn
+	if !opts.clientInput {
+		toRack = nil
+	}
+	go forwardMessages(clientConn, toRack, opts.writeWait, clientAlive, errc)
+	go forwardMessages(upstreamConn, clientConn, opts.writeWait, func() {}, errc)
 	<-errc
 }
 
@@ -77,26 +110,49 @@ func watchClientLiveness(conn *websocket.Conn, pongWait time.Duration) func() {
 	return extend
 }
 
-// pingClient pings the client every period until done is closed. A failed ping is left to the read deadline: a
-// client that can't be pinged stops answering, and its session ends when the deadline passes.
-func pingClient(conn *websocket.Conn, period time.Duration, done <-chan struct{}) {
-	ticker := time.NewTicker(period)
-	defer ticker.Stop()
+// superviseSession pings the client every ping period until done is closed. A failed ping is left to the read
+// deadline: a client that can't be pinged stops answering, and its session ends when the deadline passes. It also
+// ends the session (end closes both connections, which stops both directions) when a recheck finds its caller's
+// access gone, or once it has been open for maxLifetime.
+func superviseSession(conn *websocket.Conn, opts sessionOptions, end func(), done <-chan struct{}) {
+	ping := time.NewTicker(opts.keepalive.pingPeriod)
+	defer ping.Stop()
+	var recheck, lifetime <-chan time.Time
+	if opts.recheck != nil {
+		ticker := time.NewTicker(opts.recheckEvery)
+		defer ticker.Stop()
+		recheck = ticker.C
+	}
+	if opts.maxLifetime > 0 {
+		timer := time.NewTimer(opts.maxLifetime)
+		defer timer.Stop()
+		lifetime = timer.C
+	}
 	for {
 		select {
 		case <-done:
 			return
-		case <-ticker.C:
+		case <-ping.C:
 			_ = conn.WriteControl(websocket.PingMessage, nil, time.Now().Add(pingWriteWait))
+		case <-recheck:
+			if err := opts.recheck(); err != nil {
+				gtwlog.Infof("proxy: ending websocket session: %v", err)
+				end()
+				return
+			}
+		case <-lifetime:
+			gtwlog.Infof("proxy: ending websocket session: open for %s", opts.maxLifetime)
+			end()
+			return
 		}
 	}
 }
 
-// forwardMessages copies each message from src to dst, calling received after each one, until a read or a write
-// fails.
-func forwardMessages(src, dst *websocket.Conn, received func(), errc chan<- error) {
+// forwardMessages copies each message from src to dst (or, when dst is nil, reads and drops it), calling received
+// after each one, until a read or a write fails.
+func forwardMessages(src, dst *websocket.Conn, writeWait time.Duration, received func(), errc chan<- error) {
 	for {
-		if err := forwardMessage(src, dst); err != nil {
+		if err := forwardMessage(src, dst, writeWait); err != nil {
 			errc <- err
 			return
 		}
@@ -105,11 +161,19 @@ func forwardMessages(src, dst *websocket.Conn, received func(), errc chan<- erro
 }
 
 // forwardMessage streams one message from src to dst, keeping its type, without holding it in memory: it passes
-// through dst's write buffer a frame at a time. A message that breaks src's read limit fails partway. It's left
-// unfinished, since the session is ending and finishing it would hand the other side a truncated message.
-func forwardMessage(src, dst *websocket.Conn) error {
+// through dst's write buffer a frame at a time, within writeWait. A message that breaks src's read limit
+// fails partway. It's left unfinished, since the session is ending and finishing it would hand the other side a
+// truncated message. With no dst, the message is read and dropped.
+func forwardMessage(src, dst *websocket.Conn, writeWait time.Duration) error {
 	messageType, r, err := src.NextReader()
 	if err != nil {
+		return err
+	}
+	if dst == nil {
+		_, err := io.Copy(io.Discard, r)
+		return err
+	}
+	if err := dst.SetWriteDeadline(time.Now().Add(writeWait)); err != nil {
 		return err
 	}
 	w, err := dst.NextWriter(messageType)

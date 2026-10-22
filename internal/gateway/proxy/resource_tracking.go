@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 
@@ -38,19 +39,20 @@ func (h *Handler) setResourceCreator(resourceType, resourceID, email string) {
 }
 
 // captureResourceCreator persists the creator information for app/build/release create responses
-// and records the resource ID for audit logging.
-func (h *Handler) captureResourceCreator(r *http.Request, path string, body []byte, email string) {
+// and records the resource ID for audit logging. It returns an approvalNotRecordedError when the step can't be
+// recorded in its deploy approval request.
+func (h *Handler) captureResourceCreator(r *http.Request, path string, body []byte, email string) error {
 	if h.database == nil || h.rbacManager == nil {
 		gtwlog.Warnf(
 			"captureResourceCreator: skipping (database=%v rbacManager=%v)",
 			h.database != nil,
 			h.rbacManager != nil,
 		)
-		return
+		return nil
 	}
 	if len(body) == 0 {
 		gtwlog.Warnf("captureResourceCreator: skipping (empty body) path=%s", path)
-		return
+		return nil
 	}
 
 	obj, ok := h.parseResponseBody(body)
@@ -59,7 +61,7 @@ func (h *Handler) captureResourceCreator(r *http.Request, path string, body []by
 			"captureResourceCreator: failed to parse response body path=%s",
 			path,
 		)
-		return
+		return nil
 	}
 
 	gtwlog.Infof(
@@ -68,11 +70,12 @@ func (h *Handler) captureResourceCreator(r *http.Request, path string, body []by
 		email,
 	)
 	h.captureAppCreation(r, path, obj, email)
-	h.captureBuildCreation(r, path, obj, email)
-	h.captureObjectUpload(r, path, obj, email)
-	h.captureBuildDetails(r, path, obj)
+	buildErr := h.captureBuildCreation(r, path, obj, email)
+	objectErr := h.captureObjectUpload(r, path, obj, email)
+	detailsErr := h.captureBuildDetails(r, path, obj)
 	h.captureReleaseCreation(r, path, obj, email)
 	h.captureProcessResource(r, path, obj, email)
+	return errors.Join(buildErr, objectErr, detailsErr)
 }
 
 func (_ *Handler) parseResponseBody(body []byte) (map[string]interface{}, bool) {
@@ -117,9 +120,9 @@ func (h *Handler) captureBuildCreation(
 	path string,
 	obj map[string]interface{},
 	email string,
-) {
+) error {
 	if r.Method != http.MethodPost || !rbac.KeyMatch3(path, "/apps/{app}/builds") {
-		return
+		return nil
 	}
 
 	buildID := extractJSONString(obj["id"])
@@ -150,12 +153,13 @@ func (h *Handler) captureBuildCreation(
 			releaseID,
 			tracker != nil,
 		)
-		h.updateBuildApprovalTracking(r, buildID, releaseID)
-	} else {
-		gtwlog.Warnf(
-			"captureBuildCreation: skipping updateBuildApprovalTracking (empty buildID)",
-		)
+		// The build claim is given up with the error, so the build can be created again.
+		return recordInApproval("the rack created build "+buildID, "create the build again", func() error {
+			return h.updateBuildApprovalTracking(r, buildID, releaseID)
+		})
 	}
+	gtwlog.Warnf("captureBuildCreation: skipping updateBuildApprovalTracking (empty buildID)")
+	return nil
 }
 
 func (h *Handler) captureObjectUpload(
@@ -163,9 +167,9 @@ func (h *Handler) captureObjectUpload(
 	path string,
 	obj map[string]interface{},
 	email string,
-) {
+) error {
 	if !isObjectUpload(r, path) {
-		return
+		return nil
 	}
 
 	segments := strings.Split(strings.TrimSpace(path), "/")
@@ -188,11 +192,13 @@ func (h *Handler) captureObjectUpload(
 			gtwlog.Errorf("failed to record object upload: %v", err)
 		}
 	}
-	if objectURL != "" {
-		if err := h.updateObjectURLApprovalTracking(r, objectURL); err != nil {
-			gtwlog.Errorf("failed to update object URL tracking: %v", err)
-		}
+	if objectURL == "" {
+		return nil
 	}
+	// The object's key can't be written again (object keys are write-once).
+	return recordInApproval("the rack stored "+objectURL, "upload the archive again, to a new key", func() error {
+		return h.updateObjectURLApprovalTracking(r, objectURL)
+	})
 }
 
 func (_ *Handler) extractObjectKey(obj map[string]interface{}, segments []string) string {
@@ -225,9 +231,9 @@ func (h *Handler) recordBuildRelease(buildID, releaseID string) {
 // captureBuildDetails records a build's release once a read of the build shows it. The rack creates the release when
 // the build finishes, so whoever reads the build didn't create it: the release is credited to the build's creator,
 // and the read writes no release.create audit entry.
-func (h *Handler) captureBuildDetails(r *http.Request, path string, obj map[string]interface{}) {
+func (h *Handler) captureBuildDetails(r *http.Request, path string, obj map[string]interface{}) error {
 	if !rbac.KeyMatch3(path, "/apps/{app}/builds/{id}") {
-		return
+		return nil
 	}
 
 	buildID := extractJSONString(obj["id"])
@@ -244,9 +250,11 @@ func (h *Handler) captureBuildDetails(r *http.Request, path string, obj map[stri
 				releaseID,
 				buildID,
 			)
-			h.updateBuildApprovalTracking(r, buildID, releaseID)
+			return recordInApproval("build "+buildID+" has release "+releaseID, "read the build again",
+				func() error { return h.updateBuildApprovalTracking(r, buildID, releaseID) })
 		}
 	}
+	return nil
 }
 
 func (h *Handler) captureReleaseCreation(

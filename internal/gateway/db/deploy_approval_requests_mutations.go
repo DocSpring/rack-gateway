@@ -23,7 +23,7 @@ func (d *Database) CreateDeployApprovalRequest(
 		return nil, err
 	}
 
-	if err := d.checkDeployApprovalConflict(targetAPITokenID, normalizedGitCommitHash, normalizedApp); err != nil {
+	if err := d.CheckDeployApprovalConflict(targetAPITokenID, normalizedGitCommitHash, normalizedApp); err != nil {
 		return nil, err
 	}
 
@@ -61,9 +61,10 @@ func validateAndNormalizeDeployApprovalInput(
 	return message, app, gitCommitHash, nil
 }
 
-// checkDeployApprovalConflict returns a conflict error carrying the open (pending or unexpired approved)
-// request for this commit, target token and app, if there is one.
-func (d *Database) checkDeployApprovalConflict(tokenID int64, gitCommitHash, app string) error {
+// CheckDeployApprovalConflict returns a conflict error carrying the open (pending or unexpired approved)
+// request for this commit, target token and app, if there is one. gitCommitHash and app are normalized
+// (NormalizeCommitSHA, trimmed).
+func (d *Database) CheckDeployApprovalConflict(tokenID int64, gitCommitHash, app string) error {
 	// Check for unexpired approved requests
 	existing, err := d.FindDeployApprovalRequest(DeployApprovalLookup{
 		TokenID:       tokenID,

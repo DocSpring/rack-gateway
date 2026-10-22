@@ -36,9 +36,8 @@ func (h *Handler) handleSuccessAuditing(
 	authUser *auth.User,
 	path string,
 	status int,
-	rackPath string,
 	envDiffs []envutil.EnvDiff,
-	beforeParams map[string]string,
+	paramsUpdate *rackParamsUpdate,
 	rackConfig config.RackConfig,
 	start time.Time,
 ) {
@@ -48,7 +47,7 @@ func (h *Handler) handleSuccessAuditing(
 
 	h.auditReleaseCreations(r, authUser, path, status, start)
 	h.logEnvDiffs(r, authUser.Email, rackConfig.Name, envDiffs)
-	h.auditRackParamsIfChanged(r, authUser.Email, rackPath, beforeParams, rackConfig)
+	h.auditRackParamsUpdate(r, authUser.Email, paramsUpdate, rackConfig)
 }
 
 func (h *Handler) auditReleaseCreations(
@@ -86,26 +85,27 @@ func (h *Handler) auditReleaseCreations(
 	}
 }
 
-func (h *Handler) auditRackParamsIfChanged(
+// auditRackParamsUpdate records and emails the names of the rack parameters a successful update changed: the ones
+// whose values differ before and after, or, when the rack's parameters couldn't be read either time, the ones the
+// update asked to set (so a failed read never loses which parameters were changed).
+func (h *Handler) auditRackParamsUpdate(
 	r *http.Request,
-	userEmail, rackPath string,
-	beforeParams map[string]string,
+	userEmail string,
+	update *rackParamsUpdate,
 	rackConfig config.RackConfig,
 ) {
-	isRackParamsUpdate := (r.Method == http.MethodPut && rbac.KeyMatch3(rackPath, "/system"))
-	if !isRackParamsUpdate || beforeParams == nil {
+	if update == nil {
 		return
 	}
-
-	afterParams, err := h.fetchSystemParams(r.Context(), rackConfig)
-	if err != nil {
-		return
+	changed, fromRequest := update.requested, true
+	if update.before != nil {
+		if after, err := h.fetchSystemParams(r.Context(), rackConfig); err == nil {
+			changed, fromRequest = changedParams(update.before, after), false
+		}
 	}
-
-	changed := changedParams(beforeParams, afterParams)
 	if len(changed) > 0 {
 		h.notifyRackParamsChanged(userEmail, changed)
-		h.auditRackParamsChanged(r, userEmail, changed)
+		h.auditRackParamsChanged(r, userEmail, changed, fromRequest)
 	}
 }
 

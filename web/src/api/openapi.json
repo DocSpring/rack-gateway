@@ -3594,7 +3594,15 @@
                         }
                     },
                     {
-                        "description": "Maximum number of results (default: 100)",
+                        "description": "Page number (default: 1)",
+                        "name": "page",
+                        "in": "query",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "description": "Page size (default: 100, at most 200)",
                         "name": "limit",
                         "in": "query",
                         "schema": {

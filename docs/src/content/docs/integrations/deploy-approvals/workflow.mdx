@@ -93,8 +93,8 @@ graph LR
 ```
 
 An open PR is required unless the app's `require_pr_for_branch` is off. Before checking the commit, the gateway
-also refuses a request without `--branch`, and one from the app's `default_branch` unless
-`allow_deploy_from_default_branch` is on (see [GitHub Integration](/integrations/deploy-approvals/github/#commit-verification)).
+also refuses a request without `--branch`, and one from the app's `default_branch` or the repository's default
+branch unless `allow_deploy_from_default_branch` is on (see [GitHub Integration](/integrations/deploy-approvals/github/#commit-verification)).
 
 Verification modes:
 - **latest**: Commit must be the latest on the branch

@@ -52,6 +52,7 @@ func newCreateApprovalFixture(t *testing.T) *createApprovalFixture {
 		config: &config.Config{Racks: map[string]config.RackConfig{
 			"default": {Name: "staging", Enabled: true},
 		}},
+		approvalCreations: newApprovalCreationLimit(),
 	}
 	return &createApprovalFixture{handler: handler, user: user, token: token}
 }

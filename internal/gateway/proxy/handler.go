@@ -165,7 +165,7 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	beforeParams := h.captureRackParamsIfNeeded(r, rackPath, rackConfig)
+	r, paramsUpdate := h.captureRackParamsIfNeeded(r, rackPath, rackConfig)
 
 	status, err := h.forwardRequest(w, r, rackConfig, rackPath, authUser)
 	h.releaseDeployApprovalClaims(r, rackPath, status, err)
@@ -183,7 +183,7 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 
 	h.createAuditLogIfNeeded(r, authUser, path, status, start)
 	h.logRequestToCloudWatch(r, authUser.Email, rackConfig.Name, status, start)
-	h.handleSuccessAuditing(r, w, authUser, path, status, rackPath, envDiffs, beforeParams, rackConfig, start)
+	h.handleSuccessAuditing(r, w, authUser, path, status, envDiffs, paramsUpdate, rackConfig, start)
 
 	r.Header.Del("X-Release-Created")
 }
@@ -471,21 +471,4 @@ func (h *Handler) enforceDestructivePolicy(
 	}
 
 	return nil
-}
-
-func (h *Handler) captureRackParamsIfNeeded(
-	r *http.Request,
-	rackPath string,
-	rackConfig config.RackConfig,
-) map[string]string {
-	isRackParamsUpdate := (r.Method == http.MethodPut && rbac.KeyMatch3(rackPath, "/system"))
-	if !isRackParamsUpdate {
-		return nil
-	}
-
-	params, err := h.fetchSystemParams(r.Context(), rackConfig)
-	if err != nil {
-		return nil
-	}
-	return params
 }

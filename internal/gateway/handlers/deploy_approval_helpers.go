@@ -316,7 +316,9 @@ func loadApprover(c *gin.Context, database *db.Database, email string) (*db.User
 func logDeployApprovalAudit(
 	ctx context.Context,
 	logger *audit.Logger,
-	userEmail, userName, action, resourceID, details, status string,
+	userEmail, userName, action string,
+	approvalID int64,
+	details, status string,
 	httpStatus int,
 ) {
 	if logger == nil {
@@ -324,16 +326,17 @@ func logDeployApprovalAudit(
 	}
 
 	_ = logger.LogRequestEntry(ctx, &db.AuditLog{
-		UserEmail:    userEmail,
-		UserName:     userName,
-		ActionType:   audit.ActionTypeGateway,
-		Action:       action,
-		ResourceType: "deploy-approval-request",
-		Resource:     resourceID,
-		Details:      details,
-		Status:       status,
-		RBACDecision: "allow",
-		HTTPStatus:   httpStatus,
+		UserEmail:               userEmail,
+		UserName:                userName,
+		ActionType:              audit.ActionTypeGateway,
+		Action:                  action,
+		ResourceType:            rbac.ResourceDeployApprovalRequest.String(),
+		Resource:                strconv.FormatInt(approvalID, 10),
+		DeployApprovalRequestID: &approvalID,
+		Details:                 details,
+		Status:                  status,
+		RBACDecision:            "allow",
+		HTTPStatus:              httpStatus,
 	})
 }
 

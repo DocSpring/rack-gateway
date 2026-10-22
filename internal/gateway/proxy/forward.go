@@ -53,21 +53,18 @@ func (h *Handler) processBufferedResponse(
 	}
 
 	if handling.capture {
-		h.captureResourceCreator(r, pth, body, authUserEmail)
+		if err := h.captureResourceCreator(r, pth, body, authUserEmail); err != nil {
+			return nil, err
+		}
 	}
 
 	if handling.captureProcess && resp.StatusCode >= 200 && resp.StatusCode < 300 {
-		h.handleProcessCreation(r, body)
+		if err := h.captureProcessCreation(r, body, getDeployApprovalTracker(r.Context())); err != nil {
+			return nil, err
+		}
 	}
 
 	return body, nil
-}
-
-func (h *Handler) handleProcessCreation(r *http.Request, body []byte) {
-	tracker := getDeployApprovalTracker(r.Context())
-	if tracker != nil {
-		h.captureProcessCreation(r, body, tracker)
-	}
 }
 
 // markDeployApprovalDeployedAfterPromote marks the approval behind a successful release promote as deployed. It runs
@@ -332,6 +329,7 @@ func (h *Handler) requestBodyForRack(r *http.Request, path string, authUser *aut
 	if err != nil {
 		return rackRequestBody{}, err
 	}
+	noteRequestedRackParams(r, bodyBytes)
 
 	if err := checkHeaderOnlyRequest(r, path, bodyBytes); err != nil {
 		return rackRequestBody{}, err

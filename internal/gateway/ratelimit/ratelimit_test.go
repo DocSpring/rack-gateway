@@ -305,3 +305,19 @@ func TestFailureLimiter(t *testing.T) {
 	}
 	require.True(t, f.Blocked("198.51.100.2"))
 }
+
+func TestLimiterLimitsEachKey(t *testing.T) {
+	l := NewLimiter(1.0/60, 2)
+	clock := time.Now()
+	l.keys.now = func() time.Time { return clock }
+
+	require.True(t, l.Allow("token:1"))
+	require.True(t, l.Allow("token:1"))
+	require.False(t, l.Allow("token:1"))
+	require.True(t, l.Allow("token:2"), "another key has its own bucket")
+
+	// One action comes back each minute.
+	clock = clock.Add(time.Minute)
+	require.True(t, l.Allow("token:1"))
+	require.False(t, l.Allow("token:1"))
+}

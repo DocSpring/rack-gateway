@@ -40,14 +40,7 @@ func New() (*App, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := database.EnsureEnvironment(cfg.DevMode); err != nil {
-		return nil, errors.Join(err, database.Close())
-	}
-	dbEnvironment, err := database.CurrentEnvironment()
-	if err == nil {
-		err = checkProductionSafety(dbEnvironment, !testbypass.Compiled, os.Getenv)
-	}
-	if err != nil {
+	if err := prepareDatabase(database, cfg.DevMode, os.Getenv); err != nil {
 		return nil, errors.Join(err, database.Close())
 	}
 
@@ -71,6 +64,28 @@ func New() (*App, error) {
 	}
 
 	return app, nil
+}
+
+// prepareDatabase checks the database is safe to use (checkProductionSafety), then in dev mode migrates it, and marks
+// a new database with its environment. The check comes first: a dev build pointed at a production database must
+// refuse it before changing its schema. A database without a marker is checked as the environment it would be marked.
+func prepareDatabase(database *db.Database, devMode bool, getenv func(string) string) error {
+	environment, err := database.CurrentEnvironment()
+	if err != nil {
+		return err
+	}
+	if environment == "" {
+		environment = db.EnvironmentName(devMode)
+	}
+	if err := checkProductionSafety(environment, !testbypass.Compiled, getenv); err != nil {
+		return err
+	}
+	if devMode {
+		if err := database.Migrate(); err != nil {
+			return err
+		}
+	}
+	return database.EnsureEnvironment(devMode)
 }
 
 // Router returns the Gin router

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -153,7 +154,7 @@ func TestRackParamsChangeRedactsValues(t *testing.T) {
 
 	before := map[string]string{"Ami": "ami-old", "NodeType": "t3.medium", "Private": "true"}
 	req := httptest.NewRequest(http.MethodPut, "/system", nil)
-	h.auditRackParamsIfChanged(req, envAuditActor, "/system", before, h.config.Racks["default"])
+	h.auditRackParamsUpdate(req, envAuditActor, &rackParamsUpdate{before: before}, h.config.Racks["default"])
 
 	require.Len(t, sender.sent, 1)
 	require.Contains(t, sender.sent[0].to, envAuditActor)
@@ -180,4 +181,55 @@ func TestRackParamsChangeRedactsValues(t *testing.T) {
 		"Ami":{"old":"[REDACTED]","new":"[REDACTED]"},
 		"NodeType":{"old":"[REDACTED]","new":"[REDACTED]"}
 	}}`, details[0])
+}
+
+// rackParamsSetDetails returns the details of the rack.params_set entries recorded for envAuditActor.
+func rackParamsSetDetails(t *testing.T, database *db.Database) []string {
+	t.Helper()
+	logs, err := database.GetAuditLogs(envAuditActor, time.Time{}, 10)
+	require.NoError(t, err)
+	paramsSet := audit.BuildAction(rbac.ResourceRack.String(), audit.ActionVerbParamsSet)
+	var details []string
+	for _, entry := range logs {
+		if entry.Action == paramsSet {
+			details = append(details, entry.Details)
+		}
+	}
+	return details
+}
+
+// When the rack's parameters can't be read to compare, the update's own parameter names are recorded (and
+// emailed), marked as taken from the request, rather than nothing.
+func TestRackParamsUpdateRecordsTheRequestedNamesWhenTheRackCantBeRead(t *testing.T) {
+	rack := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "unavailable", http.StatusServiceUnavailable)
+	}))
+	t.Cleanup(rack.Close)
+	sender := &capturingSender{}
+	h, database := newEnvAuditProxy(t, rack.URL, sender)
+
+	// The Convox SDK form-encodes the parameters as one field.
+	body := url.Values{"parameters": {url.Values{"NodeType": {"t3.large"}, "Ami": {""}}.Encode()}}.Encode()
+	req := httptest.NewRequest(http.MethodPut, "/system", nil)
+	req, update := h.captureRackParamsIfNeeded(req, "/system", h.config.Racks["default"])
+	require.NotNil(t, update)
+	require.Nil(t, update.before)
+	noteRequestedRackParams(req, []byte(body))
+	h.auditRackParamsUpdate(req, envAuditActor, update, h.config.Racks["default"])
+
+	require.Len(t, sender.sent, 1)
+	require.Contains(t, sender.sent[0].textBody, "Ami\nNodeType")
+	details := rackParamsSetDetails(t, database)
+	require.Len(t, details, 1)
+	require.JSONEq(t, `{"from_request":true,"changes":{
+		"Ami":{"old":"[REDACTED]","new":"[REDACTED]"},
+		"NodeType":{"old":"[REDACTED]","new":"[REDACTED]"}
+	}}`, details[0])
+}
+
+// A parameter added or removed with an empty value is a change too.
+func TestChangedParamsCountsEmptyValuedAdditionsAndRemovals(t *testing.T) {
+	before := map[string]string{"Kept": "x", "Removed": "", "Changed": "a"}
+	after := map[string]string{"Kept": "x", "Added": "", "Changed": "b"}
+	require.Equal(t, []string{"Added", "Changed", "Removed"}, changedParams(before, after))
 }

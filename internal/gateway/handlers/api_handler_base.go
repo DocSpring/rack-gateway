@@ -20,6 +20,8 @@ type APIHandler struct {
 	settingsService *settings.Service
 	slackNotifier   SlackNotifier
 	jobsClient      *jobs.Client
+
+	approvalCreations approvalCreationLimit
 }
 
 // SlackNotifier defines the interface for sending Slack notifications
@@ -47,5 +49,7 @@ func NewAPIHandler(
 		settingsService: settingsService,
 		slackNotifier:   slackNotifier,
 		jobsClient:      jobsClient,
+
+		approvalCreations: newApprovalCreationLimit(),
 	}
 }

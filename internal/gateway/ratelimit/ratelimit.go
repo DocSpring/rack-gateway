@@ -66,6 +66,22 @@ func PositiveEnv(name string, def float64) float64 {
 	return value
 }
 
+// Limiter limits an action per key (an API token or a user, say): each key may act burst times, which come back at
+// perSecond. It keeps a bucket for at most MaxClients keys; see buckets.
+type Limiter struct {
+	keys *buckets
+}
+
+// NewLimiter allows each key burst actions, refilled at perSecond.
+func NewLimiter(perSecond float64, burst int) *Limiter {
+	return &Limiter{keys: newBuckets(rate.Limit(perSecond), max(burst, 1))}
+}
+
+// Allow reports whether key may act now, and counts the action if so.
+func (l *Limiter) Allow(key string) bool {
+	return l.keys.take(key)
+}
+
 // FailureLimiter limits each client's failed attempts (refused credentials, say), so they can't be guessed or
 // used to load the database at the rate requests arrive. Successful attempts are never limited.
 type FailureLimiter struct {
