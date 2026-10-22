@@ -44,12 +44,13 @@ func RedactQuery(rawQuery string) string {
 var commandURLUserinfo = regexp.MustCompile(`([A-Za-z][A-Za-z0-9+.-]*://)[^/\s@'"]+@`)
 
 // commandWord finds the words of a command as a shell splits them: a quoted part, spaces and all, belongs to the
-// word it's in. An unmatched quote is a word of its own.
-var commandWord = regexp.MustCompile(`(?:"[^"]*"|'[^']*'|[^\s"'])+|["']`)
+// word it's in, and so does a character escaped with a backslash (Authorization:\ Bearer\ ...). An unmatched quote
+// or a trailing backslash is a word of its own.
+var commandWord = regexp.MustCompile(`(?s)(?:"(?:[^"\\]|\\.)*"|'[^']*'|\\.|[^\s"'\\])+|["'\\]`)
 
 // commandHeader is a header as a command passes one (curl -H 'X-API-Key: value', or X-API-Key:value): its name,
 // the colon and any space after it, and its value.
-var commandHeader = regexp.MustCompile(`(?s)^([A-Za-z][A-Za-z0-9-]*)(:\s*)(\S.*)$`)
+var commandHeader = regexp.MustCompile(`(?s)^([A-Za-z][A-Za-z0-9_-]*)(:\s*)(\S.*)$`)
 
 // credentialHeaders carry a credential, whatever their value looks like.
 var credentialHeaders = map[string]bool{"authorization": true, "proxy-authorization": true, "cookie": true}
@@ -107,7 +108,7 @@ func redactCommandWord(word string) (string, bool) {
 // redactHeader redacts a credential header's whole value in text, a word without its quotes, and reports whether it
 // did. A credential header is Authorization, Proxy-Authorization or Cookie, or one with a secret's name (X-API-Key,
 // X-Auth-Token; see isSecretName). Without a space after its colon, text is only taken for a header when its name
-// has a hyphen, so a task such as credentials:edit isn't.
+// has a hyphen or an underscore, so a task such as credentials:edit isn't.
 func redactHeader(text string) (string, bool) {
 	match := commandHeader.FindStringSubmatch(text)
 	if match == nil {
@@ -115,7 +116,7 @@ func redactHeader(text string) (string, bool) {
 	}
 	name, separator := match[1], match[2]
 	if !credentialHeaders[strings.ToLower(name)] {
-		headerLike := len(separator) > 1 || strings.Contains(name, "-")
+		headerLike := len(separator) > 1 || strings.ContainsAny(name, "-_")
 		if !headerLike || !isSecretName(name) {
 			return text, false
 		}
