@@ -58,7 +58,7 @@ func Setup(router *gin.Engine, cfg *Config) {
 	authenticated.Use(middleware.RequireMFAEnrollmentWeb(cfg.Database, cfg.SettingsService))
 	authenticated.Use(middleware.RequireVerifiedMFASession(cfg.MFAService, cfg.Database, cfg.SettingsService))
 	authenticated.Use(middleware.EnforceMFARequirements(cfg.MFAService, cfg.Database, cfg.SettingsService))
-	authenticated.Use(middleware.AuditBeforeActing(cfg.AuditLogger))
+	authenticated.Use(middleware.AuditBeforeActing(cfg.AuditLogger, cfg.Database))
 
 	registerMFARoutes(authenticated, cfg, h)
 	registerAPIRoutes(authenticated, cfg, h)

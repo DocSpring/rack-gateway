@@ -14,7 +14,7 @@ import {
   verifyMFA,
   verifyWebAuthnAssertion,
 } from '@/lib/api'
-import { authService } from '@/lib/auth'
+import { authService, LOGOUT_FAILED_MESSAGE } from '@/lib/auth'
 import { normalizeRedirectPath } from '@/lib/navigation'
 import { resolveWebRedirect, WebRoute } from '@/lib/routes'
 
@@ -226,8 +226,10 @@ export function MFAChallengePage() {
     },
   })
 
-  const handleLogout = () => {
-    authService.logout()
+  const handleLogout = async () => {
+    if (!(await authService.logout())) {
+      setError(LOGOUT_FAILED_MESSAGE)
+    }
   }
 
   // Ends the login on the gateway and hands the browser to the waiting CLI, which then exits.

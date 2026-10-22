@@ -3264,19 +3264,60 @@
             }
         },
         "/auth/web/logout": {
-            "get": {
-                "description": "Revokes the active session, clears the cookie, and redirects to the login screen.",
+            "post": {
+                "description": "Revokes the active session and clears the cookie. A POST with the session's CSRF token, so another\nsite can't sign the user out. Fails with 500, keeping the cookie, when the session couldn't be\nrevoked, so the user can try again. A request without a live session just clears the cookie.",
                 "tags": [
                     "Auth"
                 ],
                 "summary": "Log out current session",
+                "parameters": [
+                    {
+                        "description": "The session's CSRF token",
+                        "name": "X-CSRF-Token",
+                        "in": "header",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
                 "responses": {
-                    "302": {
-                        "description": "Redirect to login",
+                    "200": {
+                        "description": "OK",
                         "content": {
                             "*/*": {
                                 "schema": {
-                                    "type": "string"
+                                    "$ref": "#/components/schemas/handlers.WebLogoutResponse"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
                                 }
                             }
                         }
@@ -7168,6 +7209,14 @@
                     },
                     "status": {
                         "type": "string"
+                    }
+                }
+            },
+            "handlers.WebLogoutResponse": {
+                "type": "object",
+                "properties": {
+                    "logged_out": {
+                        "type": "boolean"
                     }
                 }
             },

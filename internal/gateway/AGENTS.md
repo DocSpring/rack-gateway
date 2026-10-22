@@ -27,6 +27,9 @@ OAuth 2.0 and session management:
   challenge, or skips it with a trusted device, is marked verified with `ExemptSessionFromMFAChallenge`, which
   opens none; so is an exempt CLI login (`cli_login_states.mfa_exempt`). Trusting a device doesn't restart the window.
   Adding an MFA method is `MFAStepUpOnceEnrolled`: free for a first factor, step-up once the user has one
+- **Inline MFA proofs** (`X-MFA-TOTP`, `X-MFA-WebAuthn`) are verified by the MFA checks, but what they change in the
+  session (a completed MFA challenge, a new step-up window) is saved only after the request's audit attempt is
+  written: `middleware.saveInlineMFA` in `AuditBeforeActing`, and `ProxyToRack` after `recordAttempt`
 
 Key files:
 

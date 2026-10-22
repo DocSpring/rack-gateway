@@ -104,11 +104,11 @@ func (s *Service) ConfirmWebAuthnEnrollment(
 		return 0, err
 	}
 
-	if err := s.storeParsedCredential(methodID, credential, label); err != nil {
+	stored, err := credentialToStore(credential, label)
+	if err != nil {
 		return 0, err
 	}
-
-	if err := s.finalizeEnrollment(user, methodID); err != nil {
+	if err := s.finalizeEnrollment(user.ID, methodID, stored); err != nil {
 		return 0, err
 	}
 
@@ -179,11 +179,8 @@ func (s *Service) createWebAuthnCredential(
 	return credential, nil
 }
 
-func (s *Service) storeParsedCredential(
-	methodID int64,
-	credential *webauthn.Credential,
-	label string,
-) error {
+// credentialToStore is what enrollment stores of a newly registered credential.
+func credentialToStore(credential *webauthn.Credential, label string) (*db.WebAuthnCredential, error) {
 	transports := make([]string, 0, len(credential.Transport))
 	for _, t := range credential.Transport {
 		transports = append(transports, string(t))
@@ -196,19 +193,15 @@ func (s *Service) storeParsedCredential(
 	metadata := map[string]interface{}{"flags": credential.Flags}
 	metadataJSON, err := json.Marshal(metadata)
 	if err != nil {
-		return fmt.Errorf("failed to marshal metadata: %w", err)
+		return nil, fmt.Errorf("failed to marshal metadata: %w", err)
 	}
 
-	if err := s.db.UpdateMFAMethodCredential(
-		methodID,
-		"webauthn",
-		label,
-		credential.ID,
-		credential.PublicKey,
-		transports,
-		metadataJSON,
-	); err != nil {
-		return err
-	}
-	return s.db.SetMFAMethodSignCount(methodID, credential.Authenticator.SignCount)
+	return &db.WebAuthnCredential{
+		Label:      label,
+		ID:         credential.ID,
+		PublicKey:  credential.PublicKey,
+		Transports: transports,
+		Metadata:   metadataJSON,
+		SignCount:  credential.Authenticator.SignCount,
+	}, nil
 }

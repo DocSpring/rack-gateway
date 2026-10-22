@@ -87,6 +87,7 @@ import type {
   HandlersVerifyWebAuthnAssertionRequest,
   HandlersWebAuthnAssertionStartResponse,
   HandlersWebAuthnEnrollmentResponse,
+  HandlersWebLogoutResponse,
   PutAppsAppSettings200,
   PutAppsAppSettingsApprovedDeployCommands200,
   PutAppsAppSettingsAuditVisibleEnvVars200,
@@ -984,14 +985,18 @@ export const getRackGatewayAPI = () => {
   };
 
   /**
-   * Revokes the active session, clears the cookie, and redirects to the login screen.
+   * Revokes the active session and clears the cookie. A POST with the session's CSRF token, so another
+   * site can't sign the user out. Fails with 500, keeping the cookie, when the session couldn't be
+   * revoked, so the user can try again. A request without a live session just clears the cookie.
    * @summary Log out current session
    */
-  const getAuthWebLogout = (
-    options?: SecondParameter<typeof createGatewayClient<unknown>>,
+  const postAuthWebLogout = (
+    options?: SecondParameter<
+      typeof createGatewayClient<HandlersWebLogoutResponse>
+    >,
   ) => {
-    return createGatewayClient<unknown>(
-      { url: `/auth/web/logout`, method: "GET" },
+    return createGatewayClient<HandlersWebLogoutResponse>(
+      { url: `/auth/web/logout`, method: "POST" },
       options,
     );
   };
@@ -1588,7 +1593,7 @@ export const getRackGatewayAPI = () => {
     postAuthMfaWebauthnAssertionVerify,
     getAuthWebCallback,
     getAuthWebLogin,
-    getAuthWebLogout,
+    postAuthWebLogout,
     getCreatedBy,
     getDeployApprovalRequests,
     postDeployApprovalRequestsIdApprove,
@@ -1905,8 +1910,8 @@ export type GetAuthWebCallbackResult = NonNullable<
 export type GetAuthWebLoginResult = NonNullable<
   Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>["getAuthWebLogin"]>>
 >;
-export type GetAuthWebLogoutResult = NonNullable<
-  Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>["getAuthWebLogout"]>>
+export type PostAuthWebLogoutResult = NonNullable<
+  Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>["postAuthWebLogout"]>>
 >;
 export type GetCreatedByResult = NonNullable<
   Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>["getCreatedBy"]>>

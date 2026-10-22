@@ -11,18 +11,6 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 )
 
-// attemptContext carries request details recorded with every WebAuthn attempt.
-type attemptContext struct {
-	userID    int64
-	ipAddress string
-	userAgent string
-	sessionID *int64
-}
-
-func (a attemptContext) log(s *Service, methodID *int64, success bool, reason string) {
-	_ = s.db.LogWebAuthnAttempt(a.userID, methodID, success, reason, a.ipAddress, a.userAgent, a.sessionID)
-}
-
 // StartWebAuthnAssertion begins a WebAuthn assertion (login / step-up) ceremony.
 //
 // The challenge is stored server-side, bound to the user and (when given) the session that started it,
@@ -78,20 +66,17 @@ func (s *Service) VerifyWebAuthnAssertion(
 	if s.webAuthn == nil {
 		return nil, fmt.Errorf("WebAuthn not configured")
 	}
-	attempt := attemptContext{userID: user.ID, ipAddress: ipAddress, userAgent: userAgent, sessionID: sessionID}
-
-	if err := s.ensureUserUnlocked(user.ID); err != nil {
+	attempt, err := s.reserveAttempt(db.MFAMethodTypeWebAuthn, user.ID, ipAddress, userAgent, sessionID)
+	if err != nil {
 		return nil, err
 	}
-	if err := s.checkWebAuthnRateLimit(attempt); err != nil {
-		return nil, err
-	}
+	defer attempt.finishUnlessDone()
 
 	challenge, err := s.db.ConsumeWebAuthnChallenge(
 		strings.TrimSpace(string(challengeID)), user.ID, sessionID, db.WebAuthnChallengeAssertion,
 	)
 	if err != nil {
-		attempt.log(s, nil, false, "invalid_challenge")
+		attempt.finish(nil, false, "invalid_challenge")
 		return nil, challengeError(err)
 	}
 
@@ -112,33 +97,19 @@ func (s *Service) VerifyWebAuthnAssertion(
 	return s.findAndConfirmCredential(methods, credential, attempt)
 }
 
-func (s *Service) checkWebAuthnRateLimit(attempt attemptContext) error {
-	return s.enforceAttemptLimit(
-		func(id int64, window int) (int, error) {
-			return s.db.CountRecentWebAuthnAttempts(id, window)
-		},
-		attempt.userID,
-		5,
-		func() error {
-			attempt.log(s, nil, false, "rate_limited")
-			return nil
-		},
-	)
-}
-
 func (s *Service) handleE2EAssertion(
-	attempt attemptContext,
+	attempt *mfaAttempt,
 	methods []*db.MFAMethod,
 ) (*VerificationResult, bool, error) {
 	result, handled, err := s.maybeHandleE2EWebAuthn(methods, func(method *db.MFAMethod) error {
-		attempt.log(s, &method.ID, true, "e2e_test")
+		attempt.finish(&method.ID, true, "e2e_test")
 		return nil
 	})
 	if !handled {
 		return nil, false, nil
 	}
 	if err != nil {
-		attempt.log(s, nil, false, "no_method_enrolled")
+		attempt.finish(nil, false, "no_method_enrolled")
 	}
 	return result, true, err
 }
@@ -148,11 +119,11 @@ func (s *Service) validateAssertion(
 	methods []*db.MFAMethod,
 	sessionJSON []byte,
 	credentialJSON []byte,
-	attempt attemptContext,
+	attempt *mfaAttempt,
 ) (*webauthn.Credential, error) {
 	var session webauthn.SessionData
 	if err := json.Unmarshal(sessionJSON, &session); err != nil {
-		attempt.log(s, nil, false, "invalid_session")
+		attempt.finish(nil, false, "invalid_session")
 		return nil, fmt.Errorf("failed to unmarshal session: %w", err)
 	}
 
@@ -160,14 +131,14 @@ func (s *Service) validateAssertion(
 		strings.NewReader(string(credentialJSON)),
 	)
 	if err != nil {
-		attempt.log(s, nil, false, "invalid_credential")
+		attempt.finish(nil, false, "invalid_credential")
 		return nil, fmt.Errorf("failed to parse assertion: %w", err)
 	}
 
 	waUser := &webAuthnUser{user: user, methods: methods}
 	credential, err := s.webAuthn.ValidateLogin(waUser, session, parsedResponse)
 	if err != nil {
-		attempt.log(s, nil, false, "validation_failed")
+		attempt.finish(nil, false, "validation_failed")
 		if lockErr := s.checkAndLockAccount(user.ID); lockErr != nil {
 			return nil, lockErr
 		}
@@ -182,11 +153,11 @@ func (s *Service) validateAssertion(
 func (s *Service) findAndConfirmCredential(
 	methods []*db.MFAMethod,
 	credential *webauthn.Credential,
-	attempt attemptContext,
+	attempt *mfaAttempt,
 ) (*VerificationResult, error) {
 	method := findWebAuthnMethod(methods, credential.ID)
 	if method == nil {
-		attempt.log(s, nil, false, "credential_not_found")
+		attempt.finish(nil, false, "credential_not_found")
 		if err := s.checkAndLockAccount(attempt.userID); err != nil {
 			return nil, err
 		}
@@ -202,7 +173,7 @@ func (s *Service) findAndConfirmCredential(
 		}
 	}
 	if !advanced {
-		attempt.log(s, &method.ID, false, "sign_count_not_increased")
+		attempt.finish(&method.ID, false, "sign_count_not_increased")
 		if err := s.checkAndLockAccount(attempt.userID); err != nil {
 			return nil, err
 		}
@@ -211,7 +182,7 @@ func (s *Service) findAndConfirmCredential(
 	if err := s.touchMFAMethod(method); err != nil {
 		return nil, err
 	}
-	attempt.log(s, &method.ID, true, "")
+	attempt.finish(&method.ID, true, "")
 	return &VerificationResult{MethodID: method.ID}, nil
 }
 

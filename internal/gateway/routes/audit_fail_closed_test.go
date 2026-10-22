@@ -45,7 +45,7 @@ func TestEverythingFailsClosedThroughTheRouter(t *testing.T) {
 	require.Equal(t, http.StatusFound, w.Code, w.Body.String())
 	require.Contains(t, w.Header().Get("Location"), "error=audit_unavailable", "login must not start")
 
-	w = e.do(t, admin.creds, http.MethodGet, "/api/v1/auth/web/logout", nil)
+	w = e.do(t, admin.creds, http.MethodPost, "/api/v1/auth/web/logout", nil)
 	require.Equal(t, http.StatusServiceUnavailable, w.Code, w.Body.String())
 	w = e.do(t, admin.creds, http.MethodGet, "/api/v1/users", nil)
 	require.Equal(t, http.StatusServiceUnavailable, w.Code,

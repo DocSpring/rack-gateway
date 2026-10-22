@@ -10,13 +10,14 @@ import (
 	"time"
 )
 
-// ErrSessionUserChanged is returned by CreateUserSession when the user's email changed, or they were locked or
-// deleted, after the login that is creating the session loaded them.
+// ErrSessionUserChanged is returned by CreateUserSession when the user's email changed, they were locked or
+// deleted, or their MFA was reset, after the login that is creating the session loaded them.
 var ErrSessionUserChanged = errors.New("the user changed during sign-in")
 
 // CreateUserSession stores a new authenticated session for user, as the login loaded them. It holds the user's row
-// lock while it checks that they still have that email and aren't locked: an email change or a lock, which revoke
-// the user's sessions under the same lock, can't miss a session a racing login adds.
+// lock while it checks that they still have that email, aren't locked and, if they were enrolled in MFA, still are:
+// an email change, a lock or an MFA reset, which revoke the user's sessions, can't miss a session a racing login
+// adds.
 func (d *Database) CreateUserSession(
 	user *User,
 	tokenHash string,
@@ -63,8 +64,9 @@ func (d *Database) CreateUserSession(
 	}
 	defer func() { _ = tx.Rollback() }()
 	var current int64
-	err = tx.QueryRow(d.rebind("SELECT id FROM users WHERE id = ? AND email = ? AND locked_at IS NULL FOR SHARE"),
-		user.ID, user.Email).Scan(&current)
+	err = tx.QueryRow(d.rebind(`SELECT id FROM users
+		WHERE id = ? AND email = ? AND locked_at IS NULL AND (mfa_enrolled OR NOT ?) FOR SHARE`),
+		user.ID, user.Email, user.MFAEnrolled).Scan(&current)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrSessionUserChanged
 	}

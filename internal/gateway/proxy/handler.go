@@ -153,6 +153,11 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 	if !recorded {
 		return
 	}
+	// A verified MFA proof opens the step-up window only now that the request is on record, so a request the audit
+	// log refused leaves the session as it was.
+	if inlineMFAVerified(r) {
+		h.updateSessionStepUp(authUser)
+	}
 
 	if err := h.claimDeployApprovalStep(r, rackPath, approvalTracker); err != nil {
 		_, _, _ = h.handlePermissionError(w, r, authUser, err, rackConfig.Name, start)

@@ -1,14 +1,15 @@
 import type { ReactNode } from 'react'
 import { createContext, useCallback, useContext, useEffect, useState } from 'react'
+import { toast } from '@/components/ui/use-toast'
 import type { User } from '../lib/auth'
-import { authService } from '../lib/auth'
+import { authService, LOGOUT_FAILED_MESSAGE } from '../lib/auth'
 
 interface AuthContextType {
   user: User | null
   isLoading: boolean
   isAuthenticated: boolean
   login: (returnTo?: string) => Promise<void>
-  logout: () => void
+  logout: () => Promise<void>
   refresh: () => Promise<User | null>
 }
 
@@ -67,9 +68,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await authService.startLogin(returnTo)
   }
 
-  const logout = () => {
-    authService.logout()
-    setUser(null)
+  const logout = async () => {
+    if (await authService.logout()) {
+      setUser(null)
+      return
+    }
+    toast.error(LOGOUT_FAILED_MESSAGE)
   }
 
   const refresh = useCallback(async () => fetchUser({ suppressAuthError: true }), [fetchUser])

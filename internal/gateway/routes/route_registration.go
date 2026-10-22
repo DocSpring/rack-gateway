@@ -32,7 +32,7 @@ func registerAuthRoutes(api *gin.RouterGroup, cfg *Config, h *handlerSet) {
 	authGroup.GET("/auth/web/login", h.auth.WebLoginStart)
 	authGroup.HEAD("/auth/web/login", h.auth.WebLoginStart)
 	authGroup.GET("/auth/web/callback", h.auth.WebLoginCallback)
-	authGroup.GET("/auth/web/logout", h.auth.WebLogout)
+	authGroup.POST("/auth/web/logout", h.auth.WebLogout)
 	authGroup.POST("/auth/cli/logout", h.auth.CLILogout)
 }
 

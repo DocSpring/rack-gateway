@@ -33,6 +33,7 @@ type mfaRouteEnv struct {
 	database   *db.Database
 	sessions   *auth.SessionManager
 	mfaService *mfa.Service
+	auditLog   *audit.Logger
 	user       *db.User
 	totpSecret string
 }
@@ -74,6 +75,7 @@ func newMFARouteEnv(t *testing.T, enrolledEmail string) *mfaRouteEnv {
 		},
 	}
 	auditLogger := audit.NewLogger(database)
+	env.auditLog = auditLogger
 	settingsService := settings.NewService(database)
 	gateway := &deps.Gateway{
 		Config:          cfg,

@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"log"
+	"net/http"
 	"net/url"
 	"strings"
 	"time"
@@ -156,9 +157,20 @@ func (h *OAuthHandler) StartWebLogin() (authURL string, state string) {
 	return authURL, state
 }
 
-// CompleteLogin handles OAuth callback - validates code and returns user info
-func (h *OAuthHandler) CompleteLogin(code, _ string, codeVerifier string) (*LoginResponse, error) {
-	ctx := context.Background()
+// providerHTTPClient makes every request to the identity provider (discovery, key fetches and code exchanges), so
+// a provider that accepts a connection and then stalls can't hold a request, or the gateway's startup, for long.
+var providerHTTPClient = &http.Client{Timeout: 15 * time.Second}
+
+// loginCompletionTimeout bounds the code exchange and ID token verification of one login.
+const loginCompletionTimeout = 30 * time.Second
+
+// CompleteLogin handles OAuth callback - validates code and returns user info. ctx is the callback request's: the
+// provider requests stop when the client goes away.
+func (h *OAuthHandler) CompleteLogin(
+	ctx context.Context, code, _ string, codeVerifier string,
+) (*LoginResponse, error) {
+	ctx, cancel := context.WithTimeout(oidc.ClientContext(ctx, providerHTTPClient), loginCompletionTimeout)
+	defer cancel()
 
 	// Select the right config based on whether this is CLI or web flow
 	config := h.oauth2ConfigWeb
@@ -234,7 +246,7 @@ func discoverProvider(issuerURL string) (*oidc.Provider, error) {
 	defer cancel()
 	backoff := 100 * time.Millisecond
 	for attempt := 1; ; attempt++ {
-		provider, err := oidc.NewProvider(context.Background(), issuerURL)
+		provider, err := oidc.NewProvider(oidc.ClientContext(deadline, providerHTTPClient), issuerURL)
 		if err == nil {
 			if attempt > 1 {
 				log.Printf("Successfully connected to OIDC provider after %d attempts", attempt)

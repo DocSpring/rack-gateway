@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
@@ -49,7 +50,7 @@ func (o *loopbackOAuth) StartLogin() (*auth.LoginStartResponse, error) {
 
 func (_ *loopbackOAuth) StartWebLogin() (string, string) { return "", "" }
 
-func (o *loopbackOAuth) CompleteLogin(code, _, _ string) (*auth.LoginResponse, error) {
+func (o *loopbackOAuth) CompleteLogin(_ context.Context, code, _, _ string) (*auth.LoginResponse, error) {
 	if code != "google-code" {
 		return nil, errors.New("invalid authorization code")
 	}

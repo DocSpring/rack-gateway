@@ -1,9 +1,12 @@
 import type { AxiosError } from 'axios'
 import axios from 'axios'
 import type { HandlersInfoResponse, HandlersRackSummary } from '@/api/schemas'
+import { getCsrfToken } from './csrf'
 import { APIRoute } from './routes'
 
 export const SESSION_EXPIRED_MESSAGE = 'Session expired. Please sign in again.'
+export const LOGOUT_FAILED_MESSAGE =
+  "Couldn't sign out: your session is still active. Please try again."
 
 export interface User {
   email: string
@@ -87,18 +90,30 @@ class AuthService {
     }
   }
 
-  // Logout
-  logout(): void {
-    // Request server-side logout to clear HttpOnly cookie, then go to login
-    fetch(APIRoute('auth/web/logout'), { credentials: 'include' })
-      .catch((_e) => {
-        /* ignore network errors during logout */
+  // Logout revokes the session on the server (which clears the HttpOnly cookie), then goes to the login page. It
+  // resolves false, staying on the page, when the server didn't confirm that the session was revoked.
+  async logout(): Promise<boolean> {
+    const headers: Record<string, string> = {}
+    const csrfToken = getCsrfToken()
+    if (csrfToken) {
+      headers['X-CSRF-Token'] = csrfToken
+    }
+    try {
+      const response = await fetch(APIRoute('auth/web/logout'), {
+        method: 'POST',
+        credentials: 'include',
+        headers,
       })
-      .finally(() => {
-        const base = import.meta.env.BASE_URL || '/'
-        // Use assign to ease testing under jsdom and avoid Location href setter issues
-        window.location.assign(`${base}login`)
-      })
+      if (!response.ok) {
+        return false
+      }
+    } catch {
+      return false
+    }
+    const base = import.meta.env.BASE_URL || '/'
+    // Use assign to ease testing under jsdom and avoid Location href setter issues
+    window.location.assign(`${base}login`)
+    return true
   }
 }
 

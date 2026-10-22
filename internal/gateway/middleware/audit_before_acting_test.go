@@ -36,7 +36,7 @@ func auditRouter(logger *audit.Logger, handler gin.HandlerFunc) *gin.Engine {
 		c.Request = c.Request.WithContext(context.WithValue(c.Request.Context(), auth.UserContextKey, authUser))
 		c.Next()
 	})
-	router.Use(AuditBeforeActing(logger))
+	router.Use(AuditBeforeActing(logger, nil))
 	for _, route := range auditRoutes {
 		router.Handle(route.method, route.pattern, handler)
 	}
