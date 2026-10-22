@@ -397,6 +397,28 @@ func TestApprovalExecMustRunAnApprovedCommand(t *testing.T) {
 	require.Contains(t, string(recorded.ExecCommands), "bin/pre_release_checks migrate")
 }
 
+// The approval's record keeps an exec's command as the audit log does, without the credentials it carries, and so
+// does the refusal of a process start whose command isn't approved.
+func TestApprovalRecordsCommandsWithoutTheirCredentials(t *testing.T) {
+	e := newApprovalExecHarness(t)
+	const command = "curl -H 'X-API-Key: s3cret' https://example.com/hooks/release"
+	app := "docspring"
+	require.NoError(t, e.database.UpsertSetting(&app, "approved_deploy_commands", []string{command}, nil))
+	require.Zero(t, e.exec(command))
+
+	recorded, err := e.database.GetDeployApprovalRequest(e.approval.ID)
+	require.NoError(t, err)
+	require.Contains(t, string(recorded.ExecCommands), "X-API-Key: [REDACTED]")
+	require.NotContains(t, string(recorded.ExecCommands), "s3cret")
+
+	r := httptest.NewRequest(http.MethodPost, "/apps/docspring/services/web/processes", nil)
+	r.Header.Set("Command", "env DB_PASSWORD=s3cret bin/rails console")
+	tracker := &deployApprovalTracker{request: e.approval, app: app}
+	r = r.WithContext(context.WithValue(r.Context(), deployApprovalContextKey, tracker))
+	err = e.h.validateProcessCommand(r, r.URL.Path)
+	require.EqualError(t, err, "command not approved: env DB_PASSWORD=[REDACTED] bin/rails console")
+}
+
 // An exec runs only once it's on its approval's record: one whose approval was rejected after it was looked up is
 // refused, and so is one the database can't record.
 func TestApprovalExecIsRefusedWhenItCantBeRecorded(t *testing.T) {

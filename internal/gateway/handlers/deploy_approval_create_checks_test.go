@@ -122,6 +122,7 @@ func TestCreateAuditEntryKeepsVerificationDetailsWithALongMessage(t *testing.T) 
 
 // Without a configured window, an approval stays open for the documented default of 15 minutes.
 func TestDeployApprovalWindowDefaultsTo15Minutes(t *testing.T) {
-	expiresAt := (&AdminHandler{}).getDeployApprovalExpiry()
+	expiresAt, err := (&AdminHandler{}).getDeployApprovalExpiry()
+	require.NoError(t, err)
 	require.WithinDuration(t, time.Now().Add(15*time.Minute), expiresAt, time.Minute)
 }

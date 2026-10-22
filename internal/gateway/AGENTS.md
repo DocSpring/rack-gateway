@@ -129,7 +129,7 @@ Structured logging:
 - The logger doesn't redact: whatever writes an entry's `Details` keeps secrets out of it, and Slack copies
   `Details` verbatim. Env change entries get their details from `envutil.AuditVisibleKeys.AuditDetails`
   (every value `[REDACTED]` unless the app's `audit_visible_env_vars` lists the key and it is neither secret
-  nor protected); rack param changes log key names only; sensitive query parameters go through `RedactQuery`
+  nor protected); rack param changes log key names only; query strings go through `debugredact.RedactQuery`
 - Everything fails closed, with no exceptions (reads, logins, MFA and logouts included): nothing may act unless its
   audit entry was written first. `middleware.AuditBeforeActing` (every gateway API route) and the proxy's
   `recordAttempt` (every rack request) write an `attempted` entry first and refuse with 503 when it can't be
@@ -151,7 +151,8 @@ Key files:
 
 - `audit/logger.go` - Audit log creation
 - `audit/attempt.go`, `audit/denials.go` - Attempt/result pairing, throttled denials
-- `audit/redaction.go` - Query string redaction
+- `audit/redaction.go`, `audit/command_flags.go` - Command redaction (`RedactCommand`: an exec's command, wherever
+  it's recorded)
 - `envutil/audit.go` - Env change audit details
 - `db/audit_append.go`, `db/audit_hash.go`, `db/audit_normalize.go` - Hash-chained append (hash v2). The row is
   normalized to its stored form, hashed, then stored, so the stored row always re-hashes to `event_hash`. Never

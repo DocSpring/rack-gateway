@@ -86,7 +86,8 @@ func (l *Limiter) Allow(key string) bool {
 // FailureLimiter limits each client's failed attempts (refused credentials, say), so they can't be guessed or
 // used to load the database at the rate requests arrive. Successful attempts are never limited, but an attempt
 // still running counts as a failure until it ends (see Begin): a burst of concurrent attempts can't all get past
-// the limit before the first of them fails.
+// the limit before the first of them fails. A client is an IP address (see clientKey), or any other key, such as
+// a credential's hash, which is used as it is.
 type FailureLimiter struct {
 	clients *buckets
 
@@ -102,35 +103,35 @@ func NewFailureLimiter(perSecond float64, burst int) *FailureLimiter {
 	return &FailureLimiter{clients: newBuckets(rate.Limit(perSecond), burst), inFlight: make(map[string]int)}
 }
 
-// Begin starts an attempt from the client at ip, or reports false when the client's failed attempts are used up,
-// counting each of its attempts still running as a failure. Beginning doesn't take a failed attempt: end does,
-// when the attempt failed. end must be called once the attempt is over.
-func (f *FailureLimiter) Begin(ip string) (end func(failed bool), ok bool) {
-	key := clientKey(ip)
+// Begin starts an attempt from client, or reports false when the client's failed attempts are used up, counting
+// each of its attempts still running as a failure. Beginning doesn't take a failed attempt: end does, when the
+// attempt failed. end must be called once the attempt is over.
+func (f *FailureLimiter) Begin(client string) (end func(failed bool), ok bool) {
+	key := clientKey(client)
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if f.clients.tokens(ip) < float64(f.inFlight[key]+1) {
+	if f.clients.tokens(client) < float64(f.inFlight[key]+1) {
 		return nil, false
 	}
 	f.inFlight[key]++
 	var once sync.Once
 	return func(failed bool) {
-		once.Do(func() { f.end(ip, key, failed) })
+		once.Do(func() { f.end(client, key, failed) })
 	}, true
 }
 
-func (f *FailureLimiter) end(ip, key string, failed bool) {
+func (f *FailureLimiter) end(client, key string, failed bool) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.inFlight[key]--; f.inFlight[key] <= 0 {
 		delete(f.inFlight, key)
 	}
 	if failed {
-		f.clients.take(ip)
+		f.clients.take(client)
 	}
 }
 
-// Fail counts a failed attempt from the client at ip that wasn't begun with Begin.
-func (f *FailureLimiter) Fail(ip string) {
-	f.clients.take(ip)
+// Fail counts a failed attempt from client that wasn't begun with Begin.
+func (f *FailureLimiter) Fail(client string) {
+	f.clients.take(client)
 }

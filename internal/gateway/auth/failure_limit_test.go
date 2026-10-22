@@ -97,6 +97,43 @@ func TestAKnownCredentialGetsPastItsAddressesFailedAttempts(t *testing.T) {
 	require.Equal(t, http.StatusTooManyRequests, h.serve("203.0.113.7", "Bearer "+h.token).Code)
 }
 
+// A known credential's attempts still running count against its own limit: once it's revoked, a burst of
+// concurrent requests with it can't all be checked before the first of them fails and it's forgotten.
+func TestARevokedKnownCredentialGetsNoMoreConcurrentAttemptsThanItsLimit(t *testing.T) {
+	h := newFailureLimitHarness(t)
+	require.Equal(t, http.StatusOK, h.serve("203.0.113.7", "Bearer "+h.token).Code)
+	for i := 0; i < 3; i++ {
+		require.Equal(t, http.StatusUnauthorized, h.serve("203.0.113.7", "Bearer rgw_not_a_real_token").Code)
+	}
+	require.NoError(t, h.database.DeleteAPIToken(h.tokenID))
+
+	// Token checks wait while api_tokens is locked, so every attempt that gets past the limit is still running.
+	lock, err := h.database.DB().Begin()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = lock.Rollback() })
+	_, err = lock.Exec("LOCK TABLE api_tokens IN ACCESS EXCLUSIVE MODE")
+	require.NoError(t, err)
+
+	const sent = 10
+	codes := make(chan int, sent)
+	for i := 0; i < sent; i++ {
+		go func() { codes <- h.serve("203.0.113.7", "Bearer "+h.token).Code }()
+	}
+	for refused := 0; refused < sent-3; refused++ {
+		select {
+		case code := <-codes:
+			require.Equal(t, http.StatusTooManyRequests, code)
+		case <-time.After(10 * time.Second):
+			t.Fatalf("%d of %d requests were refused while the token was checked; the rest were all checked",
+				refused, sent)
+		}
+	}
+	require.NoError(t, lock.Rollback())
+	for i := 0; i < 3; i++ {
+		require.Equal(t, http.StatusUnauthorized, <-codes)
+	}
+}
+
 // A request without credentials isn't a failed attempt: a browser that isn't signed in yet can't lock itself out.
 func TestRequestsWithoutCredentialsArentFailedAttempts(t *testing.T) {
 	h := newFailureLimitHarness(t)

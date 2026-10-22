@@ -227,12 +227,14 @@ deploy.
 5. **Rate limits on failures and approvals.** Each client IP gets `AUTH_FAILURE_LIMIT_BURST` (30) refused sign-ins,
    refilled at `AUTH_FAILURE_LIMIT_PER_MINUTE` (30). A session or API token that signed in within the last 24
    hours, or a session just created, still gets through when its IP is refused, so clients sharing an address
-   aren't locked out by one of them. Each user can create `DEPLOY_APPROVAL_LIMIT_BURST` (20) deploy approval
+   aren't locked out by one of them. It has the same limit of its own, which caps how many requests with it are
+   checked at once. Each user can create `DEPLOY_APPROVAL_LIMIT_BURST` (20) deploy approval
    requests, across all their API tokens, refilled at `DEPLOY_APPROVAL_LIMIT_PER_HOUR` (60). Raise that if CI
    creates more requests than that. A request that repeats an open one gets `409` with that request and doesn't
-   count.
+   count, but every attempt, repeats and refusals included, counts against a limit three times as large.
 6. **Settings with a stored value of the wrong type are errors.** The MFA settings refuse to load one, rather than
-   use a default. If a settings error shows up after migrating, set that setting again.
+   use a default, and approving or extending a deploy approval request fails while `deploy_approval_window_minutes`
+   can't be read. If a settings error shows up after migrating, set that setting again.
 
 **What changes for users and CI:**
 
@@ -248,16 +250,25 @@ deploy.
 - **A promote whose outcome the gateway couldn't see keeps its approval's claim**: CI needs a new approval to promote
   again.
 - **A build, object or process the rack created but the approval couldn't record gets `503`**, naming what to do
-  again (create the build again, upload to a new key, start a new process).
+  again (create the build again, upload to a new key, start a new process). So does an upload the rack says it
+  stored at a different key.
 - **Exec and log sessions are rechecked every minute** and end when the user, session, token, permission or approval
   is gone, or when a recheck can't finish within 30 seconds. A session lasts at most 12 hours, so a long
-  `convox logs -f` reconnects.
+  `convox logs -f` reconnects. One a deploy approval allowed lasts at most an hour, whether or not the approval's
+  window ends first.
 - **Web logout is a POST** with the session's CSRF token; a GET no longer signs out.
 
 **Logs and audit:**
 
 - An exec's command is audited with the credentials a command line commonly carries redacted: a URL's password, the
-  value of a secret-named assignment or flag (`DB_PASSWORD=...`, `--token ...`) and a `Bearer` value.
+  value of a secret-named assignment or flag (`DB_PASSWORD=...`, `--token ...`), the value of a credential header
+  (`Authorization`, `Cookie`, `X-API-Key: ...`), a `Bearer` value, and the credentials common programs take with
+  short flags (`mysql -p...`, `redis-cli -a`, `sshpass -p`, `curl -u user:...`). A deploy approval request's record
+  of the commands run under it, and the refusal of a `convox run` command it doesn't approve, are redacted the same
+  way. Redaction can't recognize every credential, and the audit log is permanent: pass credentials to commands
+  through the app's env, never on the command line.
+- A request's query string is logged and audited with the value of every parameter named for a credential redacted
+  (`api_key`, `client_secret`, `password`, any `*token*`, `code`, `state`, ...), not only the login parameters.
 - Request log lines say `rbac_decision` `deny` for every 401, 403 and 429, `error` when the permission check failed,
   and `not_evaluated` when no check ran. Update CloudWatch filters that relied on the old values.
 - A deploy approval request's approve, reject and extend entries use the resource type `deploy_approval_request` (it

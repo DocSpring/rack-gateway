@@ -104,19 +104,18 @@ func (h *AdminHandler) ListDeployApprovalRequests(c *gin.Context) {
 	c.JSON(http.StatusOK, DeployApprovalRequestList{DeployApprovalRequests: responses})
 }
 
-func (h *AdminHandler) getDeployApprovalExpiry() time.Time {
+// getDeployApprovalExpiry is when an approval or extension made now ends: deploy_approval_window_minutes from now.
+// A setting it can't read is an error, never the default window, which may be longer than the one configured.
+func (h *AdminHandler) getDeployApprovalExpiry() (time.Time, error) {
 	windowMinutes := settings.DefaultDeployApprovalWindowMinutes
 	if h.settingsService != nil {
 		minutes, err := h.settingsService.GetDeployApprovalWindowMinutes()
 		if err != nil {
-			log.Printf("WARN: Failed to get deploy_approval_window_minutes setting: %v", err)
-		} else if minutes > 0 {
-			windowMinutes = minutes
+			return time.Time{}, fmt.Errorf("failed to read %s: %w", settings.KeyDeployApprovalWindowMinutes, err)
 		}
+		windowMinutes = minutes
 	}
-
-	window := time.Duration(windowMinutes) * time.Minute
-	return time.Now().Add(window)
+	return time.Now().Add(time.Duration(windowMinutes) * time.Minute), nil
 }
 
 // ApproveDeployApprovalRequest godoc

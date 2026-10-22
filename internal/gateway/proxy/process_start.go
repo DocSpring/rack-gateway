@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 )
 
@@ -50,7 +51,8 @@ func matchesAnyRoute(path string, routes []string) bool {
 }
 
 // validateProcessCommand refuses a process start under a deploy approval whose command isn't one of the app's
-// approved_deploy_commands.
+// approved_deploy_commands. The refusal, which the audit log keeps, names the command without the credentials it
+// may carry.
 func (h *Handler) validateProcessCommand(r *http.Request, original string) error {
 	if r.Method != http.MethodPost || !rbac.KeyMatch3(original, processStartRoute) {
 		return nil
@@ -64,7 +66,7 @@ func (h *Handler) validateProcessCommand(r *http.Request, original string) error
 	app := extractAppFromPath(original)
 	command := strings.TrimSpace(r.Header.Get("Command"))
 	if command != attachedRunCommand && !h.isCommandApproved(app, command) {
-		return refuse(http.StatusForbidden, fmt.Errorf("command not approved: %s", command))
+		return refuse(http.StatusForbidden, fmt.Errorf("command not approved: %s", audit.RedactCommand(command)))
 	}
 
 	return nil

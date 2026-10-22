@@ -84,6 +84,17 @@ func TestURL(t *testing.T) {
 	require.Equal(t, "/apps?"+redactedQueryValue, URL("/apps?a=%zz&token=hidden-token"))
 }
 
+// A query keeps its other parameters, and the values of those named for a credential are redacted whatever their
+// case. One that can't be parsed is redacted whole.
+func TestRedactQuery(t *testing.T) {
+	require.Empty(t, RedactQuery(""))
+	require.Equal(t,
+		"STATE="+redactedQueryValue+"&api_key="+redactedQueryValue+"&code_verifier="+redactedQueryValue+
+			"&id_token="+redactedQueryValue+"&limit=10&login_code="+redactedQueryValue,
+		RedactQuery("STATE=s&login_code=c&code_verifier=v&id_token=t&api_key=k&limit=10"))
+	require.Equal(t, redactedQueryValue, RedactQuery("state=%zz"))
+}
+
 func TestBodyRedactsSensitiveFields(t *testing.T) {
 	tests := []struct {
 		body string

@@ -178,23 +178,25 @@ func (h *Handler) captureObjectUpload(
 		h.setResourceWithAudit(r, "object", key, email, false)
 	}
 
-	// Convox API returns "Url" with capital U (Go struct field name). Only a stored object answers with one.
+	// Convox API returns "Url" with capital U (Go struct field name). Only a stored object answers with one, and the
+	// rack stores it at the key it was sent to. A build of the object needs that key marked uploaded, and the key
+	// can't be written again (object keys are write-once), so an upload that doesn't name it, or can't be marked,
+	// has to be made again, to a new key.
 	objectURL := extractJSONString(obj["Url"])
-	if objectURL == "" {
-		if tracked {
+	if objectURL != uploadObjectURL(path) {
+		if !tracked {
+			return nil
+		}
+		if objectURL == "" {
 			return unreadableAnswer("the rack answered the upload without the stored object's URL", retryUpload)
 		}
-		return nil
+		return unreadableAnswer("the rack answered the upload with another object's URL, "+objectURL, retryUpload)
 	}
-	// A build of the object needs it marked uploaded, and its key can't be written again (object keys are
-	// write-once), so an upload that can't be marked has to be made again, to a new key.
 	done := "the rack stored " + objectURL
-	if objectURL == uploadObjectURL(path) {
-		if err := recordStep(done, "record that the upload finished", retryUpload, func() error {
-			return h.database.MarkObjectUploaded(extractAppFromPath(path), uploadObjectKey(path))
-		}); err != nil {
-			return err
-		}
+	if err := recordStep(done, "record that the upload finished", retryUpload, func() error {
+		return h.database.MarkObjectUploaded(extractAppFromPath(path), uploadObjectKey(path))
+	}); err != nil {
+		return err
 	}
 	return recordInApproval(done, retryUpload, func() error {
 		return h.updateObjectURLApprovalTracking(r, objectURL)

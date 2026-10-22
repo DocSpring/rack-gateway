@@ -124,6 +124,24 @@ func TestDifferentApproverRequired(t *testing.T) {
 	require.Equal(t, &req.ID, logs[0].DeployApprovalRequestID)
 }
 
+// An approval window that can't be read (a stored value that isn't a whole number of minutes) refuses approvals and
+// extensions, rather than opening the default window, which may be longer than the one configured.
+func TestAnUnreadableApprovalWindowRefusesApprovals(t *testing.T) {
+	f := newDifferentApproverFixture(t, false)
+	require.NoError(t, f.database.UpsertSetting(nil, settings.KeyDeployApprovalWindowMinutes, "1", nil))
+	req := f.request(t, f.alice)
+
+	status, msg := callDeployApprovalAction(t, f.handler.ApproveDeployApprovalRequest, f.bob, req)
+	require.Equal(t, http.StatusInternalServerError, status)
+	require.Equal(t, "failed to read deploy approval settings", msg)
+	status, _ = callDeployApprovalAction(t, f.handler.ExtendDeployApprovalRequest, f.bob, req)
+	require.Equal(t, http.StatusInternalServerError, status)
+
+	reloaded, err := f.database.GetDeployApprovalRequest(req.ID)
+	require.NoError(t, err)
+	require.Equal(t, db.DeployApprovalRequestStatusPending, reloaded.Status)
+}
+
 func TestDifferentApproverRequiredToExtend(t *testing.T) {
 	f := newDifferentApproverFixture(t, true)
 	req := f.request(t, f.alice)
