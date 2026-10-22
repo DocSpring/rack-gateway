@@ -166,7 +166,9 @@ An environment variable pins its setting: the web UI shows it read-only, and the
 (`409 Conflict`). Change it in the deployment config instead. Values are parsed strictly by the setting's type:
 
 - Booleans: `true` or `false`
-- Numbers: whole numbers of at least 1
+- Numbers: whole numbers from 1 to the setting's maximum: 1440 (a day) for `session_timeout_minutes` and
+  `mfa_step_up_window_minutes`, 365 for `mfa_trusted_device_ttl_days`, and 10080 (a week) for
+  `deploy_approval_window_minutes`
 - Lists: a JSON array of strings, or a comma-separated list (use the JSON form when a value contains a comma,
   e.g. an approved deploy command). A quoted value such as `"A,B"` (what `jsonencode` writes for a string) is
   refused: use `jsonencode` on a list. The env var lists (`protected_env_vars`, `secret_env_vars`,
@@ -176,6 +178,14 @@ An environment variable pins its setting: the web UI shows it read-only, and the
   refused. `verify_git_commit_mode` must be `latest` or `branch`.
 
 Every value can be JSON-encoded, so a deployment tool can write `jsonencode(value)` for all of them.
+
+The API checks the values it saves the same way, by JSON type: a boolean sent as the string `"true"`, or a number
+that's fractional or out of range, is refused with `400 Bad Request`. A string setting also takes `null`, which
+reads as its default. Each settings group (a card in the web UI) is saved in one transaction, so a save changes all
+of its settings or none. A database value saved before these checks that doesn't fit its setting is an error, not
+some other value: the gateway refuses to start with an invalid MFA setting, and the other settings fail safe (the
+default session timeout, deploy approvals required, destructive actions refused). Save a new value, delete it, or
+set its environment variable.
 
 The gateway refuses to start when a `RGW_SETTING_*` or `RGW_APP_*_SETTING_*` variable names an unknown setting,
 isn't spelled the way the gateway reads it (upper case, with dashes in app names written as underscores), or has a

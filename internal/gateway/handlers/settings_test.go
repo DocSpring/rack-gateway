@@ -613,7 +613,7 @@ func testUpdateSettingsSingleBoolean(t *testing.T) {
 		Roles: []string{"admin"},
 	}))
 
-	_ = database.DeleteSetting(nil, "allow_destructive_actions")
+	_ = database.DeleteSettings(nil, []string{"allow_destructive_actions"})
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
@@ -648,8 +648,7 @@ func testUpdateSettingsMultiple(t *testing.T) {
 		Roles: []string{"admin"},
 	}))
 
-	_ = database.DeleteSetting(nil, "allow_destructive_actions")
-	_ = database.DeleteSetting(nil, "mfa_trusted_device_ttl_days")
+	_ = database.DeleteSettings(nil, []string{"allow_destructive_actions", "mfa_trusted_device_ttl_days"})
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)

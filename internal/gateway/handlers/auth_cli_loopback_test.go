@@ -77,7 +77,8 @@ func newLoopbackEnv(t *testing.T, requireMFA bool) *loopbackEnv {
 		[]byte("pepper"), "", "", "", "", nil)
 	require.NoError(t, err)
 	settingsService := settings.NewService(database)
-	require.NoError(t, settingsService.SetMFASettings(&db.MFASettings{RequireAllUsers: requireMFA}, nil))
+	require.NoError(t, settingsService.SetGlobalSettings(
+		map[string]interface{}{settings.KeyMFARequireAllUsers: requireMFA}, nil))
 	oauth := &loopbackOAuth{email: "user@example.com"}
 	auditLog := audit.NewLogger(database)
 	handler := NewAuthHandler(oauth, database, &config.Config{DevMode: true}, sessions, mfaService,

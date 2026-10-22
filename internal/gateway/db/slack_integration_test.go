@@ -1,6 +1,8 @@
 package db_test
 
 import (
+	"strings"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -26,7 +28,7 @@ func TestSlackIntegrationCRUD(t *testing.T) {
 	}
 	botToken := fakeSlackBot
 
-	integration, err := database.CreateSlackIntegration(
+	integration, err := database.ReplaceSlackIntegration(
 		"T123456",
 		"Test Workspace",
 		botToken,
@@ -88,38 +90,45 @@ func TestSlackIntegrationCRUD(t *testing.T) {
 	require.Nil(t, retrieved)
 }
 
-func TestSlackIntegration_NoDuplicates(t *testing.T) {
+// Reconnecting Slack replaces the integration, so there's only ever one, even when two reconnects run at once. A
+// replacement that can't be stored keeps the integration there was.
+func TestReplaceSlackIntegrationKeepsOne(t *testing.T) {
 	database := dbtest.NewDatabase(t)
-
 	user, err := database.CreateUser("admin@example.com", "Admin User", []string{"admin"})
 	require.NoError(t, err)
+	replace := func(workspaceID, name string) error {
+		_, err := database.ReplaceSlackIntegration(workspaceID, name, fakeSlackBot, "U123456", "chat:write",
+			map[string]interface{}{}, &user.ID)
+		return err
+	}
 
-	channelActions := map[string]interface{}{}
-	botToken := fakeSlackBot
+	require.NoError(t, replace("T1", "First"))
+	require.NoError(t, replace("T1", "First, reconnected"))
+	var wg sync.WaitGroup
+	errs := make(chan error, 2)
+	for _, workspaceID := range []string{"T2", "T3"} {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			errs <- replace(workspaceID, "Workspace "+workspaceID)
+		}()
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		require.NoError(t, err)
+	}
+	var count int
+	require.NoError(t, database.DB().QueryRow("SELECT COUNT(*) FROM slack_integration").Scan(&count))
+	require.Equal(t, 1, count)
 
-	// Create first integration
-	_, err = database.CreateSlackIntegration(
-		"T123456",
-		"Test Workspace",
-		botToken,
-		"U123456",
-		"channels:read,chat:write",
-		channelActions,
-		&user.ID,
-	)
+	current, err := database.GetSlackIntegration()
 	require.NoError(t, err)
-
-	// Attempting to create another integration with the same workspace_id should fail
-	_, err = database.CreateSlackIntegration(
-		"T123456",
-		"Test Workspace 2",
-		botToken,
-		"U123456",
-		"channels:read,chat:write",
-		channelActions,
-		&user.ID,
-	)
-	require.Error(t, err)
+	require.Error(t, replace("T4", strings.Repeat("x", 300)), "the name is longer than its column")
+	after, err := database.GetSlackIntegration()
+	require.NoError(t, err)
+	require.NotNil(t, after, "the failed reconnect kept the integration there was")
+	require.Equal(t, current.WorkspaceID, after.WorkspaceID)
 }
 
 func TestUpdateSlackChannels_NoIntegration(t *testing.T) {
@@ -137,7 +146,7 @@ func TestUpdateSlackChannels_RefusesAChangeToAnOlderConfiguration(t *testing.T) 
 			"id": "C123456", "name": "security", "actions": actions,
 		}}
 	}
-	_, err := database.CreateSlackIntegration("T123456", "Test Workspace", fakeSlackBot, "U123456",
+	_, err := database.ReplaceSlackIntegration("T123456", "Test Workspace", fakeSlackBot, "U123456",
 		"channels:read,chat:write", channel("login.*_failed"), nil)
 	require.NoError(t, err)
 

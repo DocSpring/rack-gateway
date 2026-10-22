@@ -27,9 +27,11 @@ func TestDeleteAppSettingsGroupWithoutKeysClearsTheGroup(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	handler, _, _ := setupSettingsHandler(t)
 	svc := handler.settingsService
-	require.NoError(t, svc.SetAppSetting("web", settings.KeyVCSRepo, "acme/web", nil))
-	require.NoError(t, svc.SetAppSetting("web", settings.KeyGitHubVerification, false, nil))
-	require.NoError(t, svc.SetAppSetting("web", settings.KeyProtectedEnvVars, []string{"SECRET"}, nil))
+	require.NoError(t, svc.SetAppSettings("web", map[string]interface{}{
+		settings.KeyVCSRepo:            "acme/web",
+		settings.KeyGitHubVerification: false,
+		settings.KeyProtectedEnvVars:   []string{"SECRET"},
+	}, nil))
 
 	w := deleteVCSCIDeploy(t, handler, "?key="+settings.KeyVCSRepo)
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())

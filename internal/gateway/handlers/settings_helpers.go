@@ -4,9 +4,11 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 
+	gtwlog "github.com/DocSpring/rack-gateway/internal/gateway/logging"
 	"github.com/DocSpring/rack-gateway/internal/gateway/settings"
 )
 
@@ -15,8 +17,8 @@ type settingsOperations interface {
 	isValid(key string) bool
 	getDefault(key string) (interface{}, error)
 	getSetting(appName, key string, defaultValue interface{}) (*settings.Setting, error)
-	setSetting(appName, key string, value interface{}, uid *int64) error
-	deleteSetting(appName, key string) error
+	setSettings(appName string, values map[string]interface{}, uid *int64) error
+	deleteSettings(appName string, keys []string) error
 }
 
 // globalSettingsOps implements settingsOperations for global settings.
@@ -36,12 +38,12 @@ func (o *globalSettingsOps) getSetting(_ string, key string, defaultValue interf
 	return o.service.GetGlobalSetting(key, defaultValue)
 }
 
-func (o *globalSettingsOps) setSetting(_ string, key string, value interface{}, uid *int64) error {
-	return o.service.SetGlobalSetting(key, value, uid)
+func (o *globalSettingsOps) setSettings(_ string, values map[string]interface{}, uid *int64) error {
+	return o.service.SetGlobalSettings(values, uid)
 }
 
-func (o *globalSettingsOps) deleteSetting(_ string, key string) error {
-	return o.service.DeleteGlobalSetting(key)
+func (o *globalSettingsOps) deleteSettings(_ string, keys []string) error {
+	return o.service.DeleteGlobalSettings(keys)
 }
 
 // appSettingsOps implements settingsOperations for app settings.
@@ -61,12 +63,12 @@ func (o *appSettingsOps) getSetting(appName, key string, defaultValue interface{
 	return o.service.GetAppSetting(appName, key, defaultValue)
 }
 
-func (o *appSettingsOps) setSetting(appName, key string, value interface{}, uid *int64) error {
-	return o.service.SetAppSetting(appName, key, value, uid)
+func (o *appSettingsOps) setSettings(appName string, values map[string]interface{}, uid *int64) error {
+	return o.service.SetAppSettings(appName, values, uid)
 }
 
-func (o *appSettingsOps) deleteSetting(appName, key string) error {
-	return o.service.DeleteAppSetting(appName, key)
+func (o *appSettingsOps) deleteSettings(appName string, keys []string) error {
+	return o.service.DeleteAppSettings(appName, keys)
 }
 
 // validateSettingKeys validates a list of keys against allowed keys and operations.
@@ -142,18 +144,10 @@ func (h *SettingsHandler) updateSettings(c *gin.Context, ops settingsOperations,
 		}
 	}
 
-	// Check every value before saving any, so a bad value doesn't leave a partial update
-	if key, err := validateSettingValues(appName, updates); err != nil {
-		respondSettingSaveError(c, key, err)
+	// Every value is checked, then they're saved in one transaction: the request changes all of them or none
+	if err := ops.setSettings(appName, updates, uid); err != nil {
+		respondSettingSaveError(c, err)
 		return
-	}
-
-	// Save all settings
-	for key, value := range updates {
-		if err := ops.setSetting(appName, key, value, uid); err != nil {
-			respondSettingSaveError(c, key, err)
-			return
-		}
 	}
 
 	// Return updated settings (full group when restricted, otherwise just the keys touched)
@@ -190,12 +184,11 @@ func (_ *SettingsHandler) deleteSettings(c *gin.Context, ops settingsOperations,
 		return
 	}
 
-	// Delete all settings
-	for _, key := range keys {
-		if err := ops.deleteSetting(appName, key); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to delete setting: %s", key)})
-			return
-		}
+	// Delete them together, in one statement
+	if err := ops.deleteSettings(appName, keys); err != nil {
+		gtwlog.Errorf("settings: failed to delete %s: %v", strings.Join(keys, ", "), err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete settings"})
+		return
 	}
 
 	// Return all settings after deletion
@@ -221,7 +214,7 @@ func (_ *SettingsHandler) getSingleSettingResponse(c *gin.Context, ops settingsO
 
 // respondSettingSaveError answers 400 for a value with the wrong shape, 409 for a setting an environment variable
 // defines, and 500 for anything else.
-func respondSettingSaveError(c *gin.Context, key string, err error) {
+func respondSettingSaveError(c *gin.Context, err error) {
 	if errors.Is(err, settings.ErrInvalidSettingValue) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -230,23 +223,6 @@ func respondSettingSaveError(c *gin.Context, key string, err error) {
 		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to save setting: %s", key)})
-}
-
-// validateSettingValues checks each value's shape, and that no environment variable defines the setting. appName
-// is empty for global settings.
-func validateSettingValues(appName string, updates map[string]interface{}) (string, error) {
-	var scope *string
-	if appName != "" {
-		scope = &appName
-	}
-	for key, value := range updates {
-		if err := settings.ValidateAppSettingValue(key, value); err != nil {
-			return key, err
-		}
-		if err := settings.CheckEnvironment(scope, key, value); err != nil {
-			return key, err
-		}
-	}
-	return "", nil
+	gtwlog.Errorf("settings: failed to save: %v", err)
+	c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save settings"})
 }

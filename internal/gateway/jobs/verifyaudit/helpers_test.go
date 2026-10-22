@@ -61,7 +61,7 @@ func newHarness(t *testing.T, store auditverify.AnchorStore) *harness {
 	t.Helper()
 	t.Setenv("AUDIT_HMAC_SECRET", testSecret)
 	h := &harness{t: t, database: dbtest.NewDatabase(t), slack: &queuedSlackEvents{}, now: firstRun}
-	_, err := h.database.CreateSlackIntegration("T123", "Test", "xoxb-test-token", "U123", "chat:write",
+	_, err := h.database.ReplaceSlackIntegration("T123", "Test", "xoxb-test-token", "U123", "chat:write",
 		map[string]interface{}{"security": map[string]interface{}{
 			"id": "C123", "name": "#security", "actions": []string{AlertActionPattern},
 		}}, nil)

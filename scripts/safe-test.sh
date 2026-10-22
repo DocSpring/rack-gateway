@@ -95,7 +95,10 @@ else
         echo -e "\033[31mCRITICAL: Failed to backup Convox config\033[0m"
         exit 1
     }
-    BACKUP_CREATED_BY_US=1
+    # Without a Convox config there's nothing backed up, and nothing to restore
+    if [ -d "$BACKUP_PATH" ]; then
+        BACKUP_CREATED_BY_US=1
+    fi
 
     # Trap to ensure restore happens on exit
     trap restore_config EXIT INT TERM

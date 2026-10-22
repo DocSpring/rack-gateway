@@ -16,7 +16,7 @@ func TestGetAppSetting_GlobalDefaultFallback(t *testing.T) {
 
 	t.Run("ci_provider falls back to global default when app setting is nil", func(t *testing.T) {
 		// Set global default to "circleci"
-		err := svc.SetGlobalSetting(KeyDefaultCIProvider, "circleci", nil)
+		err := svc.SetGlobalSettings(map[string]interface{}{KeyDefaultCIProvider: "circleci"}, nil)
 		require.NoError(t, err)
 
 		// Don't set app-specific ci_provider (it should be nil by default)
@@ -31,11 +31,11 @@ func TestGetAppSetting_GlobalDefaultFallback(t *testing.T) {
 
 	t.Run("ci_provider falls back to global default when app setting is empty string", func(t *testing.T) {
 		// Set global default to "circleci"
-		err := svc.SetGlobalSetting(KeyDefaultCIProvider, "circleci", nil)
+		err := svc.SetGlobalSettings(map[string]interface{}{KeyDefaultCIProvider: "circleci"}, nil)
 		require.NoError(t, err)
 
 		// Set app setting to empty string
-		err = svc.SetAppSetting("docspring", KeyCIProvider, "", nil)
+		err = svc.SetAppSettings("docspring", map[string]interface{}{KeyCIProvider: ""}, nil)
 		require.NoError(t, err)
 
 		// GetAppSetting should return the global default
@@ -48,11 +48,11 @@ func TestGetAppSetting_GlobalDefaultFallback(t *testing.T) {
 
 	t.Run("ci_provider uses app-specific value when set", func(t *testing.T) {
 		// Set global default to "circleci"
-		err := svc.SetGlobalSetting(KeyDefaultCIProvider, "circleci", nil)
+		err := svc.SetGlobalSettings(map[string]interface{}{KeyDefaultCIProvider: "circleci"}, nil)
 		require.NoError(t, err)
 
 		// Set app setting to "github_actions"
-		err = svc.SetAppSetting("docspring", KeyCIProvider, "github_actions", nil)
+		err = svc.SetAppSettings("docspring", map[string]interface{}{KeyCIProvider: "github_actions"}, nil)
 		require.NoError(t, err)
 
 		// GetAppSetting should return the app-specific value
@@ -65,7 +65,7 @@ func TestGetAppSetting_GlobalDefaultFallback(t *testing.T) {
 
 	t.Run("vcs_provider falls back to global default when app setting is nil", func(t *testing.T) {
 		// Set global default to "github"
-		err := svc.SetGlobalSetting(KeyDefaultVCSProvider, "github", nil)
+		err := svc.SetGlobalSettings(map[string]interface{}{KeyDefaultVCSProvider: "github"}, nil)
 		require.NoError(t, err)
 
 		// Don't set app-specific vcs_provider
@@ -96,9 +96,9 @@ func TestGetAllAppSettings_GlobalDefaultFallback(t *testing.T) {
 
 	t.Run("GetAllAppSettings includes global defaults for ci_provider and vcs_provider", func(t *testing.T) {
 		// Set global defaults
-		err := svc.SetGlobalSetting(KeyDefaultCIProvider, "circleci", nil)
+		err := svc.SetGlobalSettings(map[string]interface{}{KeyDefaultCIProvider: "circleci"}, nil)
 		require.NoError(t, err)
-		err = svc.SetGlobalSetting(KeyDefaultVCSProvider, "github", nil)
+		err = svc.SetGlobalSettings(map[string]interface{}{KeyDefaultVCSProvider: "github"}, nil)
 		require.NoError(t, err)
 
 		// Don't set app-specific values

@@ -70,7 +70,7 @@ func newVerifyingFixture(t *testing.T, withPR bool, appSettings map[string]inter
 		values[key] = value
 	}
 	for key, value := range values {
-		require.NoError(t, f.handler.settingsService.SetAppSetting("myapp", key, value, nil))
+		require.NoError(t, f.handler.settingsService.SetAppSettings("myapp", map[string]interface{}{key: value}, nil))
 	}
 	return f
 }

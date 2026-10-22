@@ -135,6 +135,7 @@ export function DeployApprovalsCard({ settings, disabled }: DeployApprovalsCardP
               className="w-24"
               disabled={isLocked('deploy_approval_window_minutes')}
               id="approval-window"
+              max={10_080}
               min={1}
               onChange={(event) => {
                 const value = Number.parseInt(event.target.value, 10)

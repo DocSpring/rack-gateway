@@ -258,7 +258,7 @@ All configuration via environment variables. See `docs/src/content/docs/configur
 - `COLUMN_ENCRYPTION_KEY` - Key for encrypted columns (`mfa_methods.secret`, the Slack bot token); base64 of
   32 bytes, required in every mode (dev/test use the published key in `mise.toml`, refused against a
   production database). See `colcrypt/`. Read and write these columns only through the `db` package
-  (`CreateMFAMethod`, `CreateSlackIntegration`, the scan paths): it encrypts on write, decrypts on read and
+  (`CreateMFAMethod`, `ReplaceSlackIntegration`, the scan paths): it encrypts on write, decrypts on read and
   sets `SecretErr`/`BotTokenErr` instead of an empty secret when a value can't be decrypted. Test tooling
   that touches them directly uses `cmd/totp-gen encrypt` (shell) or `web/e2e/column-crypto.ts`
 - `GOOGLE_CLIENT_ID` - OAuth client ID

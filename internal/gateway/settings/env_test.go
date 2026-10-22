@@ -7,14 +7,13 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	"github.com/DocSpring/rack-gateway/internal/gateway/testutil/dbtest"
 )
 
 // An environment variable overrides a stored value: the deployment config pins the setting.
 func TestEnvironmentOverridesTheDatabase(t *testing.T) {
 	svc := NewService(dbtest.NewDatabase(t))
-	require.NoError(t, svc.SetAppSetting("web", KeyGitHubVerification, false, nil))
+	require.NoError(t, svc.SetAppSettings("web", map[string]interface{}{KeyGitHubVerification: false}, nil))
 
 	t.Setenv("RGW_APP_WEB_SETTING_GITHUB_VERIFICATION", "true")
 	setting, err := svc.GetAppSetting("web", KeyGitHubVerification, true)
@@ -70,17 +69,19 @@ func TestAuditVisibleEnvVars(t *testing.T) {
 	require.Empty(t, visible)
 
 	stored := []string{"port", " PORT ", "Log_Level"}
-	require.NoError(t, svc.SetAppSetting("web", KeyAuditVisibleEnvVars, stored, nil))
+	require.NoError(t, svc.SetAppSettings("web", map[string]interface{}{KeyAuditVisibleEnvVars: stored}, nil))
 	visible, err = svc.GetAuditVisibleEnvVars("web")
 	require.NoError(t, err)
 	require.Equal(t, []string{"PORT", "LOG_LEVEL"}, visible)
-	require.ErrorIs(t, svc.SetAppSetting("web", KeyAuditVisibleEnvVars, "PORT", nil), ErrInvalidSettingValue)
+	require.ErrorIs(t, svc.SetAppSettings("web", map[string]interface{}{KeyAuditVisibleEnvVars: "PORT"}, nil),
+		ErrInvalidSettingValue)
 
 	t.Setenv("RGW_APP_WEB_SETTING_AUDIT_VISIBLE_ENV_VARS", "rails_env, PORT")
 	visible, err = svc.GetAuditVisibleEnvVars("web")
 	require.NoError(t, err)
 	require.Equal(t, []string{"RAILS_ENV", "PORT"}, visible)
-	require.ErrorIs(t, svc.SetAppSetting("web", KeyAuditVisibleEnvVars, []string{"PORT"}, nil), ErrSetByEnvironment)
+	require.ErrorIs(t, svc.SetAppSettings("web", map[string]interface{}{KeyAuditVisibleEnvVars: []string{"PORT"}}, nil),
+		ErrSetByEnvironment)
 
 	require.NoError(t, ValidateEnvironment([]string{`RGW_APP_API_SETTING_AUDIT_VISIBLE_ENV_VARS=["PORT"]`}))
 	require.Error(t, ValidateEnvironment([]string{`RGW_APP_API_SETTING_AUDIT_VISIBLE_ENV_VARS=[PORT]`}))
@@ -93,24 +94,26 @@ func TestEnvDefinedSettingsCantBeChanged(t *testing.T) {
 	t.Setenv("RGW_SETTING_MFA_TRUSTED_DEVICE_TTL_DAYS", "45")
 	t.Setenv("RGW_APP_WEB_SETTING_DEFAULT_BRANCH", "develop")
 
-	err := svc.SetAppSetting("web", KeyDefaultBranch, "main", nil)
+	err := svc.SetAppSettings("web", map[string]interface{}{KeyDefaultBranch: "main"}, nil)
 	require.True(t, errors.Is(err, ErrSetByEnvironment), "got %v", err)
 	require.ErrorContains(t, err, "RGW_APP_WEB_SETTING_DEFAULT_BRANCH")
-	require.NoError(t, svc.SetAppSetting("web", KeyDefaultBranch, "develop", nil))
+	require.NoError(t, svc.SetAppSettings("web", map[string]interface{}{KeyDefaultBranch: "develop"}, nil))
 	_, stored, err := database.GetSetting(stringPtr("web"), KeyDefaultBranch)
 	require.NoError(t, err)
 	require.False(t, stored, "an unchanged env-defined value isn't stored")
 
 	// A form that submits every MFA field still saves the ones the environment doesn't define.
-	require.NoError(t, svc.SetMFASettings(&db.MFASettings{
-		RequireAllUsers: false, TrustedDeviceTTLDays: 45, StepUpWindowMinutes: 20,
+	require.NoError(t, svc.SetGlobalSettings(map[string]interface{}{
+		KeyMFARequireAllUsers: false, KeyTrustedDeviceTTLDays: 45, GlobalSettingStepUpWindowMinutes.String(): 20,
 	}, nil))
 	mfa, err := svc.GetMFASettings()
 	require.NoError(t, err)
 	require.Equal(t, 20, mfa.StepUpWindowMinutes)
 	require.Equal(t, 45, mfa.TrustedDeviceTTLDays)
 
-	err = svc.SetMFASettings(&db.MFASettings{TrustedDeviceTTLDays: 7, StepUpWindowMinutes: 20}, nil)
+	err = svc.SetGlobalSettings(map[string]interface{}{
+		KeyTrustedDeviceTTLDays: 7, GlobalSettingStepUpWindowMinutes.String(): 20,
+	}, nil)
 	require.True(t, errors.Is(err, ErrSetByEnvironment), "got %v", err)
 }
 

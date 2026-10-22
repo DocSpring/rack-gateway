@@ -4,7 +4,10 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
+
+	"github.com/lib/pq"
 )
 
 // Settings CRUD operations for unified settings table
@@ -125,13 +128,17 @@ func (d *Database) UpsertSetting(appName *string, key string, value interface{},
 	}
 
 	if err := d.upsertSettingCore(nil, appName, key, string(b), updatedByUserID); err != nil {
-		scope := "global"
-		if appName != nil {
-			scope = fmt.Sprintf("app %s", *appName)
-		}
-		return fmt.Errorf("failed to upsert %s setting %s: %w", scope, key, err)
+		return fmt.Errorf("failed to upsert %s setting %s: %w", settingScope(appName), key, err)
 	}
 	return nil
+}
+
+// settingScope describes a setting's scope for error messages.
+func settingScope(appName *string) string {
+	if appName == nil {
+		return "global"
+	}
+	return "app " + *appName
 }
 
 // SettingUpdate represents a single setting to update in a batch operation.
@@ -140,55 +147,62 @@ type SettingUpdate struct {
 	Value interface{}
 }
 
-// UpsertSettingsInTx atomically updates multiple settings within a single transaction.
-// All settings succeed or all fail together.
+// UpsertSettingsInTx saves several settings in one transaction: all of them or none.
 func (d *Database) UpsertSettingsInTx(appName *string, updates []SettingUpdate, updatedByUserID *int64) error {
 	if len(updates) == 0 {
 		return nil
 	}
+	return d.inSettingsTx(func(tx *sql.Tx) error {
+		for _, update := range updates {
+			valueJSON, err := json.Marshal(update.Value)
+			if err != nil {
+				return fmt.Errorf("failed to marshal setting %s: %w", update.Key, err)
+			}
+			if err := d.upsertSettingCore(tx, appName, update.Key, string(valueJSON), updatedByUserID); err != nil {
+				return fmt.Errorf("failed to upsert %s setting %s: %w", settingScope(appName), update.Key, err)
+			}
+		}
+		return nil
+	})
+}
 
+// DeleteSettings removes settings' database values in one statement, so their environment variables or defaults
+// apply. appName is nil for global settings.
+func (d *Database) DeleteSettings(appName *string, keys []string) error {
+	if len(keys) == 0 {
+		return nil
+	}
+	return d.inSettingsTx(func(tx *sql.Tx) error {
+		var err error
+		if appName == nil {
+			_, err = d.execTx(tx, `DELETE FROM settings WHERE app_name IS NULL AND key = ANY(?)`, pq.Array(keys))
+		} else {
+			_, err = d.execTx(tx, `DELETE FROM settings WHERE app_name = ? AND key = ANY(?)`, *appName, pq.Array(keys))
+		}
+		if err != nil {
+			return fmt.Errorf("failed to delete %s settings %s: %w", settingScope(appName),
+				strings.Join(keys, ", "), err)
+		}
+		return nil
+	})
+}
+
+// inSettingsTx runs fn in a transaction that holds the settings lock. Settings changes take turns, so two saves
+// of the same group of settings can't interleave into a mix of both.
+func (d *Database) inSettingsTx(fn func(tx *sql.Tx) error) error {
 	tx, err := d.db.Begin()
 	if err != nil {
 		return fmt.Errorf("failed to begin settings transaction: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
-
-	for _, update := range updates {
-		valueJSON, err := json.Marshal(update.Value)
-		if err != nil {
-			return fmt.Errorf("failed to marshal setting %s: %w", update.Key, err)
-		}
-
-		if err := d.upsertSettingCore(tx, appName, update.Key, string(valueJSON), updatedByUserID); err != nil {
-			scope := "global"
-			if appName != nil {
-				scope = fmt.Sprintf("app %s", *appName)
-			}
-			return fmt.Errorf("failed to upsert %s setting %s: %w", scope, update.Key, err)
-		}
+	if _, err := d.execTx(tx, "SELECT pg_advisory_xact_lock(?)", AdvisoryLockSettings); err != nil {
+		return fmt.Errorf("failed to lock settings: %w", err)
 	}
-
+	if err := fn(tx); err != nil {
+		return err
+	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("failed to commit settings transaction: %w", err)
-	}
-	return nil
-}
-
-// DeleteSetting removes a setting from the database (revert to env/default).
-func (d *Database) DeleteSetting(appName *string, key string) error {
-	var err error
-	if appName == nil {
-		_, err = d.exec(`DELETE FROM settings WHERE app_name IS NULL AND key = ?`, key)
-	} else {
-		_, err = d.exec(`DELETE FROM settings WHERE app_name = ? AND key = ?`, *appName, key)
-	}
-
-	if err != nil {
-		scope := "global"
-		if appName != nil {
-			scope = fmt.Sprintf("app %s", *appName)
-		}
-		return fmt.Errorf("failed to delete %s setting %s: %w", scope, key, err)
 	}
 	return nil
 }

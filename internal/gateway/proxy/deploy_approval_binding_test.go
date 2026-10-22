@@ -77,7 +77,7 @@ func (f *bindingFixture) setImagePatterns(t *testing.T, patterns map[string]stri
 	t.Helper()
 	app := "docspring"
 	if patterns == nil {
-		require.NoError(t, f.database.DeleteSetting(&app, "service_image_patterns"))
+		require.NoError(t, f.database.DeleteSettings(&app, []string{"service_image_patterns"}))
 		return
 	}
 	require.NoError(t, f.database.UpsertSetting(&app, "service_image_patterns", patterns, nil))

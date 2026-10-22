@@ -1,6 +1,7 @@
 package db
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -84,9 +85,10 @@ func (d *Database) GetSlackIntegration() (*SlackIntegration, error) {
 	return &si, nil
 }
 
-// CreateSlackIntegration creates a new Slack integration. botToken is stored encrypted and bound to the
-// workspace.
-func (d *Database) CreateSlackIntegration(
+// ReplaceSlackIntegration connects a Slack workspace in place of the integration there was: a gateway has one. The
+// old integration is deleted and the new one stored in one transaction, so a reconnect that fails keeps the old one.
+// botToken is stored encrypted and bound to the workspace.
+func (d *Database) ReplaceSlackIntegration(
 	workspaceID, workspaceName, botToken, botUserID, scope string,
 	channelActions map[string]interface{},
 	createdByUserID *int64,
@@ -109,8 +111,23 @@ func (d *Database) CreateSlackIntegration(
 		RETURNING id, created_at, updated_at
 	`
 
+	ctx := context.Background()
+	tx, err := d.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin Slack integration replacement: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	// Reconnects take turns, so a second one replaces the first rather than failing on the one-row index.
+	if _, err := tx.ExecContext(ctx, "SELECT pg_advisory_xact_lock($1)", AdvisoryLockSlackIntegration); err != nil {
+		return nil, fmt.Errorf("failed to lock the Slack integration: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, "DELETE FROM slack_integration"); err != nil {
+		return nil, fmt.Errorf("failed to remove the previous Slack integration: %w", err)
+	}
+
 	var si SlackIntegration
-	err = d.db.QueryRow(
+	err = tx.QueryRowContext(
+		ctx,
 		query,
 		workspaceID,
 		workspaceName,
@@ -123,7 +140,10 @@ func (d *Database) CreateSlackIntegration(
 		scope,
 	).Scan(&si.ID, &si.CreatedAt, &si.UpdatedAt)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to store the Slack integration: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("failed to commit the Slack integration: %w", err)
 	}
 
 	si.WorkspaceID = workspaceID

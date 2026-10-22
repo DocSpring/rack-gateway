@@ -98,6 +98,29 @@ func (s *Service) resolveSetting(
 	return &Setting{Value: defaultValue, Source: SourceDefault, EnvVar: envVarName}, nil
 }
 
+// readGlobal reads a global setting with parse (boolValue or wholeNumber), using preloaded database values when
+// given. Values are checked when they're saved, and environment variables when the gateway starts, so one that
+// doesn't parse can only be a database value saved before that. It's an error, not some other value: readGlobal
+// returns the setting's default with it, and the caller decides how to fail safe.
+func readGlobal[T any](
+	s *Service,
+	key string,
+	preloaded map[string][]byte,
+	parse func(key string, value interface{}) (T, error),
+) (T, error) {
+	defaultValue, _ := DefaultGlobalSettings[key].(T)
+	setting, err := s.resolveSetting(nil, key, defaultValue, preloaded)
+	if err != nil {
+		return defaultValue, err
+	}
+	value, err := parse(key, setting.Value)
+	if err != nil {
+		return defaultValue, fmt.Errorf("the stored %s can't be used; save a new value, delete it, or set %s: %w",
+			key, setting.EnvVar, err)
+	}
+	return value, nil
+}
+
 // loadSettingValue returns the raw DB value for a setting, preferring a preloaded
 // map when provided to avoid repeated queries.
 func (s *Service) loadSettingValue(

@@ -5,7 +5,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	"github.com/DocSpring/rack-gateway/internal/gateway/settings"
 )
 
@@ -38,7 +37,7 @@ func TestMFASettingsChangesApplyAtOnce(t *testing.T) {
 	assertStatus(t, e.do("GET", "/api/v1/users", "", s.headers), http.StatusForbidden, "enrollment required")
 
 	svc := settings.NewService(e.database)
-	if err := svc.SetMFASettings(&db.MFASettings{RequireAllUsers: false}, nil); err != nil {
+	if err := svc.SetGlobalSettings(map[string]interface{}{settings.KeyMFARequireAllUsers: false}, nil); err != nil {
 		t.Fatal(err)
 	}
 	assertStatus(t, e.do("GET", "/api/v1/users", "", s.headers), http.StatusOK, "MFA no longer required")
