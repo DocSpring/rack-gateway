@@ -212,6 +212,10 @@ A restore to before the upgrade loses the audit events written since; see
 This release fixes the findings of a security audit. Most changes need nothing from you; check these before you
 deploy.
 
+**Skip v0.1.15 and upgrade to v0.1.16.** v0.1.15's image can't read the CA bundle that `convox.yml`'s `PGSSLROOTCERT`
+names (`permission denied`), so `migrate` fails and the deploy stops before it promotes. v0.1.16 fixes the bundle's
+permissions and has everything below.
+
 **Before deploying:**
 
 1. **The gateway verifies its database's certificate.** `convox.yml` sets `PGSSLMODE=verify-full` with Amazon RDS's

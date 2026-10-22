@@ -2,6 +2,7 @@
 # Smoke-tests the release gateway image, built without the testbypass tag, with a production configuration. The E2E
 # suite can't cover this: it runs a testbypass build with DEV_MODE and E2E_TEST_MODE on. Checks that:
 #   - the binary reports its test bypasses compiled out
+#   - the runtime user can read the CA bundle convox.yml gives as PGSSLROOTCERT
 #   - it refuses to start (or run a command) while a test bypass is set, naming each one, or with the published
 #     development column encryption key
 #   - the server refuses the published development APP_SECRET_KEY and secrets shorter than 32 bytes
@@ -69,6 +70,16 @@ echo "== Build info"
 info="$(run_gateway "$SERVICE" ./rack-gateway-api build-info)" || fail "build-info failed:"$'\n'"${info}"
 echo "$info"
 expect "build-info" "$info" "test bypasses: compiled out"
+
+# The smoke database runs without TLS, so the server never reads the bundle here; a rack's verify-full does.
+echo "== Reads the database CA bundle"
+mapfile -t ca_bundles < <(sed -n 's/^[[:space:]]*- PGSSLROOTCERT=//p' "$SCRIPT_DIR/../convox.yml" | sort -u)
+[ "${#ca_bundles[@]}" -gt 0 ] || fail "convox.yml gives no PGSSLROOTCERT"
+for bundle in "${ca_bundles[@]}"; do
+  output="$(run_gateway --entrypoint /bin/sh "$SERVICE" -c "grep -q 'BEGIN CERTIFICATE' '${bundle}'")" ||
+    fail "the runtime user can't read ${bundle}:"$'\n'"${output}"
+  echo "Read ${bundle}"
+done
 
 echo "== Refuses to start with test bypasses"
 bypasses=(
