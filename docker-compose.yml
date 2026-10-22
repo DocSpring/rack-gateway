@@ -274,9 +274,9 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: postgres
-    # Expose on a non-default host port to avoid conflicts with local Postgres
+    # Expose on a non-default host port to avoid conflicts with local Postgres (POSTGRES_PORT in mise.toml)
     ports:
-      - "55432:5432"
+      - "${POSTGRES_PORT:-55432}:5432"
     volumes:
       - postgres17-data:/var/lib/postgresql/data
     healthcheck:

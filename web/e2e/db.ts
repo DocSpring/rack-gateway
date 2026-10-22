@@ -9,7 +9,8 @@ function getFallbackDatabaseUrl(): string {
     return e2eUrl.trim()
   }
 
-  return 'postgres://postgres:postgres@127.0.0.1:55432/gateway_test?sslmode=disable'
+  const port = process.env.POSTGRES_PORT || '55432'
+  return `postgres://postgres:postgres@127.0.0.1:${port}/gateway_test?sslmode=disable`
 }
 
 const parseDatabaseUrlList = (value?: string) =>

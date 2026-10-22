@@ -193,6 +193,7 @@ This file contains high-level architecture and task commands. Component-specific
 | **Web Frontend** | 5223 | `WEB_PORT`           | Vite dev server          |
 | **Mock OAuth**   | 3345 | `MOCK_OAUTH_PORT`    | Mock Google OAuth server |
 | **Mock Convox**  | 5443 | `MOCK_CONVOX_PORT`   | Mock Convox API server   |
+| **Postgres**     | 55432 | `POSTGRES_PORT`     | Dev/test Postgres (Docker). Set it in the environment where 55432 is taken |
 
 **URLs in Development:**
 

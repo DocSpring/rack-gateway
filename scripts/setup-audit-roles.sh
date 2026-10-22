@@ -5,7 +5,7 @@ set -euo pipefail
 # In production, create them when you provision the database (see docs: deployment/database-setup).
 
 # Try DATABASE_URL first, fall back to E2E_DATABASE_URL, then TEST_DATABASE_URL, then default
-DATABASE_URL="${DATABASE_URL:-${E2E_DATABASE_URL:-${TEST_DATABASE_URL:-postgres://postgres:postgres@localhost:55432/gateway_test?sslmode=disable}}}"
+DATABASE_URL="${DATABASE_URL:-${E2E_DATABASE_URL:-${TEST_DATABASE_URL:-postgres://postgres:postgres@localhost:${POSTGRES_PORT:-55432}/gateway_test?sslmode=disable}}}"
 
 echo "Setting up audit roles..."
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -q -f "$(dirname "${BASH_SOURCE[0]}")/audit-roles.sql"

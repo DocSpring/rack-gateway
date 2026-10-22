@@ -148,7 +148,7 @@ PY
     if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
         case "$host" in
             ''|localhost|127.0.0.*)
-                if [ "${port:-}" = "55432" ]; then
+                if [ "${port:-}" = "${POSTGRES_PORT:-55432}" ]; then
                     compose_cmd up -d postgres >/dev/null 2>&1 || true
                     # A cold CI runner can take well over 20s to pull and start the image.
                     for _ in $(seq 1 60); do

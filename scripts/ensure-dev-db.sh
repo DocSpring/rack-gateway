@@ -28,7 +28,7 @@ compose_cmd exec -T postgres psql -U postgres -tc "SELECT 1 FROM pg_database WHE
 
 # Setup audit roles in gateway_dev
 echo "Setting up audit roles..."
-DEV_DB_URL="postgres://postgres:postgres@localhost:55432/gateway_dev?sslmode=disable"
+DEV_DB_URL="postgres://postgres:postgres@localhost:${POSTGRES_PORT:-55432}/gateway_dev?sslmode=disable"
 DATABASE_URL="$DEV_DB_URL" ./scripts/setup-audit-roles.sh
 
 # Run migrations
