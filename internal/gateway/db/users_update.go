@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/jackc/pgx/v5/pgconn"
@@ -15,6 +16,8 @@ var (
 	ErrUserNotFound = errors.New("user not found")
 	// ErrUserExists is returned when a new user, or a user's new email, would duplicate another user's email.
 	ErrUserExists = errors.New("a user with that email already exists")
+	// ErrUserRolesChanged is returned when a role change was decided against roles the user no longer has.
+	ErrUserRolesChanged = errors.New("the user's roles changed since they were read")
 )
 
 // UserUpdate is a change to a user. A nil field is left as it is.
@@ -22,6 +25,10 @@ type UserUpdate struct {
 	Email *string
 	Name  *string
 	Roles []string
+	// RolesWere are the roles a change to Roles was decided against (who may change them, and to what). The update
+	// fails with ErrUserRolesChanged when the user's roles are no longer these, rather than write over a change made
+	// meanwhile, such as an admin's role being revoked while their own request was in flight.
+	RolesWere []string
 }
 
 // UserUpdateResult is what UpdateUser changed.
@@ -34,7 +41,8 @@ type UserUpdateResult struct {
 
 // UpdateUser applies update to the user with id in one transaction, which holds the user's row lock: a concurrent
 // change can't interleave with it, and only the fields the update names are written, so a name change never
-// writes back roles another admin just changed.
+// writes back roles another admin just changed. A role change is checked against the roles it was decided against
+// (update.RolesWere) under the lock.
 //
 // A new email can hand the account to someone else, so changing it also revokes all of the user's sessions and
 // deletes their API tokens: nothing issued to the old address keeps working. A login racing the change can't add a
@@ -46,13 +54,19 @@ func (d *Database) UpdateUser(id int64, update UserUpdate, changedBy *int64) (*U
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	var currentEmail string
-	err = tx.QueryRow(d.rebind("SELECT email FROM users WHERE id = ? FOR UPDATE"), id).Scan(&currentEmail)
+	var currentEmail, currentRoles string
+	err = tx.QueryRow(d.rebind("SELECT email, roles FROM users WHERE id = ? FOR UPDATE"), id).
+		Scan(&currentEmail, &currentRoles)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrUserNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to load user: %w", err)
+	}
+	if update.Roles != nil {
+		if err := checkRolesUnchanged(currentRoles, update.RolesWere); err != nil {
+			return nil, err
+		}
 	}
 
 	result := &UserUpdateResult{}
@@ -73,6 +87,23 @@ func (d *Database) UpdateUser(id int64, update UserUpdate, changedBy *int64) (*U
 		return nil, err
 	}
 	return result, nil
+}
+
+// checkRolesUnchanged returns ErrUserRolesChanged unless the user's stored roles (JSON) are the roles were.
+func checkRolesUnchanged(storedJSON string, were []string) error {
+	var current []string
+	if err := json.Unmarshal([]byte(storedJSON), &current); err != nil {
+		return fmt.Errorf("failed to read the user's roles: %w", err)
+	}
+	if !SameRoles(current, were) {
+		return ErrUserRolesChanged
+	}
+	return nil
+}
+
+// SameRoles reports whether two role lists hold the same roles, in any order.
+func SameRoles(a, b []string) bool {
+	return slices.Equal(slices.Sorted(slices.Values(a)), slices.Sorted(slices.Values(b)))
 }
 
 // updateUserProfileTx writes the update's name and roles, when it has them.

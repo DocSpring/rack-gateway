@@ -32,9 +32,10 @@ type ApproveJobArgs struct {
 // Kind returns the unique identifier for this job type
 func (ApproveJobArgs) Kind() string { return "circleci:approve_job" }
 
-// ApprovalStore loads deploy approval requests.
+// ApprovalStore loads deploy approval requests (db.Database).
 type ApprovalStore interface {
 	GetDeployApprovalRequest(id int64) (*db.DeployApprovalRequest, error)
+	WithDeployApprovalRequestHeld(id int64, fn func(*db.DeployApprovalRequest) error) error
 }
 
 // AuditLog records the worker's approvals in the hash-chained audit log (audit.Logger).
@@ -64,8 +65,8 @@ func NewApproveJobWorker(approvals ApprovalStore, token string, auditLog AuditLo
 
 // Work approves the CircleCI job after checking the deploy approval is still approved and the workflow's pipeline
 // matches it. Retries can run hours after the job was queued, so the approval is re-checked on every attempt, and
-// again just before the hold job is approved: checking CircleCI takes several requests, during which the approval
-// can be rejected or expire. The approval is written to the audit log before it's sent, with the hold job,
+// again while the hold job is approved (approveHeld): checking CircleCI takes several requests, during which the
+// approval can be rejected or expire. The approval is written to the audit log before it's sent, with the hold job,
 // workflow and pipeline it approves, and nothing is approved when that entry can't be written.
 func (w *ApproveJobWorker) Work(_ context.Context, job *river.Job[ApproveJobArgs]) error {
 	if strings.TrimSpace(w.token) == "" {
@@ -94,19 +95,45 @@ func (w *ApproveJobWorker) Work(_ context.Context, job *river.Job[ApproveJobArgs
 	if err := w.auditLog.RecordSystemAttempt(attempt); err != nil {
 		return fmt.Errorf("not approving the CircleCI job without an audit entry: %w", err)
 	}
-	approveErr := client.Approve(target)
+	sent, approveErr := w.approveHeld(client, args.DeployApprovalRequestID, target)
 	result := w.approvalEntry(approval, args, target)
 	result.RequestID = attempt.RequestID
 	if approveErr != nil {
 		result.Status = audit.StatusFailed
 		result.Details = audit.WithDetails(result.Details, map[string]interface{}{"error": approveErr.Error()})
 	}
-	// The approval has been sent either way; a failed write is reported by the logger, and the attempt records it.
+	// A failed write is reported by the logger, and the attempt records that the approval was going to be sent.
 	_ = w.auditLog.LogDBEntry(result)
-	if approveErr != nil {
+	switch {
+	case approveErr == nil:
+		return nil
+	case sent:
 		return approvalError(approveErr)
+	default:
+		return approvalLookupError(approveErr)
 	}
-	return nil
+}
+
+// approveHeld approves the hold job with the deploy approval held as it is (db.WithDeployApprovalRequestHeld), so
+// it can't be rejected or expire between its last check and the approval: a rejection waits for CircleCI's answer.
+// sent reports whether the approval was sent; when it wasn't, err says why (errApprovalNotActive, or the approval
+// couldn't be loaded).
+func (w *ApproveJobWorker) approveHeld(
+	client *circleci.Client,
+	id int64,
+	target *circleci.ApprovalTarget,
+) (sent bool, err error) {
+	err = w.approvals.WithDeployApprovalRequestHeld(id, func(held *db.DeployApprovalRequest) error {
+		if err := w.checkActive(held); err != nil {
+			return err
+		}
+		sent = true
+		return client.Approve(target)
+	})
+	if !sent && errors.Is(err, db.ErrDeployApprovalRequestNotFound) {
+		err = approvalNotFound(id)
+	}
+	return sent, err
 }
 
 func (_ *ApproveJobWorker) approvalEntry(
@@ -146,8 +173,8 @@ func approvalError(err error) error {
 	return fmt.Errorf("failed to approve CircleCI job: %w", err)
 }
 
-// activeApproval returns the deploy approval, or an errApprovalNotActive error unless it's approved and unexpired.
-// Other errors (e.g. the database being unavailable) are returned as-is so the job retries.
+// activeApproval returns the deploy approval, or an errApprovalNotActive error unless it's approved and unexpired
+// (checkActive). Other errors (e.g. the database being unavailable) are returned as-is so the job retries.
 func (w *ApproveJobWorker) activeApproval(id int64) (*db.DeployApprovalRequest, error) {
 	if w.approvals == nil {
 		return nil, fmt.Errorf("deploy approval store not configured")
@@ -157,18 +184,30 @@ func (w *ApproveJobWorker) activeApproval(id int64) (*db.DeployApprovalRequest, 
 	}
 	approval, err := w.approvals.GetDeployApprovalRequest(id)
 	if approval == nil && (err == nil || errors.Is(err, db.ErrDeployApprovalRequestNotFound)) {
-		return nil, fmt.Errorf("%w: deploy approval request %d not found", errApprovalNotActive, id)
+		return nil, approvalNotFound(id)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to load deploy approval request %d: %w", id, err)
 	}
-	if approval.Status != db.DeployApprovalRequestStatusApproved {
-		return nil, fmt.Errorf("%w: deploy approval %s is %s", errApprovalNotActive, approval.PublicID, approval.Status)
-	}
-	if approval.ApprovalExpiresAt != nil && w.now().After(*approval.ApprovalExpiresAt) {
-		return nil, fmt.Errorf("%w: deploy approval %s has expired", errApprovalNotActive, approval.PublicID)
+	if err := w.checkActive(approval); err != nil {
+		return nil, err
 	}
 	return approval, nil
+}
+
+// checkActive returns an errApprovalNotActive error unless the deploy approval is approved and unexpired.
+func (w *ApproveJobWorker) checkActive(approval *db.DeployApprovalRequest) error {
+	if approval.Status != db.DeployApprovalRequestStatusApproved {
+		return fmt.Errorf("%w: deploy approval %s is %s", errApprovalNotActive, approval.PublicID, approval.Status)
+	}
+	if approval.ApprovalExpiresAt != nil && w.now().After(*approval.ApprovalExpiresAt) {
+		return fmt.Errorf("%w: deploy approval %s has expired", errApprovalNotActive, approval.PublicID)
+	}
+	return nil
+}
+
+func approvalNotFound(id int64) error {
+	return fmt.Errorf("%w: deploy approval request %d not found", errApprovalNotActive, id)
 }
 
 // isNonRetryableError checks if the error indicates a permanent failure that shouldn't be retried

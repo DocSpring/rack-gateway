@@ -64,7 +64,7 @@ func (h *APIHandler) CreateDeployApprovalRequest(c *gin.Context) {
 		return
 	}
 
-	if !h.admitApprovalCreation(c, token.ID, app, gitCommitHash, createdByAPITokenID, dbUser.ID) {
+	if !h.admitApprovalCreation(c, token.ID, app, gitCommitHash, dbUser.ID) {
 		return
 	}
 

@@ -38,6 +38,8 @@ type Service struct {
 	// one takes to come back.
 	failures   *ratelimit.FailureLimiter
 	retryAfter string
+	// known are the credentials that get past their address's failed attempts (see AuthenticateHTTPRequest).
+	known *knownCredentials
 }
 
 // ErrMissingAuthorization is returned for a request without credentials.
@@ -78,6 +80,12 @@ func NewAuthService(
 	auditLogger *audit.Logger,
 ) *Service {
 	perMinute := ratelimit.PositiveEnv("AUTH_FAILURE_LIMIT_PER_MINUTE", 30)
+	known := newKnownCredentials()
+	if sessions != nil {
+		// A session the gateway creates is known from the start: its first request may come from an address
+		// that's used up its failed attempts.
+		sessions.known = known
+	}
 	return &Service{
 		tokenService: tokenService,
 		database:     database,
@@ -87,6 +95,7 @@ func NewAuthService(
 			perMinute/60, int(ratelimit.PositiveEnv("AUTH_FAILURE_LIMIT_BURST", 30)),
 		),
 		retryAfter: strconv.Itoa(int(math.Ceil(60 / perMinute))),
+		known:      known,
 	}
 }
 
@@ -168,14 +177,32 @@ func (_ *Service) writeUnauthorized(w http.ResponseWriter, r *http.Request, reas
 // A client's failed attempts are limited, so credentials can't be guessed, or used to load the database, at the rate
 // requests arrive: once a client has used them up, its requests are refused with ErrTooManyFailedAttempts before
 // their credentials are checked, until they come back. A request without credentials isn't a failed attempt.
+//
+// A credential that authenticated recently, or a session the gateway just created (knownCredentials), isn't refused
+// for its address's failed attempts, so a client sharing an address (a NAT, a proxy) isn't locked out by someone
+// else's. It's still checked in full.
 func (a *Service) AuthenticateHTTPRequest(r *http.Request) (*User, string, error) {
 	clientIP := netutil.ClientIP(r)
-	if a.failures.Blocked(clientIP) {
-		return nil, "none", ErrTooManyFailedAttempts
+	credential := presentedCredential(r)
+	end := func(failed bool) {
+		if failed {
+			a.failures.Fail(clientIP)
+		}
+	}
+	if !a.known.has(credential) {
+		var ok bool
+		if end, ok = a.failures.Begin(clientIP); !ok {
+			return nil, "none", ErrTooManyFailedAttempts
+		}
 	}
 	user, source, err := a.authenticate(r)
-	if err != nil && !errors.Is(err, ErrMissingAuthorization) {
-		a.failures.Fail(clientIP)
+	failed := err != nil && !errors.Is(err, ErrMissingAuthorization)
+	end(failed)
+	switch {
+	case err == nil:
+		a.known.remember(credential)
+	case failed:
+		a.known.forget(credential)
 	}
 	return user, source, err
 }

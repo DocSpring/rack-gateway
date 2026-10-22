@@ -321,7 +321,7 @@ func TestCaptureObjectUpload_CallsUpdateObjectURLApprovalTracking(t *testing.T) 
 
 	// Call captureObjectUpload
 	require.NoError(t, h.captureObjectUpload(
-		req, "/apps/test-app/objects/tmp/source.tgz", responseObj, "deployer@example.com",
+		req, "/apps/test-app/objects/tmp/source.tgz", responseObj, "deployer@example.com", true,
 	))
 
 	// Verify object_url was saved
@@ -413,7 +413,7 @@ func TestCaptureBuildCreation_CallsUpdateBuildApprovalTracking(t *testing.T) {
 	}
 
 	// Call captureBuildCreation - should save build_id only
-	require.NoError(t, h.captureBuildCreation(req, "/apps/test-app/builds", responseObj, "deployer@example.com"))
+	require.NoError(t, h.captureBuildCreation(req, "/apps/test-app/builds", responseObj, "deployer@example.com", true))
 
 	// Verify build_id was saved but release_id is still empty
 	updated, err := database.FindDeployApprovalRequest(db.DeployApprovalLookup{

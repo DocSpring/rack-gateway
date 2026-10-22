@@ -13,7 +13,7 @@ const AdvisoryLockAuditAnchor int64 = 728443220
 // with a hash of the app name as the second. It must fit in an int4.
 const AdvisoryLockAppEnv int32 = 728443221
 
-// AdvisoryLockSlackIntegration serializes replacing the Slack integration (see ReplaceSlackIntegration).
+// AdvisoryLockSlackIntegration serializes changes to the Slack integration (see changeSlackIntegration).
 const AdvisoryLockSlackIntegration int64 = 728443222
 
 // AdvisoryLockSettings serializes settings changes (see inSettingsTx).

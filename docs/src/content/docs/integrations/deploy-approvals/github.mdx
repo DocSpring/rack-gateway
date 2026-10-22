@@ -98,8 +98,8 @@ When a deploy approval request is created with `github_verification` on, the gat
 4. With `require_pr_for_branch` on, the branch has an open pull request
 
 A request that repeats an open one (same app, commit and target token) is answered `409` with that request
-before any of these checks, so it doesn't call GitHub. Each API token (or user) can create
-`DEPLOY_APPROVAL_LIMIT_BURST` requests (default 20) before it's refused with `429`, and gets
+before any of these checks, so it doesn't call GitHub. Each user can create `DEPLOY_APPROVAL_LIMIT_BURST`
+requests (default 20), themselves or with any of their API tokens, before they're refused with `429`, and gets
 `DEPLOY_APPROVAL_LIMIT_PER_HOUR` (default 60) back each hour.
 
 If any check fails, the gateway answers 400 (for example `GitHub verification failed: no open pull request found

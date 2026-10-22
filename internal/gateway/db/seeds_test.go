@@ -63,7 +63,8 @@ func TestSeedDatabaseLeavesExistingUsersAlone(t *testing.T) {
 	admin, err := database.GetUser("admin@example.com")
 	require.NoError(t, err)
 	name := "Real Name"
-	_, err = database.UpdateUser(admin.ID, gwdb.UserUpdate{Roles: []string{"viewer"}, Name: &name}, nil)
+	change := gwdb.UserUpdate{Roles: []string{"viewer"}, RolesWere: admin.Roles, Name: &name}
+	_, err = database.UpdateUser(admin.ID, change, nil)
 	require.NoError(t, err)
 
 	events, err := database.SeedDatabase(seedLists(), audit.SeededUserEntry)

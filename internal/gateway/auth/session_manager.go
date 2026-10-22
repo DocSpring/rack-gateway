@@ -42,6 +42,8 @@ type SessionManager struct {
 	db          *db.Database
 	secret      []byte
 	ttlProvider SessionTTLProvider
+	// known, set by NewAuthService, learns each session token CreateSession issues.
+	known *knownCredentials
 }
 
 // SessionMetadata contains metadata for creating a new session.
@@ -151,6 +153,7 @@ func (m *SessionManager) CreateSession(user *db.User, meta SessionMetadata) (str
 	session.Channel = chanVal
 	session.DeviceID = strings.TrimSpace(meta.DeviceID)
 	session.DeviceName = strings.TrimSpace(meta.DeviceName)
+	m.known.remember(sessionToken)
 	return sessionToken, session, nil
 }
 

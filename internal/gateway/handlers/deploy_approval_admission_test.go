@@ -3,6 +3,7 @@ package handlers
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -31,7 +32,8 @@ func TestADuplicateApprovalRequestDoesntCallGitHub(t *testing.T) {
 	require.Zero(t, calls.Load())
 }
 
-// Each API token can create so many requests before it has to wait; duplicates don't count.
+// Each user can create so many requests before they have to wait, with any of their API tokens; duplicates don't
+// count.
 func TestApprovalRequestsAreLimitedPerCreator(t *testing.T) {
 	f := newCreateApprovalFixture(t)
 	f.handler.approvalCreations = approvalCreationLimit{creators: ratelimit.NewLimiter(1.0/3600, 2), retryAfter: "3600"}
@@ -45,6 +47,11 @@ func TestApprovalRequestsAreLimitedPerCreator(t *testing.T) {
 	resp = f.createWith(t, map[string]string{"app": "second", "git_commit_hash": ghBranchHead})
 	require.Equal(t, http.StatusCreated, resp.StatusCode, responseError(t, resp))
 
+	// Another token of the same user shares the limit.
+	second, err := f.handler.database.CreateAPIToken(strings.Repeat("b", 64), "ci-token-2", f.user.ID,
+		f.token.Permissions, nil, nil)
+	require.NoError(t, err)
+	f.token = second
 	resp = f.createWith(t, map[string]string{"app": "third", "git_commit_hash": ghBranchHead})
 	require.Equal(t, http.StatusTooManyRequests, resp.StatusCode, responseError(t, resp))
 	require.Equal(t, "3600", resp.Header.Get("Retry-After"))

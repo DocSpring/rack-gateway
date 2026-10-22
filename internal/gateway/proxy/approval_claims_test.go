@@ -44,10 +44,12 @@ func bindApprovalArchive(t *testing.T, database *db.Database, id int64, objectUR
 	require.NoError(t, database.UpdateDeployApprovalRequestObjectURL(id, objectURL))
 }
 
-// bindApprovalRelease takes an approval through its upload and its one build to the build's release.
-func bindApprovalRelease(t *testing.T, database *db.Database, id int64, objectURL, buildID, releaseID string) {
+// bindApprovalRelease takes an approval through its upload of object://test-app/tmp/a.tgz and its one build, BUILD1,
+// to the build's release, RELEASE1.
+func bindApprovalRelease(t *testing.T, database *db.Database, id int64) {
 	t.Helper()
-	bindApprovalArchive(t, database, id, objectURL)
+	const buildID, releaseID = "BUILD1", "RELEASE1"
+	bindApprovalArchive(t, database, id, "object://test-app/tmp/a.tgz")
 	claimed, err := database.ClaimDeployApprovalBuild(id)
 	require.NoError(t, err)
 	require.True(t, claimed)

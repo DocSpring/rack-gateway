@@ -4,6 +4,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -166,6 +167,43 @@ func TestUpdateSlackChannels_RefusesAChangeToAnOlderConfiguration(t *testing.T) 
 		"name": "security", "actions": []string{"login.*_failed", "audit_log.verification_*"}, "id": "C123456",
 	}}
 	require.NoError(t, database.UpdateSlackIntegrationChannels(reordered, channel("mfa.verify_failed")))
+}
+
+// A disconnect waits for a reconnect in progress, so it disconnects the integration the reconnect stores rather
+// than reporting success with it connected.
+func TestDeleteSlackIntegrationWaitsForAReconnect(t *testing.T) {
+	database := dbtest.NewDatabase(t)
+	_, err := database.ReplaceSlackIntegration("T1", "First", fakeSlackBot, "U1", "chat:write",
+		map[string]interface{}{}, nil)
+	require.NoError(t, err)
+
+	// A reconnect holds the lock and has deleted the old row.
+	reconnect, err := database.DB().Begin()
+	require.NoError(t, err)
+	defer func() { _ = reconnect.Rollback() }()
+	_, err = reconnect.Exec("SELECT pg_advisory_xact_lock($1)", db.AdvisoryLockSlackIntegration)
+	require.NoError(t, err)
+	_, err = reconnect.Exec("DELETE FROM slack_integration")
+	require.NoError(t, err)
+
+	disconnected := make(chan error, 1)
+	go func() { disconnected <- database.DeleteSlackIntegration() }()
+	select {
+	case err := <-disconnected:
+		t.Fatalf("the disconnect didn't wait for the reconnect: %v", err)
+	case <-time.After(200 * time.Millisecond):
+	}
+
+	_, err = reconnect.Exec(`INSERT INTO slack_integration (workspace_id, workspace_name, bot_token_encrypted)
+		VALUES ('T2', 'Second', 'token')`)
+	require.NoError(t, err)
+	require.NoError(t, reconnect.Commit())
+	require.NoError(t, <-disconnected)
+
+	integration, err := database.GetSlackIntegration()
+	require.NoError(t, err)
+	require.Nil(t, integration, "the reconnected integration was disconnected")
+	require.ErrorIs(t, database.UpdateSlackAlertSettings(true, "C1"), db.ErrNoSlackIntegration)
 }
 
 func TestDeleteSlackIntegration_NoIntegration(t *testing.T) {

@@ -39,9 +39,9 @@ func (h *Handler) setResourceCreator(resourceType, resourceID, email string) {
 }
 
 // captureResourceCreator persists the creator information for app/build/release create responses
-// and records the resource ID for audit logging. It returns an approvalNotRecordedError when the step can't be
-// recorded in its deploy approval request.
-func (h *Handler) captureResourceCreator(r *http.Request, path string, body []byte, email string) error {
+// and records the resource ID for audit logging. For a tracked answer (mustTrackAnswer), it returns a
+// stepNotRecordedError when what the rack created can't be recorded, or the answer doesn't say what that was.
+func (h *Handler) captureResourceCreator(r *http.Request, path string, body []byte, email string, tracked bool) error {
 	if h.database == nil || h.rbacManager == nil {
 		gtwlog.Warnf(
 			"captureResourceCreator: skipping (database=%v rbacManager=%v)",
@@ -50,17 +50,13 @@ func (h *Handler) captureResourceCreator(r *http.Request, path string, body []by
 		)
 		return nil
 	}
-	if len(body) == 0 {
-		gtwlog.Warnf("captureResourceCreator: skipping (empty body) path=%s", path)
-		return nil
-	}
 
 	obj, ok := h.parseResponseBody(body)
 	if !ok {
-		gtwlog.Warnf(
-			"captureResourceCreator: failed to parse response body path=%s",
-			path,
-		)
+		gtwlog.Warnf("captureResourceCreator: can't read the response body path=%s", path)
+		if tracked {
+			return unreadableTrackedAnswer(r, path)
+		}
 		return nil
 	}
 
@@ -70,8 +66,8 @@ func (h *Handler) captureResourceCreator(r *http.Request, path string, body []by
 		email,
 	)
 	h.captureAppCreation(r, path, obj, email)
-	buildErr := h.captureBuildCreation(r, path, obj, email)
-	objectErr := h.captureObjectUpload(r, path, obj, email)
+	buildErr := h.captureBuildCreation(r, path, obj, email, tracked)
+	objectErr := h.captureObjectUpload(r, path, obj, email, tracked)
 	detailsErr := h.captureBuildDetails(r, path, obj)
 	h.captureReleaseCreation(r, path, obj, email)
 	h.captureProcessResource(r, path, obj, email)
@@ -120,6 +116,7 @@ func (h *Handler) captureBuildCreation(
 	path string,
 	obj map[string]interface{},
 	email string,
+	tracked bool,
 ) error {
 	if r.Method != http.MethodPost || !rbac.KeyMatch3(path, "/apps/{app}/builds") {
 		return nil
@@ -143,23 +140,18 @@ func (h *Handler) captureBuildCreation(
 		}
 	}
 
-	// Track build_id in deploy approval immediately (release may not be set yet)
-	if buildID != "" {
-		tracker := getDeployApprovalTracker(r.Context())
-		gtwlog.Infof(
-			"captureBuildCreation: calling updateBuildApprovalTracking "+
-				"buildID=%s releaseID=%s tracker=%v",
-			buildID,
-			releaseID,
-			tracker != nil,
-		)
-		// The build claim is given up with the error, so the build can be created again.
-		return recordInApproval("the rack created build "+buildID, "create the build again", func() error {
-			return h.updateBuildApprovalTracking(r, buildID, releaseID)
-		})
+	if buildID == "" {
+		if tracked {
+			return unreadableAnswer("the rack answered the build request without the build's ID", retryBuild)
+		}
+		gtwlog.Warnf("captureBuildCreation: skipping updateBuildApprovalTracking (empty buildID)")
+		return nil
 	}
-	gtwlog.Warnf("captureBuildCreation: skipping updateBuildApprovalTracking (empty buildID)")
-	return nil
+	// Track build_id in deploy approval immediately (release may not be set yet). The build claim is given up with
+	// the error, so the build can be created again.
+	return recordInApproval("the rack created build "+buildID, retryBuild, func() error {
+		return h.updateBuildApprovalTracking(r, buildID, releaseID)
+	})
 }
 
 func (h *Handler) captureObjectUpload(
@@ -167,6 +159,7 @@ func (h *Handler) captureObjectUpload(
 	path string,
 	obj map[string]interface{},
 	email string,
+	tracked bool,
 ) error {
 	if !isObjectUpload(r, path) {
 		return nil
@@ -187,16 +180,23 @@ func (h *Handler) captureObjectUpload(
 
 	// Convox API returns "Url" with capital U (Go struct field name). Only a stored object answers with one.
 	objectURL := extractJSONString(obj["Url"])
-	if objectURL != "" && objectURL == uploadObjectURL(path) {
-		if err := h.database.MarkObjectUploaded(extractAppFromPath(path), uploadObjectKey(path)); err != nil {
-			gtwlog.Errorf("failed to record object upload: %v", err)
-		}
-	}
 	if objectURL == "" {
+		if tracked {
+			return unreadableAnswer("the rack answered the upload without the stored object's URL", retryUpload)
+		}
 		return nil
 	}
-	// The object's key can't be written again (object keys are write-once).
-	return recordInApproval("the rack stored "+objectURL, "upload the archive again, to a new key", func() error {
+	// A build of the object needs it marked uploaded, and its key can't be written again (object keys are
+	// write-once), so an upload that can't be marked has to be made again, to a new key.
+	done := "the rack stored " + objectURL
+	if objectURL == uploadObjectURL(path) {
+		if err := recordStep(done, "record that the upload finished", retryUpload, func() error {
+			return h.database.MarkObjectUploaded(extractAppFromPath(path), uploadObjectKey(path))
+		}); err != nil {
+			return err
+		}
+	}
+	return recordInApproval(done, retryUpload, func() error {
 		return h.updateObjectURLApprovalTracking(r, objectURL)
 	})
 }

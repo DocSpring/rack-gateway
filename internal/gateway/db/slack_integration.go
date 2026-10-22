@@ -111,39 +111,32 @@ func (d *Database) ReplaceSlackIntegration(
 		RETURNING id, created_at, updated_at
 	`
 
-	ctx := context.Background()
-	tx, err := d.db.BeginTx(ctx, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to begin Slack integration replacement: %w", err)
-	}
-	defer func() { _ = tx.Rollback() }()
-	// Reconnects take turns, so a second one replaces the first rather than failing on the one-row index.
-	if _, err := tx.ExecContext(ctx, "SELECT pg_advisory_xact_lock($1)", AdvisoryLockSlackIntegration); err != nil {
-		return nil, fmt.Errorf("failed to lock the Slack integration: %w", err)
-	}
-	if _, err := tx.ExecContext(ctx, "DELETE FROM slack_integration"); err != nil {
-		return nil, fmt.Errorf("failed to remove the previous Slack integration: %w", err)
-	}
-
 	var si SlackIntegration
-	err = tx.QueryRowContext(
-		ctx,
-		query,
-		workspaceID,
-		workspaceName,
-		encryptedToken,
-		channelActionsJSON,
-		false, // alert_deploy_approvals_enabled defaults to false
-		"",    // alert_deploy_approvals_channel_id defaults to empty
-		createdByUserID,
-		botUserID,
-		scope,
-	).Scan(&si.ID, &si.CreatedAt, &si.UpdatedAt)
+	// Reconnects take turns, so a second one replaces the first rather than failing on the one-row index.
+	err = d.changeSlackIntegration(func(ctx context.Context, tx *sql.Tx) error {
+		if _, err := tx.ExecContext(ctx, "DELETE FROM slack_integration"); err != nil {
+			return fmt.Errorf("failed to remove the previous Slack integration: %w", err)
+		}
+		err := tx.QueryRowContext(
+			ctx,
+			query,
+			workspaceID,
+			workspaceName,
+			encryptedToken,
+			channelActionsJSON,
+			false, // alert_deploy_approvals_enabled defaults to false
+			"",    // alert_deploy_approvals_channel_id defaults to empty
+			createdByUserID,
+			botUserID,
+			scope,
+		).Scan(&si.ID, &si.CreatedAt, &si.UpdatedAt)
+		if err != nil {
+			return fmt.Errorf("failed to store the Slack integration: %w", err)
+		}
+		return nil
+	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to store the Slack integration: %w", err)
-	}
-	if err := tx.Commit(); err != nil {
-		return nil, fmt.Errorf("failed to commit the Slack integration: %w", err)
+		return nil, err
 	}
 
 	si.WorkspaceID = workspaceID
@@ -157,6 +150,29 @@ func (d *Database) ReplaceSlackIntegration(
 	si.Scope = scope
 
 	return &si, nil
+}
+
+// changeSlackIntegration runs fn in a transaction that holds AdvisoryLockSlackIntegration, as every change to the
+// integration does. A reconnect replaces the integration's row: a change made alongside it without the lock could
+// act on the row the reconnect deleted, miss the one it inserted, and report success (a disconnect that leaves the
+// new bot connected).
+func (d *Database) changeSlackIntegration(fn func(ctx context.Context, tx *sql.Tx) error) error {
+	ctx := context.Background()
+	tx, err := d.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to begin a Slack integration change: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	if _, err := tx.ExecContext(ctx, "SELECT pg_advisory_xact_lock($1)", AdvisoryLockSlackIntegration); err != nil {
+		return fmt.Errorf("failed to lock the Slack integration: %w", err)
+	}
+	if err := fn(ctx, tx); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit the Slack integration change: %w", err)
+	}
+	return nil
 }
 
 // ErrNoSlackIntegration is returned when there is no Slack integration to update.
@@ -178,56 +194,61 @@ func (d *Database) UpdateSlackIntegrationChannels(previous, channelActions map[s
 		return fmt.Errorf("failed to marshal channel_actions: %w", err)
 	}
 
-	var changed, missing bool
-	err = d.db.QueryRow(`
-		WITH updated AS (
-			UPDATE slack_integration
-			SET channel_actions = $1, updated_at = NOW()
-			WHERE channel_actions = $2::jsonb
-			RETURNING id
-		)
-		SELECT NOT EXISTS (SELECT 1 FROM updated), NOT EXISTS (SELECT 1 FROM slack_integration)
-	`, channelActionsJSON, previousJSON).Scan(&changed, &missing)
-	if err != nil {
-		return fmt.Errorf("failed to update channel_actions: %w", err)
-	}
-	switch {
-	case missing:
-		return ErrNoSlackIntegration
-	case changed:
-		return ErrSlackChannelsChanged
-	}
-	return nil
+	return d.changeSlackIntegration(func(ctx context.Context, tx *sql.Tx) error {
+		var changed, missing bool
+		err := tx.QueryRowContext(ctx, `
+			WITH updated AS (
+				UPDATE slack_integration
+				SET channel_actions = $1, updated_at = NOW()
+				WHERE channel_actions = $2::jsonb
+				RETURNING id
+			)
+			SELECT NOT EXISTS (SELECT 1 FROM updated), NOT EXISTS (SELECT 1 FROM slack_integration)
+		`, channelActionsJSON, previousJSON).Scan(&changed, &missing)
+		if err != nil {
+			return fmt.Errorf("failed to update channel_actions: %w", err)
+		}
+		switch {
+		case missing:
+			return ErrNoSlackIntegration
+		case changed:
+			return ErrSlackChannelsChanged
+		}
+		return nil
+	})
 }
 
-// DeleteSlackIntegration removes the Slack integration
+// DeleteSlackIntegration disconnects Slack. Once it returns, no integration is connected, whatever reconnect ran
+// alongside it (see changeSlackIntegration). Deleting when there's none isn't an error.
 func (d *Database) DeleteSlackIntegration() error {
-	query := `DELETE FROM slack_integration`
-	_, err := d.db.Exec(query)
-	return err
+	return d.changeSlackIntegration(func(ctx context.Context, tx *sql.Tx) error {
+		if _, err := tx.ExecContext(ctx, "DELETE FROM slack_integration"); err != nil {
+			return fmt.Errorf("failed to delete the Slack integration: %w", err)
+		}
+		return nil
+	})
 }
 
-// UpdateSlackAlertSettings updates the deploy approval alert configuration
+// UpdateSlackAlertSettings updates the deploy approval alert configuration. It returns ErrNoSlackIntegration when
+// Slack isn't connected.
 func (d *Database) UpdateSlackAlertSettings(deployApprovalsEnabled bool, deployApprovalsChannelID string) error {
-	query := `
-		UPDATE slack_integration
-		SET alert_deploy_approvals_enabled = $1,
-		    alert_deploy_approvals_channel_id = $2,
-		    updated_at = NOW()
-	`
-
-	result, err := d.db.Exec(query, deployApprovalsEnabled, deployApprovalsChannelID)
-	if err != nil {
-		return err
-	}
-
-	rows, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if rows == 0 {
-		return fmt.Errorf("no Slack integration found to update")
-	}
-
-	return nil
+	return d.changeSlackIntegration(func(ctx context.Context, tx *sql.Tx) error {
+		result, err := tx.ExecContext(ctx, `
+			UPDATE slack_integration
+			SET alert_deploy_approvals_enabled = $1,
+			    alert_deploy_approvals_channel_id = $2,
+			    updated_at = NOW()
+		`, deployApprovalsEnabled, deployApprovalsChannelID)
+		if err != nil {
+			return fmt.Errorf("failed to update the Slack alert settings: %w", err)
+		}
+		rows, err := result.RowsAffected()
+		if err != nil {
+			return fmt.Errorf("failed to update the Slack alert settings: %w", err)
+		}
+		if rows == 0 {
+			return ErrNoSlackIntegration
+		}
+		return nil
+	})
 }

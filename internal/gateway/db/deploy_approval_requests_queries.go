@@ -11,6 +11,25 @@ func (d *Database) GetDeployApprovalRequest(id int64) (*DeployApprovalRequest, e
 	return scanDeployApprovalRequest(row)
 }
 
+// WithDeployApprovalRequestHeld calls fn with the deploy approval request as it is, and holds a share lock on its
+// row until fn returns: a rejection or other change to the request waits for fn, and the expiry sweep skips it, so
+// fn can act on the status it was given. fn mustn't append to the audit chain: the chain lock comes before row
+// locks.
+func (d *Database) WithDeployApprovalRequestHeld(id int64, fn func(*DeployApprovalRequest) error) error {
+	tx, err := d.db.Begin()
+	if err != nil {
+		return fmt.Errorf("failed to load deploy approval request %d: %w", id, err)
+	}
+	// fn only reads the request, so the transaction is rolled back to release the lock.
+	defer func() { _ = tx.Rollback() }()
+	row := tx.QueryRow(d.rebind(deployApprovalRequestSelect+" WHERE dr.id = ? FOR SHARE OF dr"), id)
+	request, err := scanDeployApprovalRequest(row)
+	if err != nil {
+		return err
+	}
+	return fn(request)
+}
+
 // GetDeployApprovalRequestByPublicID retrieves a deploy approval request by its public ID
 func (d *Database) GetDeployApprovalRequestByPublicID(publicID string) (*DeployApprovalRequest, error) {
 	if !isPublicID(publicID) {

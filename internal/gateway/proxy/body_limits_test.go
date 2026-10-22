@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -16,6 +17,12 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 )
+
+// answerStoredObject answers an upload as the rack does once it has stored the object.
+func answerStoredObject(w http.ResponseWriter, objectURL string) {
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = fmt.Fprintf(w, `{"Url":%q}`, objectURL)
+}
 
 // uploadHead is how much of an archive the client sends before it waits for the rack to start reading.
 const uploadHead = 64 << 10
@@ -46,7 +53,7 @@ func TestArchiveUploadStreamsToTheRack(t *testing.T) {
 			contentLength: r.ContentLength,
 			chunked:       len(r.TransferEncoding) > 0,
 		}
-		_, _ = io.WriteString(w, `{"url":"object://app/tmp/source.tgz"}`)
+		answerStoredObject(w, "object://app/tmp/source.tgz")
 	})
 
 	body, writer := io.Pipe()

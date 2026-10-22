@@ -168,9 +168,13 @@ func promoteMayHaveApplied(statusCode int, forwardErr error) bool {
 	return forwardErr == nil || !neverReachedRack(forwardErr)
 }
 
-// neverReachedRack reports whether a forwarding error happened before the request was sent: the connection or its
-// TLS handshake (the rack's certificate didn't match the pinned one) failed, or the gateway refused the body.
+// neverReachedRack reports whether a forwarding error happened before the request was sent: the gateway refused
+// the request or couldn't build it (requestNotSentError), or the connection or its TLS handshake (the rack's
+// certificate didn't match the pinned one) failed.
 func neverReachedRack(err error) bool {
+	if errors.As(err, new(*requestNotSentError)) {
+		return true
+	}
 	var opErr *net.OpError
 	if errors.As(err, &opErr) && opErr.Op == "dial" {
 		return true

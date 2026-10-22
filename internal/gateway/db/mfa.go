@@ -70,6 +70,11 @@ func (d *Database) SetUserMFAEnrolled(userID int64, enrolled bool) error {
 // ResetUserMFA removes a user's MFA for an admin (resetBy): their methods, backup codes and trusted devices, and
 // it revokes their sessions and deletes their CLI logins in progress (which may have passed MFA already), all in
 // one transaction. Their API tokens are kept. They enroll a new method when they next sign in.
+//
+// It takes the user's row lock first, like every other change to a user's MFA, so it can't deadlock with them, and
+// a login can't add a session it misses: a login checks the user's MFA enrollment under the same lock
+// (CreateUserSession), so it either finishes before the reset, whose revocation then covers its session, or finds
+// the user no longer enrolled.
 func (d *Database) ResetUserMFA(userID, resetBy int64) error {
 	tx, err := d.db.Begin()
 	if err != nil {
@@ -77,6 +82,9 @@ func (d *Database) ResetUserMFA(userID, resetBy int64) error {
 	}
 	defer func() { _ = tx.Rollback() }()
 
+	if err := d.lockUserTx(tx, userID); err != nil {
+		return err
+	}
 	if _, err := d.execTx(tx, "DELETE FROM mfa_methods WHERE user_id = ?", userID); err != nil {
 		return fmt.Errorf("failed to delete mfa methods: %w", err)
 	}
@@ -304,6 +312,20 @@ func (d *Database) GetMFAMethodByID(id int64) (*MFAMethod, error) {
 	return method, nil
 }
 
+// lockUserTx takes the user's row lock for the rest of tx, or returns ErrUserNotFound. Changes to a user's MFA,
+// sessions and roles take it before they touch anything else, so they can't deadlock with each other.
+func (d *Database) lockUserTx(tx *sql.Tx, userID int64) error {
+	var locked int64
+	err := tx.QueryRow(d.rebind("SELECT id FROM users WHERE id = ? FOR UPDATE"), userID).Scan(&locked)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrUserNotFound
+	}
+	if err != nil {
+		return fmt.Errorf("failed to lock user %d: %w", userID, err)
+	}
+	return nil
+}
+
 // ReplaceBackupCodes replaces all backup codes for a user with a new set. It holds the user's row lock, so two
 // replacements at once can't both keep their codes: the second deletes the first's.
 func (d *Database) ReplaceBackupCodes(userID int64, codeHashes []string) error {
@@ -313,13 +335,8 @@ func (d *Database) ReplaceBackupCodes(userID int64, codeHashes []string) error {
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	var locked int64
-	err = tx.QueryRow(d.rebind("SELECT id FROM users WHERE id = ? FOR UPDATE"), userID).Scan(&locked)
-	if errors.Is(err, sql.ErrNoRows) {
-		return ErrUserNotFound
-	}
-	if err != nil {
-		return fmt.Errorf("failed to lock user for backup codes: %w", err)
+	if err := d.lockUserTx(tx, userID); err != nil {
+		return err
 	}
 	if _, err := d.execTx(tx, "DELETE FROM mfa_backup_codes WHERE user_id = ?", userID); err != nil {
 		return fmt.Errorf("failed to clear backup codes: %w", err)

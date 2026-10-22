@@ -14,6 +14,8 @@ import (
 const (
 	// sessionRecheckPeriod is how often an open exec or log session's access is checked again.
 	sessionRecheckPeriod = time.Minute
+	// sessionRecheckTimeout ends a session whose recheck takes longer: its access can't be confirmed.
+	sessionRecheckTimeout = 30 * time.Second
 	// maxWebSocketSessionLifetime ends any exec or log session after this long, whatever its caller's access.
 	maxWebSocketSessionLifetime = 12 * time.Hour
 )

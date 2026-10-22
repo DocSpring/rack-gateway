@@ -75,7 +75,7 @@ func TestSlowUploadOutlastsTheServerTimeouts(t *testing.T) {
 	var received []byte
 	gateway := serveProxyAsAdmin(t, func(w http.ResponseWriter, r *http.Request) {
 		received, _ = io.ReadAll(r.Body)
-		_, _ = io.WriteString(w, `{"url":"object:///tmp/source.tgz"}`)
+		answerStoredObject(w, "object://app/tmp/source.tgz")
 	})
 
 	body, writer := io.Pipe()

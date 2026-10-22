@@ -128,6 +128,14 @@ func (s *sequenceApprovals) GetDeployApprovalRequest(int64) (*db.DeployApprovalR
 	return next, nil
 }
 
+func (s *sequenceApprovals) WithDeployApprovalRequestHeld(id int64, fn func(*db.DeployApprovalRequest) error) error {
+	held, err := s.GetDeployApprovalRequest(id)
+	if err != nil {
+		return err
+	}
+	return fn(held)
+}
+
 func flowApproval(status string) *db.DeployApprovalRequest {
 	expires := time.Now().Add(time.Hour)
 	return &db.DeployApprovalRequest{
@@ -186,8 +194,8 @@ func TestApproveJobIsNotSentWithoutAnAuditEntry(t *testing.T) {
 	require.Empty(t, fake.approvals())
 }
 
-// A deploy approval rejected while CircleCI was being checked isn't approved: the approval is checked again just
-// before the hold job is approved.
+// A deploy approval rejected while CircleCI was being checked isn't approved: the approval is checked again before
+// the attempt is recorded.
 func TestApproveJobRechecksTheApprovalBeforeApproving(t *testing.T) {
 	fake := &fakeCircleCI{}
 	log := &fakeAuditLog{}
@@ -198,4 +206,22 @@ func TestApproveJobRechecksTheApprovalBeforeApproving(t *testing.T) {
 	require.ErrorIs(t, err, errApprovalNotActive)
 	require.Empty(t, fake.approvals())
 	require.Empty(t, log.statuses())
+}
+
+// A rejection that lands after the attempt was recorded either waits for the approval (the approval is held while
+// it's sent) or wins: the held approval is checked before it's sent, and the attempt's result records the failure.
+func TestApproveJobChecksTheHeldApprovalBeforeSendingIt(t *testing.T) {
+	fake := &fakeCircleCI{}
+	log := &fakeAuditLog{}
+	approved := flowApproval(db.DeployApprovalRequestStatusApproved)
+	approvals := &sequenceApprovals{states: []*db.DeployApprovalRequest{
+		approved, approved, flowApproval(db.DeployApprovalRequestStatusRejected),
+	}}
+	err := newFlowWorker(t, fake, approvals, log).Work(context.Background(), flowJob())
+	require.ErrorIs(t, err, errApprovalNotActive)
+	var cancel *river.JobCancelError
+	require.True(t, errors.As(err, &cancel), "a rejected approval isn't retried")
+	require.Empty(t, fake.approvals())
+	require.Equal(t, []string{audit.StatusAttempted, audit.StatusFailed}, log.statuses())
+	require.Contains(t, log.entries[1].Details, "is rejected")
 }

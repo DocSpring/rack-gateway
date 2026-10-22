@@ -274,36 +274,82 @@ func TestClientKeyGroupsIPv6By64(t *testing.T) {
 	require.True(t, b.take("2001:db8:1:3::1"))
 }
 
+// blocked reports whether the client at ip can't begin an attempt, without leaving one running.
+func blocked(f *FailureLimiter, ip string) bool {
+	end, ok := f.Begin(ip)
+	if ok {
+		end(false)
+	}
+	return !ok
+}
+
 func TestFailureLimiter(t *testing.T) {
 	f := NewFailureLimiter(0.5, 3)
 	clock := time.Now()
 	f.clients.now = func() time.Time { return clock }
 
-	// Checking doesn't count, or add the client.
+	// An attempt that didn't fail doesn't count, or add the client.
 	for i := 0; i < 10; i++ {
-		require.False(t, f.Blocked("203.0.113.7"))
+		require.False(t, blocked(f, "203.0.113.7"))
 	}
 	require.Empty(t, f.clients.clients)
+	require.Empty(t, f.inFlight)
 
 	for i := 0; i < 3; i++ {
-		f.Fail("203.0.113.7")
+		end, ok := f.Begin("203.0.113.7")
+		require.True(t, ok)
+		end(true)
+		end(true) // an attempt ends once
 	}
-	require.True(t, f.Blocked("203.0.113.7"))
-	require.False(t, f.Blocked("203.0.113.8"), "another client isn't blocked")
+	require.True(t, blocked(f, "203.0.113.7"))
+	require.False(t, blocked(f, "203.0.113.8"), "another client isn't blocked")
 
 	// One failed attempt comes back every two seconds.
 	clock = clock.Add(2 * time.Second)
-	require.False(t, f.Blocked("203.0.113.7"))
+	require.False(t, blocked(f, "203.0.113.7"))
 	f.Fail("203.0.113.7")
-	require.True(t, f.Blocked("203.0.113.7"))
+	require.True(t, blocked(f, "203.0.113.7"))
 
 	// With the map full, a client without a bucket is blocked when the shared overflow bucket is used up.
 	f.clients.max = 1
-	require.False(t, f.Blocked("198.51.100.1"))
+	require.False(t, blocked(f, "198.51.100.1"))
 	for i := 0; i < 3; i++ {
 		f.Fail("198.51.100.1")
 	}
-	require.True(t, f.Blocked("198.51.100.2"))
+	require.True(t, blocked(f, "198.51.100.2"))
+}
+
+// Attempts still running count as failures, so a burst of concurrent attempts can't all begin before the first of
+// them fails: only as many as the client has failed attempts left run at once.
+func TestFailureLimiterCountsAttemptsInFlight(t *testing.T) {
+	f := NewFailureLimiter(0.5, 3)
+	clock := time.Now()
+	f.clients.now = func() time.Time { return clock }
+
+	var running []func(bool)
+	for i := 0; i < 3; i++ {
+		end, ok := f.Begin("203.0.113.7")
+		require.True(t, ok)
+		running = append(running, end)
+	}
+	_, ok := f.Begin("203.0.113.7")
+	require.False(t, ok, "three attempts are running, and each may fail")
+	require.False(t, blocked(f, "203.0.113.8"), "another client isn't blocked")
+
+	running[0](false)
+	end, ok := f.Begin("203.0.113.7")
+	require.True(t, ok, "an attempt that succeeded gives its place back")
+	end(true)
+	running[1](true)
+	running[2](false)
+
+	// Two failed attempts are used; one is left.
+	end, ok = f.Begin("203.0.113.7")
+	require.True(t, ok)
+	_, ok = f.Begin("203.0.113.7")
+	require.False(t, ok)
+	end(false)
+	require.Empty(t, f.inFlight)
 }
 
 func TestLimiterLimitsEachKey(t *testing.T) {

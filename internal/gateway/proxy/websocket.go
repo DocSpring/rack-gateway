@@ -68,12 +68,13 @@ func (h *Handler) proxyWebSocket(
 	h.logExecStart(r, authUser, originalPath)
 
 	proxyWebSocketMessages(clientConn, upstreamConn, sessionOptions{
-		keepalive:    defaultClientKeepalive,
-		writeWait:    messageWriteWait,
-		clientInput:  rbac.KeyMatch3(originalPath, "/apps/{app}/processes/{id}/exec"),
-		recheck:      h.sessionRecheck(r, authUser, originalPath),
-		recheckEvery: sessionRecheckPeriod,
-		maxLifetime:  maxWebSocketSessionLifetime,
+		keepalive:      defaultClientKeepalive,
+		writeWait:      messageWriteWait,
+		clientInput:    rbac.KeyMatch3(originalPath, "/apps/{app}/processes/{id}/exec"),
+		recheck:        h.sessionRecheck(r, authUser, originalPath),
+		recheckEvery:   sessionRecheckPeriod,
+		recheckTimeout: sessionRecheckTimeout,
+		maxLifetime:    maxWebSocketSessionLifetime,
 	})
 	return http.StatusSwitchingProtocols, nil
 }

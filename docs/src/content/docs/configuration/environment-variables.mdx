@@ -49,9 +49,9 @@ against a database, it marks the database as `production`, or `development` in a
 | `DEBUG_TOPICS` | | Comma-separated debug topics |
 | `RATE_LIMIT_RPS` | `10` | Requests per second allowed from one client IP on the sign-in, MFA and API token routes. An IPv6 client is limited by its `/64`. The gateway keeps a limit for up to 50,000 clients at once; past that, new clients share one |
 | `RATE_LIMIT_BURST` | `20` | Burst size for the per-IP rate limit |
-| `AUTH_FAILURE_LIMIT_BURST` | `30` | Failed sign-ins (refused session or API tokens) one client IP can make before its requests are refused with `429` until some come back. Requests without credentials don't count |
+| `AUTH_FAILURE_LIMIT_BURST` | `30` | Failed sign-ins (refused session or API tokens) one client IP can make before its requests are refused with `429` until some come back. Requests without credentials don't count. A session or API token that signed in from anywhere in the last 24 hours, or a session just created, isn't refused for its IP's failures: someone else behind the same NAT or proxy may have made them |
 | `AUTH_FAILURE_LIMIT_PER_MINUTE` | `30` | How many failed attempts come back each minute |
-| `DEPLOY_APPROVAL_LIMIT_BURST` | `20` | Deploy approval requests one API token (or user) can create before it's refused with `429` until some come back. Each can cost several GitHub API calls on `GITHUB_TOKEN`. A request that repeats an open one is answered with it, and doesn't count |
+| `DEPLOY_APPROVAL_LIMIT_BURST` | `20` | Deploy approval requests one user can create, themselves or with any of their API tokens, before they're refused with `429` until some come back. Each can cost several GitHub API calls on `GITHUB_TOKEN`. A request that repeats an open one is answered with it, and doesn't count |
 | `DEPLOY_APPROVAL_LIMIT_PER_HOUR` | `60` | How many deploy approval requests come back each hour |
 
 ## Column Encryption

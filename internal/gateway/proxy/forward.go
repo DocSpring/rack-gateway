@@ -35,25 +35,17 @@ func (h *Handler) processBufferedResponse(
 	if len(body) > maxBufferedResponseBytes {
 		return nil, errRackResponseTooLarge
 	}
-
-	if handling.filterRelease {
-		app := extractAppFromPath(pth)
-		body = h.filterReleaseEnvForUser(r, body, app)
+	// Only a JSON answer is captured, so a tracked answer in anything else can't say what the rack created.
+	if handling.tracked && !handling.capture {
+		return nil, unreadableTrackedAnswer(r, pth)
 	}
 
-	if handling.filterEnvironment {
-		app := extractAppFromPath(pth)
-		body = h.filterEnvironmentMapResponse(r, body, app)
-	}
-
-	if handling.filterBuild {
-		if body, err = stripBuildRepository(body); err != nil {
-			return nil, fmt.Errorf("failed to filter build response: %w", err)
-		}
+	if body, err = h.filterBufferedResponse(r, body, pth, handling); err != nil {
+		return nil, err
 	}
 
 	if handling.capture {
-		if err := h.captureResourceCreator(r, pth, body, authUserEmail); err != nil {
+		if err := h.captureResourceCreator(r, pth, body, authUserEmail, handling.tracked); err != nil {
 			return nil, err
 		}
 	}
@@ -272,7 +264,7 @@ func (h *Handler) forwardRequest(
 ) (int, error) {
 	targetURL, err := buildTargetURL(rack, path, r.URL.RawQuery)
 	if err != nil {
-		return 0, err
+		return 0, &requestNotSentError{err}
 	}
 
 	if status := h.refuseUnforwardableOptions(w, r, authUser); status != 0 {
@@ -284,24 +276,9 @@ func (h *Handler) forwardRequest(
 		return h.proxyWebSocket(w, r, rack, targetURL, authUser, path)
 	}
 
-	body, err := h.requestBodyForRack(r, path, authUser)
+	proxyReq, client, err := h.rackRequest(r, rack, targetURL, path, authUser)
 	if err != nil {
-		return 0, err
-	}
-
-	if err := h.validateProcessCommand(r, path); err != nil {
-		return 0, err
-	}
-
-	proxyReq, err := prepareProxyRequest(r, targetURL, body, rack, authUser)
-	if err != nil {
-		return 0, err
-	}
-
-	client, err := h.httpClient(r.Context(), forwardTimeout(r, path))
-	if err != nil {
-		log.Printf(`{"level":"error","event":"rack_tls_config_error","message":%q}`, err.Error())
-		return 0, fmt.Errorf("failed to prepare rack TLS: %w", err)
+		return 0, &requestNotSentError{err}
 	}
 
 	resp, err := client.Do(proxyReq)
@@ -314,6 +291,61 @@ func (h *Handler) forwardRequest(
 	defer func() { _ = resp.Body.Close() }()
 
 	return h.processProxyResponse(w, r, resp, path, authUser.Email)
+}
+
+// filterBufferedResponse removes what the caller mustn't see from a rack response body (see responseHandling).
+func (h *Handler) filterBufferedResponse(
+	r *http.Request,
+	body []byte,
+	pth string,
+	handling responseHandling,
+) ([]byte, error) {
+	if handling.filterRelease {
+		body = h.filterReleaseEnvForUser(r, body, extractAppFromPath(pth))
+	}
+	if handling.filterEnvironment {
+		body = h.filterEnvironmentMapResponse(r, body, extractAppFromPath(pth))
+	}
+	if handling.filterBuild {
+		filtered, err := stripBuildRepository(body)
+		if err != nil {
+			return nil, fmt.Errorf("failed to filter build response: %w", err)
+		}
+		body = filtered
+	}
+	return body, nil
+}
+
+// requestNotSentError is an error the gateway hit before sending the request to the rack (neverReachedRack).
+type requestNotSentError struct{ err error }
+
+func (e *requestNotSentError) Error() string { return e.err.Error() }
+func (e *requestNotSentError) Unwrap() error { return e.err }
+
+// rackRequest checks r's body and builds the request to send to the rack, and the client to send it with.
+func (h *Handler) rackRequest(
+	r *http.Request,
+	rack config.RackConfig,
+	targetURL, path string,
+	authUser *auth.User,
+) (*http.Request, *http.Client, error) {
+	body, err := h.requestBodyForRack(r, path, authUser)
+	if err != nil {
+		return nil, nil, err
+	}
+	if err := h.validateProcessCommand(r, path); err != nil {
+		return nil, nil, err
+	}
+	proxyReq, err := prepareProxyRequest(r, targetURL, body, rack, authUser)
+	if err != nil {
+		return nil, nil, err
+	}
+	client, err := h.httpClient(r.Context(), forwardTimeout(r, path))
+	if err != nil {
+		log.Printf(`{"level":"error","event":"rack_tls_config_error","message":%q}`, err.Error())
+		return nil, nil, fmt.Errorf("failed to prepare rack TLS: %w", err)
+	}
+	return proxyReq, client, nil
 }
 
 // requestBodyForRack returns the body to send to the rack. An archive upload streams straight through as it

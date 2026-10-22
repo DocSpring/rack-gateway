@@ -95,11 +95,11 @@ func TestAuthorizeUsesCurrentRoles(t *testing.T) {
 	deleteApps := Convox(ResourceApp, ActionDelete)
 	require.True(t, userCan(t, mgr, database, "user@test.com", deleteApps))
 
-	_, err := database.UpdateUser(user.ID, db.UserUpdate{Roles: []string{"viewer"}}, nil)
+	_, err := database.UpdateUser(user.ID, db.UserUpdate{Roles: []string{"viewer"}, RolesWere: []string{"admin"}}, nil)
 	require.NoError(t, err)
 	require.False(t, userCan(t, mgr, database, "user@test.com", deleteApps), "demotion must apply immediately")
 
-	_, err = database.UpdateUser(user.ID, db.UserUpdate{Roles: []string{"admin"}}, nil)
+	_, err = database.UpdateUser(user.ID, db.UserUpdate{Roles: []string{"admin"}, RolesWere: []string{"viewer"}}, nil)
 	require.NoError(t, err)
 	require.NoError(t, mgr.DeleteUser("user@test.com"))
 	createUser(t, database, "user@test.com", "viewer")

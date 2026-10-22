@@ -142,28 +142,26 @@ func transformEnvArray(v []interface{}, transform func(string) string) ([]byte, 
 }
 
 // captureProcessCreation records a process started under a deploy approval in it: the approval's later steps on the
-// process (exec, terminate) find it by that record. It returns an approvalNotRecordedError when it can't.
+// process (exec, terminate) find it by that record. It returns a stepNotRecordedError when it can't, including when
+// the rack's answer doesn't name the process.
 func (h *Handler) captureProcessCreation(_ *http.Request, body []byte, tracker *deployApprovalTracker) error {
-	if h.database == nil || tracker == nil {
+	if h.database == nil || !hasApproval(tracker) {
 		return nil
 	}
 
+	const retry = "start a new process (this one can't be used under the approval)"
 	var resp map[string]interface{}
 	if err := json.Unmarshal(body, &resp); err != nil {
-		log.Printf("Failed to parse process creation response: %v", err)
-		return nil
+		return unreadableAnswer("the rack answered a process start with a body that isn't a process", retry)
 	}
-
 	processID, ok := resp["id"].(string)
 	if !ok || processID == "" {
-		log.Printf("Process ID not found in response")
-		return nil
+		return unreadableAnswer("the rack answered a process start without the process's ID", retry)
 	}
 
-	return recordInApproval("the rack started process "+processID,
-		"start a new process (this one can't be used under the approval)", func() error {
-			return h.database.AppendProcessIDToDeployApprovalRequest(tracker.request.ID, processID)
-		})
+	return recordInApproval("the rack started process "+processID, retry, func() error {
+		return h.database.AppendProcessIDToDeployApprovalRequest(tracker.request.ID, processID)
+	})
 }
 
 // isCommandApproved reports whether command is in the app's approved_deploy_commands.

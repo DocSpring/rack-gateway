@@ -3883,7 +3883,7 @@
                         }
                     },
                     "409": {
-                        "description": "Conflict",
+                        "description": "Email already in use, or the user's roles changed since they were read",
                         "schema": {
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }

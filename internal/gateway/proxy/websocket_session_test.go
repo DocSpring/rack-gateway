@@ -58,7 +58,7 @@ func TestWebSocketSessionEndsWhenAccessIsGoneOrItsLifetimeIsUp(t *testing.T) {
 			}
 			return nil
 		},
-		recheckEvery: 20 * time.Millisecond,
+		recheckEvery: 20 * time.Millisecond, recheckTimeout: time.Second,
 	}, echoRack)
 	conn := dialWebSocket(t, gateway)
 	<-time.After(100 * time.Millisecond) // a few rechecks
@@ -71,6 +71,29 @@ func TestWebSocketSessionEndsWhenAccessIsGoneOrItsLifetimeIsUp(t *testing.T) {
 
 	gateway = startWebSocketSession(t, sessionOptions{
 		keepalive: defaultClientKeepalive, writeWait: messageWriteWait, clientInput: true,
+		maxLifetime: 200 * time.Millisecond,
+	}, holdRack(t))
+	waitForSessionEnd(t, dialWebSocket(t, gateway))
+}
+
+// A recheck that hangs (the database stalled) ends the session once it has taken recheckTimeout, and doesn't hold
+// up the session's lifetime limit.
+func TestWebSocketSessionEndsWhenARecheckHangs(t *testing.T) {
+	hang := make(chan struct{})
+	t.Cleanup(func() { close(hang) })
+	stalled := func() error {
+		<-hang
+		return nil
+	}
+	gateway := startWebSocketSession(t, sessionOptions{
+		keepalive: defaultClientKeepalive, writeWait: messageWriteWait, clientInput: true,
+		recheck: stalled, recheckEvery: 20 * time.Millisecond, recheckTimeout: 100 * time.Millisecond,
+	}, echoRack)
+	waitForSessionEnd(t, dialWebSocket(t, gateway))
+
+	gateway = startWebSocketSession(t, sessionOptions{
+		keepalive: defaultClientKeepalive, writeWait: messageWriteWait, clientInput: true,
+		recheck: stalled, recheckEvery: 20 * time.Millisecond, recheckTimeout: time.Hour,
 		maxLifetime: 200 * time.Millisecond,
 	}, holdRack(t))
 	waitForSessionEnd(t, dialWebSocket(t, gateway))
@@ -145,7 +168,8 @@ func TestRecheckFindsAccessThatsGone(t *testing.T) {
 	require.ErrorIs(t, h.recheck(locked), errSessionAccessGone)
 
 	demoted := signedIn("demoted@example.com", "admin")
-	_, err = database.UpdateUser(demoted.authUser.DBUser.ID, db.UserUpdate{Roles: []string{"viewer"}}, nil)
+	demotion := db.UserUpdate{Roles: []string{"viewer"}, RolesWere: []string{"admin"}}
+	_, err = database.UpdateUser(demoted.authUser.DBUser.ID, demotion, nil)
 	require.NoError(t, err)
 	require.ErrorIs(t, h.recheck(demoted), errSessionAccessGone)
 

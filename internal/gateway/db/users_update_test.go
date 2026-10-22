@@ -61,7 +61,7 @@ func TestUpdateUserWritesOnlyTheGivenFields(t *testing.T) {
 	_, err = newSession(t, database, user, "c")
 	require.NoError(t, err)
 
-	_, err = database.UpdateUser(user.ID, gwdb.UserUpdate{Roles: []string{"viewer"}}, nil)
+	_, err = database.UpdateUser(user.ID, gwdb.UserUpdate{Roles: []string{"viewer"}, RolesWere: []string{"admin"}}, nil)
 	require.NoError(t, err)
 	name := "Renamed"
 	result, err := database.UpdateUser(user.ID, gwdb.UserUpdate{Name: &name}, nil)
@@ -77,6 +77,28 @@ func TestUpdateUserWritesOnlyTheGivenFields(t *testing.T) {
 	sessions, err := database.ListActiveSessionsByUser(user.ID)
 	require.NoError(t, err)
 	require.Len(t, sessions, 1)
+}
+
+// A role change decided against roles the user no longer has is refused, so a request in flight can't write back
+// roles another admin revoked meanwhile (an admin resubmitting their own roles, say).
+func TestUpdateUserRefusesARoleChangeDecidedAgainstStaleRoles(t *testing.T) {
+	database := dbtest.NewDatabase(t)
+	user, err := database.CreateUser("user@example.com", "User", []string{"admin"})
+	require.NoError(t, err)
+	_, err = database.UpdateUser(user.ID, gwdb.UserUpdate{Roles: []string{"viewer"}, RolesWere: []string{"admin"}}, nil)
+	require.NoError(t, err)
+
+	name := "Renamed"
+	stale := gwdb.UserUpdate{Name: &name, Roles: []string{"admin"}, RolesWere: []string{"admin"}}
+	_, err = database.UpdateUser(user.ID, stale, nil)
+	require.ErrorIs(t, err, gwdb.ErrUserRolesChanged)
+	unchanged, err := database.GetUserByID(user.ID)
+	require.NoError(t, err)
+	require.Equal(t, []string{"viewer"}, unchanged.Roles)
+	require.Equal(t, "User", unchanged.Name, "a refused update writes nothing")
+
+	_, err = database.UpdateUser(user.ID, gwdb.UserUpdate{Roles: []string{"deployer"}}, nil)
+	require.ErrorIs(t, err, gwdb.ErrUserRolesChanged, "a role change must say what it was decided against")
 }
 
 func TestUpdateUserRefusesATakenEmailAndChangesNothing(t *testing.T) {

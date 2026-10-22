@@ -58,18 +58,18 @@ func (b *buckets) take(ip string) bool {
 	return limiter.AllowN(now, 1)
 }
 
-// empty reports whether the client at ip has no token left, without taking one or adding the client.
-func (b *buckets) empty(ip string) bool {
+// tokens is how many tokens the client at ip has left, without taking one or adding the client.
+func (b *buckets) tokens(ip string) float64 {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	limiter := b.clients[clientKey(ip)]
 	if limiter == nil {
 		if len(b.clients) < b.max {
-			return false
+			return float64(b.burst)
 		}
 		limiter = b.overflow
 	}
-	return limiter.TokensAt(b.now()) < 1
+	return limiter.TokensAt(b.now())
 }
 
 // maybeSweep sweeps every sweepEvery, or every second while the map is full. b.mu must be held.

@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"fmt"
 	"io"
 	"sync"
 	"time"
@@ -46,9 +47,11 @@ type sessionOptions struct {
 	// stream's are read and dropped: the rack never reads them, so they'd only fill its connection.
 	clientInput bool
 	// recheck, when set, reports why the session must end (its caller's access is gone), or nil. It runs every
-	// recheckEvery.
-	recheck      func() error
-	recheckEvery time.Duration
+	// recheckEvery, in the background (see sessionRechecks), and one that takes longer than recheckTimeout (when
+	// set) ends the session.
+	recheck        func() error
+	recheckEvery   time.Duration
+	recheckTimeout time.Duration
 	// maxLifetime, when set, ends the session that long after it started.
 	maxLifetime time.Duration
 }
@@ -113,7 +116,7 @@ func watchClientLiveness(conn *websocket.Conn, pongWait time.Duration) func() {
 // superviseSession pings the client every ping period until done is closed. A failed ping is left to the read
 // deadline: a client that can't be pinged stops answering, and its session ends when the deadline passes. It also
 // ends the session (end closes both connections, which stops both directions) when a recheck finds its caller's
-// access gone, or once it has been open for maxLifetime.
+// access gone or takes too long, or once it has been open for maxLifetime.
 func superviseSession(conn *websocket.Conn, opts sessionOptions, end func(), done <-chan struct{}) {
 	ping := time.NewTicker(opts.keepalive.pingPeriod)
 	defer ping.Stop()
@@ -128,23 +131,52 @@ func superviseSession(conn *websocket.Conn, opts sessionOptions, end func(), don
 		defer timer.Stop()
 		lifetime = timer.C
 	}
+	checks := &sessionRechecks{check: opts.recheck, timeout: opts.recheckTimeout}
 	for {
+		var reason error
 		select {
 		case <-done:
 			return
 		case <-ping.C:
 			_ = conn.WriteControl(websocket.PingMessage, nil, time.Now().Add(pingWriteWait))
 		case <-recheck:
-			if err := opts.recheck(); err != nil {
-				gtwlog.Infof("proxy: ending websocket session: %v", err)
-				end()
-				return
-			}
+			checks.start()
+		case reason = <-checks.result:
+			checks.result, checks.deadline = nil, nil
+		case <-checks.deadline:
+			reason = fmt.Errorf("checking the caller's access took over %s", checks.timeout)
 		case <-lifetime:
-			gtwlog.Infof("proxy: ending websocket session: open for %s", opts.maxLifetime)
+			reason = fmt.Errorf("open for %s", opts.maxLifetime)
+		}
+		if reason != nil {
+			gtwlog.Infof("proxy: ending websocket session: %v", reason)
 			end()
 			return
 		}
+	}
+}
+
+// sessionRechecks runs a session's rechecks in the background, one at a time, so a slow one (the database
+// stalled) doesn't hold up the session's pings or its lifetime limit. A recheck still running when the session
+// ends finishes on its own.
+type sessionRechecks struct {
+	check   func() error
+	timeout time.Duration
+	// result receives the running recheck's answer, and deadline fires once it has taken timeout. Both are nil
+	// while no recheck runs.
+	result   chan error
+	deadline <-chan time.Time
+}
+
+func (s *sessionRechecks) start() {
+	if s.result != nil {
+		return
+	}
+	result := make(chan error, 1)
+	go func() { result <- s.check() }()
+	s.result = result
+	if s.timeout > 0 {
+		s.deadline = time.After(s.timeout)
 	}
 }
 

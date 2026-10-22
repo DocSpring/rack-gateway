@@ -34,7 +34,7 @@ var errBodyNotAllowed = errors.New("request body not allowed: GET, HEAD and DELE
 // 503 for a step its deploy approval couldn't record, otherwise fallback.
 func bodyErrorStatus(err error, fallback int) int {
 	switch {
-	case errors.As(err, new(*approvalNotRecordedError)):
+	case errors.As(err, new(*stepNotRecordedError)):
 		return http.StatusServiceUnavailable
 	case errors.Is(err, errBodyTooLarge):
 		return http.StatusRequestEntityTooLarge

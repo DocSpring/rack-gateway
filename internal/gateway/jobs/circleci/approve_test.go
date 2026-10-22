@@ -57,6 +57,14 @@ func (f fakeApprovals) GetDeployApprovalRequest(id int64) (*db.DeployApprovalReq
 	return nil, db.ErrDeployApprovalRequestNotFound
 }
 
+func (f fakeApprovals) WithDeployApprovalRequestHeld(id int64, fn func(*db.DeployApprovalRequest) error) error {
+	approval, err := f.GetDeployApprovalRequest(id)
+	if err != nil {
+		return err
+	}
+	return fn(approval)
+}
+
 // A retry can run hours after the job was queued; if the deploy approval was rejected or has expired by
 // then, the job is canceled before CircleCI is called.
 func TestApproveJobCancelledWhenApprovalNoLongerActive(t *testing.T) {
@@ -95,4 +103,8 @@ type failingApprovals struct{}
 
 func (failingApprovals) GetDeployApprovalRequest(int64) (*db.DeployApprovalRequest, error) {
 	return nil, errors.New("connection refused")
+}
+
+func (failingApprovals) WithDeployApprovalRequestHeld(int64, func(*db.DeployApprovalRequest) error) error {
+	return errors.New("connection refused")
 }

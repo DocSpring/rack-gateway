@@ -197,7 +197,7 @@ func TestCaptureResourceCreatorStoresMappings(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodPost, tc.path, nil)
 			req.Header = make(http.Header)
-			require.NoError(t, h.captureResourceCreator(req, tc.path, []byte(tc.body), "creator@example.com"))
+			require.NoError(t, h.captureResourceCreator(req, tc.path, []byte(tc.body), "creator@example.com", false))
 
 			creators, err := database.GetResourceCreators(tc.typeExpect, []string{tc.idExpect})
 			require.NoError(t, err)
@@ -228,6 +228,7 @@ func TestCaptureResourceCreatorRecordsReleaseFromBuild(t *testing.T) {
 		"/apps/my-app/builds",
 		[]byte(`{"id":"B123","release":"R456"}`),
 		"creator@example.com",
+		false,
 	))
 
 	creators, err := database.GetResourceCreators("release", []string{"R456"})
@@ -245,6 +246,7 @@ func TestCaptureResourceCreatorRecordsReleaseFromBuild(t *testing.T) {
 		"/apps/my-app/builds/B123",
 		[]byte(`{"id":"B123","release":"R456"}`),
 		"creator@example.com",
+		false,
 	))
 	require.Empty(t, reqGet.Header.Values("X-Release-Created"))
 }
@@ -260,11 +262,11 @@ func TestBuildReadsCreditTheReleaseToTheBuildCreator(t *testing.T) {
 
 	create := httptest.NewRequest(http.MethodPost, "/apps/my-app/builds", nil)
 	build := []byte(`{"id":"B1","release":""}`)
-	require.NoError(t, h.captureResourceCreator(create, "/apps/my-app/builds", build, "builder@example.com"))
+	require.NoError(t, h.captureResourceCreator(create, "/apps/my-app/builds", build, "builder@example.com", false))
 
 	read := httptest.NewRequest(http.MethodGet, "/apps/my-app/builds/B1", nil)
 	finished := []byte(`{"id":"B1","release":"R1"}`)
-	require.NoError(t, h.captureResourceCreator(read, "/apps/my-app/builds/B1", finished, "viewer@example.com"))
+	require.NoError(t, h.captureResourceCreator(read, "/apps/my-app/builds/B1", finished, "viewer@example.com", false))
 	require.Empty(t, read.Header.Values("X-Release-Created"))
 	assertResourceCreator(t, database, "build", "B1", "builder@example.com")
 	assertResourceCreator(t, database, "release", "R1", "builder@example.com")
@@ -272,7 +274,7 @@ func TestBuildReadsCreditTheReleaseToTheBuildCreator(t *testing.T) {
 	// A build the gateway didn't see created has no creator, and neither does its release.
 	read = httptest.NewRequest(http.MethodGet, "/apps/my-app/builds/B2", nil)
 	unseen := []byte(`{"id":"B2","release":"R2"}`)
-	require.NoError(t, h.captureResourceCreator(read, "/apps/my-app/builds/B2", unseen, "viewer@example.com"))
+	require.NoError(t, h.captureResourceCreator(read, "/apps/my-app/builds/B2", unseen, "viewer@example.com", false))
 	creators, err := database.GetResourceCreators("release", []string{"R2"})
 	require.NoError(t, err)
 	require.Empty(t, creators)

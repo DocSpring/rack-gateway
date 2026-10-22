@@ -72,3 +72,39 @@ func TestResetUserMFAEndsCLILoginsInProgress(t *testing.T) {
 		"", nil, nil)
 	require.ErrorIs(t, err, gwdb.ErrSessionUserChanged)
 }
+
+// A login that checked the user just before an admin's MFA reset, and is still adding its session, holds a share
+// lock on the user's row (CreateUserSession). The reset waits for it, then revokes the session it added.
+func TestResetUserMFARevokesTheSessionOfALoginInFlight(t *testing.T) {
+	database := dbtest.NewDatabase(t)
+	admin, err := database.CreateUser("admin@example.com", "Admin", []string{"admin"})
+	require.NoError(t, err)
+	user, err := database.CreateUser("user@example.com", "User", []string{"viewer"})
+	require.NoError(t, err)
+	method, err := database.CreateMFAMethod(user.ID, "totp", "App", "JBSWY3DPEHPK3PXP", nil, nil, nil, nil)
+	require.NoError(t, err)
+	require.NoError(t, database.FinalizeMFAEnrollment(user.ID, method.ID, time.Now(), nil))
+
+	login, err := database.DB().Begin()
+	require.NoError(t, err)
+	defer func() { _ = login.Rollback() }()
+	var checked int64
+	require.NoError(t, login.QueryRow(`SELECT id FROM users WHERE id = $1 FOR SHARE`, user.ID).Scan(&checked))
+
+	reset := make(chan error, 1)
+	go func() { reset <- database.ResetUserMFA(user.ID, admin.ID) }()
+	select {
+	case err := <-reset:
+		t.Fatalf("the reset finished while a login held the user's row: %v", err)
+	case <-time.After(200 * time.Millisecond):
+	}
+	_, err = login.Exec(`INSERT INTO user_sessions (user_id, token_hash, expires_at, channel)
+		VALUES ($1, $2, NOW() + interval '1 hour', 'web')`, user.ID, strings.Repeat("f", 64))
+	require.NoError(t, err)
+	require.NoError(t, login.Commit())
+	require.NoError(t, <-reset)
+
+	sessions, err := database.ListActiveSessionsByUser(user.ID)
+	require.NoError(t, err)
+	require.Empty(t, sessions, "the reset revoked the session the login added")
+}

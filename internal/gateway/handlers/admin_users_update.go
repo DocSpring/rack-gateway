@@ -3,7 +3,6 @@ package handlers
 import (
 	"errors"
 	"net/http"
-	"slices"
 	"strings"
 	"time"
 
@@ -26,7 +25,7 @@ import (
 // @Success 200 {object} UserSummary
 // @Failure 400 {object} ErrorResponse
 // @Failure 404 {object} ErrorResponse
-// @Failure 409 {object} ErrorResponse
+// @Failure 409 {object} ErrorResponse "Email already in use, or the user's roles changed since they were read"
 // @Failure 500 {object} ErrorResponse
 // @Security SessionCookie
 // @Security CSRFToken
@@ -99,17 +98,14 @@ func (h *AdminHandler) userUpdateFor(target, caller *db.User, req *UpdateUserReq
 			return db.UserUpdate{}, err.Error()
 		}
 		// Compared by user ID, so a new email in the same request can't get past it.
-		if target.ID == caller.ID && !sameRoles(target.Roles, req.Roles) {
+		if target.ID == caller.ID && !db.SameRoles(target.Roles, req.Roles) {
 			return db.UserUpdate{}, "cannot change your own roles"
 		}
 		update.Roles = req.Roles
+		// Checked again under the user's row lock: the roles may change before the update is written.
+		update.RolesWere = target.Roles
 	}
 	return update, ""
-}
-
-// sameRoles reports whether two role lists hold the same roles.
-func sameRoles(a, b []string) bool {
-	return slices.Equal(slices.Sorted(slices.Values(a)), slices.Sorted(slices.Values(b)))
 }
 
 // respondUserUpdateError answers a failed db.UpdateUser.
@@ -121,6 +117,9 @@ func (h *AdminHandler) respondUserUpdateError(
 		h.respondUserNotFound(c, action, email, start)
 	case errors.Is(err, db.ErrUserExists):
 		h.respondAuditError(c, http.StatusConflict, userAuditAction(action), email, "email already in use", start, nil)
+	case errors.Is(err, db.ErrUserRolesChanged):
+		h.respondAuditError(c, http.StatusConflict, userAuditAction(action), email,
+			"the user's roles changed since they were read; reload and try again", start, nil)
 	default:
 		h.respondAuditError(
 			c, http.StatusInternalServerError, userAuditAction(action), email, "failed to update user", start, nil,

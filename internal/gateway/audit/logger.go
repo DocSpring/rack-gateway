@@ -314,10 +314,11 @@ func (_ *Logger) BuildDetailsJSON(r *http.Request) string {
 		details["query"] = RedactQuery(r.URL.RawQuery)
 	}
 
-	// For exec, include command and process id if available
+	// For exec, include command and process id if available. A command line can carry credentials, which the
+	// audit log mustn't keep (see RedactCommand).
 	if strings.HasSuffix(r.URL.Path, "/exec") {
 		if cmd := r.Header.Get("command"); cmd != "" {
-			details["command"] = cmd
+			details["command"] = RedactCommand(cmd)
 		}
 		// No fallback to WS frames; authoritative source is the 'command' header
 		parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/"), "/")
