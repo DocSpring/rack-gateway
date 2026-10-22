@@ -118,7 +118,7 @@ assert_deploy_approval_fields() {
 }
 
 reset_all_test_state() {
-    if ! [ -n "$(docker compose ps -q postgres 2>/dev/null)" ]; then
+    if [ -z "$(docker compose ps -q postgres 2>/dev/null)" ]; then
         return 0
     fi
 
