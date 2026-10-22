@@ -2,6 +2,7 @@ package audit
 
 import (
 	"encoding/json"
+	"fmt"
 	"testing"
 	"time"
 
@@ -126,6 +127,38 @@ func TestDenialsAgainstDifferentTargetsAreNotRepeats(t *testing.T) {
 	require.Contains(t, h.written[1].Details, "/apps/billing/environment")
 	h.fireTimers()
 	require.Equal(t, []int{1, 1, 1, 1}, h.counts(), "the repeat against web's environment")
+}
+
+// Requests without a principal are throttled per client IP. Past maxDenialRuns they share one run, so many
+// addresses can't grow the throttle or the log without bound; users' denials keep their own runs.
+func TestAnonymousDenialsAreThrottledPerClientAndBounded(t *testing.T) {
+	h := newThrottleHarness()
+	anonymous := func(ip string) *db.AuditLog {
+		return &db.AuditLog{Action: "rate_limit.exceeded", Resource: "/api/v1/auth/cli/start", IPAddress: ip}
+	}
+	h.throttle.record(anonymous("203.0.113.1"))
+	h.throttle.record(anonymous("203.0.113.1"))
+	h.throttle.record(anonymous("203.0.113.2"))
+	require.Equal(t, []int{1, 1}, h.counts(), "each client's first denial is written")
+
+	for i := len(h.throttle.runs); i < maxDenialRuns; i++ {
+		h.throttle.record(anonymous(fmt.Sprintf("10.0.%d.%d", i/256, i%256)))
+	}
+	written := len(h.written)
+	for i := 0; i < 50; i++ {
+		h.throttle.record(anonymous(fmt.Sprintf("198.51.100.%d", i)))
+	}
+	require.Len(t, h.throttle.runs, maxDenialRuns+1, "new clients share the overflow run")
+	require.Len(t, h.written, written+1, "the overflow run's first denial is written")
+
+	h.deny("viewer@example.com", "user.create")
+	require.Len(t, h.written, written+2, "a user's denial still gets its own run")
+
+	h.fireTimers()
+	last := h.written[len(h.written)-1]
+	require.Equal(t, 49, last.EventCount)
+	require.Equal(t, "198.51.100.49", last.IPAddress)
+	require.Contains(t, last.Details, `"from_many_clients":true`)
 }
 
 func TestFlushWritesTheRepeatsBeingCounted(t *testing.T) {

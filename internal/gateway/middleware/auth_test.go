@@ -22,7 +22,7 @@ func TestAuthenticatedSetsRequestContext(t *testing.T) {
 	}
 
 	sessionManager := auth.NewSessionManager(database, "test-secret", &auth.StaticTTLProvider{TTL: time.Hour})
-	service := auth.NewAuthService(nil, database, sessionManager)
+	service := auth.NewAuthService(nil, database, sessionManager, nil)
 
 	// Get user and create session
 	user, err := database.GetUser("user@example.com")

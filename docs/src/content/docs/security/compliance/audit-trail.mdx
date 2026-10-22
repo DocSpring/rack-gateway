@@ -80,7 +80,7 @@ it to stdout as one JSON line for CloudWatch:
 | `command` | The command or path, where one applies | `releases promote RABCDEF` |
 | `details` | JSON with more context. Never contains env var values unless the app lists them as visible (see below) | `{"reason":"..."}` |
 | `status` | Outcome (`attempted` until a request's outcome is known, see below) | `success`, `failed`, `denied`, `error`, `alert` |
-| `rbac_decision` | Access decision | `allow`, `deny` |
+| `rbac_decision` | Access decision. On a request log line it's `deny` for any request the gateway refused (401, 403 or 429), `error` when the permission check failed, and `not_evaluated` for routes without authorization (login, health) | `allow`, `deny`, `error`, `not_evaluated` |
 | `http_status` | HTTP response code | `200`, `403`, `500` |
 | `response_time_ms` (`latency_ms` on stdout) | Request duration | `1250` |
 | `ip_address` | Client IP | `192.168.1.100` |
@@ -200,16 +200,21 @@ In the web UI, a request's row shows its attempt until the result arrives, then 
 
 Requests refused for lack of permission are recorded with `status: denied` and `rbac_decision: deny`, with the
 reason in `details`: gateway API requests and proxied rack requests, including rack requests refused by a deploy
-approval check or the destructive-actions policy, and requests for rack routes the gateway doesn't forward.
+approval check or the destructive-actions policy, and requests for rack routes the gateway doesn't forward. Refused
+API tokens (`token.validate`) and requests refused by a rate limit (`rate_limit.exceeded`) are recorded the same
+way.
 
 Denials are throttled so a script retrying a refused request can't flood the log. The first denial of an action
-against a target (the resource, and for a rack request its method and path) for a user (or API token) is written
-at once, so a denial against one target is never hidden among others. Its repeats against the same target in the
-next minute are counted, and written as one entry
+against a target (the resource, and for a rack request its method and path) for a user (or API token, or for a
+request without either, its client IP) is written at once, so a denial against one target is never hidden among
+others. Its repeats against the same target in the next minute are counted, and written as one entry
 when the minute is up: `event_count` says how many there were, and `details.repeats_from` and
 `details.repeats_until` when. The next denial after that is written at once again. The counts are kept in memory,
 which works because a gateway runs as a single instance per rack: a restart can lose at most a minute's count of
-repeats (never a first denial), and the gateway writes any pending count when it shuts down.
+repeats (never a first denial), and the gateway writes any pending count when it shuts down. While 1,000 runs are
+being counted, the denials of requests without a user or token (from many client IPs at once) share one run, whose
+count entry has `details.from_many_clients` and the last request's IP; users' and tokens' denials always keep their
+own.
 
 Recording a denial fails open: the caller gets the same 403 whether or not the entry could be written.
 

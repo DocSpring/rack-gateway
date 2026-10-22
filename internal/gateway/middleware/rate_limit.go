@@ -2,8 +2,6 @@ package middleware
 
 import (
 	"net/http"
-	"os"
-	"strconv"
 
 	"github.com/gin-gonic/gin"
 
@@ -15,20 +13,10 @@ import (
 
 // RateLimit applies rate limiting per client IP address and notifies on violations.
 func RateLimit(_ *config.Config, securityNotifier *security.Notifier) gin.HandlerFunc {
-	rps := 10.0
-	burst := 20
-	if rpsEnv := os.Getenv("RATE_LIMIT_RPS"); rpsEnv != "" {
-		if parsed, err := strconv.ParseFloat(rpsEnv, 64); err == nil {
-			rps = parsed
-		}
-	}
-	if burstEnv := os.Getenv("RATE_LIMIT_BURST"); burstEnv != "" {
-		if parsed, err := strconv.Atoi(burstEnv); err == nil {
-			burst = parsed
-		}
-	}
-
-	rateLimiter := ratelimit.NewRateLimiter(rps, burst)
+	rateLimiter := ratelimit.NewRateLimiter(
+		ratelimit.PositiveEnv("RATE_LIMIT_RPS", 10),
+		int(ratelimit.PositiveEnv("RATE_LIMIT_BURST", 20)),
+	)
 
 	return func(c *gin.Context) {
 		clientIP := netutil.ClientIP(c.Request)

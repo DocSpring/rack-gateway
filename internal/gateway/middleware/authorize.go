@@ -37,13 +37,14 @@ func Authorize(manager rbac.Manager, logger *audit.Logger) gin.HandlerFunc {
 		}
 
 		if isOwnAccount(c, spec, authUser) {
-			c.Next()
+			allow(c)
 			return
 		}
 
 		allowed, missing, err := routeAllowed(manager, spec, authUser.Principal())
 		if err != nil {
 			gtwlog.Errorf("authz: failed to check permissions for %s %s: %v", spec.Method, spec.Pattern, err)
+			c.Request.Header.Set("X-RBAC-Decision", "error")
 			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "failed to check permissions"})
 			return
 		}
@@ -52,8 +53,15 @@ func Authorize(manager rbac.Manager, logger *audit.Logger) gin.HandlerFunc {
 			return
 		}
 
-		c.Next()
+		allow(c)
 	}
+}
+
+// allow lets the request through. The request log line reads the decision (clients can't send it: see
+// StripInternalHeaders).
+func allow(c *gin.Context) {
+	c.Request.Header.Set("X-RBAC-Decision", "allow")
+	c.Next()
 }
 
 // routeAllowed reports whether the principal may use the route and, when denied, the first

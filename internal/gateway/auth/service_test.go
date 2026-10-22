@@ -8,6 +8,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	"github.com/DocSpring/rack-gateway/internal/gateway/testutil/dbtest"
 	"github.com/DocSpring/rack-gateway/internal/gateway/token"
@@ -35,7 +36,7 @@ func TestAuthServiceAllowsCookieSession(t *testing.T) {
 		t.Fatalf("create session: %v", err)
 	}
 
-	svc := NewAuthService(nil, database, sessionManager)
+	svc := NewAuthService(nil, database, sessionManager, nil)
 
 	nextCalled := false
 	next := http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
@@ -126,7 +127,7 @@ func TestAPITokenRejectedWhenOwnerLocked(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create token: %v", err)
 	}
-	svc := NewAuthService(token.NewService(database), database, nil)
+	svc := NewAuthService(token.NewService(database), database, nil, audit.NewLogger(database))
 
 	authenticates := func() bool {
 		called := false
@@ -154,7 +155,7 @@ func TestInvalidAPITokenAuditRecordsClient(t *testing.T) {
 	longAgent := strings.Repeat("a", 600)
 	for _, agent := range []string{"attacker-cli/1.0", longAgent} {
 		database := dbtest.NewDatabase(t)
-		svc := NewAuthService(token.NewService(database), database, nil)
+		svc := NewAuthService(token.NewService(database), database, nil, audit.NewLogger(database))
 
 		next := http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
 			t.Fatalf("an invalid token must not authenticate")

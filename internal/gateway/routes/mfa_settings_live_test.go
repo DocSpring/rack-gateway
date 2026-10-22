@@ -4,7 +4,9 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
 	"github.com/DocSpring/rack-gateway/internal/gateway/settings"
 )
 
@@ -22,6 +24,22 @@ func TestUnenrolledWebSessionCantUseTheCLIProxy(t *testing.T) {
 	assertStatus(t, w, http.StatusForbidden, "rack-proxy")
 	if !strings.Contains(w.Body.String(), "mfa_enrollment_required") {
 		t.Fatalf("rack-proxy: expected mfa_enrollment_required, got %s", w.Body.String())
+	}
+
+	// The refused rack request never reaches the proxy, so the enrollment check records it.
+	logs, err := e.database.GetAuditLogs(user.Email, time.Time{}, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var denials []string
+	for _, entry := range logs {
+		if entry.Status == audit.StatusDenied {
+			denials = append(denials, entry.Action+" "+entry.Details)
+		}
+	}
+	if len(denials) != 1 || !strings.HasPrefix(denials[0], "app.list ") ||
+		!strings.Contains(denials[0], "mfa_enrollment_required") {
+		t.Fatalf("expected the refused app.list to be recorded, got %q", denials)
 	}
 }
 

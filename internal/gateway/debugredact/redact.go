@@ -45,9 +45,11 @@ var sensitiveNameWords = map[string]struct{}{
 }
 
 // sensitiveNames are sensitive only as the whole name. A rack resource's "url" holds its credentials
-// (postgres://user:password@host/db), but "build_url" or "pr_url" don't.
+// (postgres://user:password@host/db), but "build_url" or "pr_url" don't. The command an exec or run sends (the
+// Command header) can carry a credential on its command line.
 var sensitiveNames = map[string]struct{}{
-	"url": {},
+	"command": {},
+	"url":     {},
 }
 
 // urlHeaders hold a URL as their whole value, which may be relative (a redirect's Location is often just a path

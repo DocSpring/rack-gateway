@@ -13,9 +13,18 @@ import (
 // denialWindow is how long repeats of a denial are counted rather than written.
 const denialWindow = time.Minute
 
+// maxDenialRuns caps the runs kept. Past it, the denials of requests without a principal (no user or API token, so
+// keyed by client IP) share one run, so a flood from many addresses can't grow memory or the log without bound.
+// Users' and API tokens' denials always keep their own runs.
+const maxDenialRuns = 1000
+
+// anonymousOverflowKey is the run the denials of requests without a principal share once maxDenialRuns is reached.
+const anonymousOverflowKey = "ip:*"
+
 // RecordDenial records a refused request. Denials are throttled so repeated attempts can't flood the log: the
-// first denial of an action against a target for a user (or API token) is written at once, and its repeats in the
-// next minute are written as one entry when the minute is up, with event_count saying how many there were.
+// first denial of an action against a target for a user (or API token, or for a request without either, its
+// client IP) is written at once, and its repeats in the next minute are written as one entry when the minute is
+// up, with event_count saying how many there were.
 //
 // A denied request never acts, so it's refused whether or not its denial is written. A failed write is reported
 // (logged, sent to Sentry and failing the health check) like any other.
@@ -79,6 +88,8 @@ type denialRun struct {
 	firstRepeat time.Time
 	lastRepeat  time.Time
 	ended       bool
+	// overflow marks the run shared by requests without a principal once maxDenialRuns is reached.
+	overflow bool
 }
 
 func newDenialThrottle(write func(*db.AuditLog)) *denialThrottle {
@@ -98,6 +109,11 @@ func (t *denialThrottle) record(entry *db.AuditLog) {
 
 	t.mu.Lock()
 	run := t.runs[key]
+	overflow := false
+	if run == nil && entry.APITokenID == nil && entry.UserEmail == "" && len(t.runs) >= maxDenialRuns {
+		key, overflow = anonymousOverflowKey, true
+		run = t.runs[key]
+	}
 	if run != nil && now.Sub(run.started) < t.window {
 		run.countRepeat(entry, now)
 		t.mu.Unlock()
@@ -105,7 +121,7 @@ func (t *denialThrottle) record(entry *db.AuditLog) {
 	}
 	// The previous run's window is up but its timer hasn't fired yet: end it here, in order.
 	expired := t.endLocked(key, run)
-	next := &denialRun{started: now}
+	next := &denialRun{started: now, overflow: overflow}
 	t.runs[key] = next
 	t.mu.Unlock()
 
@@ -170,20 +186,28 @@ func (t *denialThrottle) writeRepeats(run *denialRun) {
 	}
 	entry := *run.last
 	entry.EventCount = run.repeats
-	entry.Details = WithDetails(entry.Details, map[string]interface{}{
+	fields := map[string]interface{}{
 		"repeats_from":  run.firstRepeat.UTC().Format(time.RFC3339),
 		"repeats_until": run.lastRepeat.UTC().Format(time.RFC3339),
-	})
+	}
+	if run.overflow {
+		// The repeats came from many clients; the entry has the last one's fields.
+		fields["from_many_clients"] = true
+	}
+	entry.Details = WithDetails(entry.Details, fields)
 	t.write(&entry)
 }
 
-// denialKey identifies a denial's principal (an API token, or else a user), its action and its target: the
-// resource, and for a proxied request its method and path. Only repeats against the same target are counted
-// together, so a denial against one target can't hide among denials against others.
+// denialKey identifies a denial's principal (an API token, or else a user, or else the client IP), its action and
+// its target: the resource, and for a proxied request its method and path. Only repeats against the same target
+// are counted together, so a denial against one target can't hide among denials against others.
 func denialKey(entry *db.AuditLog) string {
 	principal := entry.UserEmail
-	if entry.APITokenID != nil {
+	switch {
+	case entry.APITokenID != nil:
 		principal = fmt.Sprintf("token:%d", *entry.APITokenID)
+	case principal == "":
+		principal = "ip:" + entry.IPAddress
 	}
 	method, path := detailsTarget(entry.Details)
 	return strings.Join([]string{

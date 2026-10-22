@@ -3,8 +3,11 @@ package auth
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
+	"math"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -12,6 +15,7 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	"github.com/DocSpring/rack-gateway/internal/gateway/logging"
 	"github.com/DocSpring/rack-gateway/internal/gateway/netutil"
+	"github.com/DocSpring/rack-gateway/internal/gateway/ratelimit"
 	"github.com/DocSpring/rack-gateway/internal/gateway/token"
 )
 
@@ -28,7 +32,20 @@ type Service struct {
 	tokenService *token.Service
 	database     *db.Database
 	sessions     *SessionManager
+	// auditLogger records refused API tokens, as throttled denials.
+	auditLogger *audit.Logger
+	// failures limits each client's failed attempts (see AuthenticateHTTPRequest); retryAfter is how many seconds
+	// one takes to come back.
+	failures   *ratelimit.FailureLimiter
+	retryAfter string
 }
+
+// ErrMissingAuthorization is returned for a request without credentials.
+var ErrMissingAuthorization = errors.New("missing authorization")
+
+// ErrTooManyFailedAttempts is returned, without checking its credentials, for a request from a client that has
+// used up its failed attempts.
+var ErrTooManyFailedAttempts = errors.New("too many failed authentication attempts, try again later")
 
 // User represents an authenticated user from either session or API token
 type User struct {
@@ -52,19 +69,41 @@ type User struct {
 	DBUser             *db.User        `json:"-"`
 }
 
-// NewAuthService creates a new authentication service
-func NewAuthService(tokenService *token.Service, database *db.Database, sessions *SessionManager) *Service {
+// NewAuthService creates a new authentication service. Each client may make AUTH_FAILURE_LIMIT_BURST failed
+// attempts (default 30), which come back at AUTH_FAILURE_LIMIT_PER_MINUTE (default 30).
+func NewAuthService(
+	tokenService *token.Service,
+	database *db.Database,
+	sessions *SessionManager,
+	auditLogger *audit.Logger,
+) *Service {
+	perMinute := ratelimit.PositiveEnv("AUTH_FAILURE_LIMIT_PER_MINUTE", 30)
 	return &Service{
 		tokenService: tokenService,
 		database:     database,
 		sessions:     sessions,
+		auditLogger:  auditLogger,
+		failures: ratelimit.NewFailureLimiter(
+			perMinute/60, int(ratelimit.PositiveEnv("AUTH_FAILURE_LIMIT_BURST", 30)),
+		),
+		retryAfter: strconv.Itoa(int(math.Ceil(60 / perMinute))),
 	}
+}
+
+// RetryAfter is the Retry-After value (seconds) for a request refused with ErrTooManyFailedAttempts.
+func (a *Service) RetryAfter() string {
+	return a.retryAfter
 }
 
 // Middleware handles session token and API token authentication
 func (a *Service) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		user, source, err := a.AuthenticateHTTPRequest(r)
+		if errors.Is(err, ErrTooManyFailedAttempts) {
+			w.Header().Set("Retry-After", a.retryAfter)
+			http.Error(w, err.Error(), http.StatusTooManyRequests)
+			return
+		}
 		if err != nil {
 			a.writeUnauthorized(w, r, err.Error())
 			return
@@ -126,7 +165,22 @@ func (_ *Service) writeUnauthorized(w http.ResponseWriter, r *http.Request, reas
 }
 
 // AuthenticateHTTPRequest attempts to authenticate the provided request, returning the user and auth source label.
+// A client's failed attempts are limited, so credentials can't be guessed, or used to load the database, at the rate
+// requests arrive: once a client has used them up, its requests are refused with ErrTooManyFailedAttempts before
+// their credentials are checked, until they come back. A request without credentials isn't a failed attempt.
 func (a *Service) AuthenticateHTTPRequest(r *http.Request) (*User, string, error) {
+	clientIP := netutil.ClientIP(r)
+	if a.failures.Blocked(clientIP) {
+		return nil, "none", ErrTooManyFailedAttempts
+	}
+	user, source, err := a.authenticate(r)
+	if err != nil && !errors.Is(err, ErrMissingAuthorization) {
+		a.failures.Fail(clientIP)
+	}
+	return user, source, err
+}
+
+func (a *Service) authenticate(r *http.Request) (*User, string, error) {
 	if user, source, err := a.authenticateFromHeader(r); user != nil || err != nil {
 		if err != nil {
 			return nil, source, err
@@ -143,7 +197,7 @@ func (a *Service) AuthenticateHTTPRequest(r *http.Request) (*User, string, error
 		return user, source, nil
 	}
 
-	return nil, "none", fmt.Errorf("missing authorization")
+	return nil, "none", ErrMissingAuthorization
 }
 
 func (a *Service) authenticateFromHeader(r *http.Request) (*User, string, error) {
@@ -229,20 +283,16 @@ func (_ *Service) applyHeaderMFA(r *http.Request, user *User) {
 func (a *Service) validateAPIToken(tokenString string, r *http.Request) (*User, error) {
 	apiToken, err := a.tokenService.ValidateAPIToken(tokenString)
 	if err != nil {
-		// Audit failed token validation (do not log raw token)
-		if a.database != nil {
-			_ = audit.LogDB(a.database, &db.AuditLog{
-				UserEmail:      "",
-				UserName:       "",
-				ActionType:     audit.ActionTypeAuth,
-				Action:         "token.validate",
-				ResourceType:   "auth",
-				Resource:       "api_token",
-				Details:        "{\"result\":\"error\"}",
-				IPAddress:      netutil.ClientIP(r),
-				UserAgent:      r.UserAgent(),
-				Status:         "error",
-				ResponseTimeMs: 0,
+		// Audit the refused token (never the token itself), as a denial throttled per client IP
+		if a.auditLogger != nil {
+			a.auditLogger.RecordDenial(&db.AuditLog{
+				ActionType:   audit.ActionTypeAuth,
+				Action:       "token.validate",
+				ResourceType: "auth",
+				Resource:     "api_token",
+				Details:      `{"result":"error"}`,
+				IPAddress:    netutil.ClientIP(r),
+				UserAgent:    r.UserAgent(),
 			})
 		}
 		return nil, fmt.Errorf("invalid API token: %w", err)

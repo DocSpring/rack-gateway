@@ -111,16 +111,24 @@ func (n *Notifier) enqueueSecurityNotification(recipient, subject, eventType str
 	if recipient == "" && !strings.HasPrefix(eventType, "admin") {
 		return
 	}
+	n.enqueueOnce(recipient+subject+eventType, eventType, func() river.JobArgs { return args })
+}
+
+// enqueueOnce queues the email build returns, unless one with the same dedup key was queued within the dedup
+// window. build only runs once the key is claimed, so the work it does (looking up recipients) happens at most once
+// a window however often the alert is raised. When it returns nil nothing is sent, and the key stays claimed for
+// the window.
+func (n *Notifier) enqueueOnce(dedup, eventType string, build func() river.JobArgs) {
 	if n.jobs == nil {
-		log.Printf(
-			"WARNING: security notification dropped (no jobs client configured): type=%s, recipient=%s",
-			eventType,
-			recipient,
-		)
+		log.Printf("WARNING: security notification dropped (no jobs client configured): type=%s", eventType)
 		return
 	}
-	key := fmt.Sprintf("%x", sha256.Sum256([]byte(recipient+subject+eventType)))
+	key := fmt.Sprintf("%x", sha256.Sum256([]byte(dedup)))
 	if !n.claim(key) {
+		return
+	}
+	args := build()
+	if args == nil {
 		return
 	}
 
@@ -235,28 +243,20 @@ func (n *Notifier) LoginAttempt(userEmail, userName, channel, status, ipAddress,
 	}
 }
 
-// RateLimitExceeded logs and notifies about rate limit violations
+// RateLimitExceeded logs and notifies about a request refused by a rate limit. Its audit entry is a throttled
+// denial (see audit.Logger.RecordDenial), so a client sending requests past its limit can't write one per request.
 func (n *Notifier) RateLimitExceeded(userEmail, userName, path, ipAddress, userAgent string) {
-	// Audit log
-	if n.database != nil {
-		if err := n.auditLogger.LogDBEntry(&db.AuditLog{
+	if n.auditLogger != nil {
+		n.auditLogger.RecordDenial(&db.AuditLog{
 			UserEmail:    userEmail,
 			UserName:     userName,
 			ActionType:   audit.ActionTypeSecurity,
 			Action:       audit.BuildAction(audit.ActionScopeRateLimit, audit.ActionVerbExceeded),
 			ResourceType: "security",
 			Resource:     path,
-			Status:       "denied",
 			IPAddress:    ipAddress,
 			UserAgent:    userAgent,
-		}); err != nil {
-			action := audit.BuildAction(audit.ActionScopeRateLimit, audit.ActionVerbExceeded)
-			log.Printf(
-				`{"level":"error","event":"audit_log_failed","action":%q,"error":%q}`,
-				action,
-				err,
-			)
-		}
+		})
 	}
 
 	// Email notification to user if known (with rate limiting)
@@ -268,19 +268,20 @@ func (n *Notifier) RateLimitExceeded(userEmail, userName, path, ipAddress, userA
 		UserAgent: userAgent,
 	})
 
-	// Also notify admins about rate limit violations (potential attack) - with deduplication
-	// Use IP address in the hash so we deduplicate per-IP, not globally
-	admins := n.admins()
-	if len(admins) == 0 {
-		return
-	}
-	adminKey := fmt.Sprintf("admins-%s", ipAddress)
-	n.enqueueSecurityNotification(adminKey, "Rate Limit Exceeded", "rate_limit_admin", jobemail.RateLimitAdminArgs{
-		AdminEmails: admins,
-		UserEmail:   userEmail,
-		UserName:    userName,
-		Path:        path,
-		IPAddress:   ipAddress,
-		UserAgent:   userAgent,
+	// Also notify admins (a potential attack), once per client IP a window. The admins are looked up only when
+	// that email is due.
+	n.enqueueOnce("admins-rate_limit:"+ipAddress, "rate_limit_admin", func() river.JobArgs {
+		admins := n.admins()
+		if len(admins) == 0 {
+			return nil
+		}
+		return jobemail.RateLimitAdminArgs{
+			AdminEmails: admins,
+			UserEmail:   userEmail,
+			UserName:    userName,
+			Path:        path,
+			IPAddress:   ipAddress,
+			UserAgent:   userAgent,
+		}
 	})
 }

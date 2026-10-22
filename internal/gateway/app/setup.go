@@ -58,7 +58,8 @@ func (a *App) initializeServices() error {
 		return err
 	}
 
-	a.initTokenAndAuthServices()
+	auditLogger := a.initAuditLogger()
+	a.initTokenAndAuthServices(auditLogger)
 
 	redirectInput, issuerURL, allowedDomain, err := a.resolveOAuthParameters()
 	if err != nil {
@@ -68,7 +69,6 @@ func (a *App) initializeServices() error {
 		return err
 	}
 
-	auditLogger := a.initAuditLogger()
 	slackNotifier := a.initSlackNotifier(auditLogger)
 
 	a.initRackCertManager()
@@ -198,9 +198,9 @@ func (a *App) initRBACManager() error {
 	return nil
 }
 
-func (a *App) initTokenAndAuthServices() {
+func (a *App) initTokenAndAuthServices(auditLogger *audit.Logger) {
 	a.TokenService = token.NewService(a.Database)
-	a.AuthService = auth.NewAuthService(a.TokenService, a.Database, a.SessionManager)
+	a.AuthService = auth.NewAuthService(a.TokenService, a.Database, a.SessionManager, auditLogger)
 
 	log.Printf("Environment PORT=%s, Config Port=%s",
 		logutil.SanitizeForLog(os.Getenv("PORT")), logutil.SanitizeForLog(a.Config.Port))

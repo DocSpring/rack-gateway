@@ -15,7 +15,7 @@ func TestSensitiveHeaders(t *testing.T) {
 	for _, name := range []string{
 		"Authorization", "Proxy-Authorization", "Cookie", "Set-Cookie", "X-Csrf-Token", "X-Mfa-Totp",
 		"X-Mfa-Webauthn", "X-Mfa-Required", "X-Postmark-Server-Token", "X-Api-Key", "X-Client-Secret",
-		"X-Admin-Password",
+		"X-Admin-Password", "Command",
 	} {
 		require.Equal(t, Redacted, HeaderValue(name, "hidden-value"), name)
 	}

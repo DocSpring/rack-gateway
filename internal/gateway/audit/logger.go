@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
@@ -201,12 +202,29 @@ func RequestID(r *http.Request) string {
 	return requestID
 }
 
+// requestLog records whether a request's log line has been written.
+type requestLog struct {
+	logged atomic.Bool
+}
+
+// TrackRequestLog returns ctx with a record of whether the request's log line has been written, shared by every
+// request derived from it: the rack proxy clones and rewraps requests before it logs them, and the request logger
+// middleware has to see that it did.
+func TrackRequestLog(ctx context.Context) context.Context {
+	return context.WithValue(ctx, requestLoggedKey, &requestLog{})
+}
+
 func markRequestLogged(r *http.Request) {
 	if r == nil {
 		return
 	}
-	ctx := context.WithValue(r.Context(), requestLoggedKey, true)
-	*r = *r.WithContext(ctx)
+	if state, ok := r.Context().Value(requestLoggedKey).(*requestLog); ok {
+		state.logged.Store(true)
+		return
+	}
+	state := &requestLog{}
+	state.logged.Store(true)
+	*r = *r.WithContext(context.WithValue(r.Context(), requestLoggedKey, state))
 }
 
 // RequestAlreadyLogged checks if a request has already been logged to prevent duplicate logging.
@@ -214,12 +232,8 @@ func RequestAlreadyLogged(r *http.Request) bool {
 	if r == nil {
 		return false
 	}
-	if v := r.Context().Value(requestLoggedKey); v != nil {
-		if logged, ok := v.(bool); ok {
-			return logged
-		}
-	}
-	return false
+	state, ok := r.Context().Value(requestLoggedKey).(*requestLog)
+	return ok && state.logged.Load()
 }
 
 // ParseConvoxAction extracts meaningful action and resource from the request.

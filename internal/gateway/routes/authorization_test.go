@@ -66,8 +66,8 @@ func newAuthzEnvWithRouter(t *testing.T, router *gin.Engine) *authzEnv {
 	mfaSvc, err := mfa.NewService(database, "Test", nil, []byte("pepper"), "", "", "", "", nil)
 	require.NoError(t, err)
 
-	authService := auth.NewAuthService(tokenSvc, database, sessions)
 	auditLogger := audit.NewLogger(database)
+	authService := auth.NewAuthService(tokenSvc, database, sessions, auditLogger)
 	Setup(router, &Config{Gateway: &deps.Gateway{
 		Config: &config.Config{
 			Domain:              "gateway.example.com",

@@ -82,7 +82,7 @@ func newMFARouteEnv(t *testing.T, enrolledEmail string) *mfaRouteEnv {
 		Database:        database,
 		RBACManager:     rbacManager,
 		SessionManager:  sessions,
-		AuthService:     auth.NewAuthService(tokenService, database, sessions),
+		AuthService:     auth.NewAuthService(tokenService, database, sessions, auditLogger),
 		TokenService:    tokenService,
 		MFAService:      mfaService,
 		SettingsService: settingsService,

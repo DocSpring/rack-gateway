@@ -24,21 +24,6 @@ func (l *Logger) SetChainWriter(writer ChainWriter) {
 	l.writer = writer
 }
 
-// LogDB writes a DB-style audit entry to stdout as structured JSON and persists it. A failure is logged and sent
-// to Sentry before it's returned. Use this helper anywhere an audit log would otherwise be written directly to
-// the DB.
-func LogDB(database *db.Database, al *db.AuditLog) error {
-	if database == nil {
-		writeEntryLine(al)
-		return nil
-	}
-	if err := appendEntry(database, al); err != nil {
-		reportWriteFailure(al, err)
-		return err
-	}
-	return nil
-}
-
 // write appends al to the hash chain (only to stdout for a logger without a database). A failure is logged and
 // sent to Sentry before it's returned: either the request is about to be refused (an attempt), or it has already
 // acted and its outcome has no record.

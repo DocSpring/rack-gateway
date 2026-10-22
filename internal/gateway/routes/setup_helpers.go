@@ -39,7 +39,7 @@ func setupGlobalMiddleware(router *gin.Engine, cfg *Config) {
 	router.Use(middleware.SecurityHeaders(cfg.Config))
 	router.Use(middleware.HostValidator(cfg.Config))
 	router.Use(middleware.OriginValidator(cfg.Config))
-	router.Use(gin.Recovery())
+	router.Use(middleware.Recovery())
 
 	if cfg.SentryEnabled {
 		router.Use(middleware.SentryErrorCapture())
