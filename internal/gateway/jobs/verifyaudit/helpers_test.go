@@ -50,9 +50,14 @@ type harness struct {
 
 type queuedSlackEvents struct {
 	ids []int64
+	// err, when set, is what queueing returns instead.
+	err error
 }
 
 func (q *queuedSlackEvents) EnqueueAuditEvent(auditLogID int64) error {
+	if q.err != nil {
+		return q.err
+	}
 	q.ids = append(q.ids, auditLogID)
 	return nil
 }
@@ -79,7 +84,7 @@ func newHarness(t *testing.T, store auditverify.AnchorStore) *harness {
 
 // restart replaces the worker with a new one, as a gateway restart does.
 func (h *harness) restart() {
-	h.worker = NewWorker(h.database, h.opts, h.logger.LogDBEntry, func(context.Context) error {
+	h.worker = NewWorker(h.database, h.opts, h.logger.LogAlert, func(context.Context) error {
 		h.heartbeats++
 		return h.heartbeatErr
 	})

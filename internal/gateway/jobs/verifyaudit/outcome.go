@@ -24,7 +24,8 @@ type outcome struct {
 	plan runPlan
 	// anchors is whether anchors are configured (and so checked).
 	anchors bool
-	// report is nil when the run couldn't verify, and err says why.
+	// report is nil when the run couldn't verify, and err says why. A run that stopped with an error partway has
+	// both: the report holds what it found before it stopped.
 	report *auditverify.Report
 	err    error
 }
@@ -62,6 +63,10 @@ func (o *outcome) warningCount() int {
 func (o *outcome) headline() string {
 	switch o.result() {
 	case db.AuditVerificationError:
+		if o.failureCount() > 0 {
+			return fmt.Sprintf("Audit log verification couldn't finish: %v. It had found %d integrity failures, "+
+				"first: %s", o.err, o.report.FailureCount, o.report.Failures[0])
+		}
 		return fmt.Sprintf("Audit log verification couldn't run: %v", o.err)
 	case db.AuditVerificationFailed:
 		return fmt.Sprintf("Audit log verification failed: %d integrity failures, first: %s",
@@ -78,7 +83,9 @@ func (o *outcome) summary() string {
 	summary.WriteString(o.scope() + "\n")
 	if o.err != nil {
 		summary.WriteString(o.headline() + "\n")
-		return summary.String()
+		if o.report == nil {
+			return summary.String()
+		}
 	}
 	if err := o.report.Write(&summary); err != nil {
 		summary.WriteString(err.Error() + "\n")

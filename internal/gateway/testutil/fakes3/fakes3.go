@@ -226,6 +226,7 @@ func (b *Bucket) ListObjectsV2(
 		output.Contents = append(output.Contents, types.Object{
 			Key:          aws.String(key),
 			LastModified: aws.Time(e.lastModified),
+			Size:         aws.Int64(int64(len(e.body))),
 		})
 	}
 	return output, nil
@@ -300,5 +301,6 @@ func appendVersion(output *s3.ListObjectVersionsOutput, e *entry, isLatest bool)
 		VersionId:    aws.String(e.versionID),
 		LastModified: aws.Time(e.lastModified),
 		IsLatest:     aws.Bool(isLatest),
+		Size:         aws.Int64(int64(len(e.body))),
 	})
 }

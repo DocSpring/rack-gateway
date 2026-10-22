@@ -10,6 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/auditverify"
+	jobaudit "github.com/DocSpring/rack-gateway/internal/gateway/jobs/audit"
 )
 
 // anchorCache keeps the anchor versions runs have read, so a run only fetches the versions written since the
@@ -17,7 +18,7 @@ import (
 // never changes once written (an Object Lock bucket is always versioned), and every run still lists every
 // version, so a new version or a delete marker shows up as before. A version without an ID (an unversioned
 // bucket) or with the ID "null" (written while versioning was off, and replaceable) is always fetched. Anchors
-// are a few hundred bytes, one an hour.
+// are a few hundred bytes, one an hour, and a bigger version is never read or kept (jobaudit.MaxAnchorSize).
 type anchorCache struct {
 	store  auditverify.AnchorStore
 	mu     sync.Mutex
@@ -75,7 +76,7 @@ func (c *anchorCache) GetObject(
 		return output, err
 	}
 	defer func() { _ = output.Body.Close() }()
-	body, err := io.ReadAll(output.Body)
+	body, err := jobaudit.ReadAnchorBody(output.Body)
 	if err != nil {
 		return nil, err
 	}

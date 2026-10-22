@@ -171,6 +171,6 @@ func auditVerificationJob(
 	if pinger != nil {
 		ping = pinger.Ping
 	}
-	river.AddWorker(workers, jobverifyaudit.NewWorker(deps.Database, opts, deps.AuditLogger.LogDBEntry, ping))
+	river.AddWorker(workers, jobverifyaudit.NewWorker(deps.Database, opts, deps.AuditLogger.LogAlert, ping))
 	return jobverifyaudit.PeriodicJob(), nil
 }

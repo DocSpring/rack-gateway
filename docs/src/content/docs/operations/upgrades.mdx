@@ -247,6 +247,7 @@ itself every hour and alerts when they fail.
 3. **Pin where hash v2 starts.** Right after promoting, run `verify-audit` (see below). It prints
    `hash v2 from event N` or, before the new release has written an event, a failure naming the event that will
    be the first. Set `AUDIT_HASH_V2_FROM=N` in the gateway's environment and wherever else `verify-audit` runs.
+   With the pin set, verification fails until that first hash v2 event exists (any request writes one).
    Without it, verification fails while legacy events exist, until an anchor written by this release (within the
    hour) confirms the start, and always without anchors. See
    [Pinning where hash v2 starts](/deployment/terraform/s3-worm-storage/#pinning-where-hash-v2-starts).

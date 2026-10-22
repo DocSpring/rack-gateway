@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -171,4 +172,35 @@ func TestAnchorWriterFailsWhenThePreviousAnchorCannotBeListed(t *testing.T) {
 	err := newTestWorker(database, s3Client).Work(context.Background(), anchorJob(firstAnchorHour))
 	require.Error(t, err, "an anchor without its prev_anchor_hash would break the anchor chain")
 	assert.Contains(t, err.Error(), "failed to list anchors")
+}
+
+// An anchor is a few hundred bytes: a bigger body is refused after reading no more than MaxAnchorSize.
+func TestReadAnchorBodyRefusesOversizedBodies(t *testing.T) {
+	body, err := ReadAnchorBody(strings.NewReader(strings.Repeat("x", MaxAnchorSize)))
+	require.NoError(t, err)
+	require.Len(t, body, MaxAnchorSize)
+
+	reader := strings.NewReader(strings.Repeat("x", 10*MaxAnchorSize))
+	_, err = ReadAnchorBody(reader)
+	require.ErrorIs(t, err, ErrAnchorTooLarge)
+	require.Equal(t, 9*MaxAnchorSize-1, reader.Len(), "it read no more than the limit")
+}
+
+// The writer chains only to objects at keys it writes, and refuses an oversized one there instead of reading it.
+func TestLatestAnchorIsAlwaysAnAnchor(t *testing.T) {
+	bucket := fakes3.New(firstAnchorHour)
+	last := putHourlyAnchors(bucket, 3)
+	now := firstAnchorHour.Add(3 * time.Hour)
+	// Both stored after every anchor, at keys the writer never writes
+	bucket.PutAt(testChainID+"/notes.json", []byte(`{}`), now)
+	bucket.PutAt(testChainID+"/2026/01/01/02/anchor-20260101T03.json", []byte(`{}`), now)
+	worker := newTestWorker(nil, bucket)
+
+	hash, err := worker.getLatestAnchor(context.Background(), now)
+	require.NoError(t, err)
+	require.Equal(t, sha256Hex(last), hash)
+
+	bucket.PutAt(AnchorKey(testChainID, now), make([]byte, MaxAnchorSize+1), now.Add(time.Minute))
+	_, err = worker.getLatestAnchor(context.Background(), now.Add(time.Hour))
+	require.ErrorIs(t, err, ErrAnchorTooLarge)
 }

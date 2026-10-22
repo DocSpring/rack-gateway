@@ -3,6 +3,7 @@ package audit
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"strings"
@@ -82,13 +83,25 @@ func (l *Logger) SetAuditEventEnqueuer(enqueuer EventEnqueuer) {
 }
 
 // LogDBEntry persists a DB-style audit log entry using this logger's database, and queues its Slack
-// notification. A failure is logged and sent to Sentry as well as returned.
+// notification. A failure to write the entry is logged and sent to Sentry as well as returned; a notification that
+// can't be queued is only logged.
 func (l *Logger) LogDBEntry(al *db.AuditLog) error {
 	if err := l.write(al); err != nil {
 		return err
 	}
-	l.notifySlackAsync(al)
+	if err := l.notifySlack(al); err != nil {
+		log.Printf("%v", err)
+	}
 	return nil
+}
+
+// LogAlert persists an alert's audit log entry like LogDBEntry, and also returns an error when its Slack
+// notification can't be queued, so the sender can try the alert again.
+func (l *Logger) LogAlert(al *db.AuditLog) error {
+	if err := l.write(al); err != nil {
+		return err
+	}
+	return l.notifySlack(al)
 }
 
 // Log writes a structured audit log entry to stdout for CloudWatch ingestion.
@@ -101,23 +114,24 @@ func (_ *Logger) Log(entry *LogEntry) {
 	WriteAuditLine(data)
 }
 
-func (l *Logger) notifySlackAsync(al *db.AuditLog) {
+// notifySlack queues the entry's Slack notification, when a Slack integration is configured.
+func (l *Logger) notifySlack(al *db.AuditLog) error {
 	if l.auditEventEnqueuer == nil {
-		return
+		return nil
 	}
-
-	// Check if Slack integration is configured before enqueueing
 	if l.database != nil {
 		integration, err := l.database.GetSlackIntegration()
-		if err != nil || integration == nil {
-			// No integration configured, skip enqueueing
-			return
+		if err != nil {
+			return fmt.Errorf("failed to look up the Slack integration for audit event %d: %w", al.ID, err)
+		}
+		if integration == nil {
+			return nil
 		}
 	}
-
 	if err := l.auditEventEnqueuer.EnqueueAuditEvent(al.ID); err != nil {
-		log.Printf("failed to enqueue Slack audit event notification: %v", err)
+		return fmt.Errorf("failed to enqueue Slack audit event notification: %w", err)
 	}
+	return nil
 }
 
 // MarkAuditLogCreated marks that an explicit audit log was created for this request

@@ -173,8 +173,11 @@ Key files:
   with the command). Full check on start, while failing and daily; otherwise the events since the last passing run.
   What it has verified and alerted is in memory only (a database writer must not be able to skip checks or silence
   alerts); `audit_verification_status` is display-only (Audit Logs page). Failures go to Sentry every run and to
-  Slack as audit events: `audit_log.verification_failed` (first failure, more failures, daily reminder) and
-  `audit_log.verification_recovered` (passing again). A passing run records no event. Every run pings
+  Slack as audit events: `audit_log.verification_failed` (first failure, a failure the last alert didn't report,
+  daily reminder) and `audit_log.verification_recovered` (passing again). They're recorded with
+  `audit.Logger.LogAlert`, which also fails when the Slack notification can't be queued, so the next run sends the
+  alert again. A report's `FailureKeys` identify its failures; a failure whose message changes every run (an age,
+  the latest index) uses `failSteady` with a key that doesn't. A passing run records no event. Every run pings
   `AUDIT_VERIFY_HEARTBEAT_URL`, so a heartbeat monitor alerts when runs stop.
 - `heartbeat/`, `jobs/uptime/` - Heartbeat pings (https URLs from env vars, never logged: they carry the monitor's
   key). `UPTIME_HEARTBEAT_URL` is pinged on start and every `UPTIME_HEARTBEAT_INTERVAL_MINUTES` while the health

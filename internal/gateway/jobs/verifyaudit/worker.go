@@ -46,8 +46,8 @@ type Database interface {
 	SaveAuditVerificationStatus(ctx context.Context, status *db.AuditVerificationStatus) error
 }
 
-// AuditFunc records an audit event. The gateway passes its audit logger's, which also sends the event to the
-// Slack channels whose action patterns match it.
+// AuditFunc records an alert as an audit event. The gateway passes its audit logger's LogAlert, which also sends the
+// event to the Slack channels whose action patterns match it, and returns an error when that can't be queued.
 type AuditFunc func(*db.AuditLog) error
 
 // HeartbeatEnv is the URL of the verification's heartbeat monitor, pinged after every run (unset: no heartbeat).
@@ -150,7 +150,7 @@ func (w *Worker) Run(ctx context.Context) error {
 		w.capture(sentryEvent(result, since))
 	}
 	alerted := w.sendAlert(alert, result, since)
-	w.state.record(result, now, since, alert == failureAlert && alerted)
+	w.state.record(result, now, since, alert, alerted)
 	status := recordedStatus(previous, result, &w.state, now)
 
 	// A run that timed out is still recorded, with a context of its own.
