@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -24,6 +25,12 @@ func Authenticated(authService *auth.Service) gin.HandlerFunc {
 		}
 
 		authUser, source, err := authService.AuthenticateHTTPRequest(c.Request)
+		if errors.Is(err, auth.ErrTooManyFailedAttempts) {
+			c.Header("Retry-After", authService.RetryAfter())
+			c.JSON(http.StatusTooManyRequests, gin.H{"error": err.Error()})
+			c.Abort()
+			return
+		}
 		if err != nil {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 			c.Abort()

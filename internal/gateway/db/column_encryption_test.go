@@ -40,7 +40,7 @@ func setStoredMFASecret(t *testing.T, database *gwdb.Database, methodID int64, v
 
 func createSlackIntegration(t *testing.T, database *gwdb.Database) {
 	t.Helper()
-	_, err := database.CreateSlackIntegration(
+	_, err := database.ReplaceSlackIntegration(
 		"T123", "Test Workspace", fakeSlackBot, "U123", "chat:write", map[string]interface{}{}, nil,
 	)
 	require.NoError(t, err)

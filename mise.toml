@@ -29,6 +29,10 @@ WEB_DEV_SERVER_URL = "http://localhost:5223"
 # Rate limiting (relaxed for dev)
 RATE_LIMIT_RPS = "100"
 RATE_LIMIT_BURST = "200"
+AUTH_FAILURE_LIMIT_BURST = "1000"
+AUTH_FAILURE_LIMIT_PER_MINUTE = "6000"
+DEPLOY_APPROVAL_LIMIT_BURST = "1000"
+DEPLOY_APPROVAL_LIMIT_PER_HOUR = "100000"
 
 # OAuth configuration (override in mise.local.toml)
 GOOGLE_CLIENT_ID = "mock-client-id"
@@ -58,9 +62,11 @@ VIEWER_USERS = "viewer@example.com"
 DEPLOYER_USERS = "deployer@example.com"
 OPERATIONS_USERS = "ops@example.com"
 
-# Postgres for dev/test (Docker compose exposes 55432 by default)
-DATABASE_URL = "postgres://postgres:postgres@127.0.0.1:55432/gateway_dev?sslmode=disable"
-TEST_DATABASE_URL = "postgres://postgres:postgres@127.0.0.1:55432/gateway_test?sslmode=disable"
+# Postgres for dev/test: Docker compose publishes it on POSTGRES_PORT, 55432 unless the environment sets another
+# (for a machine where 55432 is taken)
+POSTGRES_PORT = "{{ get_env(name='POSTGRES_PORT', default='55432') }}"
+DATABASE_URL = "postgres://postgres:postgres@127.0.0.1:{{ env.POSTGRES_PORT }}/gateway_dev?sslmode=disable"
+TEST_DATABASE_URL = "postgres://postgres:postgres@127.0.0.1:{{ env.POSTGRES_PORT }}/gateway_test?sslmode=disable"
 
 # MinIO (S3-compatible local storage for dev)
 AWS_ENDPOINT_URL_S3 = "http://localhost:9000"

@@ -2,17 +2,26 @@ package handlers
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/gin-gonic/gin"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 )
 
+// maxAuditSearchLength bounds the audit log's text search, which runs across several columns.
+const maxAuditSearchLength = 200
+
 func (h *AdminHandler) auditFiltersFromRequest(c *gin.Context) (db.AuditLogFilters, int, int, error) {
 	page, limit := parsePaginationParams(c)
+	searchFilter := c.Query("search")
+	if utf8.RuneCountInString(searchFilter) > maxAuditSearchLength {
+		return db.AuditLogFilters{}, 0, 0, errAuditSearchTooLong
+	}
 	userFilter, missingUserForID, err := h.resolveUserFilter(c)
 	if err != nil {
 		return db.AuditLogFilters{}, 0, 0, err
@@ -21,7 +30,6 @@ func (h *AdminHandler) auditFiltersFromRequest(c *gin.Context) (db.AuditLogFilte
 	statusFilter := c.Query("status")
 	actionTypeFilter := c.Query("action_type")
 	resourceTypeFilter := c.Query("resource_type")
-	searchFilter := c.Query("search")
 	rangeFilter := strings.TrimSpace(c.DefaultQuery("range", "24h"))
 	startParam := c.Query("start")
 	endParam := c.Query("end")
@@ -42,6 +50,8 @@ func (h *AdminHandler) auditFiltersFromRequest(c *gin.Context) (db.AuditLogFilte
 	return filters, page, limit, nil
 }
 
+// parsePaginationParams reads the page and its size. The size is at most db.MaxAuditLogPageSize, and the page is
+// at most one whose offset fits in an int32, so working out the offset can't overflow.
 func parsePaginationParams(c *gin.Context) (int, int) {
 	page, err := strconv.Atoi(c.DefaultQuery("page", "1"))
 	if err != nil || page < 1 {
@@ -51,7 +61,8 @@ func parsePaginationParams(c *gin.Context) (int, int) {
 	if err != nil || limit <= 0 {
 		limit = 100
 	}
-	return page, limit
+	limit = min(limit, db.MaxAuditLogPageSize)
+	return min(page, math.MaxInt32/limit), limit
 }
 
 func (h *AdminHandler) resolveUserFilter(c *gin.Context) (string, bool, error) {

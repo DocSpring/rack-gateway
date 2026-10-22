@@ -102,15 +102,6 @@ func (d *Database) ConsumeSessionWebAuthnChallenge(
 	return scanWebAuthnChallenge(row)
 }
 
-// SetMFAMethodSignCount stores the signature counter of a newly registered credential.
-func (d *Database) SetMFAMethodSignCount(methodID int64, signCount uint32) error {
-	_, err := d.exec("UPDATE mfa_methods SET webauthn_sign_count = ? WHERE id = ?", signCount, methodID)
-	if err != nil {
-		return fmt.Errorf("failed to store webauthn sign count: %w", err)
-	}
-	return nil
-}
-
 // AdvanceMFAMethodSignCount stores a WebAuthn signature counter only if it moves forward: it must exceed the
 // stored counter, or both must be 0 (authenticators that don't count). The compare and store are one
 // statement, so two concurrent assertions with the same counter (a cloned key racing the real one) can't

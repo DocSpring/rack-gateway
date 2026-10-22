@@ -279,6 +279,21 @@ func (c *Client) getBranch(owner, repo, branch string) (*Branch, error) {
 	return &branchInfo, nil
 }
 
+// DefaultBranch returns the repository's default branch.
+func (c *Client) DefaultBranch(owner, repo string) (string, error) {
+	var repository struct {
+		DefaultBranch string `json:"default_branch"`
+	}
+	notFoundError := fmt.Sprintf("repository %s/%s not found", owner, repo)
+	if err := c.doRequest("GET", c.repoURL(owner, repo), nil, http.StatusOK, notFoundError, &repository); err != nil {
+		return "", err
+	}
+	if repository.DefaultBranch == "" {
+		return "", fmt.Errorf("GitHub didn't say which branch is the default in %s/%s", owner, repo)
+	}
+	return repository.DefaultBranch, nil
+}
+
 // findPRForBranch finds an open PR for the specified branch
 func (c *Client) findPRForBranch(owner, repo, branch string) (*PullRequest, error) {
 	query := url.Values{"head": {owner + ":" + branch}, "state": {"open"}}

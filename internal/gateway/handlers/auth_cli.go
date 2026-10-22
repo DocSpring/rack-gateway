@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -134,7 +135,7 @@ func (h *AuthHandler) CLILoginCallback(c *gin.Context) {
 		cliRedirectWithError(c, "missing_state")
 		return
 	}
-	email, name, errCode := h.cliExchangeOAuthCode(code, record)
+	email, name, errCode := h.cliExchangeOAuthCode(c.Request.Context(), code, record)
 	if errCode != "" {
 		returnErrorToCLI(c, record, errCode)
 		return
@@ -152,11 +153,13 @@ func cliProviderErrorCode(providerError string) string {
 
 // cliExchangeOAuthCode exchanges the identity provider code for the signed-in identity.
 // Returns the email and name, or an error code for the CLI.
-func (h *AuthHandler) cliExchangeOAuthCode(code string, record *db.CLILoginState) (string, string, string) {
+func (h *AuthHandler) cliExchangeOAuthCode(
+	ctx context.Context, code string, record *db.CLILoginState,
+) (string, string, string) {
 	if !record.OAuthCodeVerifier.Valid {
 		return "", "", "session_incomplete"
 	}
-	loginResp, err := h.oauth.CompleteLogin(code, record.State, record.OAuthCodeVerifier.String)
+	loginResp, err := h.oauth.CompleteLogin(ctx, code, record.State, record.OAuthCodeVerifier.String)
 	if err != nil {
 		var domainErr *auth.DomainNotAllowedError
 		if errors.As(err, &domainErr) {
@@ -295,6 +298,9 @@ func (h *AuthHandler) CLILoginMFASubmit(c *gin.Context) {
 	}
 
 	record, errCode := h.loadBoundCLILogin(c, parsed.state)
+	if errCode == "" && record.LoginError.Valid {
+		errCode = strings.TrimSpace(record.LoginError.String)
+	}
 	if errCode != "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": errCode})
 		return
@@ -390,7 +396,12 @@ func (h *AuthHandler) markCLILoginVerified(c *gin.Context, state string, verific
 	if verification != nil && verification.MethodID > 0 {
 		methodID = &verification.MethodID
 	}
-	if err := h.database.MarkCLILoginVerified(state, methodID); err != nil {
+	err := h.database.MarkCLILoginVerified(state, methodID)
+	if errors.Is(err, db.ErrCLILoginEnded) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "expired"})
+		return false
+	}
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "persist_failure"})
 		return false
 	}

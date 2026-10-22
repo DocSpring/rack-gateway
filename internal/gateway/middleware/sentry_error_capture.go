@@ -25,8 +25,8 @@ func (w *sentryResponseWriter) Unwrap() http.ResponseWriter {
 	return w.ResponseWriter
 }
 
-// SentryErrorCapture is a middleware that automatically captures 500-level errors to Sentry.
-// This ensures ALL internal server errors are reported, not just panics.
+// SentryErrorCapture is a middleware that automatically captures 500-level errors to Sentry, so every internal
+// server error is reported. Panics are reported by Recovery, which runs outside this.
 func SentryErrorCapture() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Wrap the response writer to capture status code

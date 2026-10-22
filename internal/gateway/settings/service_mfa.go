@@ -1,81 +1,30 @@
 package settings
 
-import (
-	"fmt"
-
-	"github.com/DocSpring/rack-gateway/internal/gateway/db"
-)
+import "github.com/DocSpring/rack-gateway/internal/gateway/db"
 
 // GetMFASettings returns the MFA configuration as it is now, read with one query. It's called for each request
-// that needs it, so a change applies at once, on every gateway instance.
+// that needs it, so a change applies at once, on every gateway instance. A stored value that doesn't fit its
+// setting is an error (see readGlobal): the gateway refuses to start, and requests that need MFA fail closed.
 func (s *Service) GetMFASettings() (*db.MFASettings, error) {
 	stored, err := s.db.GetAllSettings(nil)
 	if err != nil {
 		return nil, err
 	}
-	resolve := func(key string) (interface{}, error) {
-		setting, err := s.resolveSetting(nil, key, DefaultGlobalSettings[key], stored)
-		if err != nil {
-			return nil, err
-		}
-		return setting.Value, nil
-	}
-
-	requireAll, err := resolve(KeyMFARequireAllUsers)
+	requireAll, err := readGlobal(s, KeyMFARequireAllUsers, stored, boolValue)
 	if err != nil {
 		return nil, err
 	}
-	ttlDays, err := resolve(KeyTrustedDeviceTTLDays)
+	ttlDays, err := readGlobal(s, KeyTrustedDeviceTTLDays, stored, wholeNumber)
 	if err != nil {
 		return nil, err
 	}
-	stepUpMinutes, err := resolve(GlobalSettingStepUpWindowMinutes.String())
+	stepUpMinutes, err := readGlobal(s, GlobalSettingStepUpWindowMinutes.String(), stored, wholeNumber)
 	if err != nil {
 		return nil, err
-	}
-
-	requireAllBool, ok := requireAll.(bool)
-	if !ok {
-		requireAllBool = true
 	}
 	return &db.MFASettings{
-		RequireAllUsers:      requireAllBool,
-		TrustedDeviceTTLDays: intValue(ttlDays),
-		StepUpWindowMinutes:  intValue(stepUpMinutes),
+		RequireAllUsers:      requireAll,
+		TrustedDeviceTTLDays: ttlDays,
+		StepUpWindowMinutes:  stepUpMinutes,
 	}, nil
-}
-
-// intValue is a numeric setting's value as an int: JSON numbers decode as float64. Anything else is 0, which
-// db.MFASettings treats as unset.
-func intValue(value interface{}) int {
-	switch v := value.(type) {
-	case int:
-		return v
-	case float64:
-		return int(v)
-	default:
-		return 0
-	}
-}
-
-// SetMFASettings stores MFA configuration in the database atomically.
-// All settings are updated within a single transaction to prevent partial updates.
-func (s *Service) SetMFASettings(settings *db.MFASettings, updatedByUserID *int64) error {
-	if settings == nil {
-		return fmt.Errorf("mfa settings cannot be nil")
-	}
-	if settings.TrustedDeviceTTLDays <= 0 {
-		settings.TrustedDeviceTTLDays = defaultTrustedDeviceTTLDays
-	}
-	if settings.StepUpWindowMinutes <= 0 {
-		settings.StepUpWindowMinutes = defaultStepUpWindowMinutes
-	}
-
-	updates := []db.SettingUpdate{
-		{Key: KeyMFARequireAllUsers, Value: settings.RequireAllUsers},
-		{Key: KeyTrustedDeviceTTLDays, Value: settings.TrustedDeviceTTLDays},
-		{Key: GlobalSettingStepUpWindowMinutes.String(), Value: settings.StepUpWindowMinutes},
-	}
-
-	return s.SetGlobalSettingsInTx(updates, updatedByUserID)
 }

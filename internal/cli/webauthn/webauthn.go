@@ -26,14 +26,18 @@ func GetAssertion(options AssertionOptions) (*AssertionResponse, error) {
 // Returns the assertion response and the PIN used (for caching in subsequent calls).
 // If cachedPIN is empty, asks for the PIN when the key has one. Otherwise uses the cached PIN.
 func GetAssertionWithCachedPIN(options AssertionOptions, cachedPIN string) (*AssertionResponse, string, error) {
-	device, err := openFirstFIDODevice()
+	allowList, err := decodeCredentialIDs(options.AllowCredentials)
+	if err != nil {
+		return nil, "", err
+	}
+	keys, err := openFIDODevices()
 	if err != nil {
 		return nil, "", err
 	}
 
 	pinRequest := pinentry.Request{Gateway: options.Origin, Args: os.Args, Summary: options.Prompt.Summary}
 	flow := assertionFlow{
-		key:            device,
+		key:            chooseKey(keys, options.RPID, allowList),
 		readPIN:        func() (string, error) { return pinentry.ReadPIN(pinRequest) },
 		infoRetryDelay: infoRetryDelay,
 	}
@@ -50,7 +54,8 @@ func promptTouch(options AssertionOptions) {
 	}
 }
 
-func openFirstFIDODevice() (*libfido2.Device, error) {
+// openFIDODevices opens every connected security key that can be opened.
+func openFIDODevices() ([]securityKey, error) {
 	locs, err := libfido2.DeviceLocations()
 	if err != nil {
 		return nil, fmt.Errorf("failed to list FIDO2 devices: %w", err)
@@ -58,11 +63,20 @@ func openFirstFIDODevice() (*libfido2.Device, error) {
 	if len(locs) == 0 {
 		return nil, fmt.Errorf("no FIDO2 devices found")
 	}
-	device, err := libfido2.NewDevice(locs[0].Path)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open FIDO2 device: %w", err)
+	keys := make([]securityKey, 0, len(locs))
+	var openErr error
+	for _, loc := range locs {
+		device, err := libfido2.NewDevice(loc.Path)
+		if err != nil {
+			openErr = err
+			continue
+		}
+		keys = append(keys, device)
 	}
-	return device, nil
+	if len(keys) == 0 {
+		return nil, fmt.Errorf("failed to open FIDO2 device: %w", openErr)
+	}
+	return keys, nil
 }
 
 func decodeCredentialIDs(ids []string) ([][]byte, error) {
@@ -77,7 +91,8 @@ func decodeCredentialIDs(ids []string) ([][]byte, error) {
 	return allowList, nil
 }
 
-func intersectCredentialLists(allowList [][]byte, deviceCreds []*libfido2.Credential) ([][]byte, error) {
+// matchingCredentials returns the credentials in allowList that are among deviceCreds.
+func matchingCredentials(allowList [][]byte, deviceCreds []*libfido2.Credential) [][]byte {
 	deviceCredMap := make(map[string]bool, len(deviceCreds))
 	for _, cred := range deviceCreds {
 		encoded := base64.RawURLEncoding.EncodeToString(cred.ID)
@@ -92,15 +107,7 @@ func intersectCredentialLists(allowList [][]byte, deviceCreds []*libfido2.Creden
 		}
 	}
 
-	if len(filtered) == 0 {
-		return nil, fmt.Errorf(
-			"none of your registered credentials are on this device "+
-				"(device has %d credential(s) for this service, but none match)",
-			len(deviceCreds),
-		)
-	}
-
-	return filtered, nil
+	return filtered
 }
 
 func buildClientData(options AssertionOptions) ([]byte, []byte, error) {

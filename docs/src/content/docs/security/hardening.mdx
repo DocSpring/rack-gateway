@@ -46,6 +46,18 @@ or Tailscale (`tailscale serve`). Set `DOMAIN` to the host name clients use; the
 DOMAIN=gateway.example.com
 ```
 
+### The Rack Connection
+
+The gateway calls the rack API over TLS with the rack's API key, but it can't authenticate the rack: the Convox rack
+API serves a self-signed certificate that it generates again every time it starts, and no CA signs it. The
+connection is encrypted, and an attacker would have to intercept traffic inside the rack's network to impersonate
+the rack and capture the key. Run the gateway as an app on the rack it protects, so the connection stays inside
+the cluster, and keep anything you don't trust off that network.
+
+`ENABLE_RACK_TLS_PINNING=true` pins the first certificate the gateway sees and refuses any other until the pin is
+refreshed. It narrows the window to first use and refreshes, but each rack update replaces the certificate and needs
+a refresh.
+
 ### Firewall Rules
 
 Restrict network access:
@@ -156,9 +168,13 @@ Restrict administrative access:
 
 Mark sensitive environment variables in each app's settings (or pin them with `RGW_APP_<APP>_SETTING_*`):
 
-- **`secret_env_vars`**: values masked unless the caller holds `convox:secret:read` and asks to reveal them.
-  Names containing `SECRET` or `TOKEN`, or ending in `_KEY`, are secrets already; `CONVOX_SECRET_ENV_VARS` adds names
+- **`secret_env_vars`**: values masked unless the caller holds `convox:secret:read` and asks to reveal them, and
+  changed only with `convox:secret:set`. Names containing `SECRET`, `TOKEN`, `PASSWORD`, `PASSWD`, `PASSPHRASE` or
+  `CREDENTIAL`, or ending in `_KEY`, `_KEY_ID` or `_PASS`, are secrets already; `CONVOX_SECRET_ENV_VARS` adds names
   for every app.
+- A value with credentials in it, such as `postgres://app:password@db/app` or a connection string with `password=`,
+  is masked the same way whatever its name. Changing it still needs only `convox:env:set`, so a deployer can replace
+  a `DATABASE_URL` they can't read.
 - **`protected_env_vars`**: values masked, and changed only by an admin with `--allow-protected` and MFA.
 
 Changing either list needs MFA on that request, even within the step-up window, as changing a protected value does.

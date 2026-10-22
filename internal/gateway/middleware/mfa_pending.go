@@ -2,18 +2,12 @@ package middleware
 
 import (
 	"net/http"
-	"time"
 
 	"github.com/gin-gonic/gin"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 )
-
-// pendingMFAInlineVerifiedKey marks a request whose inline MFA credential already completed the
-// session's MFA challenge, so later MFA checks in the same request don't verify it a second time
-// (which would trip TOTP replay protection).
-const pendingMFAInlineVerifiedKey = "mfa_pending_inline_verified"
 
 // pendingMFAAllowedRoutes are the only routes a session may reach before it completes its MFA challenge.
 var pendingMFAAllowedRoutes = map[string]struct{}{
@@ -94,7 +88,8 @@ func allowPendingMFARequest(
 }
 
 // completePendingMFAInline verifies an inline MFA credential for a session that has not yet
-// completed its MFA challenge, and marks the session as MFA-verified on success.
+// completed its MFA challenge. On success the request's session counts as MFA-verified, and
+// AuditBeforeActing saves that once the request's audit attempt is written.
 func completePendingMFAInline(
 	c *gin.Context,
 	mfaService MFAVerifier,
@@ -108,21 +103,6 @@ func completePendingMFAInline(
 	if !verifyByType(c, mfaService, database, user, authUser) {
 		return false
 	}
-
-	session := authUser.Session
-	now := time.Now()
-	if err := database.UpdateSessionMFAVerified(session.ID, now, session.TrustedDeviceID); err != nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{
-			"error":   "mfa_verification_record_failed",
-			"message": "Failed to record MFA verification. Please try again.",
-		})
-		return false
-	}
-	session.MFAVerifiedAt = &now
-
-	if !updateStepUpAfterSuccess(c, database, authUser) {
-		return false
-	}
-	c.Set(pendingMFAInlineVerifiedKey, true)
+	applyInlineMFA(c, authUser.Session, true)
 	return true
 }

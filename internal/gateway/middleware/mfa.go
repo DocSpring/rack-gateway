@@ -102,9 +102,9 @@ func enforceAlwaysMFA(c *gin.Context, mfaService MFAVerifier, database *db.Datab
 		denyMFA(c)
 		return
 	}
-	// API tokens don't have MFA. A request whose inline MFA just completed the session's
-	// pending MFA challenge has already proven a factor.
-	if authUser.IsAPIToken || c.GetBool(pendingMFAInlineVerifiedKey) {
+	// API tokens don't have MFA. A request whose inline MFA was verified by an earlier check
+	// (completing the session's pending MFA challenge) has already proven a factor.
+	if authUser.IsAPIToken || inlineMFAVerified(c) {
 		c.Next()
 		return
 	}
@@ -252,8 +252,9 @@ func attemptInlineMFAVerification(
 	return false
 }
 
-// verifyInlineMFA verifies the user provided an MFA code with this request and updates step-up timestamp.
-// This is used for both MFAAlways and MFAStepUp routes when MFA is provided inline.
+// verifyInlineMFA verifies the MFA proof the request carries. On success the request's session has stepped up, and
+// AuditBeforeActing saves that once the request's audit attempt is written. This is used for both MFAAlways and
+// MFAStepUp routes when MFA is provided inline.
 func verifyInlineMFA(c *gin.Context, mfaService MFAVerifier, database *db.Database, authUser *auth.User) bool {
 	if !preconditionsMet(authUser, mfaService, database) {
 		return false
@@ -267,8 +268,8 @@ func verifyInlineMFA(c *gin.Context, mfaService MFAVerifier, database *db.Databa
 	if !verifyByType(c, mfaService, database, user, authUser) {
 		return false
 	}
-
-	return updateStepUpAfterSuccess(c, database, authUser)
+	applyInlineMFA(c, authUser.Session, false)
+	return true
 }
 
 func preconditionsMet(authUser *auth.User, mfaService MFAVerifier, database *db.Database) bool {
@@ -353,19 +354,6 @@ func handleVerifyError(c *gin.Context, mfaType string) bool {
 		"message": message,
 	})
 	return false
-}
-
-func updateStepUpAfterSuccess(c *gin.Context, database *db.Database, authUser *auth.User) bool {
-	now := time.Now()
-	if err := database.UpdateSessionRecentStepUp(authUser.Session.ID, now); err != nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{
-			"error":   "mfa_step_up_record_failed",
-			"message": "Failed to record MFA verification. Please try again.",
-		})
-		return false
-	}
-	authUser.Session.RecentStepUpAt = &now
-	return true
 }
 
 // denyStepUp sends a step-up MFA required response.

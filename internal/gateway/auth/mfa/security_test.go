@@ -1,11 +1,13 @@
 package mfa
 
 import (
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/pquerna/otp"
 	"github.com/pquerna/otp/totp"
+	"github.com/stretchr/testify/require"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	"github.com/DocSpring/rack-gateway/internal/gateway/testutil/dbtest"
@@ -47,8 +49,14 @@ func TestVerifyTOTP_RateLimiting(t *testing.T) {
 		_, _ = svc.VerifyTOTP(user, "wrong", "1.2.3.4", "test-agent", nil)
 	}
 
-	// Log one more directly to hit rate limit without triggering lock
-	_ = database.LogTOTPAttempt(user.ID, nil, false, "invalid_code", "1.2.3.4", "test-agent", nil)
+	// Record one more directly to hit rate limit without triggering lock
+	attempt, err := database.ReserveMFAAttempt(
+		db.MFAAttemptRequest{UserID: user.ID, MethodType: db.MFAMethodTypeTOTP}, attemptLimit, attemptWindowMinutes,
+	)
+	if err != nil {
+		t.Fatalf("failed to record an attempt: %v", err)
+	}
+	_ = attempt.Finish(nil, false, "invalid_code")
 
 	// 6th attempt should be rate limited (not locked, since only 4 failed verifications)
 	if _, err := svc.VerifyTOTP(user, "123456", "1.2.3.4", "test-agent", nil); err == nil {
@@ -117,6 +125,37 @@ func TestVerifyTOTP_LoggingMetadata(t *testing.T) {
 	// This test verifies that attempt logging happens, but we can't easily
 	// query the attempts table in this test framework without adding more methods.
 	// The real verification happens in integration tests.
+}
+
+// Concurrent guesses are counted one at a time: no more than the limit are checked, however many arrive at once.
+func TestConcurrentTOTPGuessesStayWithinTheLimit(t *testing.T) {
+	t.Parallel()
+	svc, database, user := setupMFAService(t, "concurrent@example.com", "Concurrent")
+	createConfirmedTOTP(t, database, user)
+
+	var wg sync.WaitGroup
+	for range 20 {
+		wg.Go(func() { _, _ = svc.VerifyTOTP(user, "wrong-code", "1.2.3.4", "test-agent", nil) })
+	}
+	wg.Wait()
+
+	var checked int
+	require.NoError(t, database.DB().QueryRow(
+		"SELECT COUNT(*) FROM mfa_attempts WHERE user_id = $1 AND failure_reason <> 'rate_limited'", user.ID,
+	).Scan(&checked))
+	require.Equal(t, attemptLimit, checked)
+}
+
+// A verifier that is configured but can't start is a startup error, not a factor that silently fails.
+func TestNewServiceRefusesAnInvalidVerifierConfiguration(t *testing.T) {
+	t.Parallel()
+	database := dbtest.NewDatabase(t)
+
+	_, err := NewService(database, "Test", nil, []byte("pepper"), "client-id", "not base64!", "", "", nil)
+	require.ErrorContains(t, err, "invalid Yubico OTP API credentials")
+	_, err = NewService(database, "Test", nil, []byte("pepper"), "", "", "not a domain!",
+		"https://gateway.example.com", nil)
+	require.ErrorContains(t, err, "invalid WebAuthn configuration")
 }
 
 func setupMFAService(t *testing.T, email, name string) (*Service, *db.Database, *db.User) {

@@ -52,7 +52,7 @@ echo "Database(s) reset."
 # Setup audit roles before migrations
 echo "Setting up audit roles..."
 for dbname in "${DATABASES[@]}"; do
-  DATABASE_URL="postgres://postgres:postgres@localhost:55432/${dbname}?sslmode=disable" ./scripts/setup-audit-roles.sh
+  DATABASE_URL="postgres://postgres:postgres@localhost:${POSTGRES_PORT:-55432}/${dbname}?sslmode=disable" ./scripts/setup-audit-roles.sh
 done
 
 # Run migrations using local binary
@@ -61,9 +61,9 @@ for dbname in "${DATABASES[@]}"; do
   echo "Running migrations on ${dbname}..."
   # Set DATABASE_URL for this specific database
   if [ "$dbname" = "gateway_dev" ]; then
-    DATABASE_URL="postgres://postgres:postgres@localhost:55432/gateway_dev?sslmode=disable" ./bin/rack-gateway-api migrate
+    DATABASE_URL="postgres://postgres:postgres@localhost:${POSTGRES_PORT:-55432}/gateway_dev?sslmode=disable" ./bin/rack-gateway-api migrate
   elif [ "$dbname" = "gateway_test" ]; then
-    DATABASE_URL="postgres://postgres:postgres@localhost:55432/gateway_test?sslmode=disable" ./bin/rack-gateway-api migrate
+    DATABASE_URL="postgres://postgres:postgres@localhost:${POSTGRES_PORT:-55432}/gateway_test?sslmode=disable" ./bin/rack-gateway-api migrate
   fi
 done
 

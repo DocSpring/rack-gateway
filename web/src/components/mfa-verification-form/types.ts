@@ -22,6 +22,8 @@ export interface MFAVerificationFormProps {
   onVerify: (params: VerificationParams) => Promise<void>
   onSuccess?: () => void | Promise<void>
   onError?: (error: unknown) => void
+  // showError false leaves showing a failed verification to the caller (onError); the form shows it by default
+  showError?: boolean
   onMFAStatusLoaded?: (mfaStatus: MFAStatus) => void
   focusOnMount?: boolean
   showTrustDevice?: boolean

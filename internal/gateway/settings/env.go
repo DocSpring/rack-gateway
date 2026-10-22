@@ -7,7 +7,6 @@ import (
 	"os"
 	"reflect"
 	"regexp"
-	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -78,31 +77,25 @@ func parseEnvSetting(isApp bool, key, raw string) (interface{}, error) {
 		return nil, fmt.Errorf("unknown setting %q", key)
 	}
 
-	typed, err := parseTyped(key, defaultValue, raw)
+	typed, err := parseTyped(defaultValue, raw)
 	if err != nil {
 		return nil, err
 	}
-	if isApp {
-		if err := ValidateAppSettingValue(key, typed); err != nil {
-			return nil, err
-		}
+	if err := checkSettingValue(isApp, key, typed); err != nil {
+		return nil, err
 	}
 	return toJSONShape(typed)
 }
 
-// allowedSettingValues lists the only values some string settings can take.
-var allowedSettingValues = map[string][]string{
-	KeyVerifyGitCommitMode: {VerifyGitCommitModeBranch, VerifyGitCommitModeLatest},
-}
-
-func parseTyped(key string, defaultValue interface{}, raw string) (interface{}, error) {
+// parseTyped parses raw as the type of the setting's default. checkSettingValue then checks the value.
+func parseTyped(defaultValue interface{}, raw string) (interface{}, error) {
 	switch defaultValue.(type) {
 	case bool:
 		return parseEnvBool(raw)
 	case int:
 		n, err := strconv.Atoi(raw)
-		if err != nil || n < 1 {
-			return nil, fmt.Errorf("must be a whole number of at least 1, got %q", raw)
+		if err != nil {
+			return nil, fmt.Errorf("must be a whole number, got %q", raw)
 		}
 		return n, nil
 	case []string:
@@ -114,7 +107,7 @@ func parseTyped(key string, defaultValue interface{}, raw string) (interface{}, 
 		}
 		return m, nil
 	default: // strings, including optional ones with a nil default
-		return parseEnvString(key, raw)
+		return parseEnvString(raw)
 	}
 }
 
@@ -131,17 +124,13 @@ func parseEnvBool(raw string) (bool, error) {
 
 // parseEnvString reads a string value: plain, or JSON-encoded (as Terraform's jsonencode writes every value). Any
 // other quoting would become part of the value, so it's refused, and so is null (unset the variable instead).
-func parseEnvString(key, raw string) (string, error) {
+func parseEnvString(raw string) (string, error) {
 	if strings.HasPrefix(raw, `"`) {
 		if err := json.Unmarshal([]byte(raw), &raw); err != nil {
 			return "", fmt.Errorf("must be a plain value or a JSON string, got %s", raw)
 		}
 	} else if strings.HasPrefix(raw, "'") || raw == "null" {
 		return "", fmt.Errorf("must be a plain value or a JSON string, got %s", raw)
-	}
-	allowed, restricted := allowedSettingValues[key]
-	if restricted && !slices.Contains(allowed, raw) {
-		return "", fmt.Errorf("must be one of %s, got %q", strings.Join(allowed, ", "), raw)
 	}
 	return raw, nil
 }

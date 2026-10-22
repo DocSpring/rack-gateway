@@ -1,9 +1,9 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { useParams } from '@tanstack/react-router'
 import { isAxiosError } from 'axios'
 import { Eye, EyeOff, Loader2, Plus, Trash2 } from 'lucide-react'
 import type { ReactNode } from 'react'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -69,7 +69,8 @@ interface EnvChangesError {
 type EnvChangesResult = EnvChangesSuccess | EnvChangesError
 
 function prepareEnvChanges(rows: EnvRowState[], removedKeys: string[]): EnvChangesResult {
-  const setPayload: Record<string, string> = {}
+  // No prototype, so every valid name (__proto__ included) becomes a key of its own.
+  const setPayload: Record<string, string> = Object.create(null)
   const uniqueRemovals = Array.from(new Set(removedKeys))
   const seenKeys = new Set<string>()
 
@@ -208,7 +209,6 @@ function EnvRow({
 export function AppEnvPage() {
   const { app } = useParams({ from: '/_app/apps/$app/env' }) as { app: string }
   const { user } = useAuth()
-  const queryClient = useQueryClient()
 
   const roles = user?.roles ?? []
   const canEdit = roles.includes('admin') || roles.includes('deployer')
@@ -224,10 +224,7 @@ export function AppEnvPage() {
   const [removedKeys, setRemovedKeys] = useState<string[]>([])
   const [lastReleaseId, setLastReleaseId] = useState<string | null>(null)
   const [revealingKey, setRevealingKey] = useState<string | null>(null)
-  const shouldResyncRef = useRef(true)
-  const lastSyncedAtRef = useRef<number | null>(null)
   const latestEnvData = envQuery.data
-  const lastUpdatedAt = envQuery.dataUpdatedAt
 
   const hasChanges = useMemo(() => {
     if (removedKeys.length > 0) {
@@ -247,23 +244,23 @@ export function AppEnvPage() {
     })
   }, [rows, removedKeys])
 
+  // A fetch while there are unsaved edits keeps them: saving sends only the changes. Save and cancel reset the rows
+  // themselves (resetRows).
   useEffect(() => {
-    if (!latestEnvData) {
-      return
-    }
-
-    const hasNewFetch =
-      typeof lastUpdatedAt === 'number' && lastSyncedAtRef.current !== lastUpdatedAt
-
-    if (!hasChanges || shouldResyncRef.current || hasNewFetch) {
+    if (latestEnvData && !hasChanges) {
       setRows(buildRowsFromEnv(latestEnvData))
-      setRemovedKeys([])
-      shouldResyncRef.current = false
-      if (typeof lastUpdatedAt === 'number') {
-        lastSyncedAtRef.current = lastUpdatedAt
-      }
     }
-  }, [latestEnvData, lastUpdatedAt, hasChanges])
+  }, [latestEnvData, hasChanges])
+
+  // resetRows replaces the rows with the app's environment as the gateway has it now, discarding any edits.
+  const resetRows = async () => {
+    setRemovedKeys([])
+    const { data } = await envQuery.refetch()
+    const env = data ?? latestEnvData
+    if (env) {
+      setRows(buildRowsFromEnv(env))
+    }
+  }
 
   const revealMutation = useMutation({
     mutationFn: (key: string) => fetchAppEnvValue(app, key, true),
@@ -301,9 +298,7 @@ export function AppEnvPage() {
       toast.success(
         data.release_id ? `Environment updated (release ${data.release_id})` : 'Environment updated'
       )
-      setRemovedKeys([])
-      shouldResyncRef.current = true
-      await queryClient.invalidateQueries({ queryKey: [...QUERY_KEYS.APP_ENV, app] })
+      await resetRows()
     },
     onError: (err) => {
       toast.error(getErrorMessage(err, 'Failed to update environment.'))
@@ -375,10 +370,8 @@ export function AppEnvPage() {
     if (envQuery.isLoading) {
       return
     }
-    setRemovedKeys([])
     setLastReleaseId(null)
-    shouldResyncRef.current = true
-    await envQuery.refetch()
+    await resetRows()
   }
 
   const handleSave = async () => {

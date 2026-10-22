@@ -70,7 +70,7 @@ CLI login uses the RFC 8252 loopback flow (see [OAuth Flow](/security/authentica
 - `POST /auth/cli/logout` - revokes the CLI session sent as the bearer token (cookies are ignored)
 - `GET /auth/web/login` (also supports `HEAD`)
 - `GET /auth/web/callback`
-- `GET /auth/web/logout`
+- `POST /auth/web/logout` (with the session's `X-CSRF-Token`)
 
 ### MFA Management
 

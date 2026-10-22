@@ -164,6 +164,7 @@ export function MfaConfigCard({ settings, disabled }: MfaConfigCardProps) {
               <Input
                 disabled={disabled || isSetByEnv(settings?.mfa_trusted_device_ttl_days)}
                 id="trusted-device-ttl"
+                max={365}
                 min={1}
                 onChange={(event) => {
                   const value = Number.parseInt(event.target.value, 10)
@@ -189,6 +190,7 @@ export function MfaConfigCard({ settings, disabled }: MfaConfigCardProps) {
               <Input
                 disabled={disabled || isSetByEnv(settings?.mfa_step_up_window_minutes)}
                 id="step-up-window"
+                max={1440}
                 min={1}
                 onChange={(event) => {
                   const value = Number.parseInt(event.target.value, 10)

@@ -27,7 +27,8 @@ func (f *protectedEnvFixture) deleteApp(t *testing.T, mfaCode string) *httptest.
 // a proof can't be used twice.
 func TestMFAAlwaysPermissionNeedsAProofOnTheRequest(t *testing.T) {
 	f := newProtectedEnvFixture(t)
-	require.NoError(t, settings.NewService(f.database).SetGlobalSetting(settings.KeyAllowDestructiveActions, true, nil))
+	require.NoError(t, settings.NewService(f.database).SetGlobalSettings(
+		map[string]interface{}{settings.KeyAllowDestructiveActions: true}, nil))
 
 	rr := f.deleteApp(t, "")
 	require.Equal(t, http.StatusUnauthorized, rr.Code, rr.Body.String())

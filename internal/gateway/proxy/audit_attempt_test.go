@@ -34,7 +34,8 @@ func newAttemptProxy(t *testing.T) (*Handler, *db.Database, *countingRack, func(
 	t.Helper()
 	rack := &countingRack{}
 	h, database, mgr, cleanup := newProxyWithRackServer(t, rack.handler)
-	require.NoError(t, mgr.SaveUser(attemptUserEmail, &rbac.UserConfig{Name: "Deployer", Roles: []string{"deployer"}}))
+	deployer := &rbac.UserConfig{Name: "Deployer", Roles: []string{"deployer"}}
+	require.NoError(t, mgr.CreateUser(attemptUserEmail, deployer))
 	return h, database, rack, cleanup
 }
 

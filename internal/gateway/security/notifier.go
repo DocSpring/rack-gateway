@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/riverqueue/river"
+	"github.com/riverqueue/river/rivertype"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
@@ -18,15 +19,25 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 )
 
+// jobInserter queues jobs (*jobs.Client).
+type jobInserter interface {
+	Insert(ctx context.Context, args river.JobArgs, opts *river.InsertOpts) (*rivertype.JobInsertResult, error)
+}
+
+// insertTimeout bounds queueing an email's job, so a database that doesn't answer can't hold up the request that
+// raised the alert.
+const insertTimeout = 10 * time.Second
+
 // Notifier handles security event notifications via audit logs and email
 type Notifier struct {
 	auditLogger *audit.Logger
 	database    *db.Database
-	jobsClient  *jobs.Client
+	// jobs queues the emails (nil: none are sent).
+	jobs jobInserter
 
 	// Email rate limiting and deduplication
 	mu              sync.Mutex
-	recentEmails    map[string]time.Time // hash -> last sent time
+	recentEmails    map[string]time.Time // hash -> when its email was queued, or is being queued
 	cleanupInterval time.Duration
 	dedupWindow     time.Duration
 	stopCleanup     chan struct{}
@@ -37,11 +48,14 @@ func NewNotifier(auditLogger *audit.Logger, database *db.Database, jobsClient *j
 	n := &Notifier{
 		auditLogger:     auditLogger,
 		database:        database,
-		jobsClient:      jobsClient,
 		recentEmails:    make(map[string]time.Time),
 		cleanupInterval: 5 * time.Minute,
 		dedupWindow:     15 * time.Minute, // Don't send same email within 15 minutes
 		stopCleanup:     make(chan struct{}),
+	}
+
+	if jobsClient != nil {
+		n.jobs = jobsClient
 	}
 
 	// Start cleanup goroutine to prevent memory leak
@@ -77,7 +91,6 @@ func (n *Notifier) cleanupRecentEmails() {
 	}
 }
 
-// shouldSendEmail checks if we should send this email based on deduplication window
 // admins returns the admins to alert, looked up now so admins added or removed since startup are respected.
 func (n *Notifier) admins() []string {
 	if n.database == nil {
@@ -91,50 +104,63 @@ func (n *Notifier) admins() []string {
 	return emails
 }
 
-// enqueueSecurityNotification enqueues a security notification if deduplication allows
+// enqueueSecurityNotification queues a security email, unless the same one (recipient, subject and event type) was
+// queued within the dedup window. It only counts as sent once its job is queued: when the insert fails, the next
+// alert tries again.
 func (n *Notifier) enqueueSecurityNotification(recipient, subject, eventType string, args river.JobArgs) {
 	if recipient == "" && !strings.HasPrefix(eventType, "admin") {
 		return
 	}
-	if !n.shouldSendEmail(recipient, subject, eventType) {
+	n.enqueueOnce(recipient+subject+eventType, eventType, func() river.JobArgs { return args })
+}
+
+// enqueueOnce queues the email build returns, unless one with the same dedup key was queued within the dedup
+// window. build only runs once the key is claimed, so the work it does (looking up recipients) happens at most once
+// a window however often the alert is raised. When it returns nil nothing is sent, and the key stays claimed for
+// the window.
+func (n *Notifier) enqueueOnce(dedup, eventType string, build func() river.JobArgs) {
+	if n.jobs == nil {
+		log.Printf("WARNING: security notification dropped (no jobs client configured): type=%s", eventType)
 		return
 	}
-	if n.jobsClient == nil {
-		log.Printf(
-			"WARNING: security notification dropped (no jobs client configured): type=%s, recipient=%s",
-			eventType,
-			recipient,
-		)
+	key := fmt.Sprintf("%x", sha256.Sum256([]byte(dedup)))
+	if !n.claim(key) {
+		return
+	}
+	args := build()
+	if args == nil {
 		return
 	}
 
-	_, err := n.jobsClient.Insert(context.Background(), args, &river.InsertOpts{
+	ctx, cancel := context.WithTimeout(context.Background(), insertTimeout)
+	defer cancel()
+	_, err := n.jobs.Insert(ctx, args, &river.InsertOpts{
 		Queue:       jobs.QueueSecurity,
 		MaxAttempts: jobs.MaxAttemptsNotification,
 	})
 	if err != nil {
+		n.release(key)
 		log.Printf("failed to enqueue %s notification: %v", eventType, err)
 	}
 }
 
-// Returns true if email should be sent, false if it was recently sent
-func (n *Notifier) shouldSendEmail(recipient, subject, eventType string) bool {
-	// Create a hash of recipient + subject + event type for deduplication
-	hash := fmt.Sprintf("%x", sha256.Sum256([]byte(recipient+subject+eventType)))
-
+// claim reserves key for an email being queued now. It returns false when one was queued, or is being queued,
+// within the dedup window.
+func (n *Notifier) claim(key string) bool {
 	n.mu.Lock()
 	defer n.mu.Unlock()
-
-	if lastSent, exists := n.recentEmails[hash]; exists {
-		if time.Since(lastSent) < n.dedupWindow {
-			// Email was sent recently, skip to avoid spam
-			return false
-		}
+	if at, exists := n.recentEmails[key]; exists && time.Since(at) < n.dedupWindow {
+		return false
 	}
-
-	// Mark this email as sent
-	n.recentEmails[hash] = time.Now()
+	n.recentEmails[key] = time.Now()
 	return true
+}
+
+// release gives up key's claim after its email couldn't be queued.
+func (n *Notifier) release(key string) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	delete(n.recentEmails, key)
 }
 
 // NewCLISession emails the user when a CLI session is created for their account, so a login they
@@ -171,22 +197,12 @@ func (n *Notifier) FailedMFAAttempt(userEmail, userName, ipAddress, userAgent st
 	}
 
 	// Email notification to user (with rate limiting)
-	if userEmail != "" && n.shouldSendEmail(userEmail, "Failed MFA Attempt", "mfa_failed") {
-		if n.jobsClient != nil {
-			_, err := n.jobsClient.Insert(context.Background(), jobemail.FailedMFAArgs{
-				UserEmail: userEmail,
-				UserName:  userName,
-				IPAddress: ipAddress,
-				UserAgent: userAgent,
-			}, &river.InsertOpts{
-				Queue:       jobs.QueueSecurity,
-				MaxAttempts: jobs.MaxAttemptsNotification,
-			})
-			if err != nil {
-				log.Printf("failed to enqueue failed MFA notification email to %s: %v", userEmail, err)
-			}
-		}
-	}
+	n.enqueueSecurityNotification(userEmail, "Failed MFA Attempt", "mfa_failed", jobemail.FailedMFAArgs{
+		UserEmail: userEmail,
+		UserName:  userName,
+		IPAddress: ipAddress,
+		UserAgent: userAgent,
+	})
 }
 
 // LoginAttempt logs and notifies about login attempts
@@ -215,48 +231,32 @@ func (n *Notifier) LoginAttempt(userEmail, userName, channel, status, ipAddress,
 	}
 
 	// Email notification for failed logins (with rate limiting)
-	if !success && userEmail != "" && n.shouldSendEmail(userEmail, "Failed Login Attempt", "login_failed") {
-		if n.jobsClient != nil {
-			_, err := n.jobsClient.Insert(context.Background(), jobemail.FailedLoginArgs{
-				UserEmail: userEmail,
-				UserName:  userName,
-				Channel:   channel,
-				Status:    status,
-				IPAddress: ipAddress,
-				UserAgent: userAgent,
-			}, &river.InsertOpts{
-				Queue:       jobs.QueueSecurity,
-				MaxAttempts: jobs.MaxAttemptsNotification,
-			})
-			if err != nil {
-				log.Printf("failed to enqueue failed login notification email to %s: %v", userEmail, err)
-			}
-		}
+	if !success {
+		n.enqueueSecurityNotification(userEmail, "Failed Login Attempt", "login_failed", jobemail.FailedLoginArgs{
+			UserEmail: userEmail,
+			UserName:  userName,
+			Channel:   channel,
+			Status:    status,
+			IPAddress: ipAddress,
+			UserAgent: userAgent,
+		})
 	}
 }
 
-// RateLimitExceeded logs and notifies about rate limit violations
+// RateLimitExceeded logs and notifies about a request refused by a rate limit. Its audit entry is a throttled
+// denial (see audit.Logger.RecordDenial), so a client sending requests past its limit can't write one per request.
 func (n *Notifier) RateLimitExceeded(userEmail, userName, path, ipAddress, userAgent string) {
-	// Audit log
-	if n.database != nil {
-		if err := n.auditLogger.LogDBEntry(&db.AuditLog{
+	if n.auditLogger != nil {
+		n.auditLogger.RecordDenial(&db.AuditLog{
 			UserEmail:    userEmail,
 			UserName:     userName,
 			ActionType:   audit.ActionTypeSecurity,
 			Action:       audit.BuildAction(audit.ActionScopeRateLimit, audit.ActionVerbExceeded),
 			ResourceType: "security",
 			Resource:     path,
-			Status:       "denied",
 			IPAddress:    ipAddress,
 			UserAgent:    userAgent,
-		}); err != nil {
-			action := audit.BuildAction(audit.ActionScopeRateLimit, audit.ActionVerbExceeded)
-			log.Printf(
-				`{"level":"error","event":"audit_log_failed","action":%q,"error":%q}`,
-				action,
-				err,
-			)
-		}
+		})
 	}
 
 	// Email notification to user if known (with rate limiting)
@@ -268,19 +268,20 @@ func (n *Notifier) RateLimitExceeded(userEmail, userName, path, ipAddress, userA
 		UserAgent: userAgent,
 	})
 
-	// Also notify admins about rate limit violations (potential attack) - with deduplication
-	// Use IP address in the hash so we deduplicate per-IP, not globally
-	admins := n.admins()
-	if len(admins) == 0 {
-		return
-	}
-	adminKey := fmt.Sprintf("admins-%s", ipAddress)
-	n.enqueueSecurityNotification(adminKey, "Rate Limit Exceeded", "rate_limit_admin", jobemail.RateLimitAdminArgs{
-		AdminEmails: admins,
-		UserEmail:   userEmail,
-		UserName:    userName,
-		Path:        path,
-		IPAddress:   ipAddress,
-		UserAgent:   userAgent,
+	// Also notify admins (a potential attack), once per client IP a window. The admins are looked up only when
+	// that email is due.
+	n.enqueueOnce("admins-rate_limit:"+ipAddress, "rate_limit_admin", func() river.JobArgs {
+		admins := n.admins()
+		if len(admins) == 0 {
+			return nil
+		}
+		return jobemail.RateLimitAdminArgs{
+			AdminEmails: admins,
+			UserEmail:   userEmail,
+			UserName:    userName,
+			Path:        path,
+			IPAddress:   ipAddress,
+			UserAgent:   userAgent,
+		}
 	})
 }

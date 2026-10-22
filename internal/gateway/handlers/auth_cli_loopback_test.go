@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
@@ -49,7 +50,7 @@ func (o *loopbackOAuth) StartLogin() (*auth.LoginStartResponse, error) {
 
 func (_ *loopbackOAuth) StartWebLogin() (string, string) { return "", "" }
 
-func (o *loopbackOAuth) CompleteLogin(code, _, _ string) (*auth.LoginResponse, error) {
+func (o *loopbackOAuth) CompleteLogin(_ context.Context, code, _, _ string) (*auth.LoginResponse, error) {
 	if code != "google-code" {
 		return nil, errors.New("invalid authorization code")
 	}
@@ -76,7 +77,8 @@ func newLoopbackEnv(t *testing.T, requireMFA bool) *loopbackEnv {
 		[]byte("pepper"), "", "", "", "", nil)
 	require.NoError(t, err)
 	settingsService := settings.NewService(database)
-	require.NoError(t, settingsService.SetMFASettings(&db.MFASettings{RequireAllUsers: requireMFA}, nil))
+	require.NoError(t, settingsService.SetGlobalSettings(
+		map[string]interface{}{settings.KeyMFARequireAllUsers: requireMFA}, nil))
 	oauth := &loopbackOAuth{email: "user@example.com"}
 	auditLog := audit.NewLogger(database)
 	handler := NewAuthHandler(oauth, database, &config.Config{DevMode: true}, sessions, mfaService,

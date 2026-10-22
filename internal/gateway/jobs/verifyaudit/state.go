@@ -31,9 +31,13 @@ type runState struct {
 	fullCheckedAt time.Time
 	// failingSince is when the current failing streak started (zero: not failing).
 	failingSince time.Time
-	// alertedAt and alertedFailures describe the streak's latest failure alert.
+	// alertedAt, alertedFailures and alertedKeys describe the streak's latest failure alert.
 	alertedAt       time.Time
 	alertedFailures int
+	alertedKeys     map[string]bool
+	// recoveryPendingSince is the start of a failing streak whose recovery alert couldn't be recorded: the next
+	// passing run sends it again (zero: none pending).
+	recoveryPendingSince time.Time
 }
 
 // plan checks every event on the first run, while verification is failing and once a day, and otherwise the
@@ -54,6 +58,8 @@ func (s *runState) streakStart(previous *db.AuditVerificationStatus, now time.Ti
 	switch {
 	case !s.failingSince.IsZero():
 		return s.failingSince
+	case !s.recoveryPendingSince.IsZero():
+		return s.recoveryPendingSince
 	case previous != nil && previous.FailingSince != nil:
 		return *previous.FailingSince
 	default:
@@ -61,11 +67,14 @@ func (s *runState) streakStart(previous *db.AuditVerificationStatus, now time.Ti
 	}
 }
 
-// record updates the state after a run. since is when the failing streak started; alerted is whether a failure
-// alert was recorded.
-func (s *runState) record(o *outcome, now, since time.Time, alerted bool) {
+// record updates the state after a run. since is when the failing streak started; kind is the alert the run called
+// for, and alerted whether it was recorded.
+func (s *runState) record(o *outcome, now, since time.Time, kind alertKind, alerted bool) {
 	if o.passed() {
 		*s = runState{fullCheckedAt: s.fullCheckedAt}
+		if kind == recoveryAlert && !alerted {
+			s.recoveryPendingSince = since
+		}
 		if head := o.report.Head; !head.Empty {
 			s.verified = &auditverify.VerifiedEvent{Index: head.LastIndex, Hash: head.LastHash}
 		}
@@ -76,8 +85,15 @@ func (s *runState) record(o *outcome, now, since time.Time, alerted bool) {
 	}
 	// The last verified event stays: a failing run doesn't move it, and it keeps the chain to it checked.
 	s.failingSince = since
-	if alerted {
+	s.recoveryPendingSince = time.Time{}
+	if kind == failureAlert && alerted {
 		s.alertedAt = now
 		s.alertedFailures = o.failureCount()
+		s.alertedKeys = map[string]bool{}
+		if o.report != nil {
+			for _, key := range o.report.FailureKeys() {
+				s.alertedKeys[key] = true
+			}
+		}
 	}
 }

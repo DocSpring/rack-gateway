@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"testing/iotest"
 	"time"
 
 	"github.com/stretchr/testify/require"
@@ -43,7 +44,7 @@ func TestSuccessfulPromoteMarksApprovalDeployed(t *testing.T) {
 			approval, err = database.ApproveDeployApprovalRequest(approval.ID, user.ID, time.Now().Add(time.Hour), "")
 			require.NoError(t, err)
 
-			bindApprovalRelease(t, database, approval.ID, "object://test-app/tmp/a.tgz", "BUILD1", "RELEASE1")
+			bindApprovalRelease(t, database, approval.ID)
 
 			tracker := &deployApprovalTracker{request: approval, tokenID: token.ID, app: "test-app"}
 			const promotePath = "/apps/test-app/releases/RELEASE1/promote"
@@ -66,11 +67,15 @@ func TestSuccessfulPromoteMarksApprovalDeployed(t *testing.T) {
 
 // promoteThroughProxy sends a CI token's promote of RELEASE1 through ProxyToRack.
 func promoteThroughProxy(h *Handler, owner *db.User, tokenID int64) *httptest.ResponseRecorder {
+	return promoteWithBodyThroughProxy(h, owner, tokenID, nil)
+}
+
+func promoteWithBodyThroughProxy(h *Handler, owner *db.User, tokenID int64, body io.Reader) *httptest.ResponseRecorder {
 	tokenUser := &auth.User{
 		Email: owner.Email, IsAPIToken: true, TokenID: &tokenID, TokenName: "ci",
 		Permissions: rbac.DefaultPermissionsForRole("cicd"), DBUser: owner,
 	}
-	req := httptest.NewRequest(http.MethodPost, "/apps/test-app/releases/RELEASE1/promote", nil)
+	req := httptest.NewRequest(http.MethodPost, "/apps/test-app/releases/RELEASE1/promote", body)
 	req = req.WithContext(context.WithValue(req.Context(), auth.UserContextKey, tokenUser))
 	rr := httptest.NewRecorder()
 	h.ProxyToRack(rr, req)
@@ -102,7 +107,7 @@ func TestPromoteClaimThroughTheProxy(t *testing.T) {
 	require.NoError(t, err)
 	approval, err = database.ApproveDeployApprovalRequest(approval.ID, deployer.ID, time.Now().Add(time.Hour), "")
 	require.NoError(t, err)
-	bindApprovalRelease(t, database, approval.ID, "object://test-app/tmp/a.tgz", "BUILD1", "RELEASE1")
+	bindApprovalRelease(t, database, approval.ID)
 	_, err = database.DB().Exec("UPDATE deploy_approval_requests SET approval_expires_at = $1 WHERE id = $2",
 		time.Now().Add(-time.Minute), approval.ID)
 	require.NoError(t, err)
@@ -151,4 +156,39 @@ func TestPromoteMayHaveApplied(t *testing.T) {
 	require.False(t, promoteMayHaveApplied(0, notSent))
 	require.False(t, promoteMayHaveApplied(0, mismatch), "the TLS handshake failed, so nothing was sent")
 	require.False(t, promoteMayHaveApplied(0, errBodyTooLarge), "the gateway refused the body before sending it")
+	require.False(t, promoteMayHaveApplied(0, &requestNotSentError{errors.New("failed to read request body")}))
+}
+
+// A promote the gateway gave up on before sending it (here, its body couldn't be read) releases its claim: the
+// rack never saw it, so CI can promote again.
+func TestAPromoteThatWasNeverSentReleasesItsClaim(t *testing.T) {
+	rackCalls := 0
+	reads := &rackReads{}
+	reads.addRelease(rackRelease{ID: "RELEASE1", Build: "BUILD1"})
+	h, database, _, cleanup := newProxyWithRackServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if reads.serve(w, r) {
+			return // the gateway reads the release to check its images
+		}
+		rackCalls++
+	})
+	defer cleanup()
+	app := "test-app"
+	require.NoError(t, database.UpsertSetting(&app, "service_image_patterns",
+		map[string]string{"*": `docker\.io/org/app:{{GIT_COMMIT}}`}, nil))
+	deployer := createUserWithRole(t, database, "deployer@example.com", "deployer")
+	token, err := database.CreateAPIToken(strings.Repeat("e", 64), "ci", deployer.ID, nil, nil, nil)
+	require.NoError(t, err)
+	approval, err := database.CreateDeployApprovalRequest("Deploy", "test-app",
+		"abc123def4567890abc123def4567890abc123de", "main", "", nil, deployer.ID, nil, token.ID)
+	require.NoError(t, err)
+	_, err = database.ApproveDeployApprovalRequest(approval.ID, deployer.ID, time.Now().Add(time.Hour), "")
+	require.NoError(t, err)
+	bindApprovalRelease(t, database, approval.ID)
+
+	rr := promoteWithBodyThroughProxy(h, deployer, token.ID, iotest.ErrReader(errors.New("the client went away")))
+	require.Equal(t, http.StatusBadRequest, rr.Code, rr.Body.String())
+	require.Zero(t, rackCalls)
+	claimed, err := database.ClaimDeployApprovalPromote(approval.ID)
+	require.NoError(t, err)
+	require.True(t, claimed, "the promote never reached the rack, so its claim was released")
 }

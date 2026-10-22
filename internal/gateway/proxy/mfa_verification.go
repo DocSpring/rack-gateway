@@ -139,8 +139,8 @@ var (
 )
 
 // verifyRequestMFA verifies the MFA proof the request carries, at most once per request: TOTP codes and WebAuthn
-// challenges are single-use, so a second check of the same proof would fail. Verifying it starts a new step-up
-// window, which covers the rest of the command.
+// challenges are single-use, so a second check of the same proof would fail. A verified proof starts a new step-up
+// window, which covers the rest of the command, once the request's audit attempt is written (ProxyToRack).
 func (h *Handler) verifyRequestMFA(r *http.Request, authUser *auth.User) error {
 	if inlineMFAVerified(r) {
 		return nil
@@ -158,7 +158,6 @@ func (h *Handler) verifyRequestMFA(r *http.Request, authUser *auth.User) error {
 	if err := h.verifyMFAByType(r, authUser, userRecord); err != nil {
 		return err
 	}
-	h.updateSessionStepUp(authUser)
 	markInlineMFAVerified(r)
 	return nil
 }

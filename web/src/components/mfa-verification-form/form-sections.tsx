@@ -3,12 +3,14 @@ import { LoadingSpinner } from '@/components/loading-spinner'
 import { MFAInput } from '@/components/mfa-input'
 import { Button } from '@/components/ui/button'
 import { trustLabel } from '@/lib/time'
-import { BackupCodeForm } from './backup-code-form'
+import { isValidBackupCode, normalizeBackupCode } from './backup-code'
+import { CodeEntryForm } from './code-entry-form'
+import { isValidYubiKeyOTP, normalizeYubiKeyOTP } from './yubikey-otp'
 
 const DIGITS_ONLY_REGEX = /^\d+$/
 const SIX_DIGITS_REGEX = /^\d{6}$/
 
-export type FormView = 'loading' | 'totp' | 'webauthn' | 'backup'
+export type FormView = 'loading' | 'totp' | 'webauthn' | 'backup' | 'yubikey'
 
 export interface RenderProps {
   showTrustDevice: boolean
@@ -22,10 +24,14 @@ export interface RenderProps {
   hasTOTP: boolean
   hasWebAuthn: boolean
   hasBackupCodes: boolean
+  hasYubiKeyOTP: boolean
   useWebAuthn: boolean
+  useYubiKeyOTP: boolean
   setUseWebAuthn: (value: boolean) => void
   setUseBackupCode: (value: boolean) => void
+  setUseYubiKeyOTP: (value: boolean) => void
   handleVerifyBackupCode: (code: string) => void
+  handleVerifyYubiKeyOTP: (otp: string) => void
   renderCancelButton?: () => ReactNode
   focusOnMount: boolean
   inputVersion: number
@@ -56,24 +62,52 @@ function TrustDeviceOption(
   )
 }
 
-function BackupCodeLink(
-  props: Pick<RenderProps, 'hasBackupCodes' | 'isVerifying' | 'setUseBackupCode'>
-) {
-  if (!props.hasBackupCodes) {
+function MethodLink({
+  show,
+  isVerifying,
+  onClick,
+  label,
+}: {
+  show: boolean
+  isVerifying: boolean
+  onClick: () => void
+  label: string
+}) {
+  if (!show) {
     return null
   }
   return (
     <div className="flex justify-center">
       <Button
         className="h-auto p-0 text-sm"
-        disabled={props.isVerifying}
-        onClick={() => props.setUseBackupCode(true)}
+        disabled={isVerifying}
+        onClick={onClick}
         type="button"
         variant="link"
       >
-        Use a backup code
+        {label}
       </Button>
     </div>
+  )
+}
+
+// OtherMethodLinks offers a YubiKey OTP (outside its own view) and a backup code.
+function OtherMethodLinks(props: RenderProps) {
+  return (
+    <>
+      <MethodLink
+        isVerifying={props.isVerifying}
+        label="Use a YubiKey OTP"
+        onClick={() => props.setUseYubiKeyOTP(true)}
+        show={props.hasYubiKeyOTP && !props.useYubiKeyOTP}
+      />
+      <MethodLink
+        isVerifying={props.isVerifying}
+        label="Use a backup code"
+        onClick={() => props.setUseBackupCode(true)}
+        show={props.hasBackupCodes}
+      />
+    </>
   )
 }
 
@@ -136,7 +170,7 @@ function renderWebAuthnForm(props: RenderProps) {
           </Button>
         </div>
       )}
-      <BackupCodeLink {...props} />
+      <OtherMethodLinks {...props} />
       <CancelButton {...props} />
     </div>
   )
@@ -202,26 +236,81 @@ function renderTOTPForm(props: RenderProps) {
           </Button>
         </div>
       )}
-      <BackupCodeLink {...props} />
+      <OtherMethodLinks {...props} />
       <CancelButton {...props} />
     </div>
   )
 }
 
+function backupCodeBackLabel(props: RenderProps): string {
+  if (props.useYubiKeyOTP) {
+    return 'Back to YubiKey OTP'
+  }
+  return props.useWebAuthn ? 'Back to security key' : 'Back to authenticator app'
+}
+
 function renderBackupCodeForm(props: RenderProps) {
   return (
-    <BackupCodeForm
-      backLabel={props.useWebAuthn ? 'Back to security key' : 'Back to authenticator app'}
+    <CodeEntryForm
+      backLabel={backupCodeBackLabel(props)}
       focusOnMount={props.focusOnMount}
+      id="mfa-backup-code"
+      isValid={isValidBackupCode}
       isVerifying={props.isVerifying}
       key={props.inputVersion}
+      label="Backup code"
+      normalize={normalizeBackupCode}
       onBack={() => {
         props.setError(null)
         props.setUseBackupCode(false)
       }}
       onSubmit={props.handleVerifyBackupCode}
+      placeholder="XXXXXX-XXXXXX"
       renderCancelButton={props.renderCancelButton}
+      submitLabel="Verify backup code"
+      uppercase
     />
+  )
+}
+
+// yubiKeyBack is the way back from the YubiKey OTP view to the user's other factor, if they have one.
+function yubiKeyBack(props: RenderProps): { label: string; onBack: () => void } | undefined {
+  if (!(props.hasTOTP || props.hasWebAuthn)) {
+    return
+  }
+  const toWebAuthn = props.hasWebAuthn && (props.useWebAuthn || !props.hasTOTP)
+  return {
+    label: toWebAuthn ? 'Back to security key' : 'Back to authenticator app',
+    onBack: () => {
+      props.setError(null)
+      props.setUseWebAuthn(toWebAuthn)
+      props.setUseYubiKeyOTP(false)
+    },
+  }
+}
+
+function renderYubiKeyForm(props: RenderProps) {
+  const back = yubiKeyBack(props)
+  return (
+    <CodeEntryForm
+      backLabel={back?.label}
+      focusOnMount={props.focusOnMount}
+      id="mfa-yubikey-otp"
+      isValid={isValidYubiKeyOTP}
+      isVerifying={props.isVerifying}
+      key={props.inputVersion}
+      label="YubiKey OTP"
+      normalize={normalizeYubiKeyOTP}
+      onBack={back?.onBack}
+      onSubmit={props.handleVerifyYubiKeyOTP}
+      placeholder="Touch your YubiKey"
+      renderCancelButton={props.renderCancelButton}
+      submitLabel="Verify YubiKey OTP"
+      uppercase={false}
+    >
+      <TrustDeviceOption {...props} />
+      <OtherMethodLinks {...props} />
+    </CodeEntryForm>
   )
 }
 
@@ -231,6 +320,8 @@ export function renderFormContent(view: FormView, props: RenderProps) {
       return renderLoadingState(props)
     case 'backup':
       return renderBackupCodeForm(props)
+    case 'yubikey':
+      return renderYubiKeyForm(props)
     case 'webauthn':
       return renderWebAuthnForm(props)
     default:

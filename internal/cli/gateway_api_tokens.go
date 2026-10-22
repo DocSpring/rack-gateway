@@ -7,7 +7,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"os"
 	"sort"
 	"strings"
 	"time"
@@ -205,7 +204,7 @@ func checkAndPromptGatewayMFA(
 }
 
 func gatewayRequest(cmd *cobra.Command, rack, method, path string, body interface{}, out interface{}) error {
-	gatewayURL, bearer, err := gatewayAuthInfo(rack)
+	gatewayURL, bearer, err := LoadRackAuth(rack)
 	if err != nil {
 		return err
 	}
@@ -265,7 +264,7 @@ func applyInlineMFA(bearer string, ctx *gatewayMFAContext) string {
 func gatewayRequestWithMFA(
 	_ *cobra.Command, rack, method, path string, body, out interface{}, mfaAuth string,
 ) error {
-	gatewayURL, bearer, err := gatewayAuthInfo(rack)
+	gatewayURL, bearer, err := LoadRackAuth(rack)
 	if err != nil {
 		return err
 	}
@@ -356,23 +355,6 @@ func doGatewayRequest(gatewayURL, bearer, method, path string, body interface{})
 	}
 
 	return resp.StatusCode, responseBody, nil
-}
-
-func gatewayAuthInfo(rack string) (string, string, error) {
-	normalized, defaultToken, err := LoadRackAuth(rack)
-	if err != nil {
-		return "", "", err
-	}
-
-	bearer := strings.TrimSpace(APITokenFlag)
-	if bearer == "" {
-		bearer = strings.TrimSpace(os.Getenv("RACK_GATEWAY_API_TOKEN"))
-	}
-	if bearer == "" {
-		bearer = defaultToken
-	}
-
-	return normalized, bearer, nil
 }
 
 // formatList renders values (from the gateway) as a sorted, indented list, one per line, each made safe to print by

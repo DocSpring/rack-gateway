@@ -51,7 +51,8 @@ func maskAllEnvVars(s string) string {
 	return strings.Join(lines, "\n")
 }
 
-// maskSecretAndProtectedEnvVars masks secret env vars and app-specific protected keys.
+// maskSecretAndProtectedEnvVars masks secret env vars, app-specific protected keys and values with credentials in
+// them.
 func maskSecretAndProtectedEnvVars(s string, keys appEnvKeys) string {
 	lines := strings.Split(s, "\n")
 	for i, ln := range lines {
@@ -59,9 +60,7 @@ func maskSecretAndProtectedEnvVars(s string, keys appEnvKeys) string {
 			continue
 		}
 		parts := strings.SplitN(ln, "=", 2)
-		key := parts[0]
-		shouldMask := keys.isSecret(key) || keys.isProtected(key)
-		if shouldMask && len(parts) > 1 {
+		if len(parts) > 1 && keys.masks(parts[0], parts[1]) {
 			lines[i] = parts[0] + "=" + maskedSecret
 		}
 	}
@@ -142,26 +141,27 @@ func transformEnvArray(v []interface{}, transform func(string) string) ([]byte, 
 	return nb, true
 }
 
-func (h *Handler) captureProcessCreation(_ *http.Request, body []byte, tracker *deployApprovalTracker) {
-	if h.database == nil || tracker == nil {
-		return
+// captureProcessCreation records a process started under a deploy approval in it: the approval's later steps on the
+// process (exec, terminate) find it by that record. It returns a stepNotRecordedError when it can't, including when
+// the rack's answer doesn't name the process.
+func (h *Handler) captureProcessCreation(_ *http.Request, body []byte, tracker *deployApprovalTracker) error {
+	if h.database == nil || !hasApproval(tracker) {
+		return nil
 	}
 
+	const retry = "start a new process (this one can't be used under the approval)"
 	var resp map[string]interface{}
 	if err := json.Unmarshal(body, &resp); err != nil {
-		log.Printf("Failed to parse process creation response: %v", err)
-		return
+		return unreadableAnswer("the rack answered a process start with a body that isn't a process", retry)
 	}
-
 	processID, ok := resp["id"].(string)
 	if !ok || processID == "" {
-		log.Printf("Process ID not found in response")
-		return
+		return unreadableAnswer("the rack answered a process start without the process's ID", retry)
 	}
 
-	if err := h.database.AppendProcessIDToDeployApprovalRequest(tracker.request.ID, processID); err != nil {
-		log.Printf("Failed to track process ID in deploy approval: %v", err)
-	}
+	return recordInApproval("the rack started process "+processID, retry, func() error {
+		return h.database.AppendProcessIDToDeployApprovalRequest(tracker.request.ID, processID)
+	})
 }
 
 // isCommandApproved reports whether command is in the app's approved_deploy_commands.
@@ -186,7 +186,7 @@ func (h *Handler) isCommandApproved(app, command string) bool {
 	return false
 }
 
-// filterEnvironmentMapResponse masks secret keys in GET /apps/{app}/environment response.
+// filterEnvironmentMapResponse masks values in the GET /apps/{app}/environment response.
 // The environment endpoint returns a flat JSON map: {"KEY1": "value1", "KEY2": "value2"}
 // This is different from the release format which has an "env" field with newline-separated values.
 func (h *Handler) filterEnvironmentMapResponse(r *http.Request, body []byte, app string) []byte {
@@ -197,13 +197,13 @@ func (h *Handler) filterEnvironmentMapResponse(r *http.Request, body []byte, app
 		return body
 	}
 
-	// Without env:read every value is masked; with it, secrets and protected keys are.
+	// Without env:read every value is masked; with it, secrets, protected keys and values with credentials are.
 	var keys appEnvKeys
 	if canEnvView {
 		keys = h.loadAppEnvKeys(app)
 	}
-	for key := range envMap {
-		if !canEnvView || keys.isSecret(key) || keys.isProtected(key) {
+	for key, value := range envMap {
+		if !canEnvView || keys.masks(key, value) {
 			envMap[key] = maskedSecret
 		}
 	}

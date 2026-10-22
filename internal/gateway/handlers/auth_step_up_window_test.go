@@ -161,6 +161,9 @@ func TestMarkCLILoginExempt(t *testing.T) {
 		{state: "exempt-state", exempt: true},
 	} {
 		require.NoError(t, env.database.CreateCLILoginState(db.NewCLILogin{State: tt.state}))
+		bound, err := env.database.BindCLILoginBrowser(tt.state, "binding-"+tt.state, "user@example.com", "User")
+		require.NoError(t, err)
+		require.True(t, bound)
 		if tt.exempt {
 			require.NoError(t, env.database.MarkCLILoginExempt(tt.state))
 		} else {

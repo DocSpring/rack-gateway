@@ -1,12 +1,10 @@
 package handlers
 
 import (
-	"encoding/csv"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
@@ -23,10 +21,22 @@ import (
 // cloneDetails and parseAuditTime are defined in admin_helpers.go
 
 var (
-	errInvalidStartTime = errors.New("invalid start time")
-	errInvalidEndTime   = errors.New("invalid end time")
-	errInvalidTimeRange = errors.New("end time must be after start time")
+	errInvalidStartTime   = errors.New("invalid start time")
+	errInvalidEndTime     = errors.New("invalid end time")
+	errInvalidTimeRange   = errors.New("end time must be after start time")
+	errAuditSearchTooLong = fmt.Errorf("search is longer than %d characters", maxAuditSearchLength)
 )
+
+// auditFilterError is the status and message for filters auditFiltersFromRequest refused.
+func auditFilterError(err error) (int, string) {
+	refused := []error{errInvalidStartTime, errInvalidEndTime, errInvalidTimeRange, errAuditSearchTooLong}
+	for _, invalid := range refused {
+		if errors.Is(err, invalid) {
+			return http.StatusBadRequest, invalid.Error()
+		}
+	}
+	return http.StatusInternalServerError, "failed to fetch audit logs"
+}
 
 // ListAuditLogs godoc
 // @Summary List audit logs
@@ -38,7 +48,7 @@ var (
 // @Param resource_type query string false "Resource type filter"
 // @Param status query string false "Status filter"
 // @Param page query int false "Page number"
-// @Param limit query int false "Page size"
+// @Param limit query int false "Page size (at most 200)"
 // @Param start query string false "ISO8601 start time"
 // @Param end query string false "ISO8601 end time"
 // @Param range query string false "Relative range (e.g. 24h, 7d, custom)"
@@ -59,32 +69,8 @@ func (h *AdminHandler) respondWithAuditLogs(c *gin.Context, userEmail string) {
 	start := time.Now()
 	filters, page, limit, err := h.auditFiltersFromRequest(c)
 	if err != nil {
-		switch {
-		case errors.Is(err, errInvalidStartTime):
-			h.respondAuditError(c, http.StatusBadRequest, "audit.list", "", "invalid start time", start, nil)
-		case errors.Is(err, errInvalidEndTime):
-			h.respondAuditError(c, http.StatusBadRequest, "audit.list", "", "invalid end time", start, nil)
-		case errors.Is(err, errInvalidTimeRange):
-			h.respondAuditError(
-				c,
-				http.StatusBadRequest,
-				"audit.list",
-				"",
-				"end time must be after start time",
-				start,
-				nil,
-			)
-		default:
-			h.respondAuditError(
-				c,
-				http.StatusInternalServerError,
-				"audit.list",
-				"",
-				"failed to fetch audit logs",
-				start,
-				nil,
-			)
-		}
+		status, message := auditFilterError(err)
+		h.respondAuditError(c, status, "audit.list", "", message, start, nil)
 		return
 	}
 	if userEmail != "" {
@@ -117,155 +103,6 @@ func (h *AdminHandler) respondWithAuditLogs(c *gin.Context, userEmail string) {
 	}
 
 	h.respondAuditSuccess(c, http.StatusOK, payload, "audit.list", "", start, buildAuditDetails(filters, baseDetails))
-}
-
-// ExportAuditLogs godoc
-// @Summary Export audit logs as CSV
-// @Description Streams the filtered audit log dataset as CSV.
-// @Tags Audit
-// @Produce text/csv
-// @Param search query string false "Text search"
-// @Param action_type query string false "Action type filter"
-// @Param resource_type query string false "Resource type filter"
-// @Param status query string false "Status filter"
-// @Param since query string false "ISO8601 start time"
-// @Param until query string false "ISO8601 end time"
-// @Success 200 {file} binary
-// @Failure 400 {object} ErrorResponse
-// @Failure 500 {object} ErrorResponse
-// @Security SessionCookie
-// @Router /audit-logs/export [get]
-func (h *AdminHandler) ExportAuditLogs(c *gin.Context) {
-	start := time.Now()
-	filters, _, _, err := h.auditFiltersFromRequest(c)
-	if err != nil {
-		h.handleExportFilterError(c, err, start)
-		return
-	}
-
-	if filters.Limit <= 0 || filters.Limit > 10000 {
-		filters.Limit = 10000
-	}
-	filters.Offset = 0
-
-	logs, _, err := h.database.GetAuditLogsAggregated(filters)
-	if err != nil {
-		h.respondAuditError(c, http.StatusInternalServerError, "audit.export", "", err.Error(), start, nil)
-		return
-	}
-
-	h.setCSVResponseHeaders(c)
-	writer := csv.NewWriter(c.Writer)
-	defer writer.Flush()
-
-	if err := h.writeAuditCSVHeader(c, writer, start); err != nil {
-		return
-	}
-
-	totalEvents, err := h.writeAuditCSVRows(c, writer, logs, start)
-	if err != nil {
-		return
-	}
-
-	writer.Flush()
-	if err := writer.Error(); err != nil {
-		h.respondAuditError(c, http.StatusInternalServerError, "audit.export", "", "failed to flush CSV", start, nil)
-		return
-	}
-
-	baseDetails := map[string]interface{}{
-		"count":  len(logs),
-		"events": totalEvents,
-	}
-
-	h.auditAdminAction(c, "audit.export", "", "success", http.StatusOK, buildAuditDetails(filters, baseDetails), start)
-}
-
-func (h *AdminHandler) handleExportFilterError(c *gin.Context, err error, start time.Time) {
-	switch {
-	case errors.Is(err, errInvalidStartTime):
-		h.respondAuditError(
-			c, http.StatusBadRequest, "audit.export", "",
-			"invalid start time", start, nil,
-		)
-	case errors.Is(err, errInvalidEndTime):
-		h.respondAuditError(
-			c, http.StatusBadRequest, "audit.export", "",
-			"invalid end time", start, nil,
-		)
-	case errors.Is(err, errInvalidTimeRange):
-		h.respondAuditError(
-			c, http.StatusBadRequest, "audit.export", "",
-			"end time must be after start time", start, nil,
-		)
-	default:
-		h.respondAuditError(
-			c, http.StatusInternalServerError, "audit.export", "",
-			"failed to fetch logs", start, nil,
-		)
-	}
-}
-
-func (_ *AdminHandler) setCSVResponseHeaders(c *gin.Context) {
-	c.Header("Content-Type", "text/csv")
-	filename := fmt.Sprintf(
-		"attachment; filename=\"audit-logs-%s.csv\"",
-		time.Now().Format("2006-01-02"),
-	)
-	c.Header("Content-Disposition", filename)
-}
-
-func (h *AdminHandler) writeAuditCSVHeader(
-	c *gin.Context, writer *csv.Writer, start time.Time,
-) error {
-	header := []string{
-		"first_seen", "last_seen", "user_email", "user_name", "action_type", "action",
-		"command", "resource", "status", "event_count",
-		"min_response_ms", "max_response_ms", "avg_response_ms", "ip_address", "user_agent",
-	}
-	if err := writer.Write(header); err != nil {
-		h.respondAuditError(
-			c, http.StatusInternalServerError, "audit.export", "",
-			"failed to write CSV header", start, nil,
-		)
-		return err
-	}
-	return nil
-}
-
-func (h *AdminHandler) writeAuditCSVRows(
-	c *gin.Context, writer *csv.Writer,
-	logs []*db.AuditLogAggregated, start time.Time,
-) (int, error) {
-	totalEvents := 0
-	for _, log := range logs {
-		totalEvents += log.EventCount
-		row := []string{
-			log.FirstSeen.Format(time.RFC3339),
-			log.LastSeen.Format(time.RFC3339),
-			log.UserEmail,
-			log.UserName,
-			log.ActionType,
-			log.Action,
-			log.Command,
-			log.Resource,
-			log.Status,
-			strconv.Itoa(log.EventCount),
-			strconv.Itoa(log.MinResponseTimeMs),
-			strconv.Itoa(log.MaxResponseTimeMs),
-			strconv.Itoa(log.AvgResponseTimeMs),
-			log.IPAddress,
-			log.UserAgent,
-		}
-		if err := writer.Write(row); err != nil {
-			h.respondAuditError(
-				c, http.StatusInternalServerError, "audit.export", "",
-				"failed to write CSV row", start, nil,
-			)
-			return 0, err
-		}
-	}
-	return totalEvents, nil
 }
 
 func (h *AdminHandler) auditAdminAction(

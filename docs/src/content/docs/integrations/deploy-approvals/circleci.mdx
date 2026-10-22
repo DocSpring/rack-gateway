@@ -231,11 +231,12 @@ sequenceDiagram
     Gateway->>CircleCI: GET /workflow/{workflow_id}
     CircleCI-->>Gateway: pipeline_id
     Gateway->>CircleCI: GET /pipeline/{pipeline_id}
-    CircleCI-->>Gateway: vcs.revision, repository URLs
-    Gateway->>Gateway: Revision = approved commit? Repository = vcs_repo? Not a fork?
+    CircleCI-->>Gateway: number, vcs.revision, repository URLs
+    Gateway->>Gateway: Number = pipeline_number? Revision = approved commit? Repository = vcs_repo? Not a fork?
     Gateway->>CircleCI: GET /workflow/{workflow_id}/job
     CircleCI-->>Gateway: List of jobs
     Gateway->>Gateway: Find job matching approval_job_name
+    Gateway->>Gateway: Deploy approval still approved? Audit entry written?
     Gateway->>CircleCI: POST /workflow/{workflow_id}/approve/{job_id}
     CircleCI-->>Gateway: 202 Accepted
 ```
@@ -247,16 +248,22 @@ the original. The gateway only looks at the pipeline's workflow list to find a r
 leaves workflows out of that list for a while.
 
 The `ci_metadata` comes from the CI job that requested the approval, so the gateway doesn't trust it on its
-own: the hold job is only approved when the workflow's pipeline is building the approved commit of the app's
-repository, and the job is re-checked against the deploy approval on every attempt (retries can run later,
-after a rejection or expiry).
+own: the hold job is only approved when the workflow is in the pipeline the request named (the one linked on the
+request's page, which the approver reviewed), and that pipeline is building the approved commit of the app's
+repository on the app's VCS host (`vcs_provider`). Without a `vcs_repo` nothing is approved automatically. The job is
+re-checked against the deploy approval on every attempt (retries can run later, after a rejection or expiry), and
+again just before the hold job is approved.
+
+Each approval is in the audit log as `deploy_approval_request.circleci_approve`, naming the hold job, its workflow
+and its pipeline: an `attempted` entry written before the approval is sent (nothing is sent if it can't be
+written), then its result.
 
 ### What Gateway Needs
 
 | Source | Data |
 |--------|------|
 | CI metadata | `workflow_id` (a CircleCI workflow UUID), `pipeline_number` (string) |
-| App settings | `circleci_approval_job_name`, `vcs_repo` (`owner/repo`) |
+| App settings | `circleci_approval_job_name`, `vcs_repo` (`owner/repo`), `vcs_provider` (`github` or `bitbucket`) |
 | Gateway config | `CIRCLECI_TOKEN` |
 
 ## Pipeline URL Display
@@ -370,7 +377,7 @@ configured`. A failing approval job is logged with its attempts and retried.
 | `CircleCI API error (401)` / `(403)` / `(404)` | Token revoked, its user can't approve in the project, or the workflow doesn't exist |
 | `ci_metadata.pipeline_number is required` | The request's `--ci-metadata` has no `pipeline_number` |
 | `invalid CircleCI workflow_id` | `workflow_id` is not a UUID (the job is cancelled) |
-| `CircleCI pipeline does not match the deploy approval` | The pipeline builds another commit or repository, is a fork, or its repository can't be determined (the job is cancelled; approve the hold manually after checking) |
+| `CircleCI pipeline does not match the deploy approval` | The workflow is in another pipeline than `pipeline_number`, or the pipeline builds another commit or repository, is a fork, or its repository can't be determined (the job is cancelled; approve the hold manually after checking) |
 | `deploy approval is no longer active` | The approval was rejected, expired or deployed before the job ran (the job is cancelled) |
 
 ### API Token Permissions
@@ -411,9 +418,10 @@ The CircleCI token can do anything its user can, in every project that user can 
 Before approving the hold job, the gateway checks:
 - The request is pending, and the approver is an admin who passes MFA
 - The app's `ci_provider` is `circleci`, `circleci_auto_approve_on_approval` is on, and `CIRCLECI_TOKEN` is set
-- The CI metadata is valid, and the app has a `circleci_approval_job_name`
-- The deploy approval is still approved and unexpired when the job runs
-- The workflow's pipeline builds the approved commit of `vcs_repo`, and isn't from a fork
+- The CI metadata is valid, and the app has a `circleci_approval_job_name` and a `vcs_repo`
+- The deploy approval is still approved and unexpired when the job runs, and just before the hold job is approved
+- The workflow is in the pipeline numbered `pipeline_number`, which builds the approved commit of `vcs_repo` on the
+  `vcs_provider`'s host, and isn't from a fork
 
 ## Next Steps
 

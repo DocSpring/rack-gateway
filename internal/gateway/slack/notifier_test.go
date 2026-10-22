@@ -48,7 +48,7 @@ func TestNotifyAuditEvent_NoMatchingChannels(t *testing.T) {
 		},
 	}
 	botToken := fakeSlackBot
-	_, err = database.CreateSlackIntegration(
+	_, err = database.ReplaceSlackIntegration(
 		"T123",
 		"Test",
 		botToken,
@@ -305,7 +305,7 @@ func TestNotifyDeployApprovalCreated(t *testing.T) {
 
 		// Create integration with alerts disabled
 		botToken := fakeSlackBot
-		_, err = database.CreateSlackIntegration(
+		_, err = database.ReplaceSlackIntegration(
 			"T123456-1",
 			"Test Team 1",
 			botToken,
@@ -336,7 +336,7 @@ func TestNotifyDeployApprovalCreated(t *testing.T) {
 
 		// Create integration with alerts enabled but no channel
 		botToken := fakeSlackBot
-		_, err = database.CreateSlackIntegration(
+		_, err = database.ReplaceSlackIntegration(
 			"T123456-2",
 			"Test Team 2",
 			botToken,

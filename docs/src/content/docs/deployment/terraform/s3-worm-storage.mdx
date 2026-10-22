@@ -472,7 +472,9 @@ hash v2 has to be confirmed outside the database, by either:
 - **A pinned start.** Right after upgrading, run `verify-audit`: it prints `hash v2 from event N` (before the new
   version has written an event, its failure names the event that will be the first). Record `N` and set
   `AUDIT_HASH_V2_FROM=N` wherever `verify-audit` runs, or pass `--hash-v2-from N`. A different start in the
-  database is a failure, and so is every legacy event from `N` on.
+  database is a failure, and so is every legacy event from `N` on. So is a database with no hash v2 events at all,
+  which is what removing every one of them from the end leaves: with a pin, verification fails until the new
+  version has written its first event (any request does).
 - **A `format` 2 anchor.** Every anchor written since the upgrade pins where hash v2 starts. Anchors are
   written hourly, so this is available about an hour after upgrading, but not with `--no-anchors`.
 
@@ -523,9 +525,11 @@ COMPLIANCE mode for at least `AUDIT_ANCHOR_RETENTION_DAYS`.
   sent to Sentry, where runs that keep failing group into one issue. The gateway also records an
   `audit_log.verification_failed` audit event with status `failed` or `error` and the first failures, which goes to
   every Slack channel whose action patterns match it (the default `#security` channel's `audit_log.verification_*`
-  does): on the first failing run, when a run finds more failures than the last alert reported, and once a day while
-  it keeps failing. The first passing run after that records `audit_log.verification_recovered`. A passing run
-  otherwise records nothing, and warnings don't alert. Findings that can't be fixed, such as a
+  does): on the first failing run, when a run finds a failure the last alert didn't report (even with the same
+  number of failures), and once a day while it keeps failing. The first passing run after that records
+  `audit_log.verification_recovered`. An alert whose Slack notification can't be queued is sent again by the next
+  run, recovery included. A run that stops partway (an anchor it can't read, say) still reports the failures it
+  found before it stopped. A passing run otherwise records nothing, and warnings don't alert. Findings that can't be fixed, such as a
   locked anchor that an earlier version wrote twice, keep verification failing until the anchor's retention ends.
   To be alerted when runs stop, set `AUDIT_VERIFY_HEARTBEAT_URL` to a heartbeat monitor's URL; the gateway requests
   it after every run (see [Heartbeats](/operations/monitoring/#heartbeats)).

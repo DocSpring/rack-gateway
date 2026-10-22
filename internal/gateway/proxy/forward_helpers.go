@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -30,9 +31,11 @@ var errBodyNotAllowed = errors.New("request body not allowed: GET, HEAD and DELE
 
 // bodyErrorStatus is the HTTP status for a request the gateway couldn't handle: 413 for a body over
 // maxBufferedBodyBytes, 400 for a body on a method that takes none, 502 for a rack response too large to filter,
-// otherwise fallback.
+// 503 for a step its deploy approval couldn't record, otherwise fallback.
 func bodyErrorStatus(err error, fallback int) int {
 	switch {
+	case errors.As(err, new(*stepNotRecordedError)):
+		return http.StatusServiceUnavailable
 	case errors.Is(err, errBodyTooLarge):
 		return http.StatusRequestEntityTooLarge
 	case errors.Is(err, errBodyNotAllowed):
@@ -63,7 +66,7 @@ func prepareProxyRequest(
 		return nil, fmt.Errorf("target URL does not match configured rack")
 	}
 
-	proxyReq, err := http.NewRequest(r.Method, targetURL, body.reader)
+	proxyReq, err := http.NewRequestWithContext(rackRequestContext(r), r.Method, targetURL, body.reader)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create proxy request: %w", err)
 	}
@@ -75,6 +78,17 @@ func prepareProxyRequest(
 	setGatewayHeaders(proxyReq.Header, rack, authUser)
 
 	return proxyReq, nil
+}
+
+// rackRequestContext is the context of the gateway's request to the rack. A read (GET or HEAD) stops when its client
+// goes away, so an abandoned download doesn't hold a rack connection until its timeout. A change carries on (within
+// its timeout), so the gateway gets the rack's answer and records what it did whether or not the caller is still
+// there.
+func rackRequestContext(r *http.Request) context.Context {
+	if r.Method == http.MethodGet || r.Method == http.MethodHead {
+		return r.Context()
+	}
+	return context.WithoutCancel(r.Context())
 }
 
 // readBufferedBody reads and closes the request body, returning the bytes. A body over maxBufferedBodyBytes is

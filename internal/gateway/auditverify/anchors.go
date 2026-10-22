@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"sort"
 	"strings"
 	"time"
@@ -22,11 +21,23 @@ type anchorRecord struct {
 	key          string
 	versionID    string
 	lastModified time.Time
-	raw          []byte
-	payload      jobaudit.AnchorPayload
-	// invalid is set when raw isn't anchor JSON (already reported).
+	// size is the version's size, as listed.
+	size    int64
+	raw     []byte
+	payload jobaudit.AnchorPayload
+	// tooLarge is set for a version bigger than any anchor, which isn't read.
+	tooLarge bool
+	// invalid is set when raw isn't anchor JSON, or wasn't read (already reported).
 	invalid bool
 }
+
+// The most a run reads: maxAnchorVersions versions, adding up to maxAnchorBytes. Anchors are written hourly and
+// are a few hundred bytes, so that's decades of them. A chain's prefix holding more isn't one the anchor writer
+// filled, and reading it all could exhaust memory, so the run fails instead.
+const (
+	maxAnchorVersions = 1_000_000
+	maxAnchorBytes    = 256 << 20
+)
 
 // writtenBefore orders anchors the way the writer chains them: by when they were written (S3 times are whole
 // seconds), then by key.
@@ -49,10 +60,19 @@ func loadAnchors(ctx context.Context, opts AnchorOptions, report *Report) ([]*an
 		return nil, err
 	}
 	reportOverwrittenAnchors(records, report)
+	if err := checkAnchorTotal(opts, records); err != nil {
+		return nil, err
+	}
 	if err := fetchAnchors(ctx, opts, records); err != nil {
 		return nil, err
 	}
 	for _, record := range records {
+		if record.tooLarge {
+			record.invalid = true
+			report.fail("anchor %s (version %s) is %s: it wasn't read", record.key, record.versionID,
+				jobaudit.ErrAnchorTooLarge)
+			continue
+		}
 		if err := json.Unmarshal(record.raw, &record.payload); err != nil {
 			record.invalid = true
 			report.fail("anchor %s (version %s) is not valid anchor JSON: %v", record.key, record.versionID, err)
@@ -73,6 +93,10 @@ func listAnchorVersions(ctx context.Context, opts AnchorOptions, report *Report)
 			return nil, fmt.Errorf("failed to list anchor versions in s3://%s/%s: %w", opts.Bucket, prefix, err)
 		}
 		records, ignored = collectAnchorVersions(page, records, ignored, report)
+		if len(records) > maxAnchorVersions {
+			return nil, fmt.Errorf("s3://%s/%s holds more than %d anchor versions, more than a run reads",
+				opts.Bucket, prefix, maxAnchorVersions)
+		}
 		if !aws.ToBool(page.IsTruncated) {
 			break
 		}
@@ -111,6 +135,7 @@ func collectAnchorVersions(
 			key:          key,
 			versionID:    aws.ToString(version.VersionId),
 			lastModified: aws.ToTime(version.LastModified),
+			size:         aws.ToInt64(version.Size),
 		})
 	}
 	return records, ignored
@@ -133,6 +158,22 @@ func reportOverwrittenAnchors(records []*anchorRecord, report *Report) {
 	}
 }
 
+// checkAnchorTotal fails a run whose anchor versions add up to more than maxAnchorBytes. Versions bigger than any
+// anchor aren't read, so they don't count.
+func checkAnchorTotal(opts AnchorOptions, records []*anchorRecord) error {
+	var total int64
+	for _, record := range records {
+		if record.size <= jobaudit.MaxAnchorSize {
+			total += record.size
+		}
+	}
+	if total > maxAnchorBytes {
+		return fmt.Errorf("the anchor versions in s3://%s/%s/ add up to %d bytes, more than a run reads (%d)",
+			opts.Bucket, opts.ChainID, total, maxAnchorBytes)
+	}
+	return nil
+}
+
 // anchorReadConcurrency is how many anchor versions are read at once. A full check reads every anchor ever
 // written, one GET of about 100ms each and about 8,800 a year, so one at a time it would take most of an hour
 // after a few years.
@@ -149,17 +190,26 @@ func fetchAnchors(ctx context.Context, opts AnchorOptions, records []*anchorReco
 	return group.Wait()
 }
 
+// fetchAnchor reads a record's anchor version, unless it's bigger than any anchor (as listed, or as read): then it
+// sets tooLarge instead.
 func fetchAnchor(ctx context.Context, opts AnchorOptions, record *anchorRecord) error {
+	if record.size > jobaudit.MaxAnchorSize {
+		record.tooLarge = true
+		return nil
+	}
 	input := &s3.GetObjectInput{Bucket: aws.String(opts.Bucket), Key: aws.String(record.key)}
 	if record.versionID != "" {
 		input.VersionId = aws.String(record.versionID)
 	}
 	output, err := opts.Store.GetObject(ctx, input)
-	if err != nil {
-		return fmt.Errorf("failed to read anchor %s (version %s): %w", record.key, record.versionID, err)
+	if err == nil {
+		defer func() { _ = output.Body.Close() }()
+		record.raw, err = jobaudit.ReadAnchorBody(output.Body)
 	}
-	defer func() { _ = output.Body.Close() }()
-	if record.raw, err = io.ReadAll(output.Body); err != nil {
+	switch {
+	case errors.Is(err, jobaudit.ErrAnchorTooLarge):
+		record.tooLarge = true
+	case err != nil:
 		return fmt.Errorf("failed to read anchor %s (version %s): %w", record.key, record.versionID, err)
 	}
 	return nil

@@ -20,8 +20,9 @@ import (
 // wrote an entry for it.
 //
 // It must run after Authorize and the MFA checks, so only requests that are about to reach their handler are
-// recorded as attempts (Authorize records denials).
-func AuditBeforeActing(logger *audit.Logger) gin.HandlerFunc {
+// recorded as attempts (Authorize records denials). The MFA checks verify an inline MFA proof without saving what it
+// changes in the session; that is saved here, once the attempt is written (saveInlineMFA).
+func AuditBeforeActing(logger *audit.Logger, database *db.Database) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		spec, ok := rbac.LookupHTTPRoute(c.Request.Method, c.FullPath())
 		authUser, authenticated := auth.GetAuthUser(c.Request.Context())
@@ -39,6 +40,10 @@ func AuditBeforeActing(logger *audit.Logger) gin.HandlerFunc {
 			return
 		}
 		c.Request = c.Request.WithContext(ctx)
+		if !saveInlineMFA(c, database, authUser.Session) {
+			recordOutcomeIfMissing(c, logger, spec, authUser, start)
+			return
+		}
 
 		c.Next()
 

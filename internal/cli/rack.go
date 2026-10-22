@@ -53,10 +53,10 @@ func NormalizeGatewayURL(raw string) (string, error) {
 }
 
 // ResolveRackStatus describes, from local configuration, the rack and gateway commands would use: RACK_GATEWAY_URL
-// with RACK_GATEWAY_API_TOKEN, or else the selected rack (--rack, RACK_GATEWAY_RACK or the current rack).
+// with an API token (--api-token or RACK_GATEWAY_API_TOKEN), or else the selected rack (--rack, RACK_GATEWAY_RACK
+// or the current rack).
 func ResolveRackStatus(now time.Time) (*RackStatus, error) {
-	if strings.TrimSpace(os.Getenv("RACK_GATEWAY_URL")) != "" &&
-		strings.TrimSpace(os.Getenv("RACK_GATEWAY_API_TOKEN")) != "" {
+	if strings.TrimSpace(os.Getenv("RACK_GATEWAY_URL")) != "" && apiTokenOverride() != "" {
 		return resolveStatusFromEnv()
 	}
 	rack, err := SelectedRack()
@@ -109,19 +109,18 @@ func resolveStatusFromEnv() (*RackStatus, error) {
 	}
 
 	label := strings.TrimSpace(os.Getenv("RACK_GATEWAY_RACK"))
-	tokenEnv := strings.TrimSpace(os.Getenv("RACK_GATEWAY_API_TOKEN"))
+	apiToken := apiTokenOverride()
 	if label == "" {
-		if tokenEnv == "" {
-			return nil, fmt.Errorf(
-				"RACK_GATEWAY_API_TOKEN must be set when relying on RACK_GATEWAY_URL without a rack name",
-			)
+		if apiToken == "" {
+			return nil, fmt.Errorf("RACK_GATEWAY_URL without a rack name needs an API token: " +
+				"pass --api-token or set RACK_GATEWAY_API_TOKEN")
 		}
-		label = "Using RACK_GATEWAY_API_TOKEN from environment"
+		label = "Using an API token with RACK_GATEWAY_URL"
 	}
 
 	status := &RackStatus{Rack: label, GatewayURL: envURL}
-	if tokenEnv == "" {
-		status.StatusLines = append(status.StatusLines, "Status: RACK_GATEWAY_API_TOKEN not set in environment")
+	if apiToken == "" {
+		status.StatusLines = append(status.StatusLines, "Status: no API token (--api-token or RACK_GATEWAY_API_TOKEN)")
 	}
 
 	return status, nil

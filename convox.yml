@@ -34,7 +34,9 @@ services:
     command: ./scripts/start-gateway.sh
     environment:
       - PORT=8080
-      - PGSSLMODE=require
+      # Verify the database's certificate and hostname against Amazon RDS's CA bundle, which the image ships
+      - PGSSLMODE=verify-full
+      - PGSSLROOTCERT=/app/certs/rds-global-bundle.pem
       - DATABASE_URL # Set via Terraform (app user connection)
     health: /api/v1/health
     internal: true
@@ -56,7 +58,8 @@ services:
     command: echo "Use this service to run migrations, database admin tasks, etc."
     environment:
       - PORT=8080
-      - PGSSLMODE=require
+      - PGSSLMODE=verify-full
+      - PGSSLROOTCERT=/app/certs/rds-global-bundle.pem
       - RGW_DATABASE_URL=${ADMIN_DATABASE_URL}
     scale:
       memory: 512

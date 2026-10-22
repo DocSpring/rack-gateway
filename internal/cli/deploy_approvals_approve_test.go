@@ -19,4 +19,5 @@ func TestTestAuthRejectsMFAModesForAPITokens(t *testing.T) {
 	err := testAPITokenAuth("staging", "mfa")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "unset RACK_GATEWAY_API_TOKEN")
+	require.Contains(t, err.Error(), "drop --api-token")
 }

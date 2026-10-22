@@ -27,8 +27,7 @@ function mfaStatus(unusedBackupCodes: number) {
 // The label shows the gateway's trusted device TTL.
 const TRUST_LABEL = 'Trust this device for 14 days'
 
-function renderForm() {
-  const onVerify = vi.fn(() => Promise.resolve())
+function renderForm(onVerify = vi.fn(() => Promise.resolve())) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   const wrapper = ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={client}>{children}</QueryClientProvider>
@@ -91,5 +90,61 @@ describe('MFAVerificationForm backup codes', () => {
     await waitForMethodsToLoad()
 
     expect(screen.queryByRole('button', { name: 'Use a backup code' })).not.toBeInTheDocument()
+  })
+})
+
+describe('MFAVerificationForm errors', () => {
+  it('shows why a code was refused', async () => {
+    mockGetMFAStatus.mockResolvedValue(mfaStatus(5))
+    renderForm(vi.fn(() => Promise.reject(new Error('Account locked: too many failed attempts'))))
+    const user = userEvent.setup()
+    await waitForMethodsToLoad()
+
+    await user.click(screen.getByRole('button', { name: 'Use a backup code' }))
+    await user.type(screen.getByLabelText('Backup code'), 'abcdef-012345')
+    await user.click(screen.getByRole('button', { name: 'Verify backup code' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Account locked: too many failed attempts'
+    )
+  })
+})
+
+describe('MFAVerificationForm YubiKey OTP', () => {
+  const otp = 'ccccccbcgujhingjrdejhgfnuetrgigvejhhgbkugded'
+
+  it('takes the OTP from a user whose only factor is a YubiKey', async () => {
+    mockGetMFAStatus.mockResolvedValue({
+      ...mfaStatus(0),
+      methods: [{ id: 2, type: 'yubiotp', label: 'Yubikey', created_at: '2026-01-01T00:00:00Z' }],
+    })
+    const onVerify = renderForm()
+    const user = userEvent.setup()
+    await waitForMethodsToLoad()
+
+    await user.type(screen.getByLabelText('YubiKey OTP'), `${otp}{Enter}`)
+
+    await waitFor(() =>
+      expect(onVerify).toHaveBeenCalledWith({ method: 'totp', code: otp, trust_device: true })
+    )
+  })
+
+  it('offers it alongside an authenticator app', async () => {
+    const status = mfaStatus(0)
+    mockGetMFAStatus.mockResolvedValue({
+      ...status,
+      methods: [
+        ...status.methods,
+        { id: 2, type: 'yubiotp', label: 'Yubikey', created_at: '2026-01-01T00:00:00Z' },
+      ],
+    })
+    renderForm()
+    const user = userEvent.setup()
+    await waitForMethodsToLoad()
+
+    await user.click(screen.getByRole('button', { name: 'Use a YubiKey OTP' }))
+    expect(screen.getByLabelText('YubiKey OTP')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Back to authenticator app' }))
+    expect(screen.queryByLabelText('YubiKey OTP')).not.toBeInTheDocument()
   })
 })

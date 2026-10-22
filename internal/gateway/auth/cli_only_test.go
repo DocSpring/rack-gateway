@@ -88,7 +88,7 @@ func setupCLITestEnvironment(t *testing.T) (*db.Database, *Service, string) {
 	// Create auth service
 	tokenService := token.NewService(database)
 	sessionManager := NewSessionManager(database, "test-secret", &StaticTTLProvider{TTL: 24 * time.Hour})
-	authService := NewAuthService(tokenService, database, sessionManager)
+	authService := NewAuthService(tokenService, database, sessionManager, nil)
 
 	// Get user record and create session token
 	userRecord, err := database.GetUser("test@example.com")
@@ -244,7 +244,7 @@ func TestCLIOnlyMiddlewareWithAPIToken(t *testing.T) {
 	rawToken := tokenResp.Token
 	apiToken := tokenResp.APIToken
 
-	authService := NewAuthService(tokenService, database, nil)
+	authService := NewAuthService(tokenService, database, nil, nil)
 
 	// Create a test handler
 	tt := t

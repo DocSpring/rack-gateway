@@ -23,8 +23,11 @@ const (
 	ghPRURL      = "https://github.com/acme/web/pull/7"
 )
 
-// fakeGitHub serves the branches, compare and pulls APIs for acme/web, for the token "gh-token". withPR controls
-// whether the branch has an open pull request.
+// ghRepoDefault is acme/web's default branch on GitHub: not main, the default_branch setting's default.
+const ghRepoDefault = "trunk"
+
+// fakeGitHub serves the repository, branches, compare and pulls APIs for acme/web, for the token "gh-token". withPR
+// controls whether the branch has an open pull request.
 func fakeGitHub(t *testing.T, withPR bool) *httptest.Server {
 	t.Helper()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -32,6 +35,8 @@ func fakeGitHub(t *testing.T, withPR bool) *httptest.Server {
 		switch {
 		case r.Header.Get("Authorization") != "Bearer gh-token":
 			w.WriteHeader(http.StatusUnauthorized)
+		case path == "/repos/acme/web":
+			_ = json.NewEncoder(w).Encode(map[string]string{"default_branch": ghRepoDefault})
 		case strings.HasPrefix(path, "/repos/acme/web/branches/"):
 			name, _ := url.PathUnescape(strings.TrimPrefix(path, "/repos/acme/web/branches/"))
 			_ = json.NewEncoder(w).Encode(map[string]interface{}{
@@ -70,7 +75,7 @@ func newVerifyingFixture(t *testing.T, withPR bool, appSettings map[string]inter
 		values[key] = value
 	}
 	for key, value := range values {
-		require.NoError(t, f.handler.settingsService.SetAppSetting("myapp", key, value, nil))
+		require.NoError(t, f.handler.settingsService.SetAppSettings("myapp", map[string]interface{}{key: value}, nil))
 	}
 	return f
 }
@@ -122,6 +127,19 @@ func TestGitHubVerificationBlocksTheDefaultBranch(t *testing.T) {
 
 	f = newVerifyingFixture(t, true, map[string]interface{}{settings.KeyAllowDeployFromDefaultBranch: true})
 	resp = f.createOnBranch(t, ghBranchHead, "main")
+	require.Equal(t, http.StatusCreated, resp.StatusCode, responseError(t, resp))
+}
+
+// The repository's own default branch is refused too, whatever the default_branch setting says.
+func TestGitHubVerificationBlocksTheRepositorysDefaultBranch(t *testing.T) {
+	f := newVerifyingFixture(t, true, nil)
+	resp := f.createOnBranch(t, ghBranchHead, ghRepoDefault)
+	require.Equal(t, http.StatusBadRequest, resp.StatusCode)
+	require.Contains(t, responseError(t, resp), "default branch '"+ghRepoDefault+"'")
+	requireNoRequestCreated(t, f)
+
+	f = newVerifyingFixture(t, true, map[string]interface{}{settings.KeyAllowDeployFromDefaultBranch: true})
+	resp = f.createOnBranch(t, ghBranchHead, ghRepoDefault)
 	require.Equal(t, http.StatusCreated, resp.StatusCode, responseError(t, resp))
 }
 

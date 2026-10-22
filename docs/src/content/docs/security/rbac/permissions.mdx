@@ -424,7 +424,7 @@ These are the only rack API routes the gateway forwards (under `/api/v1/rack-pro
 | `GET /apps`, `GET /apps/{name}`, `GET /apps/{app}/services`, `GET /apps/{app}/budget`, `GET /apps/{app}/budget/shutdown-state` | `convox:app:list`, `convox:app:read` |
 | `POST /apps` | `convox:app:create` |
 | `PUT /apps/{name}`, `PUT /apps/{app}/services/{name}` | `convox:app:update` |
-| `POST /apps/{app}/restart` | `convox:app:restart` |
+| `POST /apps/{app}/restart`, `POST /apps/{app}/services/{service}/restart` | `convox:app:restart` |
 | `DELETE /apps/{name}` | `convox:app:delete` |
 | `GET /apps/{app}/builds`, `GET /apps/{app}/builds/{id}`, `GET /apps/{app}/builds/{id}.tgz` | `convox:build:list`, `convox:build:read` |
 | `POST /apps/{app}/builds`, `PUT /apps/{app}/builds/{id}` | `convox:build:create`, `convox:build:update` |
@@ -434,7 +434,7 @@ These are the only rack API routes the gateway forwards (under `/api/v1/rack-pro
 | `POST /apps/{app}/releases` | `convox:release:create` |
 | `POST /apps/{app}/releases/{id}/promote` | `convox:release:promote` |
 | `GET /apps/{app}/processes`, `GET /apps/{app}/processes/{pid}` | `convox:process:list`, `convox:process:read` |
-| `POST /apps/{app}/services/{service}/processes`, `POST /apps/{app}/services/{service}/restart` | `convox:process:start` |
+| `POST /apps/{app}/services/{service}/processes` | `convox:process:start` |
 | `DELETE /apps/{app}/processes/{pid}` | `convox:process:terminate` |
 | `GET /apps/{app}/processes/{pid}/exec` (WebSocket) | `convox:process:exec` |
 | App, process, build and rack logs (`.../logs`, HTTP or WebSocket) | `convox:log:read` |

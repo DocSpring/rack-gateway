@@ -31,13 +31,27 @@ func systemEntry(resourceType rbac.Resource, verb, resource string, details map[
 
 // DeployApprovalExpiredEntry is the audit event for a deploy approval request the expiry sweep expired.
 func DeployApprovalExpiredEntry(expired db.ExpiredDeployApproval) *db.AuditLog {
-	return systemEntry(rbac.ResourceDeployApprovalRequest, "expire", fmt.Sprintf("%d", expired.ID),
+	entry := systemEntry(rbac.ResourceDeployApprovalRequest, "expire", fmt.Sprintf("%d", expired.ID),
 		map[string]interface{}{
 			"public_id":       expired.PublicID,
 			"app":             expired.App,
 			"git_commit_hash": expired.GitCommitHash,
 			"previous_status": expired.PreviousStatus,
 		})
+	entry.DeployApprovalRequestID = &expired.ID
+	return entry
+}
+
+// ActionVerbCircleCIApprove names the gateway approving a CircleCI hold job after a deploy approval.
+const ActionVerbCircleCIApprove = "circleci_approve"
+
+// CircleCIApprovalEntry is the audit event for the gateway approving a CircleCI hold job for a deploy approval
+// request: written as its attempt before the approval is sent (RecordSystemAttempt), then with status success or
+// failed. details name the hold job, its workflow and its pipeline.
+func CircleCIApprovalEntry(approvalID int64, publicID string, details map[string]interface{}) *db.AuditLog {
+	entry := systemEntry(rbac.ResourceDeployApprovalRequest, ActionVerbCircleCIApprove, publicID, details)
+	entry.DeployApprovalRequestID = &approvalID
+	return entry
 }
 
 // SeededUserEntry is the audit event for a user the startup seed created from the seed lists (ADMIN_USERS etc.).

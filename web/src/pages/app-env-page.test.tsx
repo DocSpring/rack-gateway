@@ -221,4 +221,45 @@ describe('AppEnvPage', () => {
     await waitFor(() => expect(mockFetchAppEnv).toHaveBeenCalledTimes(2))
     await waitFor(() => expect(screen.getByDisplayValue('baz')).toBeInTheDocument())
   })
+
+  it('keeps unsaved edits when the environment is fetched again', async () => {
+    mockUseAuth.mockReturnValue({ user: { roles: ['deployer'] } })
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(
+      <QueryClientProvider client={client}>
+        <AppEnvPage />
+      </QueryClientProvider>
+    )
+
+    fireEvent.change(await screen.findByDisplayValue('bar'), { target: { value: 'edited' } })
+    fireEvent.click(screen.getAllByLabelText('Delete env var')[1])
+
+    mockFetchAppEnv.mockResolvedValue({ FOO: 'bar', SECRET_KEY: MASK, OTHER: 'new' })
+    await client.refetchQueries()
+    await waitFor(() => expect(mockFetchAppEnv).toHaveBeenCalledTimes(2))
+
+    expect(screen.getByDisplayValue('edited')).toBeInTheDocument()
+    expect(screen.queryByDisplayValue('SECRET_KEY')).toBeNull()
+    expect(screen.getByRole('button', { name: /Save Changes/i })).toBeEnabled()
+  })
+
+  it('saves a variable named __proto__', async () => {
+    mockUseAuth.mockReturnValue({ user: { roles: ['deployer'] } })
+    mockUpdateAppEnv.mockResolvedValue({ env: {} })
+
+    renderWithClient(<AppEnvPage />)
+    await screen.findByDisplayValue('bar')
+
+    fireEvent.click(screen.getByRole('button', { name: /Add Variable/i }))
+    const newKey = screen.getAllByPlaceholderText('KEY').at(-1) as HTMLElement
+    fireEvent.change(newKey, { target: { value: '__proto__' } })
+    const newValue = screen.getAllByPlaceholderText('value').at(-1) as HTMLElement
+    fireEvent.change(newValue, { target: { value: 'x' } })
+    fireEvent.click(screen.getByRole('button', { name: /Save Changes/i }))
+
+    await waitFor(() => expect(mockUpdateAppEnv).toHaveBeenCalled())
+    const [, set, remove] = mockUpdateAppEnv.mock.calls[0]
+    expect(JSON.stringify(set)).toBe('{"__proto__":"x"}')
+    expect(remove).toEqual([])
+  })
 })

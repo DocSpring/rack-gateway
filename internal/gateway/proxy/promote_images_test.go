@@ -159,7 +159,7 @@ func TestApprovalPromoteRequiresTheApprovedCommit(t *testing.T) {
 	require.NoError(t, err)
 	_, err = f.database.ApproveDeployApprovalRequest(approval.ID, owner.ID, time.Now().Add(time.Hour), "")
 	require.NoError(t, err)
-	bindApprovalRelease(t, f.database, approval.ID, "object://test-app/tmp/a.tgz", "BUILD1", "RELEASE1")
+	bindApprovalRelease(t, f.database, approval.ID)
 
 	other := strings.Repeat("f", 40)
 	f.setRelease(initContainerManifest("docker.io/org/app:"+other), "")

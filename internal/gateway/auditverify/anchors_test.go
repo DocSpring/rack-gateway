@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -280,4 +281,63 @@ func TestVerifyFailsWhenTheBucketKeepsAnchorsTooBriefly(t *testing.T) {
 	})
 	require.Equal(t, 1, report.FailureCount, "failures: %q", report.Failures)
 	assert.Contains(t, report.Failures[0], "locks anchors for 30 days, less than AUDIT_ANCHOR_RETENTION_DAYS (400)")
+}
+
+// readRecordingStore records the keys of the anchors it's asked for. listsSizes false drops the sizes from its
+// listings, so only the read itself can tell an object is too big.
+type readRecordingStore struct {
+	*fakes3.Bucket
+	listsSizes bool
+	mu         sync.Mutex
+	reads      []string
+}
+
+func (s *readRecordingStore) ListObjectVersions(
+	ctx context.Context,
+	params *s3.ListObjectVersionsInput,
+	optFns ...func(*s3.Options),
+) (*s3.ListObjectVersionsOutput, error) {
+	output, err := s.Bucket.ListObjectVersions(ctx, params, optFns...)
+	if err == nil && !s.listsSizes {
+		for i := range output.Versions {
+			output.Versions[i].Size = nil
+		}
+	}
+	return output, err
+}
+
+func (s *readRecordingStore) GetObject(
+	ctx context.Context,
+	params *s3.GetObjectInput,
+	optFns ...func(*s3.Options),
+) (*s3.GetObjectOutput, error) {
+	s.mu.Lock()
+	s.reads = append(s.reads, aws.ToString(params.Key))
+	s.mu.Unlock()
+	return s.Bucket.GetObject(ctx, params, optFns...)
+}
+
+// An object at an anchor's key that's bigger than any anchor is a failure. It isn't read when the listing shows its
+// size, and the read stops at the limit when it doesn't: reading it all could exhaust the gateway's memory.
+func TestVerifyRefusesOversizedAnchors(t *testing.T) {
+	database := newAuditDatabase(t)
+	bucket := fakes3.New(firstHour)
+	writeEvents(t, database, 1)
+	writeAnchor(t, database, bucket, firstHour)
+	oversized := jobaudit.AnchorKey(testChainID, firstHour.Add(time.Hour))
+	bucket.PutAt(oversized, make([]byte, 10*jobaudit.MaxAnchorSize), firstHour.Add(time.Hour))
+
+	for _, listsSizes := range []bool{true, false} {
+		store := &readRecordingStore{Bucket: bucket, listsSizes: listsSizes}
+		report := verify(t, database, auditverify.Options{
+			Anchors: &auditverify.AnchorOptions{Store: store, Bucket: testBucket, ChainID: testChainID},
+			Now:     firstHour.Add(2 * time.Hour),
+		})
+		requireFailure(t, report, oversized, "larger than an anchor can be")
+		if listsSizes {
+			assert.NotContains(t, store.reads, oversized)
+		} else {
+			assert.Contains(t, store.reads, oversized)
+		}
+	}
 }

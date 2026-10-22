@@ -9,7 +9,8 @@ function getFallbackDatabaseUrl(): string {
     return e2eUrl.trim()
   }
 
-  return 'postgres://postgres:postgres@127.0.0.1:55432/gateway_test?sslmode=disable'
+  const port = process.env.POSTGRES_PORT || '55432'
+  return `postgres://postgres:postgres@127.0.0.1:${port}/gateway_test?sslmode=disable`
 }
 
 const parseDatabaseUrlList = (value?: string) =>
@@ -412,6 +413,21 @@ export async function getUserMfaEnrolled(email: string): Promise<boolean> {
   return await withDbClient(async (client) => {
     const result = await client.query('SELECT mfa_enrolled FROM users WHERE email = $1;', [email])
     return result.rows[0]?.mfa_enrolled ?? false
+  })
+}
+
+// Whether the user prefers a security key and has one, so the MFA challenge page starts it by itself.
+export async function getUserPrefersWebAuthn(email: string): Promise<boolean> {
+  return await withDbClient(async (client) => {
+    const result = await client.query(
+      `SELECT u.preferred_mfa_method = 'webauthn' AND EXISTS (
+         SELECT 1 FROM mfa_methods m
+         WHERE m.user_id = u.id AND m.type = 'webauthn' AND m.confirmed_at IS NOT NULL
+       ) AS prefers_webauthn
+       FROM users u WHERE u.email = $1;`,
+      [email]
+    )
+    return result.rows[0]?.prefers_webauthn ?? false
   })
 }
 

@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/hmac"
 	"database/sql"
+	"fmt"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 )
@@ -136,7 +137,8 @@ func checkRowCounts(ctx context.Context, source ChainSource, head db.AuditChainH
 		report.fail("events at a chain index another event already has: %d", duplicates)
 	}
 	if stats.Rows != report.EventsChecked {
-		report.fail("the database has %d events with chain indexes 0..%d, but the chain walk checked %d",
+		report.failSteady(fmt.Sprintf("%d events not in the chain walk", stats.Rows-report.EventsChecked),
+			"the database has %d events with chain indexes 0..%d, but the chain walk checked %d",
 			stats.Rows, last, report.EventsChecked)
 	}
 	return nil
@@ -160,8 +162,9 @@ func checkVerifiedEvent(
 			"were removed", verified.Index)
 		return nil
 	case head.LastIndex < verified.Index:
-		report.fail("the chain ends at event %d, but an earlier verification checked it through event %d: events "+
-			"were removed from the end", head.LastIndex, verified.Index)
+		report.failSteady(fmt.Sprintf("events removed after %d", verified.Index), "the chain ends at event %d, but "+
+			"an earlier verification checked it through event %d: events were removed from the end",
+			head.LastIndex, verified.Index)
 		return nil
 	}
 	row, err := source.AuditChainRowAt(ctx, verified.Index)

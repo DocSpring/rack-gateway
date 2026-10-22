@@ -50,7 +50,7 @@ func updateEnvAuditDetails(t *testing.T, visible, secret []string) map[string]st
 	require.NoError(t, database.UpsertSetting(&app, settings.KeyAuditVisibleEnvVars, visible, nil))
 	require.NoError(t, database.UpsertSetting(&app, settings.AppSettingSecretEnvVars.String(), secret, nil))
 	handler, rbacManager := newAPIHandler(t, database, server.URL)
-	require.NoError(t, rbacManager.SaveUser(auditEnvAdmin, &rbac.UserConfig{Name: "Admin", Roles: []string{"admin"}}))
+	require.NoError(t, rbacManager.CreateUser(auditEnvAdmin, &rbac.UserConfig{Name: "Admin", Roles: []string{"admin"}}))
 
 	body, err := json.Marshal(map[string]interface{}{"set": map[string]string{
 		"DATABASE_PASSWORD": "new-value",

@@ -89,12 +89,18 @@ When a deploy approval request is created with `github_verification` on, the gat
 
 1. The request names a branch (`--branch`); without one it's refused with `git_branch is required for GitHub
    verification`
-2. The branch isn't `default_branch`, unless `allow_deploy_from_default_branch` is on: otherwise it's refused with
-   `deploying from default branch 'main' is not allowed`. By default, deploys come from a feature branch
+2. The branch isn't `default_branch` or the repository's default branch on GitHub, unless
+   `allow_deploy_from_default_branch` is on: otherwise it's refused with `deploying from default branch 'main' is
+   not allowed`. By default, deploys come from a feature branch
 3. The commit matches the branch, by `verify_git_commit_mode`:
    - **latest**: commit must equal the branch head
    - **branch**: commit must be the branch head or one of its ancestors
 4. With `require_pr_for_branch` on, the branch has an open pull request
+
+A request that repeats an open one (same app, commit and target token) is answered `409` with that request
+before any of these checks, so it doesn't call GitHub. Each user can create `DEPLOY_APPROVAL_LIMIT_BURST`
+requests (default 20), themselves or with any of their API tokens, before they're refused with `429`, and gets
+`DEPLOY_APPROVAL_LIMIT_PER_HOUR` (default 60) back each hour.
 
 If any check fails, the gateway answers 400 (for example `GitHub verification failed: no open pull request found
 for branch my-branch`) and no request is created.

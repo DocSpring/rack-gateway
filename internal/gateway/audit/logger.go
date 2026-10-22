@@ -3,9 +3,11 @@ package audit
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
@@ -82,13 +84,25 @@ func (l *Logger) SetAuditEventEnqueuer(enqueuer EventEnqueuer) {
 }
 
 // LogDBEntry persists a DB-style audit log entry using this logger's database, and queues its Slack
-// notification. A failure is logged and sent to Sentry as well as returned.
+// notification. A failure to write the entry is logged and sent to Sentry as well as returned; a notification that
+// can't be queued is only logged.
 func (l *Logger) LogDBEntry(al *db.AuditLog) error {
 	if err := l.write(al); err != nil {
 		return err
 	}
-	l.notifySlackAsync(al)
+	if err := l.notifySlack(al); err != nil {
+		log.Printf("%v", err)
+	}
 	return nil
+}
+
+// LogAlert persists an alert's audit log entry like LogDBEntry, and also returns an error when its Slack
+// notification can't be queued, so the sender can try the alert again.
+func (l *Logger) LogAlert(al *db.AuditLog) error {
+	if err := l.write(al); err != nil {
+		return err
+	}
+	return l.notifySlack(al)
 }
 
 // Log writes a structured audit log entry to stdout for CloudWatch ingestion.
@@ -101,23 +115,24 @@ func (_ *Logger) Log(entry *LogEntry) {
 	WriteAuditLine(data)
 }
 
-func (l *Logger) notifySlackAsync(al *db.AuditLog) {
+// notifySlack queues the entry's Slack notification, when a Slack integration is configured.
+func (l *Logger) notifySlack(al *db.AuditLog) error {
 	if l.auditEventEnqueuer == nil {
-		return
+		return nil
 	}
-
-	// Check if Slack integration is configured before enqueueing
 	if l.database != nil {
 		integration, err := l.database.GetSlackIntegration()
-		if err != nil || integration == nil {
-			// No integration configured, skip enqueueing
-			return
+		if err != nil {
+			return fmt.Errorf("failed to look up the Slack integration for audit event %d: %w", al.ID, err)
+		}
+		if integration == nil {
+			return nil
 		}
 	}
-
 	if err := l.auditEventEnqueuer.EnqueueAuditEvent(al.ID); err != nil {
-		log.Printf("failed to enqueue Slack audit event notification: %v", err)
+		return fmt.Errorf("failed to enqueue Slack audit event notification: %w", err)
 	}
+	return nil
 }
 
 // MarkAuditLogCreated marks that an explicit audit log was created for this request
@@ -187,12 +202,29 @@ func RequestID(r *http.Request) string {
 	return requestID
 }
 
+// requestLog records whether a request's log line has been written.
+type requestLog struct {
+	logged atomic.Bool
+}
+
+// TrackRequestLog returns ctx with a record of whether the request's log line has been written, shared by every
+// request derived from it: the rack proxy clones and rewraps requests before it logs them, and the request logger
+// middleware has to see that it did.
+func TrackRequestLog(ctx context.Context) context.Context {
+	return context.WithValue(ctx, requestLoggedKey, &requestLog{})
+}
+
 func markRequestLogged(r *http.Request) {
 	if r == nil {
 		return
 	}
-	ctx := context.WithValue(r.Context(), requestLoggedKey, true)
-	*r = *r.WithContext(ctx)
+	if state, ok := r.Context().Value(requestLoggedKey).(*requestLog); ok {
+		state.logged.Store(true)
+		return
+	}
+	state := &requestLog{}
+	state.logged.Store(true)
+	*r = *r.WithContext(context.WithValue(r.Context(), requestLoggedKey, state))
 }
 
 // RequestAlreadyLogged checks if a request has already been logged to prevent duplicate logging.
@@ -200,12 +232,8 @@ func RequestAlreadyLogged(r *http.Request) bool {
 	if r == nil {
 		return false
 	}
-	if v := r.Context().Value(requestLoggedKey); v != nil {
-		if logged, ok := v.(bool); ok {
-			return logged
-		}
-	}
-	return false
+	state, ok := r.Context().Value(requestLoggedKey).(*requestLog)
+	return ok && state.logged.Load()
 }
 
 // ParseConvoxAction extracts meaningful action and resource from the request.
@@ -286,10 +314,11 @@ func (_ *Logger) BuildDetailsJSON(r *http.Request) string {
 		details["query"] = RedactQuery(r.URL.RawQuery)
 	}
 
-	// For exec, include command and process id if available
+	// For exec, include command and process id if available. A command line can carry credentials, which the
+	// audit log mustn't keep (see RedactCommand).
 	if strings.HasSuffix(r.URL.Path, "/exec") {
 		if cmd := r.Header.Get("command"); cmd != "" {
-			details["command"] = cmd
+			details["command"] = RedactCommand(cmd)
 		}
 		// No fallback to WS frames; authoritative source is the 'command' header
 		parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/"), "/")

@@ -126,7 +126,11 @@ func TestVerifyChecksLegacyEventsByLinksAndReportsTheCutover(t *testing.T) {
 	var summary bytes.Buffer
 	require.NoError(t, report.Write(&summary))
 	assert.Contains(t, summary.String(), "hash v2 from event 4")
-	assert.Contains(t, summary.String(), "legacy (v1) events: 3 checked")
+	assert.Contains(t, summary.String(), "legacy (v1) events: 3 checked (up to event 3)")
+	assert.Contains(t, summary.String(), "their content is unverifiable")
+	// A passing run doesn't vouch for the legacy events' content.
+	assert.Contains(t, summary.String(),
+		"Result: OK, except that the content of 3 legacy (v1) events can't be verified")
 	assert.Contains(t, summary.String(), "hash v2 start: pinned at event 4")
 
 	// A broken link between legacy events is still caught.

@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -43,9 +44,6 @@ func (h *Handler) proxyWebSocket(
 		return status, nil
 	}
 
-	// Log process.exec.start for immediate visibility
-	h.logExecStart(r, authUser, originalPath)
-
 	wsURL, err := h.prepareWebSocketURL(target)
 	if err != nil {
 		return 0, err
@@ -65,7 +63,19 @@ func (h *Handler) proxyWebSocket(
 	}
 	defer func() { _ = clientConn.Close() }()
 
-	proxyWebSocketMessages(clientConn, upstreamConn, defaultClientKeepalive)
+	// An exec is recorded as started once both connections are up, before the session runs: a handshake the rack
+	// or the client refused records its own result instead.
+	h.logExecStart(r, authUser, originalPath)
+
+	proxyWebSocketMessages(clientConn, upstreamConn, sessionOptions{
+		keepalive:      defaultClientKeepalive,
+		writeWait:      messageWriteWait,
+		clientInput:    rbac.KeyMatch3(originalPath, "/apps/{app}/processes/{id}/exec"),
+		recheck:        h.sessionRecheck(r, authUser, originalPath),
+		recheckEvery:   sessionRecheckPeriod,
+		recheckTimeout: sessionRecheckTimeout,
+		maxLifetime:    maxWebSocketSessionLifetime,
+	})
 	return http.StatusSwitchingProtocols, nil
 }
 
@@ -364,9 +374,17 @@ func (h *Handler) validateExecCommand(w http.ResponseWriter, r *http.Request, or
 		return http.StatusForbidden
 	}
 
+	// The exec runs only once it's on its approval's record. An approval rejected since it was looked up records
+	// nothing, and neither does a database that can't be reached: either way the exec is refused.
 	err := h.database.AppendExecCommandToDeployApprovalRequest(tracker.request.ID, processID, command)
+	if errors.Is(err, db.ErrDeployApprovalNotRecordable) {
+		http.Error(w, "the deploy approval request is no longer approved", http.StatusForbidden)
+		return http.StatusForbidden
+	}
 	if err != nil {
 		log.Printf("Failed to track exec command in deploy approval: %v", err)
+		http.Error(w, "the command couldn't be recorded in its deploy approval request", http.StatusServiceUnavailable)
+		return http.StatusServiceUnavailable
 	}
 
 	return 0

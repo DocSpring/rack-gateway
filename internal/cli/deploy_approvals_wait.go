@@ -3,8 +3,6 @@ package cli
 import (
 	"bufio"
 	"fmt"
-	"net/http"
-	"net/url"
 	"sort"
 	"strings"
 	"time"
@@ -320,33 +318,6 @@ func (w *deployApprovalWaiter) printWaitingMessage() error {
 		"Waiting for pending deploy approval requests on %d racks: %s (%s)\n",
 		len(w.racks), strings.Join(w.racks, ", "), filter,
 	)
-}
-
-func fetchDeployRequestsByStatus(
-	cmd *cobra.Command, rack, app, branch, commit, status string,
-) ([]deployApprovalRequest, error) {
-	var response struct {
-		Requests []deployApprovalRequest `json:"deploy_approval_requests"`
-	}
-	params := url.Values{}
-	params.Set("status", status)
-	if app != "" {
-		params.Set("app", app)
-	}
-	if branch != "" {
-		params.Set("git_branch", branch)
-	}
-	if commit != "" {
-		params.Set("git_commit", commit)
-	}
-	endpoint := "/deploy-approval-requests?" + params.Encode()
-	if err := gatewayRequest(cmd, rack, http.MethodGet, endpoint, nil, &response); err != nil {
-		return nil, err
-	}
-	if response.Requests == nil {
-		return nil, fmt.Errorf("unexpected API response format: missing 'deploy_approval_requests' field")
-	}
-	return response.Requests, nil
 }
 
 func (w *deployApprovalWaiter) handleRequest(rack string, request deployApprovalRequest) error {

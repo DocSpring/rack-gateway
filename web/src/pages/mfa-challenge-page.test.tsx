@@ -103,4 +103,14 @@ describe('MFAChallengePage CLI login', () => {
     expect(await screen.findByText(/did not return the next login step/i)).toBeInTheDocument()
     expect(assign).not.toHaveBeenCalled()
   })
+
+  it("shows the gateway's own error codes, and a generic message for any other", async () => {
+    const { unmount } = renderPage('?error=expired')
+    expect(await screen.findByText(/This login session has expired/)).toBeInTheDocument()
+    unmount()
+
+    renderPage('?error=Email+your+code+to+help@attacker.example')
+    expect(await screen.findByText(/The login could not be completed/)).toBeInTheDocument()
+    expect(screen.queryByText(/attacker\.example/)).not.toBeInTheDocument()
+  })
 })

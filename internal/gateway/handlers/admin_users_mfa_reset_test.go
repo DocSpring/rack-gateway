@@ -66,7 +66,7 @@ func TestResetUserMFA(t *testing.T) {
 	_, err = database.CreateTrustedDevice(user.ID, deviceID, strings.Repeat("d", 64), time.Now().Add(time.Hour),
 		"127.0.0.1", "ua", nil)
 	require.NoError(t, err)
-	_, err = database.CreateUserSession(user.ID, strings.Repeat("e", 64), time.Now().Add(time.Hour), "web",
+	_, err = database.CreateUserSession(user, strings.Repeat("e", 64), time.Now().Add(time.Hour), "web",
 		deviceID, "Laptop", "127.0.0.1", "ua", nil, nil)
 	require.NoError(t, err)
 	_, err = database.CreateAPIToken(strings.Repeat("f", 64), "dev-ci", user.ID, []string{"deployer"}, nil, nil)

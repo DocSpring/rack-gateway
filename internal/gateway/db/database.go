@@ -82,7 +82,7 @@ func openDatabase(
 		return nil, fmt.Errorf("RGW_DATABASE_URL or DATABASE_URL is required")
 	}
 
-	// Ensure appropriate sslmode: require in non-dev unless explicitly set
+	// PGSSLMODE can make the DSN's sslmode stricter, never weaker
 	source = ensureSSLMode(source)
 
 	// Create database/sql connection (for existing code)
@@ -204,21 +204,19 @@ func envDuration(key string, def time.Duration) time.Duration {
 	return def
 }
 
-// NewFromEnv builds a Postgres DSN from env if DATABASE_URL is unset.
-// Automatically runs migrations only in dev mode (a testbypass build with DEV_MODE=true).
-// In production, run migrations manually using the "migrate" command.
+// NewFromEnv opens the database, building a Postgres DSN from env if DATABASE_URL is unset. It doesn't migrate:
+// the server migrates a development database on startup (Migrate) once it has checked it isn't production, and a
+// deploy runs the "migrate" command.
 func NewFromEnv() (*Database, error) {
-	autoMigrate := testbypass.DevMode()
-
 	// A few variations supported to support different Convox resource names
 	if dsn := os.Getenv("RGW_DATABASE_URL"); dsn != "" {
-		return NewWithPoolConfigAndMigration(dsn, nil, autoMigrate)
+		return NewWithPoolConfig(dsn, nil)
 	}
 	if dsn := os.Getenv("GATEWAY_DATABASE_URL"); dsn != "" {
-		return NewWithPoolConfigAndMigration(dsn, nil, autoMigrate)
+		return NewWithPoolConfig(dsn, nil)
 	}
 	if dsn := os.Getenv("DATABASE_URL"); dsn != "" {
-		return NewWithPoolConfigAndMigration(dsn, nil, autoMigrate)
+		return NewWithPoolConfig(dsn, nil)
 	}
 	// Build from libpq-like env if present
 	host := os.Getenv("PGHOST")
@@ -243,52 +241,10 @@ func NewFromEnv() (*Database, error) {
 	// Respect PGSSLMODE if present; otherwise omit sslmode from DSN
 	if ssl := strings.TrimSpace(os.Getenv("PGSSLMODE")); ssl != "" {
 		dsn := fmt.Sprintf("postgres://%s@%s:%s/%s?sslmode=%s", user, host, port, dbname, ssl)
-		return NewWithPoolConfigAndMigration(dsn, nil, autoMigrate)
+		return NewWithPoolConfig(dsn, nil)
 	}
 	dsn := fmt.Sprintf("postgres://%s@%s:%s/%s", user, host, port, dbname)
-	return NewWithPoolConfigAndMigration(dsn, nil, autoMigrate)
-}
-
-// ensureSSLMode sets the DSN's sslmode to PGSSLMODE when that's set, and otherwise leaves the DSN alone.
-func ensureSSLMode(dsn string) string {
-	s := strings.TrimSpace(dsn)
-	if s == "" {
-		return dsn
-	}
-	// Only mutate sslmode when PGSSLMODE is explicitly set
-	mode := strings.TrimSpace(os.Getenv("PGSSLMODE"))
-	if mode == "" {
-		return dsn
-	}
-
-	lower := strings.ToLower(s)
-
-	// URL DSN: postgres:// or postgresql://
-	if strings.HasPrefix(lower, "postgres://") || strings.HasPrefix(lower, "postgresql://") {
-		u, err := url.Parse(s)
-		if err != nil {
-			return dsn
-		}
-		q := u.Query()
-		q.Set("sslmode", mode) // override or set
-		u.RawQuery = q.Encode()
-		return u.String()
-	}
-
-	// Keyword/libpq DSN: replace or append sslmode
-	parts := strings.Fields(s)
-	found := false
-	for i, p := range parts {
-		if strings.HasPrefix(strings.ToLower(p), "sslmode=") {
-			parts[i] = "sslmode=" + mode
-			found = true
-			break
-		}
-	}
-	if !found {
-		parts = append(parts, "sslmode="+mode)
-	}
-	return strings.Join(parts, " ")
+	return NewWithPoolConfig(dsn, nil)
 }
 
 // rebind converts ? placeholders to $1, $2 for Postgres driver
@@ -355,6 +311,16 @@ func (d *Database) query(q string, args ...interface{}) (*sql.Rows, error) {
 func (d *Database) queryRow(q string, args ...interface{}) *sql.Row {
 	d.logQuery("QUERY ROW:", q, args...)
 	return d.db.QueryRow(d.rebind(q), args...)
+}
+
+func (d *Database) queryContext(ctx context.Context, q string, args ...interface{}) (*sql.Rows, error) {
+	d.logQuery("QUERY:", q, args...)
+	return d.db.QueryContext(ctx, d.rebind(q), args...)
+}
+
+func (d *Database) queryRowContext(ctx context.Context, q string, args ...interface{}) *sql.Row {
+	d.logQuery("QUERY ROW:", q, args...)
+	return d.db.QueryRowContext(ctx, d.rebind(q), args...)
 }
 
 // ResetDatabase drops all gateway tables and re-applies migrations. It reads
@@ -427,6 +393,7 @@ func (d *Database) dropAllTables() error {
 		"webauthn_challenges",
 		"audit_verification_status",
 		"user_resources",
+		"rack_object_keys",
 		"deploy_approval_requests",
 		"api_tokens",
 		"cli_login_states",

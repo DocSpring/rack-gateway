@@ -36,11 +36,12 @@ Navigate to **Users** in the sidebar to see the list:
 </Steps>
 
 New users receive a welcome email with login instructions, and the other admins are told a user was added. Adding
-a user needs MFA on the request.
+a user needs MFA on the request. The email must be in the gateway's Google Workspace domain (the only one that can
+sign in), and one that already belongs to a user is refused: adding a user never changes an existing one.
 
 ## Editing Users (Admin)
 
-Admins can update a user's name and roles (not their email):
+Admins can update a user's name, email and roles:
 
 <Steps>
 
@@ -51,7 +52,11 @@ Admins can update a user's name and roles (not their email):
 </Steps>
 
 Changing roles needs MFA on the request. A role change applies to the user's next request, and to their API
-tokens, which can never do more than their owner's role allows.
+tokens, which can never do more than their owner's role allows. You can't change your own roles.
+
+A new email can mean the account now belongs to someone else, so changing it signs the user out everywhere and
+deletes their API tokens: nothing issued to the old address keeps working. Replace any CI tokens the user owned.
+Every field is checked before anything changes, and the changes are saved together.
 
 ## Locking or Unlocking Users (Admin)
 

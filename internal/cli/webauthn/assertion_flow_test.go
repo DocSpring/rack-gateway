@@ -265,6 +265,38 @@ func TestGetAssertionUsesWholeAllowListWhenKeyListsNoCredentials(t *testing.T) {
 	require.Equal(t, [][]byte{credentialA, credentialB}, key.assertionAllowList)
 }
 
+// A key lists only its discoverable credentials: one holding a registered non-discoverable credential next to an
+// unrelated discoverable one gets the whole allow list.
+func TestGetAssertionUsesWholeAllowListWhenNoListedCredentialMatches(t *testing.T) {
+	key := &fakeKey{options: pinOptions, credentials: []*libfido2.Credential{{ID: []byte("other-site")}}}
+	prompts := 0
+
+	_, _, err := testFlow(key, "1234", &prompts).getAssertion(testAssertionOptions(), "")
+
+	require.NoError(t, err)
+	require.Equal(t, [][]byte{credentialA, credentialB}, key.assertionAllowList)
+}
+
+// With several keys connected, the one holding a registered credential is used, found without a touch.
+func TestChooseKeyPicksTheKeyHoldingACredential(t *testing.T) {
+	allowList := [][]byte{credentialA}
+	other := &fakeKey{assertionErr: libfido2.ErrNoCredentials}
+	registered := &fakeKey{}
+
+	require.Same(t, registered, chooseKey([]securityKey{other, registered}, "gateway.example.com", allowList))
+	require.Equal(t, libfido2.False, other.assertionOpts.UP, "the probe needs no touch")
+	require.Empty(t, registered.assertionPIN)
+
+	busy := &fakeKey{assertionErr: errChannelBusy}
+	unknown := &fakeKey{assertionErr: libfido2.ErrNoCredentials}
+	require.Same(t, busy, chooseKey([]securityKey{busy, unknown}, "gateway.example.com", allowList),
+		"the first key when none says it holds a credential")
+
+	only := &fakeKey{}
+	require.Same(t, only, chooseKey([]securityKey{only}, "gateway.example.com", allowList))
+	require.Zero(t, only.assertionCalls, "a single key isn't probed")
+}
+
 func TestGetAssertionExplainsAssertionErrors(t *testing.T) {
 	unsupported := fmt.Errorf("failed to get assertion: %w", libfido2.ErrUnsupportedOption)
 	tests := []struct {
@@ -292,6 +324,13 @@ func TestGetAssertionExplainsAssertionErrors(t *testing.T) {
 			cachedPIN: "1234",
 			err:       fmt.Errorf("failed to get assertion: %w", libfido2.ErrPinInvalid),
 			want:      "wrong security key PIN (failed to get assertion: pin invalid); try again",
+		},
+		{
+			name:      "no registered credential",
+			options:   pinOptions,
+			cachedPIN: "1234",
+			err:       fmt.Errorf("failed to get assertion: %w", libfido2.ErrNoCredentials),
+			want:      "this security key holds none of your registered credentials for this gateway",
 		},
 		{
 			name:      "other errors",

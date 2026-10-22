@@ -28,6 +28,8 @@ EXCLUSIONS=(
   "web/src/api/generated.ts"
   "web/src/lib/generated/*"
   "internal/gateway/openapi/generated/*"
+  # Certificate bundles (data, see certs/README.md)
+  "*.pem"
   # Binary file extensions
   "*.jpg"
   "*.jpeg"

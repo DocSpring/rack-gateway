@@ -207,6 +207,66 @@ A restore to before the upgrade loses the audit events written since; see
 
 ## Release Notes That Need Action
 
+### Security audit fixes (v0.1.15)
+
+This release fixes the findings of a security audit. Most changes need nothing from you; check these before you
+deploy.
+
+**Before deploying:**
+
+1. **The gateway verifies its database's certificate.** `convox.yml` sets `PGSSLMODE=verify-full` with Amazon RDS's
+   CA bundle, which the image ships. `DATABASE_URL` (and `ADMIN_DATABASE_URL`) must name the database by its RDS
+   hostname: an IP address or a CNAME fails the hostname check. For a database that isn't on RDS, set
+   `PGSSLROOTCERT` to its CA.
+2. **Service restarts need `convox:app:restart`** (they took `convox:process:start`). Give it to any API token that
+   restarts services.
+3. **CircleCI auto-approval needs the app's `vcs_repo`.** Without it, approving a request no longer queues the
+   CircleCI approval job. The job also checks the pipeline number and the repository's host, owner and name.
+4. **Deploys from the repository's default branch are refused** when `allow_deploy_from_default_branch` is off,
+   whatever `default_branch` says: the gateway now reads the default branch from GitHub too.
+5. **Rate limits on failures and approvals.** Each client IP gets `AUTH_FAILURE_LIMIT_BURST` (30) refused sign-ins,
+   refilled at `AUTH_FAILURE_LIMIT_PER_MINUTE` (30). A session or API token that signed in within the last 24
+   hours, or a session just created, still gets through when its IP is refused, so clients sharing an address
+   aren't locked out by one of them. Each user can create `DEPLOY_APPROVAL_LIMIT_BURST` (20) deploy approval
+   requests, across all their API tokens, refilled at `DEPLOY_APPROVAL_LIMIT_PER_HOUR` (60). Raise that if CI
+   creates more requests than that. A request that repeats an open one gets `409` with that request and doesn't
+   count.
+6. **Settings with a stored value of the wrong type are errors.** The MFA settings refuse to load one, rather than
+   use a default. If a settings error shows up after migrating, set that setting again.
+
+**What changes for users and CI:**
+
+- **More env vars are secrets:** names containing `PASSWORD`, `PASSWD`, `PASSPHRASE` or `CREDENTIAL`, or ending in
+  `_PASS`. A value with credentials in it (a URL with a user or password, `password=`) is masked for callers without
+  `convox:secret:read`, whatever its name.
+- **Creating a user whose email exists answers `409`** instead of replacing their roles. Change roles with an update.
+  An update whose roles were decided against roles that changed since it read them (another admin changed them)
+  also gets `409`: reload the user and make the change again.
+- **Changing a user's email deletes their API tokens** and ends their sessions. Issue new tokens.
+- **An archive's object key can't be uploaded twice**, and a concurrent env change waits up to 15 seconds for the
+  app's env lock, then gets `409`.
+- **A promote whose outcome the gateway couldn't see keeps its approval's claim**: CI needs a new approval to promote
+  again.
+- **A build, object or process the rack created but the approval couldn't record gets `503`**, naming what to do
+  again (create the build again, upload to a new key, start a new process).
+- **Exec and log sessions are rechecked every minute** and end when the user, session, token, permission or approval
+  is gone, or when a recheck can't finish within 30 seconds. A session lasts at most 12 hours, so a long
+  `convox logs -f` reconnects.
+- **Web logout is a POST** with the session's CSRF token; a GET no longer signs out.
+
+**Logs and audit:**
+
+- An exec's command is audited with the credentials a command line commonly carries redacted: a URL's password, the
+  value of a secret-named assignment or flag (`DB_PASSWORD=...`, `--token ...`) and a `Bearer` value.
+- Request log lines say `rbac_decision` `deny` for every 401, 403 and 429, `error` when the permission check failed,
+  and `not_evaluated` when no check ran. Update CloudWatch filters that relied on the old values.
+- A deploy approval request's approve, reject and extend entries use the resource type `deploy_approval_request` (it
+  was `deploy-approval-request`), like its create and expire entries, and all of them set
+  `deploy_approval_request_id`.
+- With `AUDIT_HASH_V2_FROM` pinned, a chain that has no hash v2 events fails verification. An anchor over 16 KiB
+  fails verification. When the chain has legacy (v1) events, `verify-audit`'s result says their content can't be
+  verified.
+
 ### `users.suspended` dropped (v0.1.12)
 
 This release's migration drops the unused `users.suspended` column. v0.1.10 and earlier still read it, so they
@@ -247,6 +307,7 @@ itself every hour and alerts when they fail.
 3. **Pin where hash v2 starts.** Right after promoting, run `verify-audit` (see below). It prints
    `hash v2 from event N` or, before the new release has written an event, a failure naming the event that will
    be the first. Set `AUDIT_HASH_V2_FROM=N` in the gateway's environment and wherever else `verify-audit` runs.
+   With the pin set, verification fails until that first hash v2 event exists (any request writes one).
    Without it, verification fails while legacy events exist, until an anchor written by this release (within the
    hour) confirms the start, and always without anchors. See
    [Pinning where hash v2 starts](/deployment/terraform/s3-worm-storage/#pinning-where-hash-v2-starts).

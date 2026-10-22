@@ -64,6 +64,10 @@ func (h *APIHandler) CreateDeployApprovalRequest(c *gin.Context) {
 		return
 	}
 
+	if !h.admitApprovalCreation(c, token.ID, app, gitCommitHash, dbUser.ID) {
+		return
+	}
+
 	verification, ok := h.performGitHubVerification(c, app, req, gitCommitHash)
 	if !ok {
 		return
@@ -250,13 +254,7 @@ func (h *APIHandler) createApprovalRecord(
 	createdByAPITokenID *int64,
 	tokenID int64,
 ) (*db.DeployApprovalRequest, bool) {
-	// An approval past its window (or a stale pending request) no longer counts as open, so expire them first:
-	// otherwise one could block this request.
-	if err := h.expireDeployApprovals(); err != nil {
-		gtwlog.Errorf("deploy approvals: expiry sweep before create failed: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create deploy approval request"})
-		return nil, false
-	}
+	// admitApprovalCreation has expired the approvals past their window.
 	record, err := h.database.CreateDeployApprovalRequest(
 		message,
 		app,
@@ -312,17 +310,19 @@ func (h *APIHandler) logApprovalCreation(
 	fields["git_branch"] = record.GitBranch
 	details := auditDetailsWithMessage(fields, record.Message)
 
+	action := audit.BuildAction(rbac.ResourceDeployApprovalRequest.String(), rbac.ActionCreate.String())
 	_ = h.auditLogger.LogRequestEntry(ctx, &db.AuditLog{
-		UserEmail:    userEmail,
-		UserName:     userName,
-		ActionType:   audit.ActionTypeGateway,
-		Action:       audit.BuildAction(rbac.ResourceDeployApprovalRequest.String(), rbac.ActionCreate.String()),
-		ResourceType: rbac.ResourceDeployApprovalRequest.String(),
-		Resource:     fmt.Sprintf("%d", record.ID),
-		Details:      details,
-		Status:       audit.StatusSuccess,
-		RBACDecision: "allow",
-		HTTPStatus:   http.StatusCreated,
+		UserEmail:               userEmail,
+		UserName:                userName,
+		ActionType:              audit.ActionTypeGateway,
+		Action:                  action,
+		ResourceType:            rbac.ResourceDeployApprovalRequest.String(),
+		Resource:                fmt.Sprintf("%d", record.ID),
+		Details:                 details,
+		Status:                  audit.StatusSuccess,
+		RBACDecision:            "allow",
+		HTTPStatus:              http.StatusCreated,
+		DeployApprovalRequestID: &record.ID,
 	})
 }
 

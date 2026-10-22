@@ -91,14 +91,16 @@ func TestAuthorizeRolePermissions(t *testing.T) {
 // TestAuthorizeUsesCurrentRoles verifies role changes and deletion take effect without a restart.
 func TestAuthorizeUsesCurrentRoles(t *testing.T) {
 	mgr, database := newTestManager(t)
-	createUser(t, database, "user@test.com", "admin")
+	user := createUser(t, database, "user@test.com", "admin")
 	deleteApps := Convox(ResourceApp, ActionDelete)
 	require.True(t, userCan(t, mgr, database, "user@test.com", deleteApps))
 
-	require.NoError(t, mgr.SaveUser("user@test.com", &UserConfig{Roles: []string{"viewer"}}))
+	_, err := database.UpdateUser(user.ID, db.UserUpdate{Roles: []string{"viewer"}, RolesWere: []string{"admin"}}, nil)
+	require.NoError(t, err)
 	require.False(t, userCan(t, mgr, database, "user@test.com", deleteApps), "demotion must apply immediately")
 
-	require.NoError(t, mgr.SaveUser("user@test.com", &UserConfig{Roles: []string{"admin"}}))
+	_, err = database.UpdateUser(user.ID, db.UserUpdate{Roles: []string{"admin"}, RolesWere: []string{"viewer"}}, nil)
+	require.NoError(t, err)
 	require.NoError(t, mgr.DeleteUser("user@test.com"))
 	createUser(t, database, "user@test.com", "viewer")
 	require.False(t, userCan(t, mgr, database, "user@test.com", deleteApps), "re-created user must not keep old roles")
@@ -161,23 +163,17 @@ func TestAuthorizeAPITokens(t *testing.T) {
 	}
 }
 
-func TestSaveUserUpdatesDisplayName(t *testing.T) {
+// Creating a user never changes an existing one: the request might lower the roles of an admin, even the caller's
+// own, past the update path's checks and audit action.
+func TestCreateUserRefusesAnExistingEmail(t *testing.T) {
 	mgr, database := newTestManager(t)
-	createUser(t, database, "user@example.com", "viewer")
+	createUser(t, database, "user@example.com", "admin")
 
-	err := mgr.SaveUser("user@example.com", &UserConfig{Name: "New Name", Roles: []string{"viewer"}})
-	require.NoError(t, err)
-
-	updated, err := database.GetUser("user@example.com")
-	require.NoError(t, err)
-	require.NotNil(t, updated)
-	require.Equal(t, "New Name", updated.Name)
-
-	err = mgr.SaveUser("user@example.com", &UserConfig{Name: "   ", Roles: []string{"viewer"}})
-	require.NoError(t, err)
+	err := mgr.CreateUser("user@example.com", &UserConfig{Name: "New Name", Roles: []string{"viewer"}})
+	require.ErrorIs(t, err, db.ErrUserExists)
 
 	unchanged, err := database.GetUser("user@example.com")
 	require.NoError(t, err)
-	require.NotNil(t, unchanged)
-	require.Equal(t, "New Name", unchanged.Name)
+	require.Equal(t, []string{"admin"}, unchanged.Roles)
+	require.Equal(t, "user@example.com", unchanged.Name)
 }

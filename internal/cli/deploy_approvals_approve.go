@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"strings"
 	"time"
 
@@ -15,11 +14,10 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/cli/webauthn"
 )
 
-// errAPITokenCannotApprove explains why approving with RACK_GATEWAY_API_TOKEN fails: the gateway only
-// accepts approvals from people, after MFA.
-var errAPITokenCannotApprove = errors.New(
-	"API tokens can't approve deploy requests; unset RACK_GATEWAY_API_TOKEN and approve as a logged-in user",
-)
+// errAPITokenCannotApprove explains why approving with an API token fails: the gateway only accepts approvals
+// from people, after MFA.
+var errAPITokenCannotApprove = errors.New("API tokens can't approve deploy requests; " +
+	"drop --api-token and unset RACK_GATEWAY_API_TOKEN, then approve as a logged-in user")
 
 type deployApprovalApproveOptions struct {
 	app     string
@@ -382,11 +380,11 @@ func approveDeployRequestWithPIN(
 func getDeployApprovalMFAAuth(
 	cmd *cobra.Command, rack, cachedPIN string, prompt webauthn.Prompt,
 ) (string, string, error) {
-	if os.Getenv("RACK_GATEWAY_API_TOKEN") != "" {
+	if apiTokenOverride() != "" {
 		return "", "", errAPITokenCannotApprove
 	}
 
-	gatewayURL, bearer, err := gatewayAuthInfo(rack)
+	gatewayURL, bearer, err := LoadRackAuth(rack)
 	if err != nil {
 		return "", "", err
 	}

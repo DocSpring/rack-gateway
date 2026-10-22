@@ -130,6 +130,7 @@ export * from "./handlersVerifyWebAuthnAssertionRequest";
 export * from "./handlersVersionInfo";
 export * from "./handlersWebAuthnAssertionStartResponse";
 export * from "./handlersWebAuthnEnrollmentResponse";
+export * from "./handlersWebLogoutResponse";
 export * from "./paginationPageInfo";
 export * from "./putAppsAppSettings200";
 export * from "./putAppsAppSettingsApprovedDeployCommands200";

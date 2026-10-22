@@ -83,16 +83,29 @@ func TestVerifyChecksTheStartAgainstAnAnchorFromBeforeTheFirstV2Event(t *testing
 		"so hash v2 starts at event 3, but the database has no hash v2 events")
 }
 
-func TestVerifyAcceptsAConfirmedChainWithNoV2EventsYet(t *testing.T) {
+func TestVerifyBeforeTheFirstV2Event(t *testing.T) {
 	database := newAuditDatabase(t)
 	insertLegacyEvents(t, database)
 
 	// Right after upgrading, before the first hash v2 event, nothing confirms where hash v2 will start.
 	requireFailure(t, verify(t, database, auditverify.Options{}), unconfirmedStart, "event 3 if the database is intact")
-	// The next event will be the first hash v2 event, so the start can be pinned already...
-	requireOK(t, verify(t, database, auditverify.Options{HashV2From: int64Ptr(3)}))
-	// ... or confirmed by the upgraded gateway's first anchor.
+	// A pin isn't enough yet: a chain without hash v2 events is also what removing every one of them leaves.
+	requireFailure(t, verify(t, database, auditverify.Options{HashV2From: int64Ptr(3)}),
+		"the database has no hash v2 events, but the pinned hash v2 start", "is event 3 and the chain ends at event 2")
+	// The upgraded gateway's first anchor confirms it.
 	bucket := fakes3.New(firstHour)
 	writeAnchor(t, database, bucket, firstHour)
 	requireOK(t, verifyWithAnchors(t, database, bucket, firstHour.Add(time.Hour)))
+}
+
+// With the start pinned, removing every hash v2 event from the end leaves legacy events that would pass: it fails.
+func TestVerifyDetectsEveryV2EventRemovedWithAPinnedStart(t *testing.T) {
+	database := newAuditDatabase(t)
+	insertLegacyEvents(t, database)
+	writeEvents(t, database, 3) // hash v2 from event 3
+	requireOK(t, verify(t, database, auditverify.Options{HashV2From: int64Ptr(3)}))
+
+	tamper(t, database, `DELETE FROM audit.audit_event WHERE chain_index >= 3`)
+	requireFailure(t, verify(t, database, auditverify.Options{HashV2From: int64Ptr(3)}),
+		"hash v2 events were removed from the end")
 }

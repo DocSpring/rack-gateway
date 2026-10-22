@@ -91,7 +91,8 @@ type VerifiedEvent struct {
 
 // Run verifies the chain (events From..To) and, if configured, every anchor. A full run (no From or To) also
 // counts the stored events, and every run checks that something outside the database confirms where hash v2
-// starts.
+// starts. A run that can't finish (a read fails) returns the error with the report so far, StoppedBy set: the
+// failures it found before it stopped still count.
 func Run(ctx context.Context, source ChainSource, opts Options) (*Report, error) {
 	if err := opts.validate(); err != nil {
 		return nil, err
@@ -101,25 +102,33 @@ func Run(ctx context.Context, source ChainSource, opts Options) (*Report, error)
 		return nil, err
 	}
 	report := &Report{Head: head, HashV2FromPinned: opts.HashV2From}
+	if err := runChecks(ctx, source, opts, head, report); err != nil {
+		report.StoppedBy = err.Error()
+		return report, err
+	}
+	return report, nil
+}
+
+func runChecks(ctx context.Context, source ChainSource, opts Options, head db.AuditChainHead, report *Report) error {
 	checkPinnedHashV2Start(head, opts.HashV2From, report)
 	if err := checkVerifiedEvent(ctx, source, head, opts.VerifiedThrough, report); err != nil {
-		return nil, err
+		return err
 	}
 	if err := verifyRows(ctx, source, opts, head, report); err != nil {
-		return nil, err
+		return err
 	}
 	if opts.From == 0 && opts.To == nil {
 		if err := checkRowCounts(ctx, source, head, report); err != nil {
-			return nil, err
+			return err
 		}
 	}
 	if opts.Anchors != nil {
 		if err := verifyAnchors(ctx, source, *opts.Anchors, head, opts.now(), report); err != nil {
-			return nil, err
+			return err
 		}
 	}
 	checkHashV2StartConfirmed(head, report)
-	return report, nil
+	return nil
 }
 
 func (o *Options) now() time.Time {

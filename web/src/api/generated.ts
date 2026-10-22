@@ -87,6 +87,7 @@ import type {
   HandlersVerifyWebAuthnAssertionRequest,
   HandlersWebAuthnAssertionStartResponse,
   HandlersWebAuthnEnrollmentResponse,
+  HandlersWebLogoutResponse,
   PutAppsAppSettings200,
   PutAppsAppSettingsApprovedDeployCommands200,
   PutAppsAppSettingsAuditVisibleEnvVars200,
@@ -223,7 +224,8 @@ export const getRackGatewayAPI = () => {
 
   /**
    * Applies environment variable changes for a Convox app by creating a new release.
-   * Secrets remain masked unless the user has secrets permissions.
+   * Secrets and values with credentials in them remain masked unless the user has secrets permissions.
+   * Answers 409 while another env change to the app is in progress.
    * @summary Update environment variables
    */
   const putAppsAppEnv = (
@@ -510,7 +512,8 @@ export const getRackGatewayAPI = () => {
   };
 
   /**
-   * Streams the filtered audit log dataset as CSV.
+   * Exports every audit log entry that matches the filters as CSV. The export is written in full before
+   * any of it is sent, so a failed export answers with an error, never with a partial file.
    * @summary Export audit logs as CSV
    */
   const getAuditLogsExport = (
@@ -983,14 +986,18 @@ export const getRackGatewayAPI = () => {
   };
 
   /**
-   * Revokes the active session, clears the cookie, and redirects to the login screen.
+   * Revokes the active session and clears the cookie. A POST with the session's CSRF token, so another
+   * site can't sign the user out. Fails with 500, keeping the cookie, when the session couldn't be
+   * revoked, so the user can try again. A request without a live session just clears the cookie.
    * @summary Log out current session
    */
-  const getAuthWebLogout = (
-    options?: SecondParameter<typeof createGatewayClient<unknown>>,
+  const postAuthWebLogout = (
+    options?: SecondParameter<
+      typeof createGatewayClient<HandlersWebLogoutResponse>
+    >,
   ) => {
-    return createGatewayClient<unknown>(
-      { url: `/auth/web/logout`, method: "GET" },
+    return createGatewayClient<HandlersWebLogoutResponse>(
+      { url: `/auth/web/logout`, method: "POST" },
       options,
     );
   };
@@ -1326,7 +1333,8 @@ export const getRackGatewayAPI = () => {
   };
 
   /**
-   * Creates a new gateway user with the provided roles.
+   * Creates a new gateway user with the provided roles. An email already in use is a 409: this never
+   * changes an existing user.
    * @summary Create a user
    */
   const postUsers = (
@@ -1359,7 +1367,9 @@ export const getRackGatewayAPI = () => {
   };
 
   /**
-   * Updates a user's email, name, and/or roles in a single request.
+   * Updates a user's email, name, and/or roles in a single request. Every field is checked before
+   * anything is written, and the changes are written together. A new email signs the user out
+   * everywhere and deletes their API tokens.
    * @summary Update user
    */
   const putUsersEmail = (
@@ -1584,7 +1594,7 @@ export const getRackGatewayAPI = () => {
     postAuthMfaWebauthnAssertionVerify,
     getAuthWebCallback,
     getAuthWebLogin,
-    getAuthWebLogout,
+    postAuthWebLogout,
     getCreatedBy,
     getDeployApprovalRequests,
     postDeployApprovalRequestsIdApprove,
@@ -1901,8 +1911,8 @@ export type GetAuthWebCallbackResult = NonNullable<
 export type GetAuthWebLoginResult = NonNullable<
   Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>["getAuthWebLogin"]>>
 >;
-export type GetAuthWebLogoutResult = NonNullable<
-  Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>["getAuthWebLogout"]>>
+export type PostAuthWebLogoutResult = NonNullable<
+  Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>["postAuthWebLogout"]>>
 >;
 export type GetCreatedByResult = NonNullable<
   Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>["getCreatedBy"]>>

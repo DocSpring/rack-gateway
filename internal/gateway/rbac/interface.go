@@ -24,8 +24,8 @@ type Manager interface {
 	// GetUsers returns all users
 	GetUsers() (map[string]*UserConfig, error)
 
-	// SaveUser saves or updates a user
-	SaveUser(email string, user *UserConfig) error
+	// CreateUser creates a user; an email already in use returns db.ErrUserExists
+	CreateUser(email string, user *UserConfig) error
 
 	// DeleteUser removes a user
 	DeleteUser(email string) error

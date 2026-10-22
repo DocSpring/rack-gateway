@@ -16,7 +16,11 @@ export type GetDeployApprovalRequestsParams = {
    */
   only_open?: boolean;
   /**
-   * Maximum number of results
+   * Only return the newest matching request of each app
+   */
+  newest_per_app?: boolean;
+  /**
+   * Maximum number of results (at most 200)
    */
   limit?: number;
   /**

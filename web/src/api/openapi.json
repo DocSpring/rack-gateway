@@ -485,7 +485,7 @@
                         "CSRFToken": []
                     }
                 ],
-                "description": "Applies environment variable changes for a Convox app by creating a new release.\nSecrets remain masked unless the user has secrets permissions.",
+                "description": "Applies environment variable changes for a Convox app by creating a new release.\nSecrets and values with credentials in them remain masked unless the user has secrets permissions.\nAnswers 409 while another env change to the app is in progress.",
                 "tags": [
                     "Environment"
                 ],
@@ -535,6 +535,16 @@
                     },
                     "403": {
                         "description": "Forbidden",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -1579,7 +1589,7 @@
                         }
                     },
                     {
-                        "description": "Page size",
+                        "description": "Page size (at most 200)",
                         "name": "limit",
                         "in": "query",
                         "schema": {
@@ -1668,7 +1678,7 @@
                         "SessionCookie": []
                     }
                 ],
-                "description": "Streams the filtered audit log dataset as CSV.",
+                "description": "Exports every audit log entry that matches the filters as CSV. The export is written in full before\nany of it is sent, so a failed export answers with an error, never with a partial file.",
                 "tags": [
                     "Audit"
                 ],
@@ -1708,7 +1718,7 @@
                     },
                     {
                         "description": "ISO8601 start time",
-                        "name": "since",
+                        "name": "start",
                         "in": "query",
                         "schema": {
                             "type": "string"
@@ -1716,7 +1726,15 @@
                     },
                     {
                         "description": "ISO8601 end time",
-                        "name": "until",
+                        "name": "end",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "Relative range (e.g. 24h, 7d, all, custom)",
+                        "name": "range",
                         "in": "query",
                         "schema": {
                             "type": "string"
@@ -3254,19 +3272,60 @@
             }
         },
         "/auth/web/logout": {
-            "get": {
-                "description": "Revokes the active session, clears the cookie, and redirects to the login screen.",
+            "post": {
+                "description": "Revokes the active session and clears the cookie. A POST with the session's CSRF token, so another\nsite can't sign the user out. Fails with 500, keeping the cookie, when the session couldn't be\nrevoked, so the user can try again. A request without a live session just clears the cookie.",
                 "tags": [
                     "Auth"
                 ],
                 "summary": "Log out current session",
+                "parameters": [
+                    {
+                        "description": "The session's CSRF token",
+                        "name": "X-CSRF-Token",
+                        "in": "header",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
                 "responses": {
-                    "302": {
-                        "description": "Redirect to login",
+                    "200": {
+                        "description": "OK",
                         "content": {
                             "*/*": {
                                 "schema": {
-                                    "type": "string"
+                                    "$ref": "#/components/schemas/handlers.WebLogoutResponse"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
                                 }
                             }
                         }
@@ -3377,7 +3436,15 @@
                         }
                     },
                     {
-                        "description": "Maximum number of results",
+                        "description": "Only return the newest matching request of each app",
+                        "name": "newest_per_app",
+                        "in": "query",
+                        "schema": {
+                            "type": "boolean"
+                        }
+                    },
+                    {
+                        "description": "Maximum number of results (at most 200)",
                         "name": "limit",
                         "in": "query",
                         "schema": {
@@ -3527,7 +3594,15 @@
                         }
                     },
                     {
-                        "description": "Maximum number of results (default: 100)",
+                        "description": "Page number (default: 1)",
+                        "name": "page",
+                        "in": "query",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "description": "Page size (default: 100, at most 200)",
                         "name": "limit",
                         "in": "query",
                         "schema": {
@@ -4499,7 +4574,7 @@
                         "CSRFToken": []
                     }
                 ],
-                "description": "Creates a new gateway user with the provided roles.",
+                "description": "Creates a new gateway user with the provided roles. An email already in use is a 409: this never\nchanges an existing user.",
                 "tags": [
                     "Users"
                 ],
@@ -4634,7 +4709,7 @@
                         "CSRFToken": []
                     }
                 ],
-                "description": "Updates a user's email, name, and/or roles in a single request.",
+                "description": "Updates a user's email, name, and/or roles in a single request. Every field is checked before\nanything is written, and the changes are written together. A new email signs the user out\neverywhere and deletes their API tokens.",
                 "tags": [
                     "Users"
                 ],
@@ -4693,7 +4768,7 @@
                         }
                     },
                     "409": {
-                        "description": "Conflict",
+                        "description": "Email already in use, or the user's roles changed since they were read",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -7150,6 +7225,14 @@
                     },
                     "status": {
                         "type": "string"
+                    }
+                }
+            },
+            "handlers.WebLogoutResponse": {
+                "type": "object",
+                "properties": {
+                    "logged_out": {
+                        "type": "boolean"
                     }
                 }
             },

@@ -171,7 +171,9 @@ var rackRouteSpecs = []RouteSpec{
 	// Services
 	newRackRoute("PUT", "/apps/{app}/services/{name}", ResourceApp, ActionUpdate),
 	newRackRoute("GET", "/apps/{app}/services", ResourceApp, ActionRead),
-	newRackRoute("POST", "/apps/{app}/services/{service}/restart", ResourceProcess, ActionStart),
+	// A service restart restarts part of the app, so it takes app:restart. It isn't process:start: a deploy
+	// approval gates process starts by their release, and a restart has none to bind it to.
+	newRackRoute("POST", "/apps/{app}/services/{service}/restart", ResourceApp, ActionRestart),
 
 	// Instances
 	newRackRoute("GET", "/instances", ResourceInstance, ActionList),

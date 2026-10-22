@@ -98,6 +98,10 @@ The CSV has a row per entry as the table shows it (repeated events grouped): `fi
 JSON and the hash chain fields; query the database for those (see
 [Audit Trail](/security/compliance/audit-trail/)).
 
+The export holds every entry that matches the filters, not just the page on screen. A text cell that a spreadsheet
+would run as a formula (one starting with `=`, `+`, `-` or `@`) gets a leading `'`, so it opens as text. The page
+size of the table, and of `GET /api/v1/audit-logs`, is at most 200 entries.
+
 ## Compliance Features
 
 ### Tamper Detection

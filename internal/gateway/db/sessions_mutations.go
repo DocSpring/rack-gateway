@@ -98,12 +98,6 @@ func (d *Database) UpdateSessionMFAVerified(sessionID int64, verifiedAt time.Tim
 	return d.markSessionMFAVerified(sessionID, verifiedAt, &verifiedAt, trustedDeviceID)
 }
 
-// ExemptSessionFromMFAChallenge marks a new session MFA-verified without a factor: its user needs no MFA challenge,
-// or it presented a trusted-device cookie (trustedDeviceID). It opens no step-up window; only a verified factor does.
-func (d *Database) ExemptSessionFromMFAChallenge(sessionID int64, at time.Time, trustedDeviceID *int64) error {
-	return d.markSessionMFAVerified(sessionID, at, nil, trustedDeviceID)
-}
-
 // markSessionMFAVerified sets the session's MFA-verified time, its step-up time when stepUpAt is set, and its
 // trusted device when trustedDeviceID is set.
 func (d *Database) markSessionMFAVerified(
@@ -129,20 +123,6 @@ func (d *Database) markSessionMFAVerified(
 	)
 	if err != nil {
 		return fmt.Errorf("failed to update MFA verification: %w", err)
-	}
-	return nil
-}
-
-// ClearSessionsMFAVerification marks every active session of the user as not MFA-verified, so each one has to
-// complete an MFA challenge before it can be used again.
-func (d *Database) ClearSessionsMFAVerification(userID int64) error {
-	_, err := d.exec(
-		`UPDATE user_sessions SET mfa_verified_at = NULL, recent_step_up_at = NULL, updated_at = NOW()
-		WHERE user_id = ? AND revoked_at IS NULL`,
-		userID,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to clear session MFA verification: %w", err)
 	}
 	return nil
 }

@@ -15,7 +15,7 @@ func TestSensitiveHeaders(t *testing.T) {
 	for _, name := range []string{
 		"Authorization", "Proxy-Authorization", "Cookie", "Set-Cookie", "X-Csrf-Token", "X-Mfa-Totp",
 		"X-Mfa-Webauthn", "X-Mfa-Required", "X-Postmark-Server-Token", "X-Api-Key", "X-Client-Secret",
-		"X-Admin-Password",
+		"X-Admin-Password", "Command",
 	} {
 		require.Equal(t, Redacted, HeaderValue(name, "hidden-value"), name)
 	}
@@ -42,6 +42,19 @@ func TestHeaderValueRedactsURLs(t *testing.T) {
 	require.Equal(t,
 		"0; url=https://gateway.example.com/?login_code="+redactedQueryValue,
 		HeaderValue("Refresh", "0; url=https://gateway.example.com/?login_code=hidden-code"))
+}
+
+// The URL pattern's [^\s...] is the whitespace class, so a URL runs on past an "s" in its host, user or path.
+func TestURLsWithAnSAreRedactedWhole(t *testing.T) {
+	require.Equal(t,
+		`see <https://docs.example.com/sso?token=`+redactedQueryValue+`>`,
+		HeaderValue("Link", `see <https://docs.example.com/sso?token=hidden-token>`))
+	require.JSONEq(t,
+		`{"note":"see https://docs.example.com/sso?token=`+redactedQueryValue+`"}`,
+		Body([]byte(`{"note":"see https://docs.example.com/sso?token=hidden-token"}`), 1000))
+	require.JSONEq(t,
+		`{"note":"[REDACTED]"}`,
+		Body([]byte(`{"note":"pull from https://sam:hidden-secret@registry.example.com/images"}`), 1000))
 }
 
 func TestHeadersAreSortedAndRedacted(t *testing.T) {

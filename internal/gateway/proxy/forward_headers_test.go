@@ -58,7 +58,7 @@ func newRecordingProxy(t *testing.T) (*Handler, *db.Database, *recordingRack) {
 		"ops@test.com":      "ops",
 		"deployer@test.com": "deployer",
 	} {
-		require.NoError(t, mgr.SaveUser(userEmail, &rbac.UserConfig{Name: role, Roles: []string{role}}))
+		require.NoError(t, mgr.CreateUser(userEmail, &rbac.UserConfig{Name: role, Roles: []string{role}}))
 	}
 	return h, database, rack
 }

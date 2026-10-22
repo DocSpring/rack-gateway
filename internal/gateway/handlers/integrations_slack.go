@@ -122,11 +122,9 @@ func (h *AdminHandler) SlackOAuthCallbackHandler(c *gin.Context) {
 		}
 	}
 
-	// Delete existing integration if any
-	_ = h.database.DeleteSlackIntegration()
-
-	// Create new integration with default channel mappings (the database encrypts the token)
-	_, err = h.database.CreateSlackIntegration(
+	// Replace any existing integration with this workspace and the default channel mappings, in one transaction:
+	// if it can't be saved, the existing one stays connected. The database encrypts the token.
+	_, err = h.database.ReplaceSlackIntegration(
 		oauthResp.Team.ID,
 		oauthResp.Team.Name,
 		oauthResp.AccessToken,
@@ -328,7 +326,7 @@ func (h *AdminHandler) UpdateSlackAlertSettingsHandler(c *gin.Context) {
 
 	err := h.database.UpdateSlackAlertSettings(req.DeployApprovalsEnabled, req.DeployApprovalsChannelID)
 	if err != nil {
-		if err.Error() == "no Slack integration found to update" {
+		if errors.Is(err, db.ErrNoSlackIntegration) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "no Slack integration configured"})
 			return
 		}

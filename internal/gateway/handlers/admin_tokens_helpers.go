@@ -96,32 +96,39 @@ func tokenNameError(err error) string {
 	return ""
 }
 
-func (h *AdminHandler) updateTokenNameIfChanged(
+// saveTokenUpdate saves a token update's new name (an empty or unchanged name keeps it) and permissions (none keeps
+// them) in one write, and returns the audit details of what changed. It responds and returns false when the name is
+// refused or the update can't be saved, and then nothing has changed.
+func (h *AdminHandler) saveTokenUpdate(
 	c *gin.Context,
-	tokenID int64,
+	existing *db.APIToken,
 	tokenIDStr string,
-	existingName string,
-	newName string,
+	req *UpdateAPITokenRequest,
 	start time.Time,
-	details map[string]interface{},
-) error {
-	name := strings.TrimSpace(newName)
-	if name == "" || name == existingName {
-		return nil
+) (map[string]interface{}, bool) {
+	details := make(map[string]interface{})
+	var name *string
+	if trimmed := strings.TrimSpace(req.Name); trimmed != "" && trimmed != existing.Name {
+		name = &trimmed
+		details["name"] = trimmed
+	}
+	if req.Permissions != nil {
+		details["permissions"] = req.Permissions
+	}
+	if name == nil && req.Permissions == nil {
+		return details, true
 	}
 
-	if err := h.tokenService.UpdateTokenName(tokenID, name); err != nil {
+	if err := h.tokenService.UpdateToken(existing.ID, name, req.Permissions); err != nil {
 		action := audit.BuildAction(rbac.ResourceAPIToken.String(), rbac.ActionUpdate.String())
-		status, msg := http.StatusInternalServerError, "failed to update token name"
+		status, msg := http.StatusInternalServerError, "failed to update token"
 		if nameMsg := tokenNameError(err); nameMsg != "" {
 			status, msg = http.StatusBadRequest, nameMsg
 		}
-		h.respondAuditError(c, status, action, tokenIDStr, msg, start, map[string]interface{}{"name": name})
-		return err
+		h.respondAuditError(c, status, action, tokenIDStr, msg, start, details)
+		return nil, false
 	}
-
-	details["name"] = name
-	return nil
+	return details, true
 }
 
 func (h *AdminHandler) getCreatorEmail(c *gin.Context) string {

@@ -477,13 +477,19 @@ resource "aws_security_group" "rds" {
 ### Encryption
 
 - Enable encryption at rest (RDS default)
-- Use SSL for connections in transit
+- Use TLS for connections in transit, and verify the server: `sslmode=require` encrypts the connection but
+  accepts any certificate, so whoever can intercept the traffic can pose as the database
 - Consider KMS for key management
 
 ```bash
-# Force SSL connections
-DATABASE_URL=postgres://user:pass@host:5432/db?sslmode=require
+# Verify the database's certificate and hostname. The image ships Amazon RDS's CA bundle;
+# for another database, point PGSSLROOTCERT at its CA.
+PGSSLMODE=verify-full
+PGSSLROOTCERT=/app/certs/rds-global-bundle.pem
 ```
+
+`convox.yml` sets both. `DATABASE_URL` has to name the database by the hostname on its certificate (an RDS
+instance's endpoint, not an IP address or an alias). `PGSSLMODE` only ever makes the URL's own `sslmode` stricter.
 
 ### Access Control
 

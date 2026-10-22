@@ -320,6 +320,7 @@ export function useAccountSecurityPage(): UseAccountSecurityPageResult {
     ) {
       setAutoPrompted(true)
       openStepUp({
+        verify: true,
         action: async () => {
           await invalidateStatus()
           if (promptMfa && redirectTarget) {

@@ -69,6 +69,12 @@ func (k appEnvKeys) isSecret(key string) bool {
 	return k.allSecret || envutil.IsSecretKey(key, k.secretNames)
 }
 
+// masks reports whether the gateway masks key's value in env it returns: a secret, a protected key, or a value
+// with credentials in it. The gateway restores a masked value posted back, so the CLI can still set other keys.
+func (k appEnvKeys) masks(key, value string) bool {
+	return k.isSecret(key) || k.isProtected(key) || envutil.HasCredentials(value)
+}
+
 // isProtected reports whether key is in the app's protected_env_vars.
 func (k appEnvKeys) isProtected(key string) bool {
 	return k.allProtected || k.protected.has(key)

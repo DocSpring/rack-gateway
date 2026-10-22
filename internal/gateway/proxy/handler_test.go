@@ -177,7 +177,7 @@ func TestCaptureResourceCreatorStoresMappings(t *testing.T) {
 	h, database, mgr := newProxyForCreatorTest(t)
 	require.NoError(
 		t,
-		mgr.SaveUser("creator@example.com", &rbac.UserConfig{Name: "Creator", Roles: []string{"deployer"}}),
+		mgr.CreateUser("creator@example.com", &rbac.UserConfig{Name: "Creator", Roles: []string{"deployer"}}),
 	)
 
 	cases := []struct {
@@ -197,7 +197,7 @@ func TestCaptureResourceCreatorStoresMappings(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodPost, tc.path, nil)
 			req.Header = make(http.Header)
-			h.captureResourceCreator(req, tc.path, []byte(tc.body), "creator@example.com")
+			require.NoError(t, h.captureResourceCreator(req, tc.path, []byte(tc.body), "creator@example.com", false))
 
 			creators, err := database.GetResourceCreators(tc.typeExpect, []string{tc.idExpect})
 			require.NoError(t, err)
@@ -217,18 +217,19 @@ func TestCaptureResourceCreatorRecordsReleaseFromBuild(t *testing.T) {
 	h, database, mgr := newProxyForCreatorTest(t)
 	require.NoError(
 		t,
-		mgr.SaveUser("creator@example.com", &rbac.UserConfig{Name: "Creator", Roles: []string{"deployer"}}),
+		mgr.CreateUser("creator@example.com", &rbac.UserConfig{Name: "Creator", Roles: []string{"deployer"}}),
 	)
 
 	req := httptest.NewRequest(http.MethodPost, "/apps/my-app/builds", nil)
 	req.Header = make(http.Header)
 
-	h.captureResourceCreator(
+	require.NoError(t, h.captureResourceCreator(
 		req,
 		"/apps/my-app/builds",
 		[]byte(`{"id":"B123","release":"R456"}`),
 		"creator@example.com",
-	)
+		false,
+	))
 
 	creators, err := database.GetResourceCreators("release", []string{"R456"})
 	require.NoError(t, err)
@@ -240,13 +241,43 @@ func TestCaptureResourceCreatorRecordsReleaseFromBuild(t *testing.T) {
 	// Subsequent GET for the same build should not enqueue duplicates
 	reqGet := httptest.NewRequest(http.MethodGet, "/apps/my-app/builds/B123", nil)
 	reqGet.Header = make(http.Header)
-	h.captureResourceCreator(
+	require.NoError(t, h.captureResourceCreator(
 		reqGet,
 		"/apps/my-app/builds/B123",
 		[]byte(`{"id":"B123","release":"R456"}`),
 		"creator@example.com",
-	)
+		false,
+	))
 	require.Empty(t, reqGet.Header.Values("X-Release-Created"))
+}
+
+// A build's release appears when the build finishes. Whoever reads the build then didn't create it: the release is
+// credited to the build's creator, and the read writes no release.create audit entry.
+func TestBuildReadsCreditTheReleaseToTheBuildCreator(t *testing.T) {
+	h, database, mgr := newProxyForCreatorTest(t)
+	builder := &rbac.UserConfig{Name: "Builder", Roles: []string{"deployer"}}
+	require.NoError(t, mgr.CreateUser("builder@example.com", builder))
+	viewer := &rbac.UserConfig{Name: "Viewer", Roles: []string{"viewer"}}
+	require.NoError(t, mgr.CreateUser("viewer@example.com", viewer))
+
+	create := httptest.NewRequest(http.MethodPost, "/apps/my-app/builds", nil)
+	build := []byte(`{"id":"B1","release":""}`)
+	require.NoError(t, h.captureResourceCreator(create, "/apps/my-app/builds", build, "builder@example.com", false))
+
+	read := httptest.NewRequest(http.MethodGet, "/apps/my-app/builds/B1", nil)
+	finished := []byte(`{"id":"B1","release":"R1"}`)
+	require.NoError(t, h.captureResourceCreator(read, "/apps/my-app/builds/B1", finished, "viewer@example.com", false))
+	require.Empty(t, read.Header.Values("X-Release-Created"))
+	assertResourceCreator(t, database, "build", "B1", "builder@example.com")
+	assertResourceCreator(t, database, "release", "R1", "builder@example.com")
+
+	// A build the gateway didn't see created has no creator, and neither does its release.
+	read = httptest.NewRequest(http.MethodGet, "/apps/my-app/builds/B2", nil)
+	unseen := []byte(`{"id":"B2","release":"R2"}`)
+	require.NoError(t, h.captureResourceCreator(read, "/apps/my-app/builds/B2", unseen, "viewer@example.com", false))
+	creators, err := database.GetResourceCreators("release", []string{"R2"})
+	require.NoError(t, err)
+	require.Empty(t, creators)
 }
 
 func TestProxyToRackLogsReleaseAuditAndUserResource(t *testing.T) {
@@ -260,7 +291,7 @@ func TestProxyToRackLogsReleaseAuditAndUserResource(t *testing.T) {
 	defer cleanup()
 	require.NoError(
 		t,
-		mgr.SaveUser("creator@example.com", &rbac.UserConfig{Name: "Creator", Roles: []string{"deployer"}}),
+		mgr.CreateUser("creator@example.com", &rbac.UserConfig{Name: "Creator", Roles: []string{"deployer"}}),
 	)
 
 	req := httptest.NewRequest(http.MethodPost, "/apps/my-app/builds", strings.NewReader("git-sha=abc"))
@@ -296,7 +327,7 @@ func TestLogEnvDiffsLogsUnset(t *testing.T) {
 		req,
 		"user@example.com",
 		"default",
-		[]envutil.EnvDiff{{Key: "FOO", OldVal: "bar", NewVal: "", Secret: false}},
+		[]envutil.EnvDiff{{Key: "FOO", OldVal: "bar", Removed: true}},
 	)
 
 	logs, err := database.GetAuditLogs("user@example.com", time.Time{}, 10)
@@ -323,7 +354,7 @@ func TestLogEnvDiffsLogsSecretUnset(t *testing.T) {
 		req,
 		"user@example.com",
 		"default",
-		[]envutil.EnvDiff{{Key: "SECRET_KEY", OldVal: "value", NewVal: "", Secret: true}},
+		[]envutil.EnvDiff{{Key: "SECRET_KEY", OldVal: "value", Secret: true, Removed: true}},
 	)
 
 	logs, err := database.GetAuditLogs("user@example.com", time.Time{}, 10)
@@ -353,7 +384,7 @@ func TestForwardRequestRecordsBuildCreator(t *testing.T) {
 	defer cleanup()
 	require.NoError(
 		t,
-		mgr.SaveUser("creator@example.com", &rbac.UserConfig{Name: "Creator", Roles: []string{"deployer"}}),
+		mgr.CreateUser("creator@example.com", &rbac.UserConfig{Name: "Creator", Roles: []string{"deployer"}}),
 	)
 
 	req := httptest.NewRequest(http.MethodPost, "/apps/my-app/builds", strings.NewReader("description=build"))

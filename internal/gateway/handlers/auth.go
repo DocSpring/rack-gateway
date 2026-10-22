@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"context"
+
 	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth/mfa"
@@ -14,7 +16,7 @@ import (
 type OAuthProvider interface {
 	StartLogin() (*auth.LoginStartResponse, error)
 	StartWebLogin() (authURL string, state string)
-	CompleteLogin(code, state, codeVerifier string) (*auth.LoginResponse, error)
+	CompleteLogin(ctx context.Context, code, state, codeVerifier string) (*auth.LoginResponse, error)
 }
 
 // AuthHandler handles authentication endpoints

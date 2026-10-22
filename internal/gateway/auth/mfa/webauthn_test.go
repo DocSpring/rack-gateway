@@ -386,7 +386,7 @@ func TestFinalizeEnrollment(t *testing.T) {
 	// A session from before the first enrollment was marked verified at login without proving a factor.
 	session := createVerifiedSession(t, database, user.ID, strings.Repeat("a", 64))
 
-	err := service.finalizeEnrollment(user, method.ID)
+	err := service.finalizeEnrollment(user.ID, method.ID, nil)
 	if err != nil {
 		t.Fatalf("finalize enrollment failed: %v", err)
 	}
@@ -411,7 +411,7 @@ func TestFinalizeEnrollment(t *testing.T) {
 	// Adding another factor keeps sessions that already proved one.
 	verified := createVerifiedSession(t, database, user.ID, strings.Repeat("b", 64))
 	second, _ := database.CreateMFAMethod(user.ID, "totp", "Second", "secret2", nil, nil, nil, nil)
-	if err := service.finalizeEnrollment(updatedUser, second.ID); err != nil {
+	if err := service.finalizeEnrollment(updatedUser.ID, second.ID, nil); err != nil {
 		t.Fatalf("second enrollment failed: %v", err)
 	}
 	kept, _ := database.GetUserSessionByID(verified.ID)
@@ -422,8 +422,12 @@ func TestFinalizeEnrollment(t *testing.T) {
 
 func createVerifiedSession(t *testing.T, database *db.Database, userID int64, tokenHash string) *db.UserSession {
 	t.Helper()
+	user, err := database.GetUserByID(userID)
+	if err != nil {
+		t.Fatalf("load user: %v", err)
+	}
 	session, err := database.CreateUserSession(
-		userID, tokenHash, time.Now().Add(time.Hour), "web", "", "", "127.0.0.1", "test", nil, nil,
+		user, tokenHash, time.Now().Add(time.Hour), "web", "", "", "127.0.0.1", "test", nil, nil,
 	)
 	if err != nil {
 		t.Fatalf("create session: %v", err)

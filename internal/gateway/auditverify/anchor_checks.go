@@ -302,8 +302,9 @@ func reportNoAnchors(opts AnchorOptions, head db.AuditChainHead, report *Report)
 		report.warn("no anchors found under s3://%s/%s/", opts.Bucket, opts.ChainID)
 		return
 	}
-	report.fail("no anchors found under s3://%s/%s/, but the database has events up to %d: anchors aren't being "+
-		"written, or AUDIT_ANCHOR_BUCKET or AUDIT_ANCHOR_CHAIN_ID is wrong", opts.Bucket, opts.ChainID, head.LastIndex)
+	report.failSteady("no anchors", "no anchors found under s3://%s/%s/, but the database has events up to %d: "+
+		"anchors aren't being written, or AUDIT_ANCHOR_BUCKET or AUDIT_ANCHOR_CHAIN_ID is wrong", opts.Bucket,
+		opts.ChainID, head.LastIndex)
 }
 
 // checkLatestAnchorAge fails when the latest anchor was written more than maxAge before now: anchors have stopped
@@ -313,8 +314,9 @@ func checkLatestAnchorAge(latest *anchorRecord, maxAge time.Duration, now time.T
 	report.LatestAnchorWritten = latest.lastModified
 	maxAge = anchorMaxAge(maxAge)
 	if age := now.Sub(latest.lastModified); age > maxAge {
-		report.fail("the latest anchor (%s) was written %s ago, more than the maximum anchor age (%s): anchors "+
-			"have stopped being written", latest.key, age.Truncate(time.Minute), maxAge)
+		report.failSteady("anchors stopped after "+latest.key, "the latest anchor (%s) was written %s ago, more "+
+			"than the maximum anchor age (%s): anchors have stopped being written", latest.key,
+			age.Truncate(time.Minute), maxAge)
 	}
 }
 
@@ -346,9 +348,10 @@ func checkUnanchoredTail(
 		return fmt.Errorf("failed to read audit event %d: %w", maxSeq+1, err)
 	}
 	if oldest != nil && now.Sub(oldest.Timestamp) > maxAge {
-		report.fail("events %d..%d (%d) aren't anchored, and the oldest was written at %s, more than the maximum "+
-			"anchor age (%s) ago: anchors are being written but don't cover new events", maxSeq+1, head.LastIndex,
-			head.LastIndex-maxSeq, oldest.Timestamp.UTC().Format(time.RFC3339), maxAge)
+		report.failSteady(fmt.Sprintf("events from %d unanchored", maxSeq+1), "events %d..%d (%d) aren't "+
+			"anchored, and the oldest was written at %s, more than the maximum anchor age (%s) ago: anchors are "+
+			"being written but don't cover new events", maxSeq+1, head.LastIndex, head.LastIndex-maxSeq,
+			oldest.Timestamp.UTC().Format(time.RFC3339), maxAge)
 		return nil
 	}
 	report.warn("events %d..%d (%d) were written after the latest anchor and aren't anchored yet",

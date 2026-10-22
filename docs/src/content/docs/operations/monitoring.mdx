@@ -122,8 +122,11 @@ Rack Gateway writes two kinds of lines to stdout:
 }
 ```
 
-`query_params` and `response_error` are added when present. These lines are for log search; the audit log in the
-database (with its hash chain and anchors) is the record. See [Audit Logging](/concepts/audit-logging/).
+`query_params` and `response_error` are added when present. `rbac_decision` is `deny` for any request the gateway
+refused (401, 403 or 429, including failed sign-ins and rack proxy requests refused before they reached the rack),
+`error` when the permission check failed, `allow` when authorization let the request through, and `not_evaluated`
+for routes without authorization (login, health). These lines are for log search; the audit log in the database
+(with its hash chain and anchors) is the record. See [Audit Logging](/concepts/audit-logging/).
 
 ### Log Levels
 

@@ -7,17 +7,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import type { StepUpVerification } from '@/contexts/step-up-helpers'
 
 interface StepUpDialogProps {
   isOpen: boolean
   onOpenChange: (open: boolean) => void
-  onVerify: (params: {
-    method: 'totp' | 'webauthn'
-    code?: string
-    trust_device: boolean
-    session_data?: string
-    assertion_response?: string
-  }) => Promise<void>
+  onVerify: (params: StepUpVerification) => Promise<void>
   onCancel: () => void
   showTrustDevice: boolean
 }

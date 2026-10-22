@@ -45,7 +45,7 @@ func TestBuildThroughAnExtraPathPrefixIsValidated(t *testing.T) {
 	rack := &objectRack{t: t, manifest: "services:\n  web:\n    image: attacker/app\n"}
 	h, database, mgr, cleanup := newProxyWithRackServer(t, rack.handler)
 	t.Cleanup(cleanup)
-	require.NoError(t, mgr.SaveUser("admin@test.com", &rbac.UserConfig{Name: "Admin", Roles: []string{"admin"}}))
+	require.NoError(t, mgr.CreateUser("admin@test.com", &rbac.UserConfig{Name: "Admin", Roles: []string{"admin"}}))
 	app := "myapp"
 	require.NoError(t, database.UpsertSetting(
 		&app, "service_image_patterns", map[string]string{"*": `docker\.io/org/app:{{GIT_COMMIT}}`}, nil,
@@ -74,7 +74,7 @@ func TestDoublyPrefixedRackPathIsRefused(t *testing.T) {
 	rack := &objectRack{t: t}
 	h, database, mgr, cleanup := newProxyWithRackServer(t, rack.handler)
 	t.Cleanup(cleanup)
-	require.NoError(t, mgr.SaveUser("admin@test.com", &rbac.UserConfig{Name: "Admin", Roles: []string{"admin"}}))
+	require.NoError(t, mgr.CreateUser("admin@test.com", &rbac.UserConfig{Name: "Admin", Roles: []string{"admin"}}))
 
 	for _, path := range []string{"/convox/convox/apps/myapp/builds", "/rack-proxy/convox/apps/myapp/builds"} {
 		req := withPath(requestAs(t, database, "admin@test.com"), http.MethodPost, path)

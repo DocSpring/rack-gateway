@@ -4,6 +4,7 @@ import (
 	"crypto/subtle"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"net/url"
 	"strings"
@@ -115,7 +116,7 @@ func (h *AuthHandler) WebLoginCallback(c *gin.Context) {
 	}
 
 	// Complete OAuth login
-	resp, err := h.oauth.CompleteLogin(code, state, "")
+	resp, err := h.oauth.CompleteLogin(c.Request.Context(), code, state, "")
 	if err != nil {
 		h.handleWebLoginOAuthError(c, err)
 		return
@@ -175,42 +176,53 @@ func (h *AuthHandler) WebLoginCallback(c *gin.Context) {
 
 // WebLogout godoc
 // @Summary Log out current session
-// @Description Revokes the active session, clears the cookie, and redirects to the login screen.
+// @Description Revokes the active session and clears the cookie. A POST with the session's CSRF token, so another
+// @Description site can't sign the user out. Fails with 500, keeping the cookie, when the session couldn't be
+// @Description revoked, so the user can try again. A request without a live session just clears the cookie.
 // @Tags Auth
-// @Success 302 {string} string "Redirect to login"
-// @Router /auth/web/logout [get]
+// @Param X-CSRF-Token header string true "The session's CSRF token"
+// @Success 200 {object} WebLogoutResponse
+// @Failure 403 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Failure 503 {object} ErrorResponse
+// @Router /auth/web/logout [post]
 func (h *AuthHandler) WebLogout(c *gin.Context) {
 	h.clearWebOAuthStateCookie(c)
 	sessionToken := extractSessionToken(c)
 	email, name := h.sessionUser(c, sessionToken)
+	if email != "" && !h.sessions.ValidateCSRFToken(sessionToken, strings.TrimSpace(c.GetHeader("X-CSRF-Token"))) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "invalid CSRF token"})
+		return
+	}
 	if !h.recordAuthAttempt(c, audit.ActionScopeLogout, "web", email, name) {
-		c.String(http.StatusServiceUnavailable, audit.RefusalMessage(audit.ActionScopeLogout))
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": audit.RefusalMessage(audit.ActionScopeLogout)})
 		return
 	}
 
 	var revokeErr error
-	if sessionToken != "" && h.sessions != nil {
+	if email != "" {
 		_, revokeErr = h.sessions.RevokeByToken(sessionToken, nil)
 	}
-	secure := h.cookieSecure()
-	c.SetSameSite(http.SameSiteLaxMode)
-	c.SetCookie(
-		"session_token",
-		"",
-		-1,
-		"/",
-		"",
-		secure,
-		true,
-	)
-	c.SetSameSite(http.SameSiteDefaultMode)
-
 	h.recordAuthResult(c, audit.ActionScopeLogout, "web", email, name, auditStatus(revokeErr))
-	c.Redirect(http.StatusFound, "/app/login")
+	if revokeErr != nil {
+		log.Printf("web logout: failed to revoke the session of %s: %v", email, revokeErr)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "logout_failed"})
+		return
+	}
+
+	c.SetSameSite(http.SameSiteLaxMode)
+	c.SetCookie("session_token", "", -1, "/", "", h.cookieSecure(), true)
+	c.SetSameSite(http.SameSiteDefaultMode)
+	c.JSON(http.StatusOK, WebLogoutResponse{LoggedOut: true})
 }
 
-// sessionUser names the user a session token belongs to, for the logout's audit entries. A token that isn't a
-// valid session names nobody.
+// WebLogoutResponse is the answer to a completed web logout.
+type WebLogoutResponse struct {
+	LoggedOut bool `json:"logged_out"`
+}
+
+// sessionUser names the user a session token belongs to. A token that isn't a live session (or no session manager)
+// names nobody.
 func (h *AuthHandler) sessionUser(c *gin.Context, sessionToken string) (email, name string) {
 	if sessionToken == "" || h.sessions == nil {
 		return "", ""

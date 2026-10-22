@@ -54,7 +54,7 @@ func (_ *denyAllRBAC) GetUsers() (map[string]*rbac.UserConfig, error) {
 	return nil, nil
 }
 
-func (_ *denyAllRBAC) SaveUser(_ string, _ *rbac.UserConfig) error {
+func (_ *denyAllRBAC) CreateUser(_ string, _ *rbac.UserConfig) error {
 	return nil
 }
 
@@ -134,7 +134,7 @@ func TestGetSlackIntegration_Found(t *testing.T) {
 		},
 	}
 	botToken := fakeSlackBot
-	integration, err := database.CreateSlackIntegration(
+	integration, err := database.ReplaceSlackIntegration(
 		"T123456",
 		"Test Workspace",
 		botToken,
@@ -198,7 +198,7 @@ func TestUpdateSlackChannels(t *testing.T) {
 		},
 	}
 	botToken := fakeSlackBot
-	_, err = database.CreateSlackIntegration(
+	_, err = database.ReplaceSlackIntegration(
 		"T123456",
 		"Test Workspace",
 		botToken,
@@ -261,7 +261,7 @@ func TestDeleteSlackIntegration(t *testing.T) {
 		},
 	}
 	botToken := fakeSlackBot
-	_, err = database.CreateSlackIntegration(
+	_, err = database.ReplaceSlackIntegration(
 		"T123456",
 		"Test Workspace",
 		botToken,
@@ -332,7 +332,7 @@ func TestUpdateSlackChannels_Conflict(t *testing.T) {
 			"id": "C123456", "name": "security", "actions": actions,
 		}}
 	}
-	_, err = database.CreateSlackIntegration("T123456", "Test Workspace", fakeSlackBot, "U123456",
+	_, err = database.ReplaceSlackIntegration("T123456", "Test Workspace", fakeSlackBot, "U123456",
 		"channels:read,chat:write", security("login.*_failed"), &user.ID)
 	require.NoError(t, err)
 	handler := &AdminHandler{rbac: newAllowAllRBAC(user), database: database, config: &config.Config{}}
@@ -499,7 +499,7 @@ func TestCreateSlackClient_InvalidToken(t *testing.T) {
 	}
 
 	// A stored token that can't be decrypted (here: plaintext written directly to the database)
-	_, err = database.CreateSlackIntegration(
+	_, err = database.ReplaceSlackIntegration(
 		"T123456", "Test Workspace", fakeSlackBot, "U123456", "channels:read,chat:write",
 		map[string]interface{}{}, &user.ID,
 	)

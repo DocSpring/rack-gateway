@@ -3,9 +3,12 @@ package cli
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -91,7 +94,7 @@ func (g *fakeDeployGateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	id, approve := strings.CutSuffix(strings.TrimPrefix(path, "/"), "/approve")
 	switch {
 	case r.Method == http.MethodGet && path == "":
-		g.list(w, r.URL.Query().Get("status"), r.URL.Query().Get("app"))
+		g.list(w, r.URL.Query())
 	case r.Method == http.MethodGet && !approve && g.find(id) != nil:
 		respondJSON(w, http.StatusOK, g.find(id))
 	case r.Method == http.MethodPost && approve:
@@ -101,13 +104,27 @@ func (g *fakeDeployGateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (g *fakeDeployGateway) list(w http.ResponseWriter, status, app string) {
+// list pages through the matching requests, at most 200 at a time, keeping only each app's newest when asked.
+func (g *fakeDeployGateway) list(w http.ResponseWriter, query url.Values) {
 	matches := []deployApprovalRequest{}
+	seen := map[string]bool{}
 	for _, req := range g.requests {
-		if req.Status == status && (app == "" || req.App == app) {
-			matches = append(matches, req)
+		app := query.Get("app")
+		if req.Status != query.Get("status") || (app != "" && req.App != app) {
+			continue
 		}
+		if query.Get("newest_per_app") == "true" && seen[req.App] {
+			continue
+		}
+		seen[req.App] = true
+		matches = append(matches, req)
 	}
+	offset, _ := strconv.Atoi(query.Get("offset"))
+	limit, _ := strconv.Atoi(query.Get("limit"))
+	if limit <= 0 || limit > 200 {
+		limit = 200
+	}
+	matches = matches[min(offset, len(matches)):min(offset+limit, len(matches))]
 	respondJSON(w, http.StatusOK, deployApprovalRequestList{DeployApprovalRequests: matches})
 }
 
@@ -212,6 +229,36 @@ func TestApproveBySearchShowsEveryRequestBeforeApproving(t *testing.T) {
 	for _, want := range []string{"p-web", "p-worker", "Deploy web", "Deploy worker", appsTestCommit} {
 		require.Contains(t, approvals[0].outputBefore, want, "every request is shown before the first approval")
 	}
+}
+
+// The search reads every page of requests: an app whose request comes after the gateway's first 200 still counts.
+func TestApproveBySearchReadsEveryPage(t *testing.T) {
+	requests := make([]deployApprovalRequest, 0, 251)
+	for i := range 250 {
+		requests = append(requests, shownRequest(fmt.Sprintf("d-%03d", i), fmt.Sprintf("app-%03d", i), "deployed"))
+	}
+	requests = append(requests, shownRequest("p-web", "web", "pending"))
+	gateway := startFakeDeployGateway(t, requests...)
+
+	err := approveBySearch(gateway.command("\n"), []string{"staging"}, approvalApps{all: true}, "", appsTestCommit, "")
+	require.NoError(t, err)
+	approvals := gateway.seen()
+	require.Len(t, approvals, 1)
+	require.Equal(t, "p-web", approvals[0].id)
+	require.Contains(t, approvals[0].outputBefore, "d-249", "every app's request is shown")
+}
+
+// An approval past its expiry no longer allows a deploy: the search doesn't report it as done.
+func TestApproveBySearchDoesNotCountAnExpiredApproval(t *testing.T) {
+	expired := shownRequest("a-web", "web", "approved")
+	expiredAt := time.Now().Add(-time.Minute)
+	expired.ApprovalExpiresAt = &expiredAt
+	gateway := startFakeDeployGateway(t, expired)
+
+	err := approveBySearch(gateway.command("\n"), []string{"staging"},
+		approvalApps{names: []string{"web"}}, "", appsTestCommit, "")
+	require.ErrorContains(t, err, "no deploy approval request found for commit "+appsTestCommit+" on staging/web")
+	require.NotContains(t, gateway.output.String(), "Nothing to approve")
 }
 
 func TestApprovalSummaryDescribesEachApproval(t *testing.T) {

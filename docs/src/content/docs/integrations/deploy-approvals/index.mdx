@@ -115,9 +115,12 @@ Each step claims the approval before the gateway forwards it to the rack, so two
 approval can't both reach the rack:
 
 - **Upload**: the upload claims the approval's archive. A second upload while the first is in flight gets 409. An
-  upload the rack refuses (or that fails before the gateway records it) releases the claim, so CI can upload again.
-- **Archive objects**: an object that holds an approval's archive can't be uploaded again by anyone, admins
-  included (409). The rack would replace the archive that the build's manifest is checked against.
+  upload the rack refuses (or that fails before the gateway records it) releases the claim, so CI can upload again
+  (to a new key, as the Convox CLI always does).
+- **Archive objects**: object keys are write-once through the gateway, for every upload, approval or not. A second
+  upload to a key gets 409 from anyone, admins included, even when the first upload failed (the rack may have
+  stored it anyway), and so does an upload to a key a build's manifest was checked against. The rack would replace
+  the archive the check read. A build of an archive whose upload hasn't finished gets 409 too.
 - **Build**: an approval creates one build, only from an archive whose upload finished. A second build while the
   first is in flight, or after it, gets 409. A build the rack refuses releases the claim. The build's release is
   recorded once, from that build, and never replaced.

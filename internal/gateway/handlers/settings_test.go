@@ -608,12 +608,12 @@ func TestUpdateGlobalSettings_Boolean(t *testing.T) {
 
 func testUpdateSettingsSingleBoolean(t *testing.T) {
 	handler, database, mgr := setupSettingsHandler(t)
-	require.NoError(t, mgr.SaveUser("admin@example.com", &rbac.UserConfig{
+	require.NoError(t, mgr.CreateUser("admin@example.com", &rbac.UserConfig{
 		Name:  "Admin",
 		Roles: []string{"admin"},
 	}))
 
-	_ = database.DeleteSetting(nil, "allow_destructive_actions")
+	_ = database.DeleteSettings(nil, []string{"allow_destructive_actions"})
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
@@ -643,13 +643,12 @@ func testUpdateSettingsSingleBoolean(t *testing.T) {
 
 func testUpdateSettingsMultiple(t *testing.T) {
 	handler, database, mgr := setupSettingsHandler(t)
-	require.NoError(t, mgr.SaveUser("admin@example.com", &rbac.UserConfig{
+	require.NoError(t, mgr.CreateUser("admin@example.com", &rbac.UserConfig{
 		Name:  "Admin",
 		Roles: []string{"admin"},
 	}))
 
-	_ = database.DeleteSetting(nil, "allow_destructive_actions")
-	_ = database.DeleteSetting(nil, "mfa_trusted_device_ttl_days")
+	_ = database.DeleteSettings(nil, []string{"allow_destructive_actions", "mfa_trusted_device_ttl_days"})
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
@@ -687,7 +686,7 @@ func testUpdateSettingsMultiple(t *testing.T) {
 
 func testUpdateSettingsClearRevertsToDefault(t *testing.T) {
 	handler, database, mgr := setupSettingsHandler(t)
-	require.NoError(t, mgr.SaveUser("admin@example.com", &rbac.UserConfig{
+	require.NoError(t, mgr.CreateUser("admin@example.com", &rbac.UserConfig{
 		Name:  "Admin",
 		Roles: []string{"admin"},
 	}))

@@ -90,10 +90,11 @@ type responseHandling struct {
 	filterBuild       bool // strip build repository URLs (see stripBuildRepository)
 	capture           bool // record who created the resource
 	captureProcess    bool // track a process started under a deploy approval
+	tracked           bool // the answer must say what the rack created (mustTrackAnswer)
 }
 
 func (rh responseHandling) needsBuffer() bool {
-	return rh.filterRelease || rh.filterEnvironment || rh.filterBuild || rh.capture || rh.captureProcess
+	return rh.filterRelease || rh.filterEnvironment || rh.filterBuild || rh.capture || rh.captureProcess || rh.tracked
 }
 
 func (h *Handler) responseHandlingFor(r *http.Request, resp *http.Response, path string) responseHandling {
@@ -107,6 +108,7 @@ func (h *Handler) responseHandlingFor(r *http.Request, resp *http.Response, path
 			(rbac.KeyMatch3(path, "/apps/{app}/builds") || rbac.KeyMatch3(path, "/apps/{app}/builds/{id}")),
 	}
 	handling.capture, handling.captureProcess = h.shouldCaptureResponse(r, path, isJSON)
+	handling.tracked = mustTrackAnswer(r, path, resp.StatusCode)
 	return handling
 }
 

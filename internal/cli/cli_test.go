@@ -278,7 +278,7 @@ func TestResolveRackStatusFallsBackToEnv(t *testing.T) {
 
 	status, err := ResolveRackStatus(time.Now())
 	require.NoError(t, err)
-	assert.Equal(t, "Using RACK_GATEWAY_API_TOKEN from environment", status.Rack)
+	assert.Equal(t, "Using an API token with RACK_GATEWAY_URL", status.Rack)
 	assert.Equal(t, "https://env-gateway.example.com", status.GatewayURL)
 	assert.Len(t, status.StatusLines, 0)
 }

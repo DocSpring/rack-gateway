@@ -3,6 +3,7 @@
 package webauthn
 
 import (
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"os"
@@ -120,9 +121,9 @@ func (f assertionFlow) readInfo() (*libfido2.DeviceInfo, error) {
 	return info, nil
 }
 
-// filterCredentials narrows the allow list to the credentials this key holds, and reports early when it holds
-// none of them. Listing credentials needs the key's PIN. Without a PIN, or when the key can't list these
-// credentials, the key gets the whole allow list and finds its credential itself.
+// filterCredentials narrows the allow list to the credentials this key lists. Listing credentials needs the key's
+// PIN. Without a PIN, when the key can't list these credentials, or when none it lists is in the allow list, the
+// key gets the whole allow list and finds its credential itself.
 func (f assertionFlow) filterCredentials(rpID string, allowList [][]byte, pin string) ([][]byte, error) {
 	if pin == "" {
 		return allowList, nil
@@ -138,16 +139,28 @@ func (f assertionFlow) filterCredentials(rpID string, allowList [][]byte, pin st
 		return nil, fmt.Errorf("failed to list the security key's credentials: %w", err)
 	}
 	// Only discoverable credentials are listed. A non-discoverable one still works from the allow list.
-	if len(deviceCreds) == 0 {
+	filtered := matchingCredentials(allowList, deviceCreds)
+	if len(filtered) == 0 {
 		return allowList, nil
-	}
-
-	filtered, err := intersectCredentialLists(allowList, deviceCreds)
-	if err != nil {
-		return nil, err
 	}
 	fmt.Fprintf(os.Stderr, "Found %d matching credential(s) on this device\n", len(filtered))
 	return filtered, nil
+}
+
+// chooseKey returns the first of keys that holds a credential in allowList, or the first key when none says so.
+// It asks each key for an assertion without user presence, which a key answers without a touch, and fails with
+// "no credentials" when it holds none of them.
+func chooseKey(keys []securityKey, rpID string, allowList [][]byte) securityKey {
+	if len(keys) == 1 {
+		return keys[0]
+	}
+	probe := &libfido2.AssertionOpts{UP: libfido2.False}
+	for _, key := range keys {
+		if _, err := key.Assertion(rpID, make([]byte, sha256.Size), allowList, "", probe); err == nil {
+			return key
+		}
+	}
+	return keys[0]
 }
 
 // cannotListCredentials reports whether a failed listing just means the key gets the whole allow list: it has no
@@ -193,6 +206,10 @@ func pinError(err error) error {
 func assertionError(err error, pin string) error {
 	if pinErr := pinError(err); pinErr != nil {
 		return pinErr
+	}
+	if errors.Is(err, libfido2.ErrNoCredentials) {
+		return fmt.Errorf("this security key holds none of your registered credentials for this gateway (%w); "+
+			"use the key you registered", err)
 	}
 	if !errors.Is(err, libfido2.ErrUnsupportedOption) {
 		return fmt.Errorf("failed to get assertion: %w", err)

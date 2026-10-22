@@ -1,6 +1,7 @@
 package mfa
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
@@ -31,22 +32,17 @@ func (s *Service) backupCodesForEnrollment(user *db.User) ([]string, error) {
 	return s.GenerateBackupCodes(user.ID)
 }
 
-// finalizeEnrollment confirms the method and marks user as MFA enrolled. user is the record loaded before
-// enrollment. On a first enrollment every existing session loses its MFA-verified state: those sessions were
-// marked verified at login only because the user had no factor, and must now prove one. The caller re-verifies
-// the session that completed the enrollment.
-func (s *Service) finalizeEnrollment(user *db.User, methodID int64) error {
-	now := s.now()
-	if err := s.db.ConfirmMFAMethod(methodID, now); err != nil {
-		return err
+// finalizeEnrollment confirms the method (storing credential, for a security key) and marks the user MFA
+// enrolled, in one transaction. On a first enrollment every existing session loses its MFA-verified state: those
+// sessions were marked verified at login only because the user had no factor, and must now prove one. The caller
+// re-verifies the session that completed the enrollment. A method deleted meanwhile (a new enrollment started)
+// enrolls nothing.
+func (s *Service) finalizeEnrollment(userID, methodID int64, credential *db.WebAuthnCredential) error {
+	err := s.db.FinalizeMFAEnrollment(userID, methodID, s.now(), credential)
+	if errors.Is(err, db.ErrMFAMethodNotFound) {
+		return fmt.Errorf("the enrollment was replaced by a newer one; start again")
 	}
-	if err := s.db.SetUserMFAEnrolled(user.ID, true); err != nil {
-		return err
-	}
-	if user.MFAEnrolled {
-		return nil
-	}
-	return s.db.ClearSessionsMFAVerification(user.ID)
+	return err
 }
 
 // prepareEnrollment deletes unconfirmed methods to prevent clutter

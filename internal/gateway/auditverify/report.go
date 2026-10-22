@@ -11,6 +11,9 @@ import (
 // maxMessages caps how many failures (and warnings) are kept for the summary; all of them are counted.
 const maxMessages = 100
 
+// maxFailureKeys caps how many failure keys a report keeps (see FailureKeys).
+const maxFailureKeys = 1000
+
 // Report is the outcome of a verification run.
 type Report struct {
 	// Head is the end of the chain when the run started.
@@ -19,8 +22,11 @@ type Report struct {
 	EventsChecked int64
 	FirstChecked  int64
 	LastChecked   int64
-	// LegacyEvents were written before hash v2: only their previous_hash links are checked.
+	// LegacyEvents were written before hash v2: only their previous_hash links are checked. Their content can't be
+	// verified: a v1 event_hash can't be recomputed, so a v1 event whose content was changed (by someone able to get
+	// past the append-only trigger) still passes. LastLegacy is the last one checked.
 	LegacyEvents int64
+	LastLegacy   int64
 	// V2Events had their HMAC recomputed.
 	V2Events int64
 	// LegacyIndexGaps are jumps in legacy chain indexes, which the old sequence-based writer left after failed
@@ -44,6 +50,12 @@ type Report struct {
 	FailureCount int
 	Warnings     []string
 	WarningCount int
+	// StoppedBy is why the run stopped before it finished ("" when it finished): the report holds what it found
+	// until then.
+	StoppedBy string
+
+	// failureKeys identify the failures found (the first maxFailureKeys of them).
+	failureKeys []string
 }
 
 // OK reports whether no integrity failure was found.
@@ -52,10 +64,30 @@ func (r *Report) OK() bool {
 }
 
 func (r *Report) fail(format string, args ...interface{}) {
+	message := fmt.Sprintf(format, args...)
+	r.addFailure(message, message)
+}
+
+// failSteady records a failure whose message changes from run to run (an age, or the latest event's index) under
+// key, which doesn't: finding it again isn't a new failure.
+func (r *Report) failSteady(key, format string, args ...interface{}) {
+	r.addFailure(fmt.Sprintf(format, args...), key)
+}
+
+func (r *Report) addFailure(message, key string) {
 	r.FailureCount++
 	if len(r.Failures) < maxMessages {
-		r.Failures = append(r.Failures, fmt.Sprintf(format, args...))
+		r.Failures = append(r.Failures, message)
 	}
+	if len(r.failureKeys) < maxFailureKeys {
+		r.failureKeys = append(r.failureKeys, key)
+	}
+}
+
+// FailureKeys identifies the failures found, up to maxFailureKeys of them. A failure found again by a later run has
+// the same key, so a failure that wasn't found before stands out even when the count stays the same.
+func (r *Report) FailureKeys() []string {
+	return r.failureKeys
 }
 
 func (r *Report) warn(format string, args ...interface{}) {
@@ -75,6 +107,7 @@ func (r *Report) countEvent(row *db.AuditChainRow) {
 		r.V2Events++
 	} else {
 		r.LegacyEvents++
+		r.LastLegacy = row.ChainIndex
 	}
 }
 
@@ -85,9 +118,17 @@ func (r *Report) Write(w io.Writer) error {
 	r.writeAnchors(p)
 	p.messages("Warnings", r.WarningCount, r.Warnings)
 	p.messages("FAILURES", r.FailureCount, r.Failures)
-	if r.OK() {
+	switch {
+	case r.StoppedBy != "" && r.OK():
+		p.line("Result: INCOMPLETE (stopped before it finished: %s)", r.StoppedBy)
+	case r.StoppedBy != "":
+		p.line("Result: FAILED (%d integrity failures, and stopped before it finished: %s)", r.FailureCount,
+			r.StoppedBy)
+	case r.OK() && r.LegacyEvents > 0:
+		p.line("Result: OK, except that the content of %d legacy (v1) events can't be verified", r.LegacyEvents)
+	case r.OK():
 		p.line("Result: OK")
-	} else {
+	default:
 		p.line("Result: FAILED (%d integrity failures)", r.FailureCount)
 	}
 	return p.err
@@ -107,7 +148,8 @@ func (r *Report) writeChain(p *summaryPrinter) {
 		p.line("  hash v2 from event %d: %d events checked, HMAC recomputed", r.Head.HashV2From.Int64, r.V2Events)
 	}
 	if r.LegacyEvents > 0 {
-		p.line("  legacy (v1) events: %d checked, previous_hash links only (HMAC not recomputable)", r.LegacyEvents)
+		p.line("  legacy (v1) events: %d checked (up to event %d), previous_hash links only: their content is "+
+			"unverifiable (a v1 event_hash can't be recomputed)", r.LegacyEvents, r.LastLegacy)
 	}
 	if hasLegacyEvents(r.Head) {
 		p.line("  hash v2 start: %s", r.describeHashV2StartConfirmation())

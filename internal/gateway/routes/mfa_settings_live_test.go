@@ -4,8 +4,9 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
-	"github.com/DocSpring/rack-gateway/internal/gateway/db"
+	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
 	"github.com/DocSpring/rack-gateway/internal/gateway/settings"
 )
 
@@ -24,6 +25,22 @@ func TestUnenrolledWebSessionCantUseTheCLIProxy(t *testing.T) {
 	if !strings.Contains(w.Body.String(), "mfa_enrollment_required") {
 		t.Fatalf("rack-proxy: expected mfa_enrollment_required, got %s", w.Body.String())
 	}
+
+	// The refused rack request never reaches the proxy, so the enrollment check records it.
+	logs, err := e.database.GetAuditLogs(user.Email, time.Time{}, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var denials []string
+	for _, entry := range logs {
+		if entry.Status == audit.StatusDenied {
+			denials = append(denials, entry.Action+" "+entry.Details)
+		}
+	}
+	if len(denials) != 1 || !strings.HasPrefix(denials[0], "app.list ") ||
+		!strings.Contains(denials[0], "mfa_enrollment_required") {
+		t.Fatalf("expected the refused app.list to be recorded, got %q", denials)
+	}
 }
 
 // MFA settings are read for each request, so a change applies without a restart.
@@ -38,7 +55,7 @@ func TestMFASettingsChangesApplyAtOnce(t *testing.T) {
 	assertStatus(t, e.do("GET", "/api/v1/users", "", s.headers), http.StatusForbidden, "enrollment required")
 
 	svc := settings.NewService(e.database)
-	if err := svc.SetMFASettings(&db.MFASettings{RequireAllUsers: false}, nil); err != nil {
+	if err := svc.SetGlobalSettings(map[string]interface{}{settings.KeyMFARequireAllUsers: false}, nil); err != nil {
 		t.Fatal(err)
 	}
 	assertStatus(t, e.do("GET", "/api/v1/users", "", s.headers), http.StatusOK, "MFA no longer required")

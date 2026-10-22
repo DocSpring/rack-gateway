@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/stretchr/testify/require"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
@@ -46,7 +47,7 @@ func (f *fakeOAuth) StartWebLogin() (string, string) {
 	return url, state
 }
 
-func (f *fakeOAuth) CompleteLogin(_, _, _ string) (*auth.LoginResponse, error) {
+func (f *fakeOAuth) CompleteLogin(_ context.Context, _, _, _ string) (*auth.LoginResponse, error) {
 	if f.completeErr != nil {
 		return nil, f.completeErr
 	}
@@ -241,12 +242,12 @@ func TestWebLogoutClearsCookie(t *testing.T) {
 		auditLogger,
 	)
 
-	c, w := newTestContext(http.MethodGet, "/api/v1/auth/web/logout")
+	c, w := newTestContext(http.MethodPost, "/api/v1/auth/web/logout")
 	handler.WebLogout(c)
 
 	res := w.Result()
-	if res.StatusCode != http.StatusFound {
-		t.Fatalf("expected redirect status, got %d", res.StatusCode)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", res.StatusCode)
 	}
 	cookie := findCookie(res, "session_token")
 	if cookie == nil {
@@ -258,6 +259,40 @@ func TestWebLogoutClearsCookie(t *testing.T) {
 	if cookie.MaxAge >= 0 && !cookie.Expires.Before(time.Now()) {
 		t.Fatalf("expected cookie to expire immediately")
 	}
+}
+
+// Logging out a live session takes its CSRF token, so another site can't sign the user out, and the session is
+// revoked before the cookie is cleared.
+func TestWebLogoutNeedsTheSessionsCSRFToken(t *testing.T) {
+	database := dbtest.NewDatabase(t)
+	sessionManager := auth.NewSessionManager(database, "test-secret", &auth.StaticTTLProvider{TTL: time.Hour})
+	handler := NewAuthHandler(&fakeOAuth{}, database, &config.Config{DevMode: true}, sessionManager, nil, nil, nil,
+		audit.NewLogger(database))
+	user, err := database.CreateUser("logout@example.com", "Logout", []string{"viewer"})
+	require.NoError(t, err)
+	token, _, err := sessionManager.CreateSession(user, auth.SessionMetadata{Channel: "web"})
+	require.NoError(t, err)
+	logout := func(csrf string) *httptest.ResponseRecorder {
+		c, w := newTestContext(http.MethodPost, "/api/v1/auth/web/logout")
+		c.Request.Header.Set("Cookie", "session_token="+token)
+		c.Request.Header.Set("X-CSRF-Token", csrf)
+		handler.WebLogout(c)
+		return w
+	}
+
+	w := logout("forged")
+	require.Equal(t, http.StatusForbidden, w.Code)
+	require.Nil(t, findCookie(w.Result(), "session_token"))
+	_, err = sessionManager.ValidateSession(token, "", "")
+	require.NoError(t, err, "the session is still live")
+
+	csrf, err := sessionManager.DeriveCSRFToken(token)
+	require.NoError(t, err)
+	w = logout(csrf)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	require.NotNil(t, findCookie(w.Result(), "session_token"))
+	_, err = sessionManager.ValidateSession(token, "", "")
+	require.Error(t, err, "the session is revoked")
 }
 
 func TestWebLoginStartSetsStateCookie(t *testing.T) {

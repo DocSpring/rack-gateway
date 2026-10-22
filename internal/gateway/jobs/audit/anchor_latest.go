@@ -4,9 +4,10 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
-	"strings"
+	"path"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -16,6 +17,33 @@ import (
 // recentAnchorWindow is how far back the anchor writer first looks for the previous anchor. Anchors are
 // written about hourly, so it is almost always there; otherwise the whole chain prefix is listed.
 const recentAnchorWindow = 35 * 24 * time.Hour
+
+// MaxAnchorSize is the most an anchor's body can hold. An anchor is a few hundred bytes of JSON, so a bigger object
+// under the chain's prefix isn't one the writer wrote, and it's refused without reading it all.
+const MaxAnchorSize = 16 << 10
+
+// ErrAnchorTooLarge means an object stored as an anchor is bigger than MaxAnchorSize.
+var ErrAnchorTooLarge = errors.New("larger than an anchor can be (16 KiB)")
+
+// ReadAnchorBody reads an anchor's body, and refuses one bigger than MaxAnchorSize (ErrAnchorTooLarge) after
+// reading no more than that.
+func ReadAnchorBody(body io.Reader) ([]byte, error) {
+	data, err := io.ReadAll(io.LimitReader(body, MaxAnchorSize+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(data) > MaxAnchorSize {
+		return nil, ErrAnchorTooLarge
+	}
+	return data, nil
+}
+
+// isAnchorKey reports whether key is one AnchorKey writes for the chain. Nothing else under the prefix is an
+// anchor, so the writer never chains to it.
+func isAnchorKey(chainID, key string) bool {
+	ts, err := time.Parse("anchor-20060102T15.json", path.Base(key))
+	return err == nil && AnchorKey(chainID, ts) == key
+}
 
 // anchorObject is a listed anchor.
 type anchorObject struct {
@@ -66,7 +94,7 @@ func (w *AnchorWriterWorker) readAnchor(ctx context.Context, key string) ([]byte
 		return nil, fmt.Errorf("failed to get anchor %s: %w", key, err)
 	}
 	defer func() { _ = output.Body.Close() }()
-	body, err := io.ReadAll(output.Body)
+	body, err := ReadAnchorBody(output.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read anchor %s: %w", key, err)
 	}
@@ -92,7 +120,7 @@ func (w *AnchorWriterWorker) findLatestAnchor(ctx context.Context, startAfter st
 		}
 		for _, obj := range page.Contents {
 			key := aws.ToString(obj.Key)
-			if !strings.HasSuffix(key, ".json") {
+			if !isAnchorKey(w.chainID, key) {
 				continue
 			}
 			candidate := anchorObject{key: key, lastModified: aws.ToTime(obj.LastModified)}

@@ -2,7 +2,6 @@ package cli
 
 import (
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -34,7 +33,7 @@ func runTestAuth(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	if os.Getenv("RACK_GATEWAY_API_TOKEN") != "" {
+	if apiTokenOverride() != "" {
 		return testAPITokenAuth(rack, determineTestMode(args))
 	}
 
@@ -61,10 +60,11 @@ func runTestAuth(cmd *cobra.Command, args []string) error {
 // endpoint is only for people, so the MFA test modes need a logged-in user instead.
 func testAPITokenAuth(rack, testMode string) error {
 	if testMode != "basic" {
-		return fmt.Errorf("API tokens have no MFA; unset RACK_GATEWAY_API_TOKEN to test MFA as a logged-in user")
+		return fmt.Errorf("API tokens have no MFA; " +
+			"drop --api-token and unset RACK_GATEWAY_API_TOKEN to test MFA as a logged-in user")
 	}
 
-	gatewayURL, bearer, err := gatewayAuthInfo(rack)
+	gatewayURL, bearer, err := LoadRackAuth(rack)
 	if err != nil {
 		return err
 	}
@@ -83,7 +83,7 @@ func testAPITokenAuth(rack, testMode string) error {
 }
 
 func loadAuthStatus(rack string) (string, string, *MFAStatusResponse, error) {
-	gatewayURL, bearer, err := gatewayAuthInfo(rack)
+	gatewayURL, bearer, err := LoadRackAuth(rack)
 	if err != nil {
 		return "", "", nil, err
 	}

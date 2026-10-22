@@ -47,13 +47,14 @@ func (s *Service) StartYubiOTPEnrollment(user *db.User, yubiOTP string) (*StartY
 		return nil, err
 	}
 
-	// Auto-confirm since we validated the OTP
-	if err := s.finalizeEnrollment(user, method.ID); err != nil {
+	// Store the backup codes before the key is enrolled: when they can't be stored, nothing is enrolled.
+	backupCodes, err := s.backupCodesForEnrollment(user)
+	if err != nil {
 		return nil, err
 	}
 
-	backupCodes, err := s.backupCodesForEnrollment(user)
-	if err != nil {
+	// Auto-confirm since we validated the OTP
+	if err := s.finalizeEnrollment(user.ID, method.ID, nil); err != nil {
 		return nil, err
 	}
 

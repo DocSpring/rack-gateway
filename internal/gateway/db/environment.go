@@ -1,13 +1,28 @@
 package db
 
-import "database/sql"
+import (
+	"database/sql"
+	"errors"
 
-// CurrentEnvironment returns the environment string stored in the metadata table, if present.
+	"github.com/jackc/pgx/v5/pgconn"
+)
+
+// EnvironmentName is the environment marker for a development (isDev) or production database.
+func EnvironmentName(isDev bool) string {
+	if isDev {
+		return "development"
+	}
+	return "production"
+}
+
+// CurrentEnvironment returns the environment string stored in the metadata table, or "" when there is none (also
+// in a database that hasn't been migrated yet).
 func (d *Database) CurrentEnvironment() (string, error) {
 	row := d.queryRow(`SELECT environment FROM rgw_internal_metadata WHERE id = TRUE`)
 	var env sql.NullString
 	if err := row.Scan(&env); err != nil {
-		if err == sql.ErrNoRows {
+		var pgErr *pgconn.PgError
+		if errors.Is(err, sql.ErrNoRows) || (errors.As(err, &pgErr) && pgErr.Code == "42P01") {
 			return "", nil
 		}
 		return "", err
@@ -20,10 +35,7 @@ func (d *Database) CurrentEnvironment() (string, error) {
 
 // SetEnvironment upserts the current environment marker (development/production).
 func (d *Database) SetEnvironment(isDev bool) error {
-	env := "production"
-	if isDev {
-		env = "development"
-	}
+	env := EnvironmentName(isDev)
 	_, err := d.exec(`
 		INSERT INTO rgw_internal_metadata (id, environment, updated_at)
 		VALUES (TRUE, ?, NOW())

@@ -2,6 +2,7 @@ package db
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 )
@@ -98,6 +99,10 @@ func (d *Database) BindCLILoginBrowser(state, bindingHash, email, name string) (
 	return rows == 1, nil
 }
 
+// ErrCLILoginEnded is returned when a CLI login's MFA result is recorded after the login expired, failed or was
+// canceled, or before a browser was bound to it. A failed or canceled login stays that way.
+var ErrCLILoginEnded = errors.New("the CLI login has ended")
+
 // MarkCLILoginVerified records that the CLI login verified a factor (methodID, when known).
 func (d *Database) MarkCLILoginVerified(state string, methodID *int64) error {
 	return d.markCLILoginMFA(state, methodID, false)
@@ -109,19 +114,18 @@ func (d *Database) MarkCLILoginExempt(state string) error {
 }
 
 func (d *Database) markCLILoginMFA(state string, methodID *int64, exempt bool) error {
-	_, err := d.exec(`
+	res, err := d.exec(`
         UPDATE cli_login_states
         SET mfa_verified_at = NOW(),
             mfa_exempt = ?,
             mfa_method_id = ?,
-            login_error = NULL,
             updated_at = NOW()
-        WHERE state = ?
-    `, exempt, nullableInt64(methodID), state)
+        WHERE state = ? AND login_error IS NULL AND browser_binding_hash IS NOT NULL AND `+cliLoginLive,
+		exempt, nullableInt64(methodID), state)
 	if err != nil {
 		return fmt.Errorf("failed to mark CLI login verified: %w", err)
 	}
-	return nil
+	return requireAffectedRow(res, ErrCLILoginEnded)
 }
 
 // MarkCLILoginEnrollmentRequired records that the user had no MFA factor when the login reached MFA,

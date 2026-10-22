@@ -32,17 +32,21 @@ func isBuildCreate(r *http.Request, pth string) bool {
 
 // uploadObjectURL is the URL the rack gives an archive uploaded to pth (/apps/{app}/objects/tmp/{name}).
 func uploadObjectURL(pth string) string {
-	name := pth[strings.LastIndex(pth, "/")+1:]
-	return fmt.Sprintf("object://%s/tmp/%s", extractAppFromPath(pth), name)
+	return fmt.Sprintf("object://%s/%s", extractAppFromPath(pth), uploadObjectKey(pth))
+}
+
+// uploadObjectKey is the key of an archive uploaded to pth (/apps/{app}/objects/tmp/{name}).
+func uploadObjectKey(pth string) string {
+	return "tmp/" + pth[strings.LastIndex(pth, "/")+1:]
 }
 
 func hasApproval(tracker *deployApprovalTracker) bool {
 	return tracker != nil && tracker.request != nil
 }
 
-// claimDeployApprovalStep claims the approval step of a request that's about to be forwarded. It also refuses an
-// upload, from anyone, to an object that holds an approval's archive: the rack would overwrite it, and the build
-// would then use an archive the gateway never checked.
+// claimDeployApprovalStep claims the approval step of a request that's about to be forwarded. Every upload also
+// claims its object key, which is never released (db.ClaimObjectUpload): the rack would overwrite an object uploaded
+// again, and a build would then use an archive the gateway never checked.
 func (h *Handler) claimDeployApprovalStep(r *http.Request, pth string, tracker *deployApprovalTracker) error {
 	if h.database == nil {
 		return nil
@@ -59,17 +63,20 @@ func (h *Handler) claimDeployApprovalStep(r *http.Request, pth string, tracker *
 
 func (h *Handler) claimObjectUpload(pth string, tracker *deployApprovalTracker) error {
 	objectURL := uploadObjectURL(pth)
-	bound, err := h.database.DeployApprovalObjectBound(objectURL)
+	claimed, err := h.database.ClaimObjectUpload(extractAppFromPath(pth), uploadObjectKey(pth))
 	if err != nil {
 		return err
 	}
-	if bound {
-		return objectBoundError(objectURL)
+	if !claimed {
+		return &deployApprovalError{
+			status:  http.StatusConflict,
+			message: fmt.Sprintf("%s has already been uploaded: upload the archive to a new key", objectURL),
+		}
 	}
 	if !hasApproval(tracker) {
 		return nil
 	}
-	claimed, err := h.database.ClaimDeployApprovalObjectUpload(tracker.request.ID, objectURL)
+	claimed, err = h.database.ClaimDeployApprovalObjectUpload(tracker.request.ID, objectURL)
 	if errors.Is(err, db.ErrDeployApprovalObjectBound) {
 		return objectBoundError(objectURL)
 	}
@@ -150,10 +157,10 @@ func (h *Handler) releaseDeployApprovalClaims(r *http.Request, pth string, statu
 }
 
 // promoteMayHaveApplied reports whether the rack may have applied a promote. The rack keeps applying a promote the
-// gateway gave up on, so a retry would run a second promote alongside it; such a promote keeps its claim until the
-// claim lapses. Only a promote that certainly didn't apply releases it: the rack answered with an error status, or
-// the request never reached the rack. Any other failure, such as a timeout or a response body that broke off after
-// a 2xx status (which reports no status), may have applied.
+// gateway gave up on, so a retry would run a second promote alongside it; such a promote keeps its claim, and CI
+// needs a new approval. Only a promote that certainly didn't apply releases it: the rack answered with an error
+// status, or the request never reached the rack. Any other failure, such as a timeout or a response body that broke
+// off after a 2xx status (which reports no status), may have applied.
 func promoteMayHaveApplied(statusCode int, forwardErr error) bool {
 	if statusCode >= 300 {
 		return false
@@ -161,9 +168,13 @@ func promoteMayHaveApplied(statusCode int, forwardErr error) bool {
 	return forwardErr == nil || !neverReachedRack(forwardErr)
 }
 
-// neverReachedRack reports whether a forwarding error happened before the request was sent: the connection or its
-// TLS handshake (the rack's certificate didn't match the pinned one) failed, or the gateway refused the body.
+// neverReachedRack reports whether a forwarding error happened before the request was sent: the gateway refused
+// the request or couldn't build it (requestNotSentError), or the connection or its TLS handshake (the rack's
+// certificate didn't match the pinned one) failed.
 func neverReachedRack(err error) bool {
+	if errors.As(err, new(*requestNotSentError)) {
+		return true
+	}
 	var opErr *net.OpError
 	if errors.As(err, &opErr) && opErr.Op == "dial" {
 		return true

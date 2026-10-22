@@ -334,8 +334,9 @@ builds, runs the migrations against the new release, then promotes it (plain `co
 
 ## CloudWatch Alerts
 
-On Convox the request log goes to CloudWatch Logs (retention: `LOG_RETENTION_DAYS` in `convox.yml`). Denied
-requests can feed a metric filter:
+On Convox the request log goes to CloudWatch Logs (retention: `LOG_RETENTION_DAYS` in `convox.yml`). Refused
+requests (401, 403 or 429, including failed sign-ins) have `rbac_decision` `deny`, so they can feed a metric
+filter:
 
 ```bash
 aws logs put-metric-filter \

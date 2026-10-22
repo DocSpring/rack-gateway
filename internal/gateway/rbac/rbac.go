@@ -17,8 +17,6 @@ type Database interface {
 	GetUser(email string) (*db.User, error)
 	ListUsers() ([]*db.User, error)
 	CreateUser(email, name string, roles []string) (*db.User, error)
-	UpdateUserRoles(email string, roles []string) error
-	UpdateUserName(email, name string) error
 	DeleteUser(email string) error
 }
 
@@ -192,34 +190,10 @@ func (m *DBManager) GetUsers() (map[string]*UserConfig, error) {
 	return result, nil
 }
 
-// SaveUser saves or updates a user in the database
-func (m *DBManager) SaveUser(email string, user *UserConfig) error {
-	existing, err := m.db.GetUser(email)
-	if err != nil {
-		return fmt.Errorf("failed to check existing user: %w", err)
-	}
-	if existing != nil {
-		return m.updateExistingUser(email, user, existing)
-	}
-	return m.createNewUser(email, user)
-}
-
-func (m *DBManager) updateExistingUser(email string, user *UserConfig, existing *db.User) error {
-	trimmedName := strings.TrimSpace(user.Name)
-	if trimmedName != "" && trimmedName != existing.Name {
-		if err := m.db.UpdateUserName(email, trimmedName); err != nil {
-			return fmt.Errorf("failed to update user name: %w", err)
-		}
-	}
-	if err := m.db.UpdateUserRoles(email, user.Roles); err != nil {
-		return fmt.Errorf("failed to update user: %w", err)
-	}
-	return nil
-}
-
-func (m *DBManager) createNewUser(email string, user *UserConfig) error {
-	name := strings.TrimSpace(user.Name)
-	if _, err := m.db.CreateUser(email, name, user.Roles); err != nil {
+// CreateUser creates a user. It never changes an existing one: an email already in use returns db.ErrUserExists.
+// Changes to a user go through db.UpdateUser.
+func (m *DBManager) CreateUser(email string, user *UserConfig) error {
+	if _, err := m.db.CreateUser(email, strings.TrimSpace(user.Name), user.Roles); err != nil {
 		return fmt.Errorf("failed to create user: %w", err)
 	}
 	return nil

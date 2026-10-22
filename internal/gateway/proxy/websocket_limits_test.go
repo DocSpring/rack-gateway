@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"bytes"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -24,8 +25,16 @@ func websocketURL(httpURL string) string {
 }
 
 // startWebSocketProxy starts a rack that runs rackSide on each websocket connection, and a gateway that proxies each
-// client connection to it. It returns the gateway's websocket URL.
+// client connection to it as an exec. It returns the gateway's websocket URL.
 func startWebSocketProxy(t *testing.T, keepalive clientKeepalive, rackSide func(*websocket.Conn)) string {
+	t.Helper()
+	return startWebSocketSession(t, sessionOptions{
+		keepalive: keepalive, writeWait: messageWriteWait, clientInput: true,
+	}, rackSide)
+}
+
+// startWebSocketSession is startWebSocketProxy with the session's options.
+func startWebSocketSession(t *testing.T, opts sessionOptions, rackSide func(*websocket.Conn)) string {
 	t.Helper()
 	var upgrader websocket.Upgrader
 	rack := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -50,7 +59,7 @@ func startWebSocketProxy(t *testing.T, keepalive clientKeepalive, rackSide func(
 			return
 		}
 		defer func() { _ = client.Close() }()
-		proxyWebSocketMessages(client, upstream, keepalive)
+		proxyWebSocketMessages(client, upstream, opts)
 	}))
 	t.Cleanup(gateway.Close)
 	return websocketURL(gateway.URL)
@@ -220,4 +229,30 @@ func TestWebSocketProxyRefusesASessionOverTheCallersCap(t *testing.T) {
 	require.Equal(t, http.StatusTooManyRequests, rr.Code)
 	require.Contains(t, rr.Body.String(), "too many open exec and log sessions")
 	require.False(t, dialed.Load(), "a refused session must not reach the rack")
+}
+
+// An exec the rack refuses never started: the gateway passes the rack's answer on and records it as the result,
+// with no process.exec.start entry.
+func TestARefusedExecHandshakeIsntRecordedAsStarted(t *testing.T) {
+	gateway, database := serveProxyAsAdminWithDatabase(t, func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "process not found", http.StatusNotFound)
+	})
+
+	header := http.Header{"Command": []string{"ls"}}
+	_, resp, err := websocket.DefaultDialer.Dial(websocketURL(gateway)+"/apps/app/processes/p1/exec", header)
+	require.Error(t, err)
+	require.NotNil(t, resp)
+	_ = resp.Body.Close()
+	require.Equal(t, http.StatusNotFound, resp.StatusCode)
+
+	logs, err := database.GetAuditLogs("admin@example.com", time.Time{}, 20)
+	require.NoError(t, err)
+	var results []string
+	for _, entry := range logs {
+		require.NotEqual(t, "process.exec.start", entry.Action)
+		if entry.Status != "attempted" {
+			results = append(results, fmt.Sprintf("%s %s %d", entry.Action, entry.Status, entry.HTTPStatus))
+		}
+	}
+	require.Equal(t, []string{"process.exec failed 404"}, results)
 }

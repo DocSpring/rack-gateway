@@ -205,7 +205,8 @@ rack-gateway env [command] -a <app>
 ```
 
 **Subcommands:**
-- `rack-gateway env -a <app>` - List environment variables (secret and protected values masked)
+- `rack-gateway env -a <app>` - List environment variables (secret and protected values, and values with
+  credentials in them, masked)
 - `rack-gateway env get VAR -a <app>` - Show one variable. `--unmask` shows a secret value (needs `convox:secret:read`
   and a step-up)
 - `rack-gateway env set VAR=value -a <app>` - Set variables

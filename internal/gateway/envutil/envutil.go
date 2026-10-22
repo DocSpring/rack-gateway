@@ -96,6 +96,8 @@ type EnvDiff struct {
 	Secret bool
 	// Protected marks a change to one of the app's protected env vars. Its values are never logged.
 	Protected bool
+	// Removed marks the key's removal. A key set to an empty value is still set.
+	Removed bool
 }
 
 // MergeOptions controls how MergeEnv applies updates.
@@ -172,7 +174,7 @@ func processRemovals(
 		if secret && !opts.AllowSecretUpdates {
 			return nil, ErrSecretPermission
 		}
-		diffs = append(diffs, EnvDiff{Key: key, OldVal: oldVal, NewVal: "", Secret: secret})
+		diffs = append(diffs, EnvDiff{Key: key, OldVal: oldVal, NewVal: "", Secret: secret, Removed: true})
 		removedOld[key] = oldVal
 		delete(merged, key)
 	}
@@ -227,7 +229,9 @@ func processSetOperation(
 	secret := opts.IsSecretKey != nil && opts.IsSecretKey(key)
 	oldVal, hadOld := getOldValue(key, base, removedOld)
 
-	if secret && value == MaskedSecret {
+	// The mask keeps the current value: it's what the editor shows for a secret, and for a value with credentials in
+	// it (MaskedForReaders), which isn't a secret by name.
+	if value == MaskedSecret {
 		if !hadOld {
 			return nil, ErrMaskedSecretWithoutBase
 		}
@@ -310,7 +314,7 @@ func CreateReleaseWithEnv(
 	req, err := http.NewRequestWithContext(
 		ctx,
 		http.MethodPost,
-		fmt.Sprintf("%s/apps/%s/releases", base, app),
+		fmt.Sprintf("%s/apps/%s/releases", base, url.PathEscape(app)),
 		strings.NewReader(vals.Encode()),
 	)
 	if err != nil {
@@ -348,61 +352,65 @@ func CreateReleaseWithEnv(
 	return release.ID, nil
 }
 
-// IsSecretKey returns true if key looks secret-like (by suffix/pattern) or is in explicit list.
-func IsSecretKey(key string, explicit []string) bool {
-	upper := strings.ToUpper(key)
-	if strings.Contains(upper, "SECRET") || strings.Contains(upper, "TOKEN") {
-		return true
-	}
-	if strings.HasSuffix(upper, "_KEY") || strings.HasSuffix(upper, "_KEY_ID") {
-		return true
-	}
-	for _, k := range explicit {
-		if strings.EqualFold(strings.TrimSpace(k), key) {
-			return true
-		}
-	}
-	return false
-}
-
-// FetchLatestEnvMap pulls the latest release then returns its env as a map.
-func FetchLatestEnvMap(rack config.RackConfig, app string, tlsConfig *tls.Config) (map[string]string, error) {
+// FetchLatestEnvMap pulls the latest release then returns its env as a map. An app without a release has an empty
+// env. Anything else the rack answers that isn't a release (an error, a release without an ID or an env) is an
+// error, never an empty env: callers write the whole env back as a new release, so an empty base would drop every
+// variable the change didn't name.
+func FetchLatestEnvMap(
+	ctx context.Context,
+	rack config.RackConfig,
+	app string,
+	tlsConfig *tls.Config,
+) (map[string]string, error) {
 	base := strings.TrimRight(rack.URL, "/")
-	// Disable TLS verification for Convox API (internal/self-signed certs)
 	client := httpclient.NewRackClient(10*time.Second, tlsConfig)
 	authHeader := "Basic " + base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", rack.Username, rack.APIKey)))
-	// List releases
-	req1, _ := http.NewRequest(http.MethodGet, fmt.Sprintf("%s/apps/%s/releases?limit=1", base, app), nil)
-	req1.Header.Set("Authorization", authHeader)
-	resp1, err := client.Do(req1)
-	if err != nil {
-		return nil, err
+	var list []struct {
+		ID string `json:"id"`
 	}
-	defer func() { _ = resp1.Body.Close() }()
-	var list []map[string]interface{}
-	if err := json.NewDecoder(resp1.Body).Decode(&list); err != nil {
-		return nil, err
+	listURL := fmt.Sprintf("%s/apps/%s/releases?limit=1", base, url.PathEscape(app))
+	if err := getRackJSON(ctx, client, listURL, authHeader, &list); err != nil {
+		return nil, fmt.Errorf("failed to list releases: %w", err)
 	}
 	if len(list) == 0 {
 		return map[string]string{}, nil
 	}
-	id, _ := list[0]["id"].(string)
-	if id == "" {
-		return map[string]string{}, nil
+	if list[0].ID == "" {
+		return nil, errors.New("the rack's latest release has no ID")
 	}
-	// Get release
-	req2, _ := http.NewRequest(http.MethodGet, fmt.Sprintf("%s/apps/%s/releases/%s", base, app, id), nil)
-	req2.Header.Set("Authorization", authHeader)
-	resp2, err := client.Do(req2)
+	var rel struct {
+		Env *string `json:"env"`
+	}
+	releaseURL := fmt.Sprintf("%s/apps/%s/releases/%s", base, url.PathEscape(app), url.PathEscape(list[0].ID))
+	if err := getRackJSON(ctx, client, releaseURL, authHeader, &rel); err != nil {
+		return nil, fmt.Errorf("failed to get release %s: %w", list[0].ID, err)
+	}
+	if rel.Env == nil {
+		return nil, fmt.Errorf("release %s has no env", list[0].ID)
+	}
+	return parseEnvLines(*rel.Env), nil
+}
+
+// getRackJSON GETs a rack API URL and decodes its JSON answer into out. A non-2xx answer is an error.
+func getRackJSON(ctx context.Context, client *http.Client, rackURL, authHeader string, out interface{}) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rackURL, http.NoBody)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	defer func() { _ = resp2.Body.Close() }()
-	var rel map[string]interface{}
-	if err := json.NewDecoder(resp2.Body).Decode(&rel); err != nil {
-		return nil, err
+	req.Header.Set("Authorization", authHeader)
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
 	}
-	envStr, _ := rel["env"].(string)
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("the rack answered %s", resp.Status)
+	}
+	return json.NewDecoder(resp.Body).Decode(out)
+}
+
+// parseEnvLines parses a release's env, newline-separated KEY=VALUE lines.
+func parseEnvLines(envStr string) map[string]string {
 	out := map[string]string{}
 	for _, ln := range strings.Split(envStr, "\n") {
 		if strings.TrimSpace(ln) == "" {
@@ -416,5 +424,5 @@ func FetchLatestEnvMap(rack config.RackConfig, app string, tlsConfig *tls.Config
 		}
 		out[k] = v
 	}
-	return out, nil
+	return out
 }

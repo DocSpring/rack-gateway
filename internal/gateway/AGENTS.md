@@ -27,6 +27,9 @@ OAuth 2.0 and session management:
   challenge, or skips it with a trusted device, is marked verified with `ExemptSessionFromMFAChallenge`, which
   opens none; so is an exempt CLI login (`cli_login_states.mfa_exempt`). Trusting a device doesn't restart the window.
   Adding an MFA method is `MFAStepUpOnceEnrolled`: free for a first factor, step-up once the user has one
+- **Inline MFA proofs** (`X-MFA-TOTP`, `X-MFA-WebAuthn`) are verified by the MFA checks, but what they change in the
+  session (a completed MFA challenge, a new step-up window) is saved only after the request's audit attempt is
+  written: `middleware.saveInlineMFA` in `AuditBeforeActing`, and `ProxyToRack` after `recordAttempt`
 
 Key files:
 
@@ -140,9 +143,9 @@ Structured logging:
   roles' grants) in one migration: the previous release keeps serving requests between `migrate` and the promote,
   and it refuses every request it can't record, the promote included. Add the new function alongside the old one,
   and drop the old one in a later release
-- Denials (gateway `Authorize`, proxy RBAC/approval/destructive refusals) go through `RecordDenial`: throttled per
-  principal + action per minute in memory (one gateway per rack). The request is refused either way; a denial that
-  can't be written is logged and sent to Sentry
+- Denials (gateway `Authorize`, proxy RBAC/approval/destructive refusals, unknown rack routes) go through
+  `RecordDenial`: throttled per principal + action + target (resource, method and path) per minute in memory (one
+  gateway per rack). The request is refused either way; a denial that can't be written is logged and sent to Sentry
 
 Key files:
 
@@ -170,8 +173,11 @@ Key files:
   with the command). Full check on start, while failing and daily; otherwise the events since the last passing run.
   What it has verified and alerted is in memory only (a database writer must not be able to skip checks or silence
   alerts); `audit_verification_status` is display-only (Audit Logs page). Failures go to Sentry every run and to
-  Slack as audit events: `audit_log.verification_failed` (first failure, more failures, daily reminder) and
-  `audit_log.verification_recovered` (passing again). A passing run records no event. Every run pings
+  Slack as audit events: `audit_log.verification_failed` (first failure, a failure the last alert didn't report,
+  daily reminder) and `audit_log.verification_recovered` (passing again). They're recorded with
+  `audit.Logger.LogAlert`, which also fails when the Slack notification can't be queued, so the next run sends the
+  alert again. A report's `FailureKeys` identify its failures; a failure whose message changes every run (an age,
+  the latest index) uses `failSteady` with a key that doesn't. A passing run records no event. Every run pings
   `AUDIT_VERIFY_HEARTBEAT_URL`, so a heartbeat monitor alerts when runs stop.
 - `heartbeat/`, `jobs/uptime/` - Heartbeat pings (https URLs from env vars, never logged: they carry the monitor's
   key). `UPTIME_HEARTBEAT_URL` is pinged on start and every `UPTIME_HEARTBEAT_INTERVAL_MINUTES` while the health
@@ -255,7 +261,7 @@ All configuration via environment variables. See `docs/src/content/docs/configur
 - `COLUMN_ENCRYPTION_KEY` - Key for encrypted columns (`mfa_methods.secret`, the Slack bot token); base64 of
   32 bytes, required in every mode (dev/test use the published key in `mise.toml`, refused against a
   production database). See `colcrypt/`. Read and write these columns only through the `db` package
-  (`CreateMFAMethod`, `CreateSlackIntegration`, the scan paths): it encrypts on write, decrypts on read and
+  (`CreateMFAMethod`, `ReplaceSlackIntegration`, the scan paths): it encrypts on write, decrypts on read and
   sets `SecretErr`/`BotTokenErr` instead of an empty secret when a value can't be decrypted. Test tooling
   that touches them directly uses `cmd/totp-gen encrypt` (shell) or `web/e2e/column-crypto.ts`
 - `GOOGLE_CLIENT_ID` - OAuth client ID

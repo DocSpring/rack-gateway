@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -16,6 +17,12 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 )
+
+// answerStoredObject answers an upload as the rack does once it has stored the object.
+func answerStoredObject(w http.ResponseWriter, objectURL string) {
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = fmt.Fprintf(w, `{"Url":%q}`, objectURL)
+}
 
 // uploadHead is how much of an archive the client sends before it waits for the rack to start reading.
 const uploadHead = 64 << 10
@@ -46,7 +53,7 @@ func TestArchiveUploadStreamsToTheRack(t *testing.T) {
 			contentLength: r.ContentLength,
 			chunked:       len(r.TransferEncoding) > 0,
 		}
-		_, _ = io.WriteString(w, `{"url":"object://app/tmp/source.tgz"}`)
+		answerStoredObject(w, "object://app/tmp/source.tgz")
 	})
 
 	body, writer := io.Pipe()
@@ -86,7 +93,7 @@ func TestOversizedRequestBodyIsRefused(t *testing.T) {
 		_, _ = io.WriteString(w, `{"id":"B1"}`)
 	})
 	t.Cleanup(cleanup)
-	require.NoError(t, mgr.SaveUser("admin@test.com", &rbac.UserConfig{Name: "Admin", Roles: []string{"admin"}}))
+	require.NoError(t, mgr.CreateUser("admin@test.com", &rbac.UserConfig{Name: "Admin", Roles: []string{"admin"}}))
 
 	cases := []struct {
 		name          string
@@ -198,7 +205,7 @@ func TestOversizedRackResponseIsRefused(t *testing.T) {
 		_, _ = io.WriteString(w, "["+strings.Repeat(" ", size-2)+"]")
 	})
 	t.Cleanup(cleanup)
-	require.NoError(t, mgr.SaveUser("admin@test.com", &rbac.UserConfig{Name: "Admin", Roles: []string{"admin"}}))
+	require.NoError(t, mgr.CreateUser("admin@test.com", &rbac.UserConfig{Name: "Admin", Roles: []string{"admin"}}))
 
 	rr := httptest.NewRecorder()
 	h.ProxyToRack(rr, withPath(requestAs(t, database, "admin@test.com"), http.MethodGet, "/apps/myapp/releases"))
@@ -226,7 +233,7 @@ func TestInterruptedResponseIsNotAppendedTo(t *testing.T) {
 		}
 	})
 	t.Cleanup(cleanup)
-	require.NoError(t, mgr.SaveUser("admin@test.com", &rbac.UserConfig{Name: "Admin", Roles: []string{"admin"}}))
+	require.NoError(t, mgr.CreateUser("admin@test.com", &rbac.UserConfig{Name: "Admin", Roles: []string{"admin"}}))
 
 	rr := httptest.NewRecorder()
 	h.ProxyToRack(rr, withPath(requestAs(t, database, "admin@test.com"), http.MethodGet, "/apps/myapp/builds/B1.tgz"))

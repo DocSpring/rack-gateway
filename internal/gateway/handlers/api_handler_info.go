@@ -1,9 +1,9 @@
 package handlers
 
 import (
-	"crypto/tls"
-	"encoding/base64"
 	"encoding/json"
+	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"sort"
@@ -238,19 +238,11 @@ func (h *APIHandler) GetCreatedBy(c *gin.Context) {
 		return
 	}
 
-	parts := strings.Split(idsParam, ",")
-	ids := make([]string, 0, len(parts))
-	seen := map[string]struct{}{}
-	for _, p := range parts {
-		p = strings.TrimSpace(p)
-		if p == "" {
-			continue
-		}
-		if _, ok := seen[p]; ok {
-			continue
-		}
-		seen[p] = struct{}{}
-		ids = append(ids, p)
+	ids, ok := parseCreatedByIDs(idsParam)
+	if !ok {
+		message := fmt.Sprintf("ids takes at most %d IDs of up to %d characters", maxCreatedByIDs, maxCreatedByIDLength)
+		c.JSON(http.StatusBadRequest, gin.H{"error": message})
+		return
 	}
 
 	if len(ids) == 0 {
@@ -265,6 +257,38 @@ func (h *APIHandler) GetCreatedBy(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, creators)
+}
+
+// The web UI asks for the creators of every release or build it lists, across all apps.
+const (
+	maxCreatedByIDs      = 1000
+	maxCreatedByIDLength = 128
+)
+
+// parseCreatedByIDs returns the distinct IDs in a comma-separated list, or false when there are too many or one is
+// too long.
+func parseCreatedByIDs(param string) ([]string, bool) {
+	if len(param) > maxCreatedByIDs*(maxCreatedByIDLength+1) {
+		return nil, false
+	}
+	parts := strings.Split(param, ",")
+	ids := make([]string, 0, len(parts))
+	seen := map[string]struct{}{}
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		if len(p) > maxCreatedByIDLength {
+			return nil, false
+		}
+		if _, dup := seen[p]; dup {
+			continue
+		}
+		seen[p] = struct{}{}
+		ids = append(ids, p)
+	}
+	return ids, len(ids) <= maxCreatedByIDs
 }
 
 func normalizeStringSlice(value interface{}) []string {
@@ -295,44 +319,25 @@ func normalizeStringSlice(value interface{}) []string {
 // @Security SessionCookie
 // @Router /rack [get]
 func (h *APIHandler) GetRackInfo(c *gin.Context) {
-	rackConfig, exists := h.config.Racks["default"]
-	if !exists {
-		rackConfig, exists = h.config.Racks["local"]
-		if !exists {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "no rack configured"})
-			return
-		}
+	rackConfig, tlsCfg, ok := h.acquireRackContext(c)
+	if !ok {
+		return
 	}
 
-	base := strings.TrimRight(rackConfig.URL, "/")
-	url := base + "/system"
-
-	req, err := http.NewRequest(http.MethodGet, url, http.NoBody)
+	req, err := http.NewRequestWithContext(
+		c.Request.Context(), http.MethodGet, strings.TrimRight(rackConfig.URL, "/")+"/system", http.NoBody,
+	)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create request"})
 		return
 	}
-
 	user := rackConfig.Username
 	if user == "" {
 		user = "convox"
 	}
-	authz := base64.StdEncoding.EncodeToString([]byte(user + ":" + rackConfig.APIKey))
-	req.Header.Set("Authorization", "Basic "+authz)
+	req.SetBasicAuth(user, rackConfig.APIKey)
 
-	var tlsCfg *tls.Config
-	if h.rackCertManager != nil {
-		cfg, err := h.rackCertManager.TLSConfig(c.Request.Context())
-		if err != nil {
-			log.Printf(`{"level":"error","event":"rack_tls_config_error","message":%q}`, err.Error())
-			c.JSON(http.StatusBadGateway, gin.H{"error": "failed to prepare rack TLS"})
-			return
-		}
-		tlsCfg = cfg
-	}
-
-	client := httpclient.NewRackClient(10*time.Second, tlsCfg)
-	resp, err := client.Do(req)
+	resp, err := httpclient.NewRackClient(10*time.Second, tlsCfg).Do(req)
 	if err != nil {
 		if fpErr, ok := rackcert.AsFingerprintMismatch(err); ok {
 			logFmt := `{"level":"error","event":"rack_tls_verification_failed",` +
@@ -346,11 +351,22 @@ func (h *APIHandler) GetRackInfo(c *gin.Context) {
 	}
 	defer func() { _ = resp.Body.Close() }()
 
+	// A rack error (a 401 for a wrong API key, a 503 while the rack updates) means the gateway has no rack
+	// information to give, even when its body is JSON.
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		gtwlog.Warnf("rack info: the rack answered %s", resp.Status)
+		c.JSON(http.StatusBadGateway, gin.H{"error": fmt.Sprintf("the rack answered %d", resp.StatusCode)})
+		return
+	}
+
 	var rackInfo map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&rackInfo); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to decode rack info"})
+	if err := json.NewDecoder(io.LimitReader(resp.Body, maxRackInfoBytes)).Decode(&rackInfo); err != nil {
+		c.JSON(http.StatusBadGateway, gin.H{"error": "failed to decode rack info"})
 		return
 	}
 
 	c.JSON(http.StatusOK, rackInfo)
 }
+
+// maxRackInfoBytes caps the rack's /system answer the gateway reads; it's a few KB.
+const maxRackInfoBytes = 1 << 20

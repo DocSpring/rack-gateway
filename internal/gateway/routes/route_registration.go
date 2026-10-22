@@ -32,7 +32,7 @@ func registerAuthRoutes(api *gin.RouterGroup, cfg *Config, h *handlerSet) {
 	authGroup.GET("/auth/web/login", h.auth.WebLoginStart)
 	authGroup.HEAD("/auth/web/login", h.auth.WebLoginStart)
 	authGroup.GET("/auth/web/callback", h.auth.WebLoginCallback)
-	authGroup.GET("/auth/web/logout", h.auth.WebLogout)
+	authGroup.POST("/auth/web/logout", h.auth.WebLogout)
 	authGroup.POST("/auth/cli/logout", h.auth.CLILogout)
 }
 
@@ -227,7 +227,7 @@ func registerAdminRoutes(authenticated *gin.RouterGroup, cfg *Config, h *handler
 func registerCLIProxyRoutes(api *gin.RouterGroup, cfg *Config, h *handlerSet) {
 	convoxCLI := api.Group("/rack-proxy")
 	convoxCLI.Use(middleware.CLIOnly(cfg.AuthService))
-	convoxCLI.Use(middleware.RequireMFAEnrollment(cfg.Database, cfg.SettingsService))
+	convoxCLI.Use(middleware.RequireMFAEnrollment(cfg.Database, cfg.SettingsService, cfg.AuditLogger))
 	convoxCLI.GET("/*path", h.proxy.ProxyStripPrefix)
 	convoxCLI.POST("/*path", h.proxy.ProxyStripPrefix)
 	convoxCLI.PUT("/*path", h.proxy.ProxyStripPrefix)

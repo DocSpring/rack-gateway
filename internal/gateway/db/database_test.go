@@ -31,7 +31,7 @@ func TestDatabaseUserCRUD(t *testing.T) {
 	assert.Equal(t, user.Roles, retrieved.Roles)
 
 	// Update roles
-	err = db.UpdateUserRoles("test@example.com", []string{"admin"})
+	_, err = db.UpdateUser(user.ID, gwdb.UserUpdate{Roles: []string{"admin"}, RolesWere: user.Roles}, nil)
 	require.NoError(t, err)
 
 	// Verify update

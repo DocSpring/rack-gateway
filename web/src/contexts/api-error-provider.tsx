@@ -71,7 +71,9 @@ const handleUnauthorized = (error: InterceptorError): boolean => {
     }
   }
 
-  authService.logout()
+  authService.logout().catch(() => {
+    /* the session has already expired: nothing to revoke */
+  })
   return true
 }
 

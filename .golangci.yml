@@ -30,6 +30,8 @@ linters:
     - gosec
     - unconvert
     - nolintlint
+    # A scan loop that ends on a database error returns partial results unless it checks rows.Err()
+    - rowserrcheck
   exclusions:
     paths:
       - reference

@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"time"
 )
 
 // Each step of an approved deploy claims its approval before the gateway forwards it, so two concurrent requests
@@ -12,26 +11,8 @@ import (
 // one build, and a promote claims the approval for one promote at a time. A step the rack didn't complete releases
 // its claim so CI can retry it.
 
-// promoteClaimTimeout is how long a promote claim lasts. It only matters for a promote that may still be running
-// on the rack (the gateway timed out or stopped mid-promote): a promote the rack refused releases its claim.
-const promoteClaimTimeout = 15 * time.Minute
-
 // ErrDeployApprovalObjectBound is returned when an upload's object already holds a deploy approval request's archive.
 var ErrDeployApprovalObjectBound = errors.New("the object already holds a deploy approval request's archive")
-
-// DeployApprovalObjectBound reports whether objectURL holds (or is being uploaded as) any deploy approval request's
-// archive. The rack overwrites an object uploaded to the same key again, so the gateway refuses that: the archive
-// a build was checked against must be the one the rack builds.
-func (d *Database) DeployApprovalObjectBound(objectURL string) (bool, error) {
-	var bound bool
-	err := d.queryRow(
-		`SELECT EXISTS (SELECT 1 FROM deploy_approval_requests WHERE object_url = ?)`, objectURL,
-	).Scan(&bound)
-	if err != nil {
-		return false, fmt.Errorf("failed to check deploy approval archives: %w", err)
-	}
-	return bound, nil
-}
 
 // ClaimDeployApprovalObjectUpload binds objectURL to an approved, unexpired request that has no archive yet, before
 // the upload is forwarded. It reports whether this caller got the claim, and returns ErrDeployApprovalObjectBound
@@ -43,7 +24,7 @@ func (d *Database) ClaimDeployApprovalObjectUpload(id int64, objectURL string) (
            AND (approval_expires_at IS NULL OR approval_expires_at > NOW())`,
 		objectURL, id, DeployApprovalRequestStatusApproved,
 	)
-	if err != nil && isUniqueConstraintViolation(err) {
+	if isUniqueViolation(err) {
 		return false, ErrDeployApprovalObjectBound
 	}
 	return claimResult(res, err, "upload")
@@ -109,13 +90,18 @@ func (d *Database) ReleaseDeployApprovalBuild(id int64) error {
 
 // ClaimDeployApprovalPromote atomically claims an approved, unexpired request for one promote, so two concurrent
 // promotes with the same approval can't both be forwarded. It reports whether this caller got the claim.
+//
+// A claim never lapses. Only a promote that certainly didn't apply releases it (ReleaseDeployApprovalPromote): one
+// whose outcome the gateway couldn't see (it timed out, or stopped mid-promote) may still be running on the rack, or
+// may have succeeded without the approval being marked deployed. Either way the approval mustn't promote again; CI
+// needs a new approval.
 func (d *Database) ClaimDeployApprovalPromote(id int64) (bool, error) {
 	res, err := d.exec(
 		`UPDATE deploy_approval_requests SET promote_started_at = NOW(), updated_at = NOW()
          WHERE id = ? AND status = ?
            AND (approval_expires_at IS NULL OR approval_expires_at > NOW())
-           AND (promote_started_at IS NULL OR promote_started_at < NOW() - make_interval(mins => ?))`,
-		id, DeployApprovalRequestStatusApproved, int(promoteClaimTimeout/time.Minute),
+           AND promote_started_at IS NULL`,
+		id, DeployApprovalRequestStatusApproved,
 	)
 	return claimResult(res, err, "promote")
 }

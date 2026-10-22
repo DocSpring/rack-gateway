@@ -124,6 +124,7 @@ export function SessionTimeoutCard({ settings, disabled }: SessionTimeoutCardPro
               className="w-24"
               disabled={disabled || isSetByEnv(settings?.session_timeout_minutes)}
               id="session-timeout"
+              max={1440}
               min={1}
               onChange={(event) => {
                 const value = Number.parseInt(event.target.value, 10)

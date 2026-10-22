@@ -129,7 +129,7 @@ func (_ *APIHandler) fetchEnvMap(
 	rackConfig config.RackConfig,
 	tlsCfg *tls.Config,
 ) (map[string]string, bool) {
-	envMap, err := envutil.FetchLatestEnvMap(rackConfig, app, tlsCfg)
+	envMap, err := envutil.FetchLatestEnvMap(c.Request.Context(), rackConfig, app, tlsCfg)
 	if err != nil {
 		if fpErr, ok := rackcert.AsFingerprintMismatch(err); ok {
 			log.Printf(
@@ -159,7 +159,7 @@ func maskEnvForResponse(values map[string]string, secretKeys []string, canViewSe
 	response := make(map[string]string, len(values))
 	for key, value := range values {
 		masked := value
-		if !canViewSecrets && envutil.IsSecretKey(key, secretKeys) {
+		if !canViewSecrets && envutil.MaskedForReaders(key, value, secretKeys) {
 			masked = envutil.MaskedSecret
 		}
 		response[key] = masked

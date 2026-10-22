@@ -38,7 +38,7 @@ func TestApproveJobArgs_DoNotContainToken(t *testing.T) {
 
 // Test NewApproveJobWorker
 func TestNewApproveJobWorker(t *testing.T) {
-	worker := NewApproveJobWorker(nil, "token")
+	worker := NewApproveJobWorker(nil, "token", &fakeAuditLog{})
 	require.NotNil(t, worker)
 }
 
@@ -57,6 +57,14 @@ func (f fakeApprovals) GetDeployApprovalRequest(id int64) (*db.DeployApprovalReq
 	return nil, db.ErrDeployApprovalRequestNotFound
 }
 
+func (f fakeApprovals) WithDeployApprovalRequestHeld(id int64, fn func(*db.DeployApprovalRequest) error) error {
+	approval, err := f.GetDeployApprovalRequest(id)
+	if err != nil {
+		return err
+	}
+	return fn(approval)
+}
+
 // A retry can run hours after the job was queued; if the deploy approval was rejected or has expired by
 // then, the job is canceled before CircleCI is called.
 func TestApproveJobCancelledWhenApprovalNoLongerActive(t *testing.T) {
@@ -67,7 +75,7 @@ func TestApproveJobCancelledWhenApprovalNoLongerActive(t *testing.T) {
 		2: {PublicID: "expired", Status: db.DeployApprovalRequestStatusApproved, ApprovalExpiresAt: &past},
 		3: {PublicID: "deployed", Status: db.DeployApprovalRequestStatusDeployed, ApprovalExpiresAt: &future},
 	}
-	worker := NewApproveJobWorker(approvals, "token")
+	worker := NewApproveJobWorker(approvals, "token", &fakeAuditLog{})
 
 	for _, id := range []int64{1, 2, 3, 404, 0} {
 		job := &river.Job[ApproveJobArgs]{
@@ -83,7 +91,7 @@ func TestApproveJobCancelledWhenApprovalNoLongerActive(t *testing.T) {
 
 // Database errors are retried rather than canceling the job.
 func TestApproveJobRetriesWhenApprovalLookupFails(t *testing.T) {
-	worker := NewApproveJobWorker(failingApprovals{}, "token")
+	worker := NewApproveJobWorker(failingApprovals{}, "token", &fakeAuditLog{})
 	job := &river.Job[ApproveJobArgs]{JobRow: &rivertype.JobRow{}, Args: ApproveJobArgs{DeployApprovalRequestID: 1}}
 	err := worker.Work(context.Background(), job)
 	require.Error(t, err)
@@ -95,4 +103,8 @@ type failingApprovals struct{}
 
 func (failingApprovals) GetDeployApprovalRequest(int64) (*db.DeployApprovalRequest, error) {
 	return nil, errors.New("connection refused")
+}
+
+func (failingApprovals) WithDeployApprovalRequestHeld(int64, func(*db.DeployApprovalRequest) error) error {
+	return errors.New("connection refused")
 }

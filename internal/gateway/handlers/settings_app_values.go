@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	gtwlog "github.com/DocSpring/rack-gateway/internal/gateway/logging"
 	"github.com/DocSpring/rack-gateway/internal/gateway/settings"
 )
 
@@ -34,8 +35,8 @@ func (h *SettingsHandler) updateAppSettingValue(c *gin.Context, key string) {
 	}
 
 	ops := &appSettingsOps{service: h.settingsService}
-	if err := ops.setSetting(appName, key, value, uid); err != nil {
-		respondSettingSaveError(c, key, err)
+	if err := ops.setSettings(appName, map[string]interface{}{key: value}, uid); err != nil {
+		respondSettingSaveError(c, err)
 		return
 	}
 
@@ -51,7 +52,8 @@ func (h *SettingsHandler) deleteAppSettingValue(c *gin.Context, key string) {
 	}
 
 	ops := &appSettingsOps{service: h.settingsService}
-	if err := ops.deleteSetting(appName, key); err != nil {
+	if err := ops.deleteSettings(appName, []string{key}); err != nil {
+		gtwlog.Errorf("settings: failed to delete %s for app %s: %v", key, appName, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to delete setting: %s", key)})
 		return
 	}

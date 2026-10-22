@@ -1,9 +1,11 @@
 package handlers
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
+	"net/mail"
 	"sort"
 	"strings"
 	"time"
@@ -12,6 +14,7 @@ import (
 	"github.com/riverqueue/river"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
+	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	"github.com/DocSpring/rack-gateway/internal/gateway/jobs"
 	jobemail "github.com/DocSpring/rack-gateway/internal/gateway/jobs/email"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
@@ -19,7 +22,8 @@ import (
 
 // CreateUser godoc
 // @Summary Create a user
-// @Description Creates a new gateway user with the provided roles.
+// @Description Creates a new gateway user with the provided roles. An email already in use is a 409: this never
+// @Description changes an existing user.
 // @Tags Users
 // @Accept json
 // @Produce json
@@ -40,6 +44,13 @@ func (h *AdminHandler) CreateUser(c *gin.Context) {
 		return
 	}
 
+	email, err := normalizeUserEmail(req.Email, h.rbac.GetAllowedDomain())
+	if err != nil {
+		h.respondUserBadRequest(c, rbac.ActionCreate, req.Email, start, err.Error())
+		return
+	}
+	req.Email = email
+
 	if err := validateUserRoles(req.Roles); err != nil {
 		h.respondUserBadRequest(c, rbac.ActionCreate, req.Email, start, err.Error())
 		return
@@ -50,7 +61,7 @@ func (h *AdminHandler) CreateUser(c *gin.Context) {
 		Roles: req.Roles,
 	}
 
-	if err := h.rbac.SaveUser(req.Email, userConfig); err != nil {
+	if err := h.rbac.CreateUser(req.Email, userConfig); err != nil {
 		h.handleCreateUserError(c, req.Email, err, start)
 		return
 	}
@@ -77,6 +88,23 @@ func (h *AdminHandler) CreateUser(c *gin.Context) {
 	)
 
 	h.notifyUserCreated(c, req)
+}
+
+// normalizeUserEmail returns email trimmed and lower-cased, or why it can't be a user's email: it isn't a bare
+// address, or it isn't in the allowed domain (the only one that can sign in).
+func normalizeUserEmail(email, allowedDomain string) (string, error) {
+	trimmed := strings.ToLower(strings.TrimSpace(email))
+	if trimmed == "" {
+		return "", errors.New("email cannot be empty")
+	}
+	parsed, err := mail.ParseAddress(trimmed)
+	if err != nil || parsed.Address != trimmed {
+		return "", fmt.Errorf("invalid email: %s", trimmed)
+	}
+	if allowedDomain != "" && !strings.EqualFold(trimmed[strings.LastIndex(trimmed, "@")+1:], allowedDomain) {
+		return "", fmt.Errorf("email must be in the %s domain", allowedDomain)
+	}
+	return trimmed, nil
 }
 
 // validateUserRoles validates that all roles are valid.
@@ -106,7 +134,7 @@ func (h *AdminHandler) handleCreateUserError(
 	status := http.StatusInternalServerError
 	message := "failed to create user"
 
-	if strings.Contains(err.Error(), "already exists") {
+	if errors.Is(err, db.ErrUserExists) {
 		status = http.StatusConflict
 		message = "user already exists"
 	}
@@ -143,7 +171,7 @@ func (h *AdminHandler) trackUserCreation(c *gin.Context, email string) {
 		return
 	}
 
-	_, _ = h.database.CreateUserResource(creator.ID, "user", newUser.Email)
+	_ = h.database.SetResourceCreator(creator.ID, "user", newUser.Email)
 }
 
 // getUserResourceID returns the resource ID for audit logging.

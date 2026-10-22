@@ -2,11 +2,13 @@ package middleware
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 )
@@ -80,12 +82,15 @@ func enforceMFAEnrollment(
 
 // RequireMFAEnrollment blocks the CLI proxy for a user who must use MFA but hasn't enrolled. It applies to every
 // session, whatever channel it was created on: a web session's token sent as a Bearer token reaches the proxy too.
-// It returns a clear error so the CLI can instruct the user to finish setup.
-func RequireMFAEnrollment(database *db.Database, settings db.MFASettingsSource) gin.HandlerFunc {
+// It returns a clear error so the CLI can instruct the user to finish setup, and records the refused rack request
+// (a throttled denial, see audit.Logger.RecordDenial) when logger is set: it never reaches the proxy, which records
+// the others.
+func RequireMFAEnrollment(database *db.Database, settings db.MFASettingsSource, logger *audit.Logger) gin.HandlerFunc {
 	return enforceMFAEnrollment(database, settings, func(c *gin.Context, current *db.MFASettings, user *db.User) bool {
 		if !db.ShouldEnforceMFA(current, user) || user.MFAEnrolled {
 			return false
 		}
+		recordEnrollmentDenial(c, logger, user)
 		message := "You must set up multi-factor authentication before you can continue using the CLI. " +
 			"Please run rack-gateway login and finish MFA enrollment."
 		c.JSON(http.StatusForbidden, gin.H{
@@ -93,6 +98,31 @@ func RequireMFAEnrollment(database *db.Database, settings db.MFASettingsSource) 
 			"message": message,
 		})
 		return true
+	})
+}
+
+// recordEnrollmentDenial records a rack request refused because its user hasn't set up MFA.
+func recordEnrollmentDenial(c *gin.Context, logger *audit.Logger, user *db.User) {
+	if logger == nil {
+		return
+	}
+	path := strings.TrimPrefix(c.Request.URL.Path, "/api/v1/rack-proxy")
+	action, resource := logger.ParseConvoxAction(path, c.Request.Method, "")
+	details, _ := json.Marshal(map[string]string{
+		"method": c.Request.Method, "path": path, "reason": "mfa_enrollment_required",
+	})
+	logger.RecordDenial(&db.AuditLog{
+		UserEmail:    user.Email,
+		UserName:     user.Name,
+		ActionType:   audit.ActionTypeConvox,
+		Action:       action,
+		ResourceType: logger.InferResourceType(path, action),
+		Resource:     resource,
+		Details:      string(details),
+		HTTPStatus:   http.StatusForbidden,
+		RequestID:    audit.RequestID(c.Request),
+		IPAddress:    c.ClientIP(),
+		UserAgent:    c.Request.UserAgent(),
 	})
 }
 

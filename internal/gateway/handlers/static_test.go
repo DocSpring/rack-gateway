@@ -3,7 +3,6 @@ package handlers
 import (
 	"net/http"
 	"net/http/httptest"
-	nethttputil "net/http/httputil"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -171,21 +170,26 @@ func TestStaticHandlerInjectsSentryPlaceholders(t *testing.T) {
 	}
 }
 
-func TestCreateProxyRewriterJoinsWithSingleSlash(t *testing.T) {
-	target := &url.URL{
-		Scheme: "http",
-		Host:   "localhost:5173",
-		Path:   "/",
+// A request goes through the dev proxy the gateway builds to the dev server, at the same path.
+func TestDevProxyForwardsToTheDevServer(t *testing.T) {
+	devServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/app/login" || r.Host != "gateway.local" || r.Header.Get("X-Gateway-Proxy") != "true" {
+			http.Error(w, "unexpected request "+r.Host+r.URL.Path, http.StatusBadRequest)
+			return
+		}
+		_, _ = w.Write([]byte("login page"))
+	}))
+	t.Cleanup(devServer.Close)
+	target, err := url.Parse(devServer.URL + "/")
+	if err != nil {
+		t.Fatal(err)
 	}
-	in := httptest.NewRequest(http.MethodGet, "http://gateway.local/app/login", nil)
-	out := in.Clone(in.Context())
 
-	createProxyRewriter(target)(&nethttputil.ProxyRequest{
-		In:  in,
-		Out: out,
-	})
+	rec := httptest.NewRecorder()
+	proxy := NewStaticHandler(&config.Config{}, nil).createDevProxy(target)
+	proxy.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "http://gateway.local/app/login", nil))
 
-	if out.URL.Path != "/app/login" {
-		t.Fatalf("expected joined path /app/login, got %q", out.URL.Path)
+	if rec.Code != http.StatusOK || rec.Body.String() != "login page" {
+		t.Fatalf("expected the dev server's page, got %d %q", rec.Code, rec.Body.String())
 	}
 }

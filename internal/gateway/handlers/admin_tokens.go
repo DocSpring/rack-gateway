@@ -194,29 +194,13 @@ func (h *AdminHandler) UpdateAPIToken(c *gin.Context) {
 	}
 
 	tokenID := existing.ID
-	details := make(map[string]interface{})
-
-	if err := h.updateTokenNameIfChanged(c, tokenID, tokenIDStr, existing.Name, req.Name, start, details); err != nil {
+	// The whole request is checked before anything is saved, and the name and permissions are saved together.
+	if req.Permissions != nil && !h.ensureTokenWithinOwnerRole(c, existing.UserID, req.Permissions, tokenIDStr, start) {
 		return
 	}
-
-	if req.Permissions != nil {
-		if !h.ensureTokenWithinOwnerRole(c, existing.UserID, req.Permissions, tokenIDStr, start) {
-			return
-		}
-		if err := h.tokenService.UpdateTokenPermissions(tokenID, req.Permissions); err != nil {
-			h.respondAuditError(
-				c,
-				http.StatusInternalServerError,
-				audit.BuildAction(rbac.ResourceAPIToken.String(), rbac.ActionUpdate.String()),
-				tokenIDStr,
-				"failed to update token permissions",
-				start,
-				nil,
-			)
-			return
-		}
-		details["permissions"] = req.Permissions
+	details, saved := h.saveTokenUpdate(c, existing, tokenIDStr, req, start)
+	if !saved {
+		return
 	}
 
 	updated, err := h.database.GetAPITokenByID(tokenID)

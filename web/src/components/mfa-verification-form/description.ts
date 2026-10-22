@@ -16,6 +16,8 @@ const TOTP_DESCRIPTIONS: Record<MFAMode, string> = {
   web: 'Enter the 6-digit code from your authenticator app to finish signing in.',
 }
 
+const YUBIKEY_OTP_DESCRIPTION = 'Touch your YubiKey to enter its one-time password.'
+
 const BACKUP_CODE_DESCRIPTION =
   'Enter one of the backup codes you saved when you set up multi-factor authentication. Each code works once.'
 
@@ -23,6 +25,9 @@ const BACKUP_CODE_DESCRIPTION =
 export function describeMFAView(view: FormView, mode: MFAMode): string {
   if (view === 'backup') {
     return BACKUP_CODE_DESCRIPTION
+  }
+  if (view === 'yubikey') {
+    return YUBIKEY_OTP_DESCRIPTION
   }
   if (view === 'webauthn') {
     return WEBAUTHN_DESCRIPTIONS[mode]

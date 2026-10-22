@@ -124,10 +124,10 @@ func (h *Handler) updateObjectURLApprovalTracking(r *http.Request, objectURL str
 //
 // Note: releaseID may be empty initially when the build is first created. The real Convox API
 // returns Build responses with an empty release field, which gets populated later when the build completes.
-func (h *Handler) updateBuildApprovalTracking(r *http.Request, buildID, releaseID string) {
+func (h *Handler) updateBuildApprovalTracking(r *http.Request, buildID, releaseID string) error {
 	if buildID == "" {
 		gtwlog.Warnf("updateBuildApprovalTracking: skipping update (empty buildID)")
-		return
+		return nil
 	}
 
 	// Use the permission-based tracker which is set by RBAC when permission is granted
@@ -135,7 +135,7 @@ func (h *Handler) updateBuildApprovalTracking(r *http.Request, buildID, releaseI
 	if tracker == nil || tracker.request == nil {
 		// Not authorized through a deploy approval (e.g. a person's build): there's nothing to record.
 		gtwlog.Debugf("updateBuildApprovalTracking: no deploy approval for buildID=%s", buildID)
-		return
+		return nil
 	}
 
 	gtwlog.Infof(
@@ -147,16 +147,14 @@ func (h *Handler) updateBuildApprovalTracking(r *http.Request, buildID, releaseI
 		releaseID,
 	)
 
-	err := h.database.MarkDeployApprovalRequestBuildStarted(tracker.request.ID, buildID, releaseID)
-	if err != nil {
-		gtwlog.Errorf("updateBuildApprovalTracking: failed to update approval: %v", err)
-	} else {
-		gtwlog.Infof(
-			"updateBuildApprovalTracking: successfully updated approval %d "+
-				"buildID=%s releaseID=%s",
-			tracker.request.ID,
-			buildID,
-			releaseID,
-		)
+	if err := h.database.MarkDeployApprovalRequestBuildStarted(tracker.request.ID, buildID, releaseID); err != nil {
+		return err
 	}
+	gtwlog.Infof(
+		"updateBuildApprovalTracking: successfully updated approval %d buildID=%s releaseID=%s",
+		tracker.request.ID,
+		buildID,
+		releaseID,
+	)
+	return nil
 }

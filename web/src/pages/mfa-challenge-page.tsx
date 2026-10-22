@@ -14,7 +14,7 @@ import {
   verifyMFA,
   verifyWebAuthnAssertion,
 } from '@/lib/api'
-import { authService } from '@/lib/auth'
+import { authService, LOGOUT_FAILED_MESSAGE } from '@/lib/auth'
 import { normalizeRedirectPath } from '@/lib/navigation'
 import { resolveWebRedirect, WebRoute } from '@/lib/routes'
 
@@ -77,8 +77,13 @@ function mapQueryError(code: string | null): string | null {
       return EXPIRED_MESSAGE
     case 'browser_mismatch':
       return BROWSER_MISMATCH_MESSAGE
+    case 'persist_failure':
+      return 'We could not save the login session. Try again from your terminal.'
+    case null:
+      return null
     default:
-      return code
+      // Anyone can link to this page with an error of their choosing, so only the gateway's own codes are shown.
+      return 'The login could not be completed. Close this window and rerun the login command from your terminal.'
   }
 }
 
@@ -226,8 +231,10 @@ export function MFAChallengePage() {
     },
   })
 
-  const handleLogout = () => {
-    authService.logout()
+  const handleLogout = async () => {
+    if (!(await authService.logout())) {
+      setError(LOGOUT_FAILED_MESSAGE)
+    }
   }
 
   // Ends the login on the gateway and hands the browser to the waiting CLI, which then exits.
@@ -308,6 +315,7 @@ export function MFAChallengePage() {
                     )
               window.location.assign(destination)
             }}
+            showError={false}
             showTrustDevice={mode === 'web'}
           />
         </CardContent>

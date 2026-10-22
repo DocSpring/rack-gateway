@@ -98,7 +98,10 @@ func NewService(
 	}
 	var yubiAuth yubiAuthVerifier
 	if yubiClientID != "" && yubiSecretKey != "" {
-		auth, _ := yubigo.NewYubiAuth(yubiClientID, yubiSecretKey)
+		auth, err := yubigo.NewYubiAuth(yubiClientID, yubiSecretKey)
+		if err != nil {
+			return nil, fmt.Errorf("invalid Yubico OTP API credentials: %w", err)
+		}
 		yubiAuth = auth
 	}
 
@@ -109,7 +112,11 @@ func NewService(
 			RPID:          webAuthnRPID,
 			RPOrigins:     []string{webAuthnOrigin},
 		}
-		webAuthnClient, _ = webauthn.New(wconfig)
+		client, err := webauthn.New(wconfig)
+		if err != nil {
+			return nil, fmt.Errorf("invalid WebAuthn configuration: %w", err)
+		}
+		webAuthnClient = client
 	}
 
 	return &Service{
@@ -133,36 +140,4 @@ func (s *Service) touchMFAMethod(method *db.MFAMethod) error {
 		return s.db.ConfirmMFAMethod(method.ID, now)
 	}
 	return s.db.UpdateMFAMethodLastUsed(method.ID, now)
-}
-
-func (s *Service) ensureUserUnlocked(userID int64) error {
-	locked, err := s.db.IsUserLocked(userID)
-	if err != nil {
-		return fmt.Errorf("failed to check account lock status: %w", err)
-	}
-	if locked {
-		return fmt.Errorf("account locked - contact administrator")
-	}
-	return nil
-}
-
-func (_ *Service) enforceAttemptLimit(
-	counter func(int64, int) (int, error),
-	userID int64,
-	window int,
-	onLimit func() error,
-) error {
-	attempts, err := counter(userID, window)
-	if err != nil {
-		return fmt.Errorf("failed to check rate limit: %w", err)
-	}
-	if attempts >= window {
-		if onLimit != nil {
-			if err := onLimit(); err != nil {
-				return err
-			}
-		}
-		return fmt.Errorf("too many attempts - try again in 5 minutes")
-	}
-	return nil
 }

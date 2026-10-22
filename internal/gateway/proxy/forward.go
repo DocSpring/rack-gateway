@@ -21,33 +21,6 @@ import (
 
 const proxyLogBodyLimit = 16384
 
-// attachedRunCommand is the placeholder command `convox run` starts before exec'ing the real command
-// into the process (default --timeout). The real command is checked on the exec path.
-const attachedRunCommand = "sleep 3600"
-
-func (h *Handler) validateProcessCommand(
-	r *http.Request,
-	original string,
-) error {
-	if r.Method != http.MethodPost ||
-		!rbac.KeyMatch3(original, "/apps/{app}/services/{service}/processes") {
-		return nil
-	}
-
-	tracker := getDeployApprovalTracker(r.Context())
-	if tracker == nil {
-		return nil
-	}
-
-	app := extractAppFromPath(original)
-	command := strings.TrimSpace(r.Header.Get("Command"))
-	if command != attachedRunCommand && !h.isCommandApproved(app, command) {
-		return fmt.Errorf("command not approved: %s", command)
-	}
-
-	return nil
-}
-
 func (h *Handler) processBufferedResponse(
 	r *http.Request,
 	resp *http.Response,
@@ -62,43 +35,33 @@ func (h *Handler) processBufferedResponse(
 	if len(body) > maxBufferedResponseBytes {
 		return nil, errRackResponseTooLarge
 	}
-
-	if handling.filterRelease {
-		app := extractAppFromPath(pth)
-		body = h.filterReleaseEnvForUser(r, body, app)
+	// Only a JSON answer is captured, so a tracked answer in anything else can't say what the rack created.
+	if handling.tracked && !handling.capture {
+		return nil, unreadableTrackedAnswer(r, pth)
 	}
 
-	if handling.filterEnvironment {
-		app := extractAppFromPath(pth)
-		body = h.filterEnvironmentMapResponse(r, body, app)
-	}
-
-	if handling.filterBuild {
-		if body, err = stripBuildRepository(body); err != nil {
-			return nil, fmt.Errorf("failed to filter build response: %w", err)
-		}
+	if body, err = h.filterBufferedResponse(r, body, pth, handling); err != nil {
+		return nil, err
 	}
 
 	if handling.capture {
-		h.captureResourceCreator(r, pth, body, authUserEmail)
+		if err := h.captureResourceCreator(r, pth, body, authUserEmail, handling.tracked); err != nil {
+			return nil, err
+		}
 	}
 
 	if handling.captureProcess && resp.StatusCode >= 200 && resp.StatusCode < 300 {
-		h.handleProcessCreation(r, body)
+		if err := h.captureProcessCreation(r, body, getDeployApprovalTracker(r.Context())); err != nil {
+			return nil, err
+		}
 	}
 
 	return body, nil
 }
 
-func (h *Handler) handleProcessCreation(r *http.Request, body []byte) {
-	tracker := getDeployApprovalTracker(r.Context())
-	if tracker != nil {
-		h.captureProcessCreation(r, body, tracker)
-	}
-}
-
-// markDeployApprovalDeployedAfterPromote marks the approval behind a successful release promote as deployed,
-// so the approval can't promote again. It runs for every proxied response: promote responses aren't buffered.
+// markDeployApprovalDeployedAfterPromote marks the approval behind a successful release promote as deployed. It runs
+// for every proxied response: promote responses aren't buffered. When that fails the approval still can't promote
+// again: the promote keeps its claim, which never lapses.
 func (h *Handler) markDeployApprovalDeployedAfterPromote(r *http.Request, pth string, statusCode int) {
 	if r.Method != http.MethodPost || statusCode < 200 || statusCode >= 300 ||
 		!rbac.KeyMatch3(pth, "/apps/{app}/releases/{id}/promote") {
@@ -110,7 +73,8 @@ func (h *Handler) markDeployApprovalDeployedAfterPromote(r *http.Request, pth st
 	}
 
 	if err := h.database.MarkDeployApprovalAsDeployed(tracker.request.ID); err != nil {
-		log.Printf("Failed to mark deploy approval as deployed: %v", err)
+		log.Printf("Failed to mark deploy approval %d as deployed (it keeps its promote claim): %v",
+			tracker.request.ID, err)
 	}
 }
 
@@ -300,7 +264,7 @@ func (h *Handler) forwardRequest(
 ) (int, error) {
 	targetURL, err := buildTargetURL(rack, path, r.URL.RawQuery)
 	if err != nil {
-		return 0, err
+		return 0, &requestNotSentError{err}
 	}
 
 	if status := h.refuseUnforwardableOptions(w, r, authUser); status != 0 {
@@ -312,24 +276,9 @@ func (h *Handler) forwardRequest(
 		return h.proxyWebSocket(w, r, rack, targetURL, authUser, path)
 	}
 
-	body, err := h.requestBodyForRack(r, path, authUser)
+	proxyReq, client, err := h.rackRequest(r, rack, targetURL, path, authUser)
 	if err != nil {
-		return 0, err
-	}
-
-	if err := h.validateProcessCommand(r, path); err != nil {
-		return 0, err
-	}
-
-	proxyReq, err := prepareProxyRequest(r, targetURL, body, rack, authUser)
-	if err != nil {
-		return 0, err
-	}
-
-	client, err := h.httpClient(r.Context(), forwardTimeout(r, path))
-	if err != nil {
-		log.Printf(`{"level":"error","event":"rack_tls_config_error","message":%q}`, err.Error())
-		return 0, fmt.Errorf("failed to prepare rack TLS: %w", err)
+		return 0, &requestNotSentError{err}
 	}
 
 	resp, err := client.Do(proxyReq)
@@ -342,6 +291,61 @@ func (h *Handler) forwardRequest(
 	defer func() { _ = resp.Body.Close() }()
 
 	return h.processProxyResponse(w, r, resp, path, authUser.Email)
+}
+
+// filterBufferedResponse removes what the caller mustn't see from a rack response body (see responseHandling).
+func (h *Handler) filterBufferedResponse(
+	r *http.Request,
+	body []byte,
+	pth string,
+	handling responseHandling,
+) ([]byte, error) {
+	if handling.filterRelease {
+		body = h.filterReleaseEnvForUser(r, body, extractAppFromPath(pth))
+	}
+	if handling.filterEnvironment {
+		body = h.filterEnvironmentMapResponse(r, body, extractAppFromPath(pth))
+	}
+	if handling.filterBuild {
+		filtered, err := stripBuildRepository(body)
+		if err != nil {
+			return nil, fmt.Errorf("failed to filter build response: %w", err)
+		}
+		body = filtered
+	}
+	return body, nil
+}
+
+// requestNotSentError is an error the gateway hit before sending the request to the rack (neverReachedRack).
+type requestNotSentError struct{ err error }
+
+func (e *requestNotSentError) Error() string { return e.err.Error() }
+func (e *requestNotSentError) Unwrap() error { return e.err }
+
+// rackRequest checks r's body and builds the request to send to the rack, and the client to send it with.
+func (h *Handler) rackRequest(
+	r *http.Request,
+	rack config.RackConfig,
+	targetURL, path string,
+	authUser *auth.User,
+) (*http.Request, *http.Client, error) {
+	body, err := h.requestBodyForRack(r, path, authUser)
+	if err != nil {
+		return nil, nil, err
+	}
+	if err := h.validateProcessCommand(r, path); err != nil {
+		return nil, nil, err
+	}
+	proxyReq, err := prepareProxyRequest(r, targetURL, body, rack, authUser)
+	if err != nil {
+		return nil, nil, err
+	}
+	client, err := h.httpClient(r.Context(), forwardTimeout(r, path))
+	if err != nil {
+		log.Printf(`{"level":"error","event":"rack_tls_config_error","message":%q}`, err.Error())
+		return nil, nil, fmt.Errorf("failed to prepare rack TLS: %w", err)
+	}
+	return proxyReq, client, nil
 }
 
 // requestBodyForRack returns the body to send to the rack. An archive upload streams straight through as it
@@ -357,7 +361,11 @@ func (h *Handler) requestBodyForRack(r *http.Request, path string, authUser *aut
 	if err != nil {
 		return rackRequestBody{}, err
 	}
+	noteRequestedRackParams(r, bodyBytes)
 
+	if err := checkHeaderOnlyRequest(r, path, bodyBytes); err != nil {
+		return rackRequestBody{}, err
+	}
 	if err := h.validateBuildRequest(r, path, bodyBytes, authUser); err != nil {
 		return rackRequestBody{}, err
 	}

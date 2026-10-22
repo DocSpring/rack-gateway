@@ -63,7 +63,8 @@ type envChangeDetails struct {
 }
 
 // AuditDetails returns the details JSON of the audit log entry for d. Its values are shown only when its key is
-// visible and the change is neither secret nor protected; otherwise both are RedactedValue.
+// visible, the change is neither secret nor protected, and neither value has credentials in it (HasCredentials);
+// otherwise both are RedactedValue.
 func (v AuditVisibleKeys) AuditDetails(d EnvDiff) string {
 	details := envChangeDetails{Old: RedactedValue, New: RedactedValue}
 	if v.shows(d) {
@@ -77,7 +78,7 @@ func (v AuditVisibleKeys) AuditDetails(d EnvDiff) string {
 }
 
 func (v AuditVisibleKeys) shows(d EnvDiff) bool {
-	if d.Secret || d.Protected {
+	if d.Secret || d.Protected || HasCredentials(d.OldVal) || HasCredentials(d.NewVal) {
 		return false
 	}
 	_, ok := v[strings.ToUpper(strings.TrimSpace(d.Key))]

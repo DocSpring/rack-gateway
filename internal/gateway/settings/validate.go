@@ -3,7 +3,9 @@ package settings
 import (
 	"errors"
 	"fmt"
+	"math"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -13,6 +15,94 @@ import (
 
 // ErrInvalidSettingValue means a setting value has the wrong shape for its key.
 var ErrInvalidSettingValue = errors.New("invalid setting value")
+
+// allowedSettingValues lists the only values some string settings can take.
+var allowedSettingValues = map[string][]string{
+	KeyVerifyGitCommitMode: {VerifyGitCommitModeBranch, VerifyGitCommitModeLatest},
+}
+
+// settingMaximums bounds the numeric settings: each is a whole number from 1 to its maximum, so its duration is
+// one that makes sense (and can't overflow).
+var settingMaximums = map[string]int{
+	KeyDeployApprovalWindowMinutes:            7 * 24 * 60, // a week
+	KeySessionTimeoutMinutes:                  24 * 60,     // a day
+	GlobalSettingStepUpWindowMinutes.String(): 24 * 60,
+	KeyTrustedDeviceTTLDays:                   365,
+}
+
+// ValidateSettingValue checks a value against its setting's type before it's saved: true or false, a whole number
+// in the setting's range, a string (or null, which reads as the default) that's one of the values the setting
+// allows, or a list or object of the right shape. appName is nil for a global setting. An unknown setting is
+// refused too.
+func ValidateSettingValue(appName *string, key string, value interface{}) error {
+	return checkSettingValue(appName != nil, key, value)
+}
+
+func checkSettingValue(isApp bool, key string, value interface{}) error {
+	defaults := DefaultGlobalSettings
+	if isApp {
+		defaults = DefaultAppSettings
+	}
+	defaultValue, known := defaults[key]
+	if !known {
+		return fmt.Errorf("%w: unknown setting %s", ErrInvalidSettingValue, key)
+	}
+	switch defaultValue.(type) {
+	case bool:
+		_, err := boolValue(key, value)
+		return err
+	case int:
+		_, err := wholeNumber(key, value)
+		return err
+	case []string, map[string]string:
+		return validateCollection(key, value)
+	default: // strings, including optional ones with a nil default
+		return validateString(key, value)
+	}
+}
+
+// boolValue returns a boolean setting's value, or ErrInvalidSettingValue when it isn't true or false.
+func boolValue(key string, value interface{}) (bool, error) {
+	b, ok := value.(bool)
+	if !ok {
+		return false, fmt.Errorf("%w: %s must be true or false", ErrInvalidSettingValue, key)
+	}
+	return b, nil
+}
+
+// wholeNumber returns a numeric setting's value, or ErrInvalidSettingValue when it isn't a whole number from 1 to
+// the setting's maximum. JSON numbers decode as float64.
+func wholeNumber(key string, value interface{}) (int, error) {
+	var n float64 // any other type stays 0, which is refused
+	switch v := value.(type) {
+	case int:
+		n = float64(v)
+	case float64:
+		n = v
+	}
+	maximum := settingMaximums[key]
+	if n != math.Trunc(n) || n < 1 || n > float64(maximum) {
+		return 0, fmt.Errorf("%w: %s must be a whole number from 1 to %d", ErrInvalidSettingValue, key, maximum)
+	}
+	return int(n), nil
+}
+
+// validateString requires a string, or null (which reads as the default), and one of the allowed values for a
+// setting that has them.
+func validateString(key string, value interface{}) error {
+	if value == nil {
+		return nil
+	}
+	s, ok := value.(string)
+	if !ok {
+		return fmt.Errorf("%w: %s must be a string", ErrInvalidSettingValue, key)
+	}
+	if allowed, restricted := allowedSettingValues[key]; restricted && !slices.Contains(allowed, s) {
+		return fmt.Errorf("%w: %s must be one of %s, got %q", ErrInvalidSettingValue, key,
+			strings.Join(allowed, ", "), s)
+	}
+	return nil
+}
 
 // stringListKeys are app settings stored as a JSON array of strings. Reading one back fails on any other shape
 // (the gateway then treats every env var as secret and protected, and allows no deploy commands), so a value of
@@ -32,8 +122,8 @@ var envVarNameKeys = map[string]bool{
 	AppSettingSecretEnvVars.String(): true,
 }
 
-// ValidateAppSettingValue checks the shape of an app setting value before it is saved.
-func ValidateAppSettingValue(key string, value interface{}) error {
+// validateCollection checks the shape of a list or object setting.
+func validateCollection(key string, value interface{}) error {
 	switch {
 	case envVarNameKeys[key]:
 		_, err := envVarNameList(key, value)

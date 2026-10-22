@@ -38,19 +38,7 @@ func (h *APIHandler) logEnvUpdateDiffs(
 	visible := h.auditVisibleKeys(app)
 
 	for _, diff := range diffs {
-		action := audit.BuildAction(rbac.ResourceEnv.String(), rbac.ActionSet.String())
-		resourceType := "env"
-		if diff.Secret {
-			action = audit.BuildAction(rbac.ResourceSecret.String(), rbac.ActionSet.String())
-			resourceType = "secret"
-		}
-		if strings.TrimSpace(diff.NewVal) == "" {
-			if diff.Secret {
-				action = audit.BuildAction(rbac.ResourceSecret.String(), audit.ActionVerbUnset)
-			} else {
-				action = audit.BuildAction(rbac.ResourceEnv.String(), audit.ActionVerbUnset)
-			}
-		}
+		action, resourceType := audit.EnvChangeAction(diff)
 
 		_ = h.auditLogger.LogRequestEntry(c.Request.Context(), &db.AuditLog{
 			UserEmail:      email,
@@ -190,8 +178,8 @@ func (_ *APIHandler) maskSecretsIfNeeded(envMap map[string]string, secretKeys []
 	if allowed {
 		return
 	}
-	for k := range envMap {
-		if envutil.IsSecretKey(k, secretKeys) {
+	for k, v := range envMap {
+		if envutil.MaskedForReaders(k, v, secretKeys) {
 			envMap[k] = envutil.MaskedSecret
 		}
 	}
@@ -241,7 +229,8 @@ func (h *APIHandler) logEnvRead(
 // UpdateEnvValues godoc
 // @Summary Update environment variables
 // @Description Applies environment variable changes for a Convox app by creating a new release.
-// @Description Secrets remain masked unless the user has secrets permissions.
+// @Description Secrets and values with credentials in them remain masked unless the user has secrets permissions.
+// @Description Answers 409 while another env change to the app is in progress.
 // @Tags Environment
 // @Accept json
 // @Produce json
@@ -250,6 +239,7 @@ func (h *APIHandler) logEnvRead(
 // @Success 200 {object} UpdateEnvValuesResponse
 // @Failure 400 {object} ErrorResponse
 // @Failure 403 {object} ErrorResponse
+// @Failure 409 {object} ErrorResponse
 // @Failure 502 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
 // @Security SessionCookie
@@ -260,6 +250,7 @@ func (h *APIHandler) UpdateEnvValues(c *gin.Context) {
 	if !ok {
 		return
 	}
+	defer ctx.envLock.Release()
 
 	merged, diffs, err := h.mergeEnvChanges(ctx)
 	if err != nil {
@@ -303,6 +294,7 @@ type envUpdateContext struct {
 	extraSecrets   []string
 	protectedKeys  map[string]struct{}
 	baseEnv        map[string]string
+	envLock        *db.AppEnvLock
 	rackConfig     config.RackConfig
 	tlsCfg         *tls.Config
 	start          time.Time
@@ -342,12 +334,6 @@ func (h *APIHandler) prepareEnvUpdateContext(c *gin.Context) (*envUpdateContext,
 	ctx.rackConfig = rackConfig
 	ctx.tlsCfg = tlsCfg
 
-	baseEnv, ok := h.fetchEnvMap(c, "env_update", ctx.app, rackConfig, tlsCfg)
-	if !ok {
-		return nil, false
-	}
-	ctx.baseEnv = baseEnv
-
 	extraSecrets, protectedKeys, err := h.secretAndProtectedKeys(ctx.app)
 	if err != nil {
 		respondEnvSettingsError(c, ctx.app, err)
@@ -357,7 +343,37 @@ func (h *APIHandler) prepareEnvUpdateContext(c *gin.Context) (*envUpdateContext,
 	ctx.allowSecrets = callerCan(c, h.rbac, rbac.Convox(rbac.ResourceSecret, rbac.ActionSet))
 	ctx.canViewSecrets = callerCan(c, h.rbac, rbac.Convox(rbac.ResourceSecret, rbac.ActionRead))
 
+	// The lock is held from reading the env until the release is created (UpdateEnvValues releases it).
+	if ctx.envLock, ok = h.lockAppEnv(c, ctx.app); !ok {
+		return nil, false
+	}
+	baseEnv, ok := h.fetchEnvMap(c, "env_update", ctx.app, rackConfig, tlsCfg)
+	if !ok {
+		ctx.envLock.Release()
+		return nil, false
+	}
+	ctx.baseEnv = baseEnv
+
 	return ctx, true
+}
+
+// lockAppEnv takes the app's env write lock (db.LockAppEnv), or answers 409 when another change holds it.
+func (h *APIHandler) lockAppEnv(c *gin.Context, app string) (*db.AppEnvLock, bool) {
+	if h.database == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database unavailable"})
+		return nil, false
+	}
+	lock, err := h.database.LockAppEnv(c.Request.Context(), app)
+	switch {
+	case errors.Is(err, db.ErrAppEnvLockBusy):
+		c.JSON(http.StatusConflict, gin.H{"error": "Another env change to this app is in progress. Try again."})
+		return nil, false
+	case err != nil:
+		log.Printf(`{"level":"error","event":"env_lock_failed","app":%q,"error":%q}`, app, err.Error())
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to lock the app's env"})
+		return nil, false
+	}
+	return lock, true
 }
 
 func (_ *APIHandler) mergeEnvChanges(ctx *envUpdateContext) (map[string]string, []envutil.EnvDiff, error) {

@@ -99,11 +99,14 @@ func verifyAudit(args []string) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	report, err := auditverify.Run(ctx, database, opts)
+	if report != nil {
+		// A run that stopped partway prints what it found until then
+		if writeErr := report.Write(os.Stdout); writeErr != nil {
+			return writeErr
+		}
+	}
 	if err != nil {
 		return fmt.Errorf("verify audit log: %w", err)
-	}
-	if err := report.Write(os.Stdout); err != nil {
-		return err
 	}
 	if !report.OK() {
 		return fmt.Errorf("audit log verification failed: %d integrity failures", report.FailureCount)

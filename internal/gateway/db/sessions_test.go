@@ -15,7 +15,7 @@ func TestGetSessionByID(t *testing.T) {
 	user, _ := database.CreateUser("getsession@example.com", "Get Test", []string{"ops"})
 
 	session, _ := database.CreateUserSession(
-		user.ID,
+		user,
 		"abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789", // 64 chars
 		time.Now().Add(1*time.Hour),
 		"web",

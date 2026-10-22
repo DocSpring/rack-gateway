@@ -18,6 +18,14 @@ import (
 //go:embed migrations/*.sql
 var migrationsFS embed.FS
 
+// Migrate applies the pending migrations.
+func (d *Database) Migrate() error {
+	if err := d.migrateAll(); err != nil {
+		return fmt.Errorf("failed to initialize schema: %w", err)
+	}
+	return nil
+}
+
 // migrateAll applies embedded migrations in lexical order using a simple schema_migrations table.
 func (d *Database) migrateAll() error {
 	// Only acquire lock for non-test databases

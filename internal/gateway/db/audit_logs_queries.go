@@ -1,8 +1,10 @@
 package db
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -99,18 +101,7 @@ func (d *Database) GetAuditLogsPaged(filters AuditLogFilters) ([]*AuditLog, int,
 		return nil, 0, fmt.Errorf("failed to count audit logs: %w", err)
 	}
 
-	// Get paginated results
-	query := `
-        SELECT "id", "timestamp", "chain_index", "previous_hash", "event_hash",
-               "checkpoint_id", "checkpoint_hash",
-               "user_email", COALESCE("user_name", ''), "api_token_id", "api_token_name",
-               "action_type", "action",
-               COALESCE("command", ''), COALESCE("resource", ''), COALESCE("resource_type", ''),
-               COALESCE("details", ''), COALESCE("request_id", ''),
-               COALESCE(host("ip_address"::inet), ''), COALESCE("user_agent", ''),
-               "status", COALESCE("rbac_decision", ''), COALESCE("http_status", 0),
-               "response_time_ms", "event_count", "deploy_approval_request_id"
-        FROM "audit"."audit_event" ` + whereClause + `
+	query := auditLogSelect + whereClause + `
         ORDER BY "timestamp" DESC
 		LIMIT ? OFFSET ?`
 
@@ -124,6 +115,19 @@ func (d *Database) GetAuditLogsPaged(filters AuditLogFilters) ([]*AuditLog, int,
 	return logs, total, nil
 }
 
+// auditLogSelect selects audit events in the column order scanAuditLog reads.
+const auditLogSelect = `
+        SELECT "id", "timestamp", "chain_index", "previous_hash", "event_hash",
+               "checkpoint_id", "checkpoint_hash",
+               "user_email", COALESCE("user_name", ''), "api_token_id", "api_token_name",
+               "action_type", "action",
+               COALESCE("command", ''), COALESCE("resource", ''), COALESCE("resource_type", ''),
+               COALESCE("details", ''), COALESCE("request_id", ''),
+               COALESCE(host("ip_address"::inet), ''), COALESCE("user_agent", ''),
+               "status", COALESCE("rbac_decision", ''), COALESCE("http_status", 0),
+               "response_time_ms", "event_count", "deploy_approval_request_id"
+        FROM "audit"."audit_event" `
+
 // queryAuditLogs executes a query and scans the results into AuditLog structs
 func (d *Database) queryAuditLogs(query string, args []interface{}) ([]*AuditLog, error) {
 	rows, err := d.query(query, args...)
@@ -135,40 +139,31 @@ func (d *Database) queryAuditLogs(query string, args []interface{}) ([]*AuditLog
 	return scanAuditLogs(rows)
 }
 
-// GetAuditLogsByDeployApprovalRequestID retrieves audit logs for a specific deploy approval request
-func (d *Database) GetAuditLogsByDeployApprovalRequestID(
-	deployApprovalRequestID int64,
-	limit int,
-) ([]*AuditLog, error) {
-	if limit <= 0 {
-		limit = 100
+// deployApprovalAuditWhere matches the audit events about a deploy approval request (its ID twice: the column, then
+// as text). Its own lifecycle entries (created, approved, rejected, extended, expired) name it as their resource;
+// ones written before they also set deploy_approval_request_id carry it only there, some with the resource type
+// spelled deploy-approval-request. Audit entries can't be rewritten, so the match covers both.
+const deployApprovalAuditWhere = `WHERE "deploy_approval_request_id" = ?
+        OR ("resource_type" IN ('deploy_approval_request', 'deploy-approval-request') AND "resource" = ?)`
+
+// GetDeployApprovalAuditLogsPaged returns a page of the audit events about a deploy approval request, newest
+// first, and how many there are in all.
+func (d *Database) GetDeployApprovalAuditLogsPaged(approvalID int64, limit, offset int) ([]*AuditLog, int, error) {
+	args := []interface{}{approvalID, strconv.FormatInt(approvalID, 10)}
+	var total int
+	countQuery := `SELECT COUNT(*) FROM "audit"."audit_event" ` + deployApprovalAuditWhere
+	if err := d.queryRow(countQuery, args...).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("failed to count deploy approval audit logs: %w", err)
 	}
 
-	query := `
-        SELECT "id", "timestamp", "chain_index", "previous_hash", "event_hash",
-               "checkpoint_id", "checkpoint_hash",
-               "user_email", COALESCE("user_name", ''), "api_token_id", "api_token_name",
-               "action_type", "action",
-               COALESCE("command", ''), COALESCE("resource", ''), COALESCE("resource_type", ''),
-               COALESCE("details", ''),
-               COALESCE("request_id", ''), COALESCE(host("ip_address"::inet), ''),
-               COALESCE("user_agent", ''),
-               "status", COALESCE("rbac_decision", ''), COALESCE("http_status", 0),
-               "response_time_ms",
-               "event_count", "deploy_approval_request_id"
-        FROM "audit"."audit_event"
-        WHERE "deploy_approval_request_id" = ?
+	query := auditLogSelect + deployApprovalAuditWhere + `
         ORDER BY "timestamp" DESC
-        LIMIT ?
-    `
-
-	rows, err := d.query(query, deployApprovalRequestID, limit)
+        LIMIT ? OFFSET ?`
+	logs, err := d.queryAuditLogs(query, append(args, limit, offset))
 	if err != nil {
-		return nil, fmt.Errorf("failed to query audit logs by deploy approval request ID: %w", err)
+		return nil, 0, err
 	}
-	defer func() { _ = rows.Close() }()
-
-	return scanAuditLogs(rows)
+	return logs, total, nil
 }
 
 func scanAuditLogs(rows *sql.Rows) ([]*AuditLog, error) {
@@ -180,7 +175,9 @@ func scanAuditLogs(rows *sql.Rows) ([]*AuditLog, error) {
 		}
 		logs = append(logs, log)
 	}
-
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to read audit logs: %w", err)
+	}
 	return logs, nil
 }
 
@@ -223,27 +220,16 @@ type AuditLogAggregated struct {
 	DeployApprovalRequestID *int64    `json:"deploy_approval_request_id,omitempty"`
 }
 
-// GetAuditLogsAggregated retrieves aggregated audit logs with filters (for frontend pagination)
-func (d *Database) GetAuditLogsAggregated(filters AuditLogFilters) ([]*AuditLogAggregated, int, error) {
-	if filters.Limit <= 0 {
-		filters.Limit = 100
-	}
-	if filters.Offset < 0 {
-		filters.Offset = 0
-	}
+const (
+	// MaxAuditLogPageSize is the most aggregated audit entries one page of the audit log holds.
+	MaxAuditLogPageSize = 200
+	// auditReadTimeout bounds reading one page of the audit log (its count and its entries).
+	auditReadTimeout = 30 * time.Second
+)
 
-	// Build WHERE clause (use "last_seen" for aggregated view)
-	whereClause, args := buildAuditFilterWhereClause(filters, "last_seen")
-
-	// Get total count
-	countQuery := "SELECT COUNT(*) FROM \"audit\".\"audit_event_aggregated\" " + whereClause
-	var total int
-	if err := d.queryRow(countQuery, args...).Scan(&total); err != nil {
-		return nil, 0, fmt.Errorf("failed to count aggregated audit logs: %w", err)
-	}
-
-	// Get paginated results
-	query := `
+// selectAggregatedAuditLogs selects the columns scanAuditLogAggregated reads, newest entries first. Its %s is the
+// WHERE clause; the id breaks ties, so pages don't overlap.
+const selectAggregatedAuditLogs = `
         SELECT "id", "first_event_id", "last_event_id", "first_seen", "last_seen",
                "first_hash", "last_hash", "event_count",
                "min_response_time_ms", "max_response_time_ms", "avg_response_time_ms",
@@ -253,38 +239,82 @@ func (d *Database) GetAuditLogsAggregated(filters AuditLogFilters) ([]*AuditLogA
                COALESCE(host("ip_address"::inet), ''), COALESCE("user_agent", ''),
                "status", COALESCE("rbac_decision", ''), COALESCE("http_status", 0),
                "deploy_approval_request_id"
-        FROM "audit"."audit_event_aggregated" ` + whereClause + `
-        ORDER BY "last_seen" DESC
-        LIMIT ? OFFSET ?`
+        FROM "audit"."audit_event_aggregated" %s
+        ORDER BY "last_seen" DESC, "id" DESC`
 
+// GetAuditLogsAggregated returns one page of the aggregated audit log entries that match filters, and how many match.
+// A page holds at most MaxAuditLogPageSize entries.
+func (d *Database) GetAuditLogsAggregated(filters AuditLogFilters) ([]*AuditLogAggregated, int, error) {
+	if filters.Limit <= 0 {
+		filters.Limit = 100
+	}
+	filters.Limit = min(filters.Limit, MaxAuditLogPageSize)
+	if filters.Offset < 0 {
+		filters.Offset = 0
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), auditReadTimeout)
+	defer cancel()
+
+	// Build WHERE clause (use "last_seen" for aggregated view)
+	whereClause, args := buildAuditFilterWhereClause(filters, "last_seen")
+
+	countQuery := "SELECT COUNT(*) FROM \"audit\".\"audit_event_aggregated\" " + whereClause
+	var total int
+	if err := d.queryRowContext(ctx, countQuery, args...).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("failed to count aggregated audit logs: %w", err)
+	}
+
+	query := fmt.Sprintf(selectAggregatedAuditLogs, whereClause) + " LIMIT ? OFFSET ?"
 	args = append(args, filters.Limit, filters.Offset)
-
-	logs, err := d.queryAggregatedAuditLogs(query, args)
+	var logs []*AuditLogAggregated
+	err := d.eachAggregatedAuditLog(ctx, query, args, func(log *AuditLogAggregated) error {
+		logs = append(logs, log)
+		return nil
+	})
 	if err != nil {
 		return nil, 0, err
 	}
-
 	return logs, total, nil
 }
 
-// queryAggregatedAuditLogs executes a query and scans the results into AuditLogAggregated structs
-func (d *Database) queryAggregatedAuditLogs(query string, args []interface{}) ([]*AuditLogAggregated, error) {
-	rows, err := d.query(query, args...)
+// EachAuditLogAggregated calls fn with every aggregated audit log entry that matches filters (whatever their Limit
+// and Offset), newest first. The entries come from one query, so they are one consistent snapshot, and they are
+// streamed rather than held in memory. It stops at fn's first error and returns it.
+func (d *Database) EachAuditLogAggregated(
+	ctx context.Context,
+	filters AuditLogFilters,
+	fn func(*AuditLogAggregated) error,
+) error {
+	whereClause, args := buildAuditFilterWhereClause(filters, "last_seen")
+	return d.eachAggregatedAuditLog(ctx, fmt.Sprintf(selectAggregatedAuditLogs, whereClause), args, fn)
+}
+
+// eachAggregatedAuditLog runs a query of selectAggregatedAuditLogs and calls fn with each entry it returns.
+func (d *Database) eachAggregatedAuditLog(
+	ctx context.Context,
+	query string,
+	args []interface{},
+	fn func(*AuditLogAggregated) error,
+) error {
+	rows, err := d.queryContext(ctx, query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query aggregated audit logs: %w", err)
+		return fmt.Errorf("failed to query aggregated audit logs: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
 
-	var logs []*AuditLogAggregated
 	for rows.Next() {
 		log, err := scanAuditLogAggregated(rows)
 		if err != nil {
-			return nil, fmt.Errorf("failed to scan aggregated audit log: %w", err)
+			return fmt.Errorf("failed to scan aggregated audit log: %w", err)
 		}
-		logs = append(logs, log)
+		if err := fn(log); err != nil {
+			return err
+		}
 	}
-
-	return logs, nil
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("failed to read aggregated audit logs: %w", err)
+	}
+	return nil
 }
 
 // scanAuditLogAggregated scans a single aggregated audit log row

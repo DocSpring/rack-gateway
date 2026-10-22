@@ -1,0 +1,71 @@
+package proxy
+
+import (
+	"bytes"
+	"errors"
+	"fmt"
+	"net/http"
+	"strings"
+
+	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
+)
+
+// processStartRoute is where `convox run` starts a one-off process.
+const processStartRoute = "/apps/{app}/services/{service}/processes"
+
+// attachedRunCommand is the placeholder command `convox run` starts before exec'ing the real command
+// into the process (default --timeout). The real command is checked on the exec path.
+const attachedRunCommand = "sleep 3600"
+
+// headerOnlyRoutes are rack routes that take their options only from headers: the rack reads a process start's
+// options with stdapi.UnmarshalOptions, and every ProcessRunOptions field is a `header` tag, while a service restart
+// takes no options. The Convox SDK sends neither a body nor a query string to them. The gateway checks a process
+// start's headers (the release a deploy approval is bound to, the approved command, the privileged run options), so
+// a body or query string, which a later rack might read in place of a header, is refused rather than forwarded
+// unchecked.
+var headerOnlyRoutes = []string{processStartRoute, "/apps/{app}/services/{service}/restart"}
+
+// checkHeaderOnlyRequest refuses a body or query string on a request to one of headerOnlyRoutes.
+func checkHeaderOnlyRequest(r *http.Request, path string, body []byte) error {
+	if r.Method != http.MethodPost || !matchesAnyRoute(path, headerOnlyRoutes) {
+		return nil
+	}
+	if r.URL.RawQuery != "" {
+		return refuse(http.StatusBadRequest, errors.New("this request takes no query parameters"))
+	}
+	if len(bytes.TrimSpace(body)) > 0 {
+		return refuse(http.StatusBadRequest, errors.New("this request takes no body: its options are headers"))
+	}
+	return nil
+}
+
+func matchesAnyRoute(path string, routes []string) bool {
+	normalized := "/" + strings.TrimLeft(path, "/")
+	for _, route := range routes {
+		if rbac.KeyMatch3(normalized, route) {
+			return true
+		}
+	}
+	return false
+}
+
+// validateProcessCommand refuses a process start under a deploy approval whose command isn't one of the app's
+// approved_deploy_commands.
+func (h *Handler) validateProcessCommand(r *http.Request, original string) error {
+	if r.Method != http.MethodPost || !rbac.KeyMatch3(original, processStartRoute) {
+		return nil
+	}
+
+	tracker := getDeployApprovalTracker(r.Context())
+	if tracker == nil {
+		return nil
+	}
+
+	app := extractAppFromPath(original)
+	command := strings.TrimSpace(r.Header.Get("Command"))
+	if command != attachedRunCommand && !h.isCommandApproved(app, command) {
+		return refuse(http.StatusForbidden, fmt.Errorf("command not approved: %s", command))
+	}
+
+	return nil
+}

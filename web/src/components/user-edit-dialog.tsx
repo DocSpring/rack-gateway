@@ -127,6 +127,11 @@ export function UserEditDialog({
               type="email"
               value={email}
             />
+            {mode === 'edit' && email.trim().toLowerCase() !== initialEmail.toLowerCase() ? (
+              <p className="text-muted-foreground text-sm" data-testid="user-edit-email-warning">
+                Changing the email signs this user out everywhere and deletes their API tokens.
+              </p>
+            ) : null}
           </div>
 
           <div className="space-y-2">

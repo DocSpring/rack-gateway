@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"net/http"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -11,9 +12,6 @@ import (
 
 func shouldSkipLogging(path string, devMode bool) bool {
 	if path == "/api/v1/health" || strings.HasPrefix(path, "/.well-known/") || path == "/favicon.ico" {
-		return true
-	}
-	if strings.HasPrefix(path, "/api/v1/rack-proxy/") {
 		return true
 	}
 	if devMode && !strings.HasPrefix(path, "/api/v1/") {
@@ -55,12 +53,19 @@ func extractRackInfo(c *gin.Context, defaultRack string) string {
 	return r
 }
 
-func extractRBACDecision(c *gin.Context) string {
-	rbacDecision := strings.TrimSpace(c.Request.Header.Get("X-RBAC-Decision"))
-	if rbacDecision == "" {
-		rbacDecision = "allow"
+// requestDecision is a request log line's rbac_decision: "deny" for a request the gateway refused (401, 403 or 429,
+// whichever middleware or handler refused it), otherwise what Authorize decided ("allow", or "error" when the
+// permission check failed), otherwise "not_evaluated" (routes without authorization, such as login).
+func requestDecision(c *gin.Context) string {
+	switch c.Writer.Status() {
+	case http.StatusUnauthorized, http.StatusForbidden, http.StatusTooManyRequests:
+		return "deny"
 	}
-	return rbacDecision
+	// Clients can't send this header: see StripInternalHeaders.
+	if decision := strings.TrimSpace(c.Request.Header.Get("X-RBAC-Decision")); decision != "" {
+		return decision
+	}
+	return "not_evaluated"
 }
 
 func shouldLogRequest(c *gin.Context, path string, devMode bool) bool {

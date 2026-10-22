@@ -24,7 +24,7 @@ func TestAuditDetailsRedactsUnlistedKeys(t *testing.T) {
 	require.Equal(t, redactedDetails, visible.AuditDetails(EnvDiff{Key: "DATABASE_PASSWORD", OldVal: "a", NewVal: "b"}))
 }
 
-// Listing a key never shows a secret or protected value.
+// Listing a key never shows a secret or protected value, or a value with credentials in it.
 func TestAuditDetailsNeverShowsSecretOrProtectedValues(t *testing.T) {
 	visible := newAuditVisibleKeys(
 		[]string{"PORT", "STRIPE_SECRET", "SIGNING_KEY", "BILLING_ID", "ADMIN_PASSWORD"},
@@ -39,6 +39,8 @@ func TestAuditDetailsNeverShowsSecretOrProtectedValues(t *testing.T) {
 		{Key: "ADMIN_PASSWORD", OldVal: "a", NewVal: "b"},
 		{Key: "PORT", OldVal: "a", NewVal: "b", Secret: true},
 		{Key: "PORT", OldVal: "a", NewVal: "b", Protected: true},
+		{Key: "PORT", OldVal: "a", NewVal: "postgres://app@db/app"},
+		{Key: "PORT", OldVal: "host=db password=hunter2", NewVal: "b"},
 	} {
 		require.Equal(t, redactedDetails, visible.AuditDetails(d), "%+v", d)
 	}
