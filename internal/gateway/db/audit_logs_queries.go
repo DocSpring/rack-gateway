@@ -1,6 +1,7 @@
 package db
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"strings"
@@ -180,7 +181,9 @@ func scanAuditLogs(rows *sql.Rows) ([]*AuditLog, error) {
 		}
 		logs = append(logs, log)
 	}
-
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to read audit logs: %w", err)
+	}
 	return logs, nil
 }
 
@@ -223,27 +226,16 @@ type AuditLogAggregated struct {
 	DeployApprovalRequestID *int64    `json:"deploy_approval_request_id,omitempty"`
 }
 
-// GetAuditLogsAggregated retrieves aggregated audit logs with filters (for frontend pagination)
-func (d *Database) GetAuditLogsAggregated(filters AuditLogFilters) ([]*AuditLogAggregated, int, error) {
-	if filters.Limit <= 0 {
-		filters.Limit = 100
-	}
-	if filters.Offset < 0 {
-		filters.Offset = 0
-	}
+const (
+	// MaxAuditLogPageSize is the most aggregated audit entries one page of the audit log holds.
+	MaxAuditLogPageSize = 200
+	// auditReadTimeout bounds reading one page of the audit log (its count and its entries).
+	auditReadTimeout = 30 * time.Second
+)
 
-	// Build WHERE clause (use "last_seen" for aggregated view)
-	whereClause, args := buildAuditFilterWhereClause(filters, "last_seen")
-
-	// Get total count
-	countQuery := "SELECT COUNT(*) FROM \"audit\".\"audit_event_aggregated\" " + whereClause
-	var total int
-	if err := d.queryRow(countQuery, args...).Scan(&total); err != nil {
-		return nil, 0, fmt.Errorf("failed to count aggregated audit logs: %w", err)
-	}
-
-	// Get paginated results
-	query := `
+// selectAggregatedAuditLogs selects the columns scanAuditLogAggregated reads, newest entries first. Its %s is the
+// WHERE clause; the id breaks ties, so pages don't overlap.
+const selectAggregatedAuditLogs = `
         SELECT "id", "first_event_id", "last_event_id", "first_seen", "last_seen",
                "first_hash", "last_hash", "event_count",
                "min_response_time_ms", "max_response_time_ms", "avg_response_time_ms",
@@ -253,38 +245,82 @@ func (d *Database) GetAuditLogsAggregated(filters AuditLogFilters) ([]*AuditLogA
                COALESCE(host("ip_address"::inet), ''), COALESCE("user_agent", ''),
                "status", COALESCE("rbac_decision", ''), COALESCE("http_status", 0),
                "deploy_approval_request_id"
-        FROM "audit"."audit_event_aggregated" ` + whereClause + `
-        ORDER BY "last_seen" DESC
-        LIMIT ? OFFSET ?`
+        FROM "audit"."audit_event_aggregated" %s
+        ORDER BY "last_seen" DESC, "id" DESC`
 
+// GetAuditLogsAggregated returns one page of the aggregated audit log entries that match filters, and how many match.
+// A page holds at most MaxAuditLogPageSize entries.
+func (d *Database) GetAuditLogsAggregated(filters AuditLogFilters) ([]*AuditLogAggregated, int, error) {
+	if filters.Limit <= 0 {
+		filters.Limit = 100
+	}
+	filters.Limit = min(filters.Limit, MaxAuditLogPageSize)
+	if filters.Offset < 0 {
+		filters.Offset = 0
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), auditReadTimeout)
+	defer cancel()
+
+	// Build WHERE clause (use "last_seen" for aggregated view)
+	whereClause, args := buildAuditFilterWhereClause(filters, "last_seen")
+
+	countQuery := "SELECT COUNT(*) FROM \"audit\".\"audit_event_aggregated\" " + whereClause
+	var total int
+	if err := d.queryRowContext(ctx, countQuery, args...).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("failed to count aggregated audit logs: %w", err)
+	}
+
+	query := fmt.Sprintf(selectAggregatedAuditLogs, whereClause) + " LIMIT ? OFFSET ?"
 	args = append(args, filters.Limit, filters.Offset)
-
-	logs, err := d.queryAggregatedAuditLogs(query, args)
+	var logs []*AuditLogAggregated
+	err := d.eachAggregatedAuditLog(ctx, query, args, func(log *AuditLogAggregated) error {
+		logs = append(logs, log)
+		return nil
+	})
 	if err != nil {
 		return nil, 0, err
 	}
-
 	return logs, total, nil
 }
 
-// queryAggregatedAuditLogs executes a query and scans the results into AuditLogAggregated structs
-func (d *Database) queryAggregatedAuditLogs(query string, args []interface{}) ([]*AuditLogAggregated, error) {
-	rows, err := d.query(query, args...)
+// EachAuditLogAggregated calls fn with every aggregated audit log entry that matches filters (whatever their Limit
+// and Offset), newest first. The entries come from one query, so they are one consistent snapshot, and they are
+// streamed rather than held in memory. It stops at fn's first error and returns it.
+func (d *Database) EachAuditLogAggregated(
+	ctx context.Context,
+	filters AuditLogFilters,
+	fn func(*AuditLogAggregated) error,
+) error {
+	whereClause, args := buildAuditFilterWhereClause(filters, "last_seen")
+	return d.eachAggregatedAuditLog(ctx, fmt.Sprintf(selectAggregatedAuditLogs, whereClause), args, fn)
+}
+
+// eachAggregatedAuditLog runs a query of selectAggregatedAuditLogs and calls fn with each entry it returns.
+func (d *Database) eachAggregatedAuditLog(
+	ctx context.Context,
+	query string,
+	args []interface{},
+	fn func(*AuditLogAggregated) error,
+) error {
+	rows, err := d.queryContext(ctx, query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query aggregated audit logs: %w", err)
+		return fmt.Errorf("failed to query aggregated audit logs: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
 
-	var logs []*AuditLogAggregated
 	for rows.Next() {
 		log, err := scanAuditLogAggregated(rows)
 		if err != nil {
-			return nil, fmt.Errorf("failed to scan aggregated audit log: %w", err)
+			return fmt.Errorf("failed to scan aggregated audit log: %w", err)
 		}
-		logs = append(logs, log)
+		if err := fn(log); err != nil {
+			return err
+		}
 	}
-
-	return logs, nil
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("failed to read aggregated audit logs: %w", err)
+	}
+	return nil
 }
 
 // scanAuditLogAggregated scans a single aggregated audit log row

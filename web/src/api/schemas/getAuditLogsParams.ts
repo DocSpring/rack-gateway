@@ -28,7 +28,7 @@ export type GetAuditLogsParams = {
    */
   page?: number;
   /**
-   * Page size
+   * Page size (at most 200)
    */
   limit?: number;
   /**

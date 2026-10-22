@@ -109,11 +109,13 @@ func TestAdminManagesEveryTokenWithinOwnerRoles(t *testing.T) {
 	w := e.do(t, admin.creds, http.MethodGet, "/api/v1/api-tokens/"+deployerToken.PublicID, nil)
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 
-	// Even an admin can't give a deployer's token more than the deployer holds.
+	// Even an admin can't give a deployer's token more than the deployer holds, and the refused update changes
+	// nothing, not even the name it carried.
 	w = e.do(t, admin.withMFA(t), http.MethodPut, "/api/v1/api-tokens/"+deployerToken.PublicID,
-		map[string]interface{}{"permissions": []string{"convox:app:delete"}})
+		map[string]interface{}{"name": "renamed", "permissions": []string{"convox:app:delete"}})
 	require.Equal(t, http.StatusForbidden, w.Code, w.Body.String())
 	require.Contains(t, w.Body.String(), "cannot exceed the owner's role")
+	require.Equal(t, []string{"deployer-ci", "viewer-script"}, e.listTokenNames(t, admin.creds))
 
 	w = e.do(t, admin.withMFA(t), http.MethodPost, "/api/v1/api-tokens", map[string]interface{}{
 		"name": "viewer-read", "user_email": "viewer@example.com", "permissions": []string{"convox:app:list"},

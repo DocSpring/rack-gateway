@@ -512,7 +512,8 @@ export const getRackGatewayAPI = () => {
   };
 
   /**
-   * Streams the filtered audit log dataset as CSV.
+   * Exports every audit log entry that matches the filters as CSV. The export is written in full before
+   * any of it is sent, so a failed export answers with an error, never with a partial file.
    * @summary Export audit logs as CSV
    */
   const getAuditLogsExport = (

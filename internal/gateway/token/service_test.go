@@ -172,11 +172,12 @@ func TestRenameToken(t *testing.T) {
 
 	// Rename the token
 	newName := "New Name"
-	err = service.UpdateTokenName(resp.APIToken.ID, newName)
+	err = service.UpdateToken(resp.APIToken.ID, &newName, nil)
 	assert.NoError(t, err)
 
 	// Reject empty name updates
-	err = service.UpdateTokenName(resp.APIToken.ID, "   ")
+	blank := "   "
+	err = service.UpdateToken(resp.APIToken.ID, &blank, nil)
 	assert.ErrorIs(t, err, ErrAPITokenNameRequired)
 
 	// Verify via list
@@ -240,5 +241,10 @@ func TestTokenNameWithControlCharactersRejected(t *testing.T) {
 		Permissions: DefaultCICDPermissions(),
 	})
 	require.NoError(t, err)
-	assert.ErrorIs(t, service.UpdateTokenName(resp.APIToken.ID, "Circle\nCI"), ErrAPITokenNameInvalid)
+	invalid := "Circle\nCI"
+	assert.ErrorIs(t, service.UpdateToken(resp.APIToken.ID, &invalid, []string{"convox:app:list"}),
+		ErrAPITokenNameInvalid)
+	stored, err := service.db.GetAPITokenByID(resp.APIToken.ID)
+	require.NoError(t, err)
+	assert.Equal(t, DefaultCICDPermissions(), stored.Permissions, "a refused update saves nothing")
 }

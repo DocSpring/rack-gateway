@@ -26,9 +26,13 @@ export type GetAuditLogsExportParams = {
   /**
    * ISO8601 start time
    */
-  since?: string;
+  start?: string;
   /**
    * ISO8601 end time
    */
-  until?: string;
+  end?: string;
+  /**
+   * Relative range (e.g. 24h, 7d, all, custom)
+   */
+  range?: string;
 };

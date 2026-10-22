@@ -1589,7 +1589,7 @@
                         }
                     },
                     {
-                        "description": "Page size",
+                        "description": "Page size (at most 200)",
                         "name": "limit",
                         "in": "query",
                         "schema": {
@@ -1678,7 +1678,7 @@
                         "SessionCookie": []
                     }
                 ],
-                "description": "Streams the filtered audit log dataset as CSV.",
+                "description": "Exports every audit log entry that matches the filters as CSV. The export is written in full before\nany of it is sent, so a failed export answers with an error, never with a partial file.",
                 "tags": [
                     "Audit"
                 ],
@@ -1718,7 +1718,7 @@
                     },
                     {
                         "description": "ISO8601 start time",
-                        "name": "since",
+                        "name": "start",
                         "in": "query",
                         "schema": {
                             "type": "string"
@@ -1726,7 +1726,15 @@
                     },
                     {
                         "description": "ISO8601 end time",
-                        "name": "until",
+                        "name": "end",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "Relative range (e.g. 24h, 7d, all, custom)",
+                        "name": "range",
                         "in": "query",
                         "schema": {
                             "type": "string"

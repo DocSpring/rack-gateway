@@ -357,6 +357,16 @@ func (d *Database) queryRow(q string, args ...interface{}) *sql.Row {
 	return d.db.QueryRow(d.rebind(q), args...)
 }
 
+func (d *Database) queryContext(ctx context.Context, q string, args ...interface{}) (*sql.Rows, error) {
+	d.logQuery("QUERY:", q, args...)
+	return d.db.QueryContext(ctx, d.rebind(q), args...)
+}
+
+func (d *Database) queryRowContext(ctx context.Context, q string, args ...interface{}) *sql.Row {
+	d.logQuery("QUERY ROW:", q, args...)
+	return d.db.QueryRowContext(ctx, d.rebind(q), args...)
+}
+
 // ResetDatabase drops all gateway tables and re-applies migrations. It reads
 // environment guards from process environment variables so callers do not need
 // to pass context explicitly.

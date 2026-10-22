@@ -267,7 +267,9 @@ func (d *Database) listAPITokens(query string, args ...interface{}) ([]*APIToken
 
 		tokens = append(tokens, &token)
 	}
-
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to list API tokens: %w", err)
+	}
 	return tokens, nil
 }
 
@@ -292,24 +294,26 @@ func (d *Database) DeleteAPIToken(id int64) error {
 	return nil
 }
 
-// UpdateAPITokenName renames an existing API token
-func (d *Database) UpdateAPITokenName(id int64, name string) error {
-	_, err := d.exec("UPDATE api_tokens SET name = ? WHERE id = ?", name, id)
-	if err != nil {
-		return fmt.Errorf("failed to update API token name: %w", err)
+// UpdateAPIToken renames an API token and replaces its permissions in one statement, so an update is saved whole or
+// not at all. A nil name keeps the token's name, and nil permissions keep its permissions.
+func (d *Database) UpdateAPIToken(id int64, name *string, permissions []string) error {
+	var newName, newPermissions interface{}
+	if name != nil {
+		newName = *name
 	}
-	return nil
-}
-
-// UpdateAPITokenPermissions replaces the permission set for an API token
-func (d *Database) UpdateAPITokenPermissions(id int64, permissions []string) error {
-	permsJSON, err := json.Marshal(permissions)
-	if err != nil {
-		return fmt.Errorf("failed to marshal permissions: %w", err)
+	if permissions != nil {
+		permsJSON, err := json.Marshal(permissions)
+		if err != nil {
+			return fmt.Errorf("failed to marshal permissions: %w", err)
+		}
+		newPermissions = string(permsJSON)
 	}
-	_, err = d.exec("UPDATE api_tokens SET permissions = ? WHERE id = ?", string(permsJSON), id)
+	_, err := d.exec(
+		"UPDATE api_tokens SET name = COALESCE(?, name), permissions = COALESCE(?, permissions) WHERE id = ?",
+		newName, newPermissions, id,
+	)
 	if err != nil {
-		return fmt.Errorf("failed to update API token permissions: %w", err)
+		return fmt.Errorf("failed to update API token: %w", err)
 	}
 	return nil
 }

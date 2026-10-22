@@ -167,21 +167,21 @@ func (s *Service) DeleteToken(tokenID int64) error {
 	return s.db.DeleteAPIToken(tokenID)
 }
 
-// UpdateTokenName updates the display name of an API token
-func (s *Service) UpdateTokenName(tokenID int64, name string) error {
-	trimmed, err := normalizeTokenName(name)
-	if err != nil {
-		return err
+// UpdateToken renames an API token and replaces its permissions, both or neither: the name is checked before
+// anything is saved. A nil name keeps the token's name, and nil permissions keep its permissions. The caller checks
+// the permissions against the owner's role first.
+func (s *Service) UpdateToken(tokenID int64, name *string, permissions []string) error {
+	if name != nil {
+		trimmed, err := normalizeTokenName(*name)
+		if err != nil {
+			return err
+		}
+		if err := s.ensureUniqueTokenName(trimmed, tokenID); err != nil {
+			return err
+		}
+		name = &trimmed
 	}
-	if err := s.ensureUniqueTokenName(trimmed, tokenID); err != nil {
-		return err
-	}
-	return s.db.UpdateAPITokenName(tokenID, trimmed)
-}
-
-// UpdateTokenPermissions updates the permission list for an API token
-func (s *Service) UpdateTokenPermissions(tokenID int64, permissions []string) error {
-	return s.db.UpdateAPITokenPermissions(tokenID, permissions)
+	return s.db.UpdateAPIToken(tokenID, name, permissions)
 }
 
 // HasPermission checks if an API token has a specific permission
