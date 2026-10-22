@@ -4,7 +4,7 @@ psql_query() {
     local sql="$1"
     local output
     set +e
-    output=$(docker exec -i rack-gateway-postgres-1 psql -U postgres -d "$E2E_DATABASE_NAME" -At -F $'\t' -c "$sql" 2>&1)
+    output=$(docker compose exec -T postgres psql -U postgres -d "$E2E_DATABASE_NAME" -At -F $'\t' -c "$sql" 2>&1)
     local status=$?
     set -e
     if [[ $status -ne 0 ]]; then
@@ -118,7 +118,7 @@ assert_deploy_approval_fields() {
 }
 
 reset_all_test_state() {
-    if ! docker ps --format '{{.Names}}' | grep -q '^rack-gateway-postgres-1$'; then
+    if ! [ -n "$(docker compose ps -q postgres 2>/dev/null)" ]; then
         return 0
     fi
 

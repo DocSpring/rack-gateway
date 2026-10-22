@@ -16,8 +16,9 @@ import {
   clearMFAHeaders,
   getMFAHeaders,
   isMFAError,
-  setTotpHeader,
-  setWebAuthnHeader,
+  type StepUpVerification,
+  setMFAHeaders,
+  verifyStepUp,
 } from '@/contexts/step-up-helpers'
 import {
   createCancelledError,
@@ -65,7 +66,7 @@ export function StepUpProvider({ children }: { children: ReactNode }): React.Rea
     }
     debugLog('closeStepUp')
     setIsOpen(false)
-    queueRef.current.rejectAll(createCancelledError())
+    queueRef.current.cancel(createCancelledError())
   }, [isVerifying])
 
   const openStepUp = useCallback((request?: StepUpRequest) => {
@@ -104,73 +105,58 @@ export function StepUpProvider({ children }: { children: ReactNode }): React.Rea
     return await Promise.resolve(action())
   }, [])
 
-  // This is called by the form when user submits MFA code
+  // This is called by the form when the user answers the prompt. A wrong answer throws, so the form shows the error
+  // and the prompt stays open for another try.
   const handleVerify = useCallback(
-    async (params: {
-      method: 'totp' | 'webauthn'
-      code?: string
-      trust_device: boolean
-      session_data?: string
-      assertion_response?: string
-    }) => {
+    async (params: StepUpVerification) => {
       const queue = queueRef.current
       const request = queue.primary()
       if (!request?.action) {
         throw new Error('No active MFA request')
       }
+      debugLog('handleVerify called', { method: params.method, verify: Boolean(request.verify) })
 
-      debugLog('handleVerify called', { method: params.method })
-
-      // Set MFA headers
-      clearMFAHeaders()
-      if (params.method === 'totp') {
-        setTotpHeader(params.code)
-        debugLog('Set TOTP header', { code: params.code })
+      if (request.verify) {
+        await verifyStepUp(params)
       } else {
-        setWebAuthnHeader({
-          session_data: params.session_data,
-          assertion_response: params.assertion_response,
-        })
-        debugLog('Set WebAuthn header')
+        setMFAHeaders(params)
       }
 
-      debugLog('MFA headers before action', getMFAHeaders())
-
-      let result: unknown
+      let settle: () => void
       try {
-        // Run the action - this will make a new request with MFA headers
-        result = await runAction(request.action)
-        debugLog('handleVerify - action succeeded')
+        // Unless the gateway has already checked the answer, the retried request sends it as its MFA proof
+        const result = await runAction(request.action)
+        settle = () => request.onResolve?.(result)
       } catch (error) {
         debugLog('handleVerify - action failed', error)
-
-        // Keep the dialog open and the queue intact; re-throw so the form shows the error inline
-        throw error
+        if (!request.verify && isMFAError(error)) {
+          throw error
+        }
+        // The request failed for another reason: settle it and carry on with the rest of the queue
+        settle = () => request.onReject?.(error)
       } finally {
         clearMFAHeaders()
       }
 
-      // Success: close the dialog, resolve this request, then retry everything that was waiting
+      // Close the dialog, settle this request, then retry everything that was waiting
       const waiting = queue.drain().filter((queued) => queued !== request)
       setIsOpen(false)
-      request.onResolve?.(result)
-      retryQueuedRequests(waiting, { run: runAction, isMFAError, requeue: openStepUp }).catch(
-        (error: unknown) => {
-          debugLog('retryQueuedRequests failed', error)
-        }
-      )
+      settle()
+      const { cancelCount } = queue
+      retryQueuedRequests(waiting, {
+        run: runAction,
+        isMFAError,
+        requeue: openStepUp,
+        cancelled: () => queue.cancelCount !== cancelCount,
+      }).catch((error: unknown) => {
+        debugLog('retryQueuedRequests failed', error)
+      })
     },
     [openStepUp, runAction]
   )
 
   const handleDialogVerify = useCallback(
-    async (params: {
-      method: 'totp' | 'webauthn'
-      code?: string
-      trust_device: boolean
-      session_data?: string
-      assertion_response?: string
-    }) => {
+    async (params: StepUpVerification) => {
       setIsVerifying(true)
       try {
         await handleVerify(params)

@@ -22,8 +22,11 @@ type Report struct {
 	EventsChecked int64
 	FirstChecked  int64
 	LastChecked   int64
-	// LegacyEvents were written before hash v2: only their previous_hash links are checked.
+	// LegacyEvents were written before hash v2: only their previous_hash links are checked. Their content can't be
+	// verified: a v1 event_hash can't be recomputed, so a v1 event whose content was changed (by someone able to get
+	// past the append-only trigger) still passes. LastLegacy is the last one checked.
 	LegacyEvents int64
+	LastLegacy   int64
 	// V2Events had their HMAC recomputed.
 	V2Events int64
 	// LegacyIndexGaps are jumps in legacy chain indexes, which the old sequence-based writer left after failed
@@ -104,6 +107,7 @@ func (r *Report) countEvent(row *db.AuditChainRow) {
 		r.V2Events++
 	} else {
 		r.LegacyEvents++
+		r.LastLegacy = row.ChainIndex
 	}
 }
 
@@ -120,6 +124,8 @@ func (r *Report) Write(w io.Writer) error {
 	case r.StoppedBy != "":
 		p.line("Result: FAILED (%d integrity failures, and stopped before it finished: %s)", r.FailureCount,
 			r.StoppedBy)
+	case r.OK() && r.LegacyEvents > 0:
+		p.line("Result: OK, except that the content of %d legacy (v1) events can't be verified", r.LegacyEvents)
 	case r.OK():
 		p.line("Result: OK")
 	default:
@@ -142,7 +148,8 @@ func (r *Report) writeChain(p *summaryPrinter) {
 		p.line("  hash v2 from event %d: %d events checked, HMAC recomputed", r.Head.HashV2From.Int64, r.V2Events)
 	}
 	if r.LegacyEvents > 0 {
-		p.line("  legacy (v1) events: %d checked, previous_hash links only (HMAC not recomputable)", r.LegacyEvents)
+		p.line("  legacy (v1) events: %d checked (up to event %d), previous_hash links only: their content is "+
+			"unverifiable (a v1 event_hash can't be recomputed)", r.LegacyEvents, r.LastLegacy)
 	}
 	if hasLegacyEvents(r.Head) {
 		p.line("  hash v2 start: %s", r.describeHashV2StartConfirmation())

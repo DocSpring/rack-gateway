@@ -21,6 +21,7 @@ const DIGITS_ONLY_REGEX = /^\d+$/
 function resolveFormView(
   isLoading: boolean,
   useBackupCode: boolean,
+  useYubiKeyOTP: boolean,
   useWebAuthn: boolean
 ): FormView {
   if (isLoading) {
@@ -28,6 +29,9 @@ function resolveFormView(
   }
   if (useBackupCode) {
     return 'backup'
+  }
+  if (useYubiKeyOTP) {
+    return 'yubikey'
   }
   return useWebAuthn ? 'webauthn' : 'totp'
 }
@@ -42,6 +46,7 @@ export function MFAVerificationForm({
   onVerify,
   onSuccess,
   onError,
+  showError = true,
   onMFAStatusLoaded,
   focusOnMount = true,
   showTrustDevice = true,
@@ -57,6 +62,7 @@ export function MFAVerificationForm({
   const [error, setError] = useState<string | null>(null)
   const [useWebAuthn, setUseWebAuthn] = useState(false)
   const [useBackupCode, setUseBackupCode] = useState(false)
+  const [useYubiKeyOTP, setUseYubiKeyOTP] = useState(false)
   const [isVerifying, setIsVerifying] = useState(false)
   const [inputVersion, setInputVersion] = useState(0)
   const lastSubmittedCodeRef = useRef<string | null>(null)
@@ -85,6 +91,7 @@ export function MFAVerificationForm({
   const hasWebAuthn = (mfaStatus?.methods?.filter((m) => m.type === 'webauthn').length ?? 0) > 0
   const hasTOTP = (mfaStatus?.methods?.filter((m) => m.type === 'totp').length ?? 0) > 0
   const hasBackupCodes = (mfaStatus?.backup_codes?.unused ?? 0) > 0
+  const hasYubiKeyOTP = mfaStatus?.methods?.some((m) => m.type === 'yubiotp') ?? false
 
   const resolvedInitialMethod = useMemo<MFAMethod | null>(
     () =>
@@ -98,11 +105,16 @@ export function MFAVerificationForm({
   )
 
   useEffect(() => {
-    if (!(mfaStatus && resolvedInitialMethod)) {
+    if (!mfaStatus) {
       return
     }
-    setUseWebAuthn(resolvedInitialMethod === 'webauthn')
-  }, [mfaStatus, resolvedInitialMethod])
+    if (resolvedInitialMethod) {
+      setUseWebAuthn(resolvedInitialMethod === 'webauthn')
+      return
+    }
+    // A user whose only factor is a YubiKey OTP starts there.
+    setUseYubiKeyOTP(hasYubiKeyOTP)
+  }, [hasYubiKeyOTP, mfaStatus, resolvedInitialMethod])
 
   // Submits a TOTP or backup code. Backup codes never trust the device: they are for recovery.
   const verifyCode = useCallback(
@@ -142,7 +154,7 @@ export function MFAVerificationForm({
 
   const trySubmitCode = useCallback(() => {
     const pending = pendingCodeRef.current
-    if (useWebAuthn || useBackupCode || isVerifying) {
+    if (useWebAuthn || useBackupCode || useYubiKeyOTP || isVerifying) {
       return
     }
 
@@ -157,7 +169,7 @@ export function MFAVerificationForm({
     verifyCode(pending, trustDevice).catch(() => {
       /* errors handled in verifyCode */
     })
-  }, [isVerifying, trustDevice, useBackupCode, useWebAuthn, verifyCode])
+  }, [isVerifying, trustDevice, useBackupCode, useWebAuthn, useYubiKeyOTP, verifyCode])
 
   useEffect(() => {
     if (!isVerifying) {
@@ -244,7 +256,7 @@ export function MFAVerificationForm({
     useWebAuthn,
   ])
 
-  const view = resolveFormView(isMFAStatusLoading, useBackupCode, useWebAuthn)
+  const view = resolveFormView(isMFAStatusLoading, useBackupCode, useYubiKeyOTP, useWebAuthn)
 
   const renderProps: RenderProps = {
     showTrustDevice,
@@ -261,14 +273,26 @@ export function MFAVerificationForm({
     hasTOTP,
     hasWebAuthn,
     hasBackupCodes,
+    hasYubiKeyOTP,
     useWebAuthn,
+    useYubiKeyOTP,
     setUseWebAuthn,
     setUseBackupCode: (value: boolean) => {
       setError(null)
       setUseBackupCode(value)
     },
+    setUseYubiKeyOTP: (value: boolean) => {
+      setError(null)
+      setUseYubiKeyOTP(value)
+    },
     handleVerifyBackupCode: (backupCode: string) => {
       verifyCode(backupCode, false).catch(() => {
+        /* errors handled in verifyCode */
+      })
+    },
+    // A YubiKey OTP is checked by the same endpoint and header as an authenticator app's code.
+    handleVerifyYubiKeyOTP: (otp: string) => {
+      verifyCode(otp, trustDevice).catch(() => {
         /* errors handled in verifyCode */
       })
     },
@@ -289,6 +313,11 @@ export function MFAVerificationForm({
       >
         {describeMFAView(view, mode)}
       </p>
+      {showError && error && (
+        <p className="text-center text-destructive text-sm" role="alert">
+          {error}
+        </p>
+      )}
       {renderFormContent(view, renderProps)}
     </div>
   )

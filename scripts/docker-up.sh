@@ -190,7 +190,7 @@ fi
 
 # Wait for postgres and ensure databases exist before starting main services
 echo "Waiting for postgres and ensuring databases exist..."
-if docker ps --format '{{.Names}}' | grep -q '^rack-gateway-postgres-1$'; then
+if [ -n "$(docker compose ps -q postgres 2>/dev/null)" ]; then
   for _ in $(seq 1 20); do
     # Over TCP: the image's temporary init server only listens on the Unix socket, then restarts.
     if docker compose exec -T postgres pg_isready -U postgres -h 127.0.0.1 >/dev/null 2>&1; then

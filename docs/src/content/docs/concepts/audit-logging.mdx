@@ -216,16 +216,18 @@ rack-gateway-api verify-audit
 ```
 Audit chain: checked 48210 events (0..48209), latest event 48209
   hash v2 from event 31877: 16333 events checked, HMAC recomputed
-  legacy (v1) events: 31877 checked, previous_hash links only (HMAC not recomputable)
+  legacy (v1) events: 31877 checked (up to event 31876), previous_hash links only: their content is unverifiable (a v1 event_hash can't be recomputed)
   hash v2 start: pinned at event 31877, and recorded by 1210 format 2 anchors
 Anchors: 1460 checked, latest production/2025/03/02/13/anchor-20250302T13.json (written 2025-03-02T13:00:02Z)
 Warnings (1):
   - events 48190..48209 (20) were written after the latest anchor and aren't anchored yet
-Result: OK
+Result: OK, except that the content of 31877 legacy (v1) events can't be verified
 ```
 
 The command checks every link in the chain, recomputes the HMAC of every hash v2 event, checks every anchor and
-exits non-zero on any integrity failure. After upgrading from a version before hash v2, pin where hash v2 starts
+exits non-zero on any integrity failure. Events written before hash v2 (legacy v1 events) are checked for their
+links only: a v1 hash can't be recomputed, so a change to a v1 event's content (by someone able to get past the
+append-only trigger) wouldn't be found, and the result says so. After upgrading from a version before hash v2, pin where hash v2 starts
 with `AUDIT_HASH_V2_FROM`. See
 [Verification](/deployment/terraform/s3-worm-storage/#verification) for its options, the permissions it needs, and
 what it can and can't detect.

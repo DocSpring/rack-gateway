@@ -49,7 +49,7 @@ CI_METADATA="${CI_METADATA:-{\"workflow_id\":\"test-workflow-123\",\"pipeline_nu
 
 # Clean up any existing deploy requests for this commit
 echo -e "${BLUE}Cleaning up existing deploy requests for commit ${GIT_COMMIT:0:7}...${NC}"
-docker exec -i rack-gateway-postgres-1 psql -U postgres -d gateway_dev -c "DELETE FROM deploy_approval_requests WHERE git_commit_hash = '$GIT_COMMIT';" >/dev/null 2>&1 || true
+docker compose exec -T postgres psql -U postgres -d gateway_dev -c "DELETE FROM deploy_approval_requests WHERE git_commit_hash = '$GIT_COMMIT';" >/dev/null 2>&1 || true
 echo ""
 
 echo -e "${BLUE}Creating deploy approval request...${NC}"
