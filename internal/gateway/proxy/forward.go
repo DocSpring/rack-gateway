@@ -70,8 +70,9 @@ func (h *Handler) handleProcessCreation(r *http.Request, body []byte) {
 	}
 }
 
-// markDeployApprovalDeployedAfterPromote marks the approval behind a successful release promote as deployed,
-// so the approval can't promote again. It runs for every proxied response: promote responses aren't buffered.
+// markDeployApprovalDeployedAfterPromote marks the approval behind a successful release promote as deployed. It runs
+// for every proxied response: promote responses aren't buffered. When that fails the approval still can't promote
+// again: the promote keeps its claim, which never lapses.
 func (h *Handler) markDeployApprovalDeployedAfterPromote(r *http.Request, pth string, statusCode int) {
 	if r.Method != http.MethodPost || statusCode < 200 || statusCode >= 300 ||
 		!rbac.KeyMatch3(pth, "/apps/{app}/releases/{id}/promote") {
@@ -83,7 +84,8 @@ func (h *Handler) markDeployApprovalDeployedAfterPromote(r *http.Request, pth st
 	}
 
 	if err := h.database.MarkDeployApprovalAsDeployed(tracker.request.ID); err != nil {
-		log.Printf("Failed to mark deploy approval as deployed: %v", err)
+		log.Printf("Failed to mark deploy approval %d as deployed (it keeps its promote claim): %v",
+			tracker.request.ID, err)
 	}
 }
 

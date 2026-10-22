@@ -123,7 +123,8 @@ or delete them in the web UI and remove them from the list. Each user it creates
 | `DATABASE_URL` | Alternate Postgres URL |
 | `ADMIN_DATABASE_URL` | Admin URL for `migrate` and `reset-db` (falls back to the URLs above) |
 | `PGHOST` / `PGPORT` / `PGUSER` / `PGPASSWORD` / `PGDATABASE` | libpq connection fields |
-| `PGSSLMODE` | SSL mode override |
+| `PGSSLMODE` | SSL mode. It replaces the URL's `sslmode` only when it's stricter (`verify-full` over `require`, never the reverse). `convox.yml` sets `verify-full` |
+| `PGSSLROOTCERT` | CA bundle that verifies the database's certificate. The image ships Amazon RDS's at `/app/certs/rds-global-bundle.pem` |
 
 ### Pooling
 

@@ -127,3 +127,44 @@ func TestDeployApprovalReleaseIsNeverReplaced(t *testing.T) {
 	require.Equal(t, "B1", reloaded.BuildID)
 	require.Equal(t, "R1", reloaded.ReleaseID)
 }
+
+// A step the approval authorized records its result even when the approval expired while the step ran, so
+// extending the approval can carry on from it. An expired approval authorizes nothing new, and a request that was
+// never approved records nothing.
+func TestApprovedStepRecordsItsResultAfterExpiry(t *testing.T) {
+	database, userID, tokenID := newApprovalTestFixture(t)
+	approval := approvedForClaims(t, database, userID, tokenID, "docspring")
+	const objectURL = "object://docspring/tmp/a.tgz"
+	claimed, err := database.ClaimDeployApprovalObjectUpload(approval.ID, objectURL)
+	require.NoError(t, err)
+	require.True(t, claimed)
+	require.NoError(t, database.UpdateDeployApprovalRequestObjectURL(approval.ID, objectURL))
+	claimed, err = database.ClaimDeployApprovalBuild(approval.ID)
+	require.NoError(t, err)
+	require.True(t, claimed)
+
+	require.NoError(t, database.SetDeployApprovalExpiryForTest(approval.ID, time.Now().Add(-time.Minute)))
+	expired, _, err := database.ExpireDeployApprovalRequests(0, expiryEvent)
+	require.NoError(t, err)
+	require.Len(t, expired, 1)
+
+	require.NoError(t, database.MarkDeployApprovalRequestBuildStarted(approval.ID, "B1", "R1"))
+	require.NoError(t, database.AppendProcessIDToDeployApprovalRequest(approval.ID, "P1"))
+	require.NoError(t, database.AppendExecCommandToDeployApprovalRequest(approval.ID, "P1", "bin/migrate"))
+	reloaded, err := database.GetDeployApprovalRequest(approval.ID)
+	require.NoError(t, err)
+	require.Equal(t, gwdb.DeployApprovalRequestStatusExpired, reloaded.Status)
+	require.Equal(t, "B1", reloaded.BuildID)
+	require.Equal(t, "R1", reloaded.ReleaseID)
+	claimed, err = database.ClaimDeployApprovalPromote(approval.ID)
+	require.NoError(t, err)
+	require.False(t, claimed, "an expired approval authorizes nothing new")
+
+	pending, err := createApproval(t, database, userID, tokenID, "api-proxy")
+	require.NoError(t, err)
+	require.NoError(t, database.SetDeployApprovalCreatedAtForTest(pending.ID, time.Now().Add(-48*time.Hour)))
+	_, _, err = database.ExpireDeployApprovalRequests(time.Hour, expiryEvent)
+	require.NoError(t, err)
+	require.Error(t, database.AppendProcessIDToDeployApprovalRequest(pending.ID, "P2"),
+		"a request that was never approved records nothing")
+}

@@ -157,10 +157,10 @@ func (h *Handler) releaseDeployApprovalClaims(r *http.Request, pth string, statu
 }
 
 // promoteMayHaveApplied reports whether the rack may have applied a promote. The rack keeps applying a promote the
-// gateway gave up on, so a retry would run a second promote alongside it; such a promote keeps its claim until the
-// claim lapses. Only a promote that certainly didn't apply releases it: the rack answered with an error status, or
-// the request never reached the rack. Any other failure, such as a timeout or a response body that broke off after
-// a 2xx status (which reports no status), may have applied.
+// gateway gave up on, so a retry would run a second promote alongside it; such a promote keeps its claim, and CI
+// needs a new approval. Only a promote that certainly didn't apply releases it: the rack answered with an error
+// status, or the request never reached the rack. Any other failure, such as a timeout or a response body that broke
+// off after a 2xx status (which reports no status), may have applied.
 func promoteMayHaveApplied(statusCode int, forwardErr error) bool {
 	if statusCode >= 300 {
 		return false

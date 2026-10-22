@@ -61,7 +61,7 @@ Use this checklist before deploying Rack Gateway to production. Each item addres
 - [ ] **PostgreSQL properly configured**
   - Production-grade instance (not Docker)
   - Encryption at rest enabled
-  - SSL connections required
+  - TLS connections that verify the server (`PGSSLMODE=verify-full` with `PGSSLROOTCERT`)
   - Audit roles created, the gateway connecting as the app user and migrations as the admin user (see
     [Database Setup](/deployment/database-setup/#database-users-and-audit-roles))
   - Migrations applied with `rack-gateway-api migrate` before the release starts

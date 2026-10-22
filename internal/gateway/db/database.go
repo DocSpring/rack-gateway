@@ -82,7 +82,7 @@ func openDatabase(
 		return nil, fmt.Errorf("RGW_DATABASE_URL or DATABASE_URL is required")
 	}
 
-	// Ensure appropriate sslmode: require in non-dev unless explicitly set
+	// PGSSLMODE can make the DSN's sslmode stricter, never weaker
 	source = ensureSSLMode(source)
 
 	// Create database/sql connection (for existing code)
@@ -247,48 +247,6 @@ func NewFromEnv() (*Database, error) {
 	}
 	dsn := fmt.Sprintf("postgres://%s@%s:%s/%s", user, host, port, dbname)
 	return NewWithPoolConfigAndMigration(dsn, nil, autoMigrate)
-}
-
-// ensureSSLMode sets the DSN's sslmode to PGSSLMODE when that's set, and otherwise leaves the DSN alone.
-func ensureSSLMode(dsn string) string {
-	s := strings.TrimSpace(dsn)
-	if s == "" {
-		return dsn
-	}
-	// Only mutate sslmode when PGSSLMODE is explicitly set
-	mode := strings.TrimSpace(os.Getenv("PGSSLMODE"))
-	if mode == "" {
-		return dsn
-	}
-
-	lower := strings.ToLower(s)
-
-	// URL DSN: postgres:// or postgresql://
-	if strings.HasPrefix(lower, "postgres://") || strings.HasPrefix(lower, "postgresql://") {
-		u, err := url.Parse(s)
-		if err != nil {
-			return dsn
-		}
-		q := u.Query()
-		q.Set("sslmode", mode) // override or set
-		u.RawQuery = q.Encode()
-		return u.String()
-	}
-
-	// Keyword/libpq DSN: replace or append sslmode
-	parts := strings.Fields(s)
-	found := false
-	for i, p := range parts {
-		if strings.HasPrefix(strings.ToLower(p), "sslmode=") {
-			parts[i] = "sslmode=" + mode
-			found = true
-			break
-		}
-	}
-	if !found {
-		parts = append(parts, "sslmode="+mode)
-	}
-	return strings.Join(parts, " ")
 }
 
 // rebind converts ? placeholders to $1, $2 for Postgres driver

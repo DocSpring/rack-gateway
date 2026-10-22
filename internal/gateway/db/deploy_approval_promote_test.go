@@ -7,8 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Only one promote can hold an approval's claim. A failed promote releases it, and a stale claim (a gateway that
-// stopped mid-promote) can be taken over.
+// Only one promote can hold an approval's claim. A failed promote releases it; any other claim never lapses.
 func TestDeployApprovalPromoteClaim(t *testing.T) {
 	database, userID, tokenID := newApprovalTestFixture(t)
 	approval, err := createApproval(t, database, userID, tokenID, "docspring")
@@ -33,10 +32,12 @@ func TestDeployApprovalPromoteClaim(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, claimed, "a failed promote's claim is released for a retry")
 
-	require.NoError(t, database.SetDeployApprovalPromoteStartedForTest(approval.ID, time.Now().Add(-time.Hour)))
+	_, err = database.DB().Exec("UPDATE deploy_approval_requests SET promote_started_at = $1 WHERE id = $2",
+		time.Now().Add(-24*time.Hour), approval.ID)
+	require.NoError(t, err)
 	claimed, err = database.ClaimDeployApprovalPromote(approval.ID)
 	require.NoError(t, err)
-	require.True(t, claimed, "a stale claim can be taken over")
+	require.False(t, claimed, "a promote whose outcome is unknown keeps the claim, however old")
 
 	lapsed, err := createApproval(t, database, userID, tokenID, "other-app")
 	require.NoError(t, err)

@@ -462,8 +462,8 @@ pattern`, or `git-sha ... does not match the approved commit ...`.
 | Upload or build refused by the rack | The claim is released, so CI can retry with the same approval |
 | Build ran on the rack and failed | An approval makes one build: create a new request |
 | Promote refused by the rack | Can retry promote with same approval |
-| Promote timed out or lost its connection | Retries are refused for up to 15 minutes, since it may still be running |
-| Approval expired | Ask an admin to extend it, or create a new request |
+| Promote timed out or lost its connection | It may still be running, or may have succeeded: the approval can't promote again. Check the rack, and create a new request if the promote didn't apply |
+| Approval expired | Ask an admin to extend it, or create a new request. A build or process that started before it expired is still recorded on it |
 
 ## Best Practices
 

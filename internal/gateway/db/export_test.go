@@ -12,8 +12,3 @@ func (d *Database) SetDeployApprovalCreatedAtForTest(id int64, createdAt time.Ti
 	_, err := d.exec(`UPDATE deploy_approval_requests SET created_at = ? WHERE id = ?`, createdAt, id)
 	return err
 }
-
-func (d *Database) SetDeployApprovalPromoteStartedForTest(id int64, startedAt time.Time) error {
-	_, err := d.exec(`UPDATE deploy_approval_requests SET promote_started_at = ? WHERE id = ?`, startedAt, id)
-	return err
-}

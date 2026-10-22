@@ -57,6 +57,8 @@ WORKDIR /app
 COPY --from=builder /out/rack-gateway-api ./
 COPY --from=webbuild /app/web/dist ./web/dist
 COPY --chmod=0755 scripts/start-gateway.sh ./scripts/start-gateway.sh
+# Amazon RDS's CA bundle, for PGSSLMODE=verify-full with PGSSLROOTCERT (see certs/README.md)
+COPY --chmod=0644 certs/rds-global-bundle.pem ./certs/rds-global-bundle.pem
 
 USER 10001:10001
 

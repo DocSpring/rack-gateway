@@ -5,6 +5,14 @@ import (
 	"strings"
 )
 
+// recordableApproval matches an approval that was approved, whether or not it has expired since. A step the
+// approval authorized records its result (a build, a process, an exec command) even when the approval expired while
+// the step ran, so extending the approval can carry on from it. Recording never authorizes anything: every new step
+// claims an approved, unexpired approval first. Its two placeholders take recordableApprovalStatuses.
+const recordableApproval = `status IN (?, ?) AND approved_at IS NOT NULL`
+
+var recordableApprovalStatuses = []interface{}{DeployApprovalRequestStatusApproved, DeployApprovalRequestStatusExpired}
+
 // MarkDeployApprovalRequestBuildStarted records the build created under an approval's build claim and, once the
 // build has finished, its release: the real Convox API returns a new build with an empty release, which a later
 // read of the build fills in. Neither is ever replaced, so a second build can't be recorded and a build read can't
@@ -13,21 +21,22 @@ func (d *Database) MarkDeployApprovalRequestBuildStarted(id int64, buildID, rele
 	if strings.TrimSpace(buildID) == "" {
 		return fmt.Errorf("build id required")
 	}
+	args := append([]interface{}{buildID, releaseID, id}, recordableApprovalStatuses...)
 	res, err := d.exec(
 		`UPDATE deploy_approval_requests
          SET build_id = ?, release_id = COALESCE(NULLIF(release_id, ''), NULLIF(?::text, '')), updated_at = NOW()
-         WHERE id = ? AND status = ?
+         WHERE id = ? AND `+recordableApproval+`
            AND (build_id = ? OR (build_id IS NULL AND build_started_at IS NOT NULL))
            AND (?::text = '' OR NULLIF(release_id, '') IS NULL OR release_id = ?)`,
-		buildID, releaseID, id, DeployApprovalRequestStatusApproved, buildID, releaseID, releaseID,
+		append(args, buildID, releaseID, releaseID)...,
 	)
 	updated, err := updatedOneRow(res, err)
 	if err != nil {
 		return fmt.Errorf("failed to update build tracking: %w", err)
 	}
 	if !updated {
-		return fmt.Errorf("deploy approval request %d is not approved, has no build claim, or has another build "+
-			"or release", id)
+		return fmt.Errorf("deploy approval request %d was never approved, has no build claim, or has another "+
+			"build or release", id)
 	}
 	return nil
 }
@@ -44,10 +53,8 @@ func (d *Database) AppendProcessIDToDeployApprovalRequest(id int64, processID st
 		`UPDATE deploy_approval_requests
          SET process_ids = array_append(COALESCE(process_ids, ARRAY[]::TEXT[]), ?),
              updated_at = NOW()
-         WHERE id = ? AND status = ?`,
-		processID,
-		id,
-		DeployApprovalRequestStatusApproved,
+         WHERE id = ? AND `+recordableApproval,
+		append([]interface{}{processID, id}, recordableApprovalStatuses...)...,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to append process ID to deploy approval request: %w", err)
@@ -76,11 +83,8 @@ func (d *Database) AppendExecCommandToDeployApprovalRequest(id int64, processID,
 		`UPDATE deploy_approval_requests
          SET exec_commands = COALESCE(exec_commands, '{}'::jsonb) || jsonb_build_object(?::text, ?::text),
              updated_at = NOW()
-         WHERE id = ? AND status = ?`,
-		processID,
-		command,
-		id,
-		DeployApprovalRequestStatusApproved,
+         WHERE id = ? AND `+recordableApproval,
+		append([]interface{}{processID, command, id}, recordableApprovalStatuses...)...,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to append exec command to deploy approval request: %w", err)

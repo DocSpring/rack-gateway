@@ -19,7 +19,11 @@ func TestCompleteLoginStopsWithTheRequest(t *testing.T) {
 	provider := fakeOIDCProvider(t, key)
 	mux, ok := provider.Config.Handler.(*http.ServeMux)
 	require.True(t, ok)
-	mux.HandleFunc("/token", func(_ http.ResponseWriter, r *http.Request) { <-r.Context().Done() })
+	// The stalled token request ends when the test does. Cleanups run last first, so this runs before the
+	// provider's server waits for its requests to finish.
+	release := make(chan struct{})
+	t.Cleanup(func() { close(release) })
+	mux.HandleFunc("/token", func(http.ResponseWriter, *http.Request) { <-release })
 	handler, err := NewOAuthHandler("client-id", "secret", "http://localhost:8447", "example.com", provider.URL)
 	require.NoError(t, err)
 
