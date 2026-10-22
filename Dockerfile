@@ -47,9 +47,12 @@ RUN VERSION=$(node -p "require('./web/package.json').version") && \
 FROM alpine:3.24.2@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6
 
 # ca-certificates for outbound TLS. No curl: the compose healthcheck uses busybox wget.
+# /app/certs is made here because COPY --chmod would give a directory it creates the file's mode, which leaves no
+# search bit for the runtime user.
 RUN apk --no-cache add ca-certificates \
     && addgroup -S -g 10001 gateway \
-    && adduser -S -D -H -u 10001 -G gateway -s /sbin/nologin gateway
+    && adduser -S -D -H -u 10001 -G gateway -s /sbin/nologin gateway \
+    && mkdir -p /app/certs
 
 WORKDIR /app
 
