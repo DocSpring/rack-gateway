@@ -28,7 +28,12 @@ func (h *AdminHandler) parseApprovalWindowRequest(c *gin.Context) (*approvalWind
 	if !ok {
 		return nil, false
 	}
-	expiresAt := h.getDeployApprovalExpiry()
+	expiresAt, err := h.getDeployApprovalExpiry()
+	if err != nil {
+		gtwlog.Errorf("deploy approvals: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read deploy approval settings"})
+		return nil, false
+	}
 	details := map[string]string{"expires_at": expiresAt.UTC().Format(time.RFC3339)}
 	if differentApproverChecked {
 		details[differentApproverAuditKey] = "true"

@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
+	"github.com/DocSpring/rack-gateway/internal/gateway/debugredact"
 	gtwlog "github.com/DocSpring/rack-gateway/internal/gateway/logging"
 	"github.com/DocSpring/rack-gateway/internal/gateway/netutil"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
@@ -170,7 +171,7 @@ func (l *Logger) LogRequest(
 		UserEmail:    userEmail,
 		Method:       r.Method,
 		Path:         path,
-		QueryParams:  RedactQuery(r.URL.RawQuery),
+		QueryParams:  debugredact.RedactQuery(r.URL.RawQuery),
 		Status:       status,
 		LatencyMs:    latency.Milliseconds(),
 		RBACDecision: rbacDecision,
@@ -311,7 +312,7 @@ func (_ *Logger) BuildDetailsJSON(r *http.Request) string {
 	}
 
 	if r.URL.RawQuery != "" {
-		details["query"] = RedactQuery(r.URL.RawQuery)
+		details["query"] = debugredact.RedactQuery(r.URL.RawQuery)
 	}
 
 	// For exec, include command and process id if available. A command line can carry credentials, which the

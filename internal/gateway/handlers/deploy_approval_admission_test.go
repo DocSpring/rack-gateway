@@ -36,7 +36,9 @@ func TestADuplicateApprovalRequestDoesntCallGitHub(t *testing.T) {
 // count.
 func TestApprovalRequestsAreLimitedPerCreator(t *testing.T) {
 	f := newCreateApprovalFixture(t)
-	f.handler.approvalCreations = approvalCreationLimit{creators: ratelimit.NewLimiter(1.0/3600, 2), retryAfter: "3600"}
+	f.handler.approvalCreations = approvalCreationLimit{
+		creators: ratelimit.NewLimiter(1.0/3600, 2), attempts: ratelimit.NewLimiter(1.0/3600, 6), retryAfter: "3600",
+	}
 
 	first := map[string]string{"app": "first", "git_commit_hash": ghBranchHead}
 	resp := f.createWith(t, first)
@@ -54,5 +56,28 @@ func TestApprovalRequestsAreLimitedPerCreator(t *testing.T) {
 	f.token = second
 	resp = f.createWith(t, map[string]string{"app": "third", "git_commit_hash": ghBranchHead})
 	require.Equal(t, http.StatusTooManyRequests, resp.StatusCode, responseError(t, resp))
+	require.Equal(t, "3600", resp.Header.Get("Retry-After"))
+}
+
+// Every attempt to create a request counts against a larger limit, duplicates and refusals included, and it's
+// checked before the request is: a creator past it is refused before the gateway looks the app up on the rack,
+// sweeps expired approvals or looks for a duplicate.
+func TestApprovalRequestAttemptsAreLimitedPerCreator(t *testing.T) {
+	f := newCreateApprovalFixture(t)
+	f.handler.approvalCreations = approvalCreationLimit{
+		creators: ratelimit.NewLimiter(1.0/3600, 2), attempts: ratelimit.NewLimiter(1.0/3600, 3), retryAfter: "3600",
+	}
+
+	first := map[string]string{"app": "first", "git_commit_hash": ghBranchHead}
+	resp := f.createWith(t, first)
+	require.Equal(t, http.StatusCreated, resp.StatusCode, responseError(t, resp))
+	for i := 0; i < 2; i++ {
+		resp = f.createWith(t, first)
+		require.Equal(t, http.StatusConflict, resp.StatusCode, responseError(t, resp))
+	}
+
+	resp = f.createWith(t, map[string]string{"app": "Not_An_App", "git_commit_hash": ghBranchHead})
+	require.Equal(t, http.StatusTooManyRequests, resp.StatusCode, "refused before the app is checked: %s",
+		responseError(t, resp))
 	require.Equal(t, "3600", resp.Header.Get("Retry-After"))
 }

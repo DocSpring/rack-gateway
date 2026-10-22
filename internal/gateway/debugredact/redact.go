@@ -135,13 +135,15 @@ func URL(raw string) string {
 	parsed.Fragment = ""
 	parsed.RawFragment = ""
 	if parsed.RawQuery != "" {
-		parsed.RawQuery = redactQuery(parsed.RawQuery)
+		parsed.RawQuery = RedactQuery(parsed.RawQuery)
 	}
 	return parsed.String()
 }
 
-// redactQuery redacts the values of sensitive parameters in a query string, or all of it when it can't be parsed.
-func redactQuery(rawQuery string) string {
+// RedactQuery redacts the values of sensitive parameters in a query string (an api_key, a client_secret, a login
+// code; see isSensitiveName), or all of it when it can't be parsed. The audit log and the request logs keep a
+// request's query this way too.
+func RedactQuery(rawQuery string) string {
 	values, err := url.ParseQuery(rawQuery)
 	if err != nil {
 		return url.QueryEscape(Redacted)

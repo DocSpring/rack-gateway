@@ -39,6 +39,10 @@ func (h *APIHandler) CreateDeployApprovalRequest(c *gin.Context) {
 		return
 	}
 
+	if !h.admitApprovalAttempt(c, dbUser.ID) {
+		return
+	}
+
 	var req CreateDeployApprovalRequestRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload"})

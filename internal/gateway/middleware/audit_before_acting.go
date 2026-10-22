@@ -11,6 +11,7 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
+	"github.com/DocSpring/rack-gateway/internal/gateway/debugredact"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 )
 
@@ -78,7 +79,7 @@ func routeAuditEntry(c *gin.Context, spec rbac.RouteSpec, authUser *auth.User) *
 	name := spec.AuditName(c.Request.URL.Query())
 	details := map[string]string{"method": c.Request.Method, "route": spec.Pattern}
 	if raw := c.Request.URL.RawQuery; raw != "" {
-		details["query"] = audit.RedactQuery(raw)
+		details["query"] = debugredact.RedactQuery(raw)
 	}
 	detailsJSON, _ := json.Marshal(details)
 	return &db.AuditLog{

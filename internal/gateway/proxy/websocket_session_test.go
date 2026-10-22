@@ -1,8 +1,11 @@
 package proxy
 
 import (
+	"context"
 	"errors"
 	"net"
+	"net/http"
+	"net/http/httptest"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -138,6 +141,17 @@ func TestABlockedWriteEndsTheSession(t *testing.T) {
 		}
 	}()
 	waitForSessionEnd(t, conn)
+}
+
+// A session a deploy approval allowed ends after an hour, whether or not the approval's window has ended; any other
+// lasts up to maxWebSocketSessionLifetime.
+func TestAnApprovalsSessionLastsAnHourAtMost(t *testing.T) {
+	r := httptest.NewRequest(http.MethodGet, "/apps/app/processes/p1/exec", nil)
+	require.Equal(t, maxWebSocketSessionLifetime, sessionLifetime(r))
+
+	tracker := &deployApprovalTracker{request: &db.DeployApprovalRequest{ID: 1}, app: "app"}
+	r = r.WithContext(context.WithValue(r.Context(), deployApprovalContextKey, tracker))
+	require.Equal(t, time.Hour, sessionLifetime(r))
 }
 
 // recheck ends a session whose user is locked, whose sign-in is revoked, whose roles no longer allow it, or whose

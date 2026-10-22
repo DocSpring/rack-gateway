@@ -74,7 +74,7 @@ func (h *Handler) proxyWebSocket(
 		recheck:        h.sessionRecheck(r, authUser, originalPath),
 		recheckEvery:   sessionRecheckPeriod,
 		recheckTimeout: sessionRecheckTimeout,
-		maxLifetime:    maxWebSocketSessionLifetime,
+		maxLifetime:    sessionLifetime(r),
 	})
 	return http.StatusSwitchingProtocols, nil
 }

@@ -18,7 +18,20 @@ const (
 	sessionRecheckTimeout = 30 * time.Second
 	// maxWebSocketSessionLifetime ends any exec or log session after this long, whatever its caller's access.
 	maxWebSocketSessionLifetime = 12 * time.Hour
+	// approvalSessionLifetime ends a session a deploy approval allowed after this long. The approval's window is
+	// when its steps may start, so a command started just before the window ends (a migration, say) isn't cut off
+	// when it does, but it can't run on for hours either: `convox run` stops its process after an hour too.
+	approvalSessionLifetime = time.Hour
 )
+
+// sessionLifetime is how long an exec or log session on r may stay open: approvalSessionLifetime when a deploy
+// approval allowed it, maxWebSocketSessionLifetime otherwise.
+func sessionLifetime(r *http.Request) time.Duration {
+	if hasApproval(getDeployApprovalTracker(r.Context())) {
+		return approvalSessionLifetime
+	}
+	return maxWebSocketSessionLifetime
+}
 
 // errSessionAccessGone ends an open session whose caller can no longer start it.
 var errSessionAccessGone = errors.New("access revoked")

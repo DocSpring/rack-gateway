@@ -5,8 +5,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
 	"github.com/DocSpring/rack-gateway/internal/gateway/config"
+	"github.com/DocSpring/rack-gateway/internal/gateway/debugredact"
 )
 
 var staticAssetExtensions = map[string]struct{}{
@@ -42,7 +42,7 @@ func DebugLogging(_ *config.Config) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		path := c.Request.URL.EscapedPath()
 		if c.Request.URL.RawQuery != "" {
-			path += "?" + audit.RedactQuery(c.Request.URL.RawQuery)
+			path += "?" + debugredact.RedactQuery(c.Request.URL.RawQuery)
 		}
 		logReqInfo, logReqHeaders, logReqBody, logRespHeaders := shouldLogDebugTopics(path)
 
