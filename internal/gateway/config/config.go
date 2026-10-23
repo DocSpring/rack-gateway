@@ -38,10 +38,12 @@ type Config struct {
 	DevMode               bool // DEV_MODE, read through testbypass: always false in a release build
 	Racks                 map[string]RackConfig
 	RackTLSPinningEnabled bool
-	TrustedProxies        []string
-	GitHubToken           string
-	GitHubAPIURL          string
-	CircleCIToken         string
+	// AuditAnchorsConfigured is whether AUDIT_ANCHOR_BUCKET is set: the audit chain is anchored in S3.
+	AuditAnchorsConfigured bool
+	TrustedProxies         []string
+	GitHubToken            string
+	GitHubAPIURL           string
+	CircleCIToken          string
 	// DeployApprovalPendingMaxAge is how long a deploy approval request can stay pending before it expires
 	// (0 keeps pending requests forever).
 	DeployApprovalPendingMaxAge time.Duration
@@ -135,7 +137,8 @@ func loadBaseConfig() *Config {
 		// certificate on every restart (see stdapi.Server.Listen). Pinning that dynamic cert would
 		// break after each deploy. If Convox supports providing a stable internal certificate in the
 		// future, operators can enable this flag to re-activate TOFU pinning.
-		RackTLSPinningEnabled: getEnv("ENABLE_RACK_TLS_PINNING", "false") == "true",
+		RackTLSPinningEnabled:  getEnv("ENABLE_RACK_TLS_PINNING", "false") == "true",
+		AuditAnchorsConfigured: strings.TrimSpace(getEnv("AUDIT_ANCHOR_BUCKET", "")) != "",
 	}
 }
 

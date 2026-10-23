@@ -168,6 +168,7 @@ func registerUserManagementRoutes(authenticated *gin.RouterGroup, cfg *Config, h
 	users.POST("/:email/lock", h.admin.LockUser)
 	users.POST("/:email/unlock", h.admin.UnlockUser)
 	users.POST("/:email/mfa/reset", h.admin.ResetUserMFA)
+	users.POST("/:email/sign-in/reset", h.admin.ResetUserSignIn)
 
 	auditLogs := authenticated.Group("/audit-logs")
 	if cfg.SessionManager != nil {

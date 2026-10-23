@@ -101,7 +101,7 @@ func Run(ctx context.Context, source ChainSource, opts Options) (*Report, error)
 	if err != nil {
 		return nil, err
 	}
-	report := &Report{Head: head, HashV2FromPinned: opts.HashV2From}
+	report := &Report{Head: head, HashV2FromPinned: opts.HashV2From, Anchored: opts.Anchors != nil}
 	if err := runChecks(ctx, source, opts, head, report); err != nil {
 		report.StoppedBy = err.Error()
 		return report, err

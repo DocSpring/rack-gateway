@@ -13,10 +13,13 @@ import (
 // denialWindow is how long repeats of a denial are counted rather than written.
 const denialWindow = time.Minute
 
-// maxDenialRuns caps the runs kept. Past it, the denials of requests without a principal (no user or API token, so
-// keyed by client IP) share one run, so a flood from many addresses can't grow memory or the log without bound.
-// Users' and API tokens' denials always keep their own runs.
+// maxDenialRuns caps the runs kept. Past it, a denial without a run of its own shares one with its principal's other
+// denials (see overflowKey), so a flood of distinct targets or client addresses can't grow memory or the log without
+// bound.
 const maxDenialRuns = 1000
+
+// maxDenialKeyPath caps how much of a denied request's path its run's key keeps.
+const maxDenialKeyPath = 512
 
 // anonymousOverflowKey is the run the denials of requests without a principal share once maxDenialRuns is reached.
 const anonymousOverflowKey = "ip:*"
@@ -88,8 +91,9 @@ type denialRun struct {
 	firstRepeat time.Time
 	lastRepeat  time.Time
 	ended       bool
-	// overflow marks the run shared by requests without a principal once maxDenialRuns is reached.
-	overflow bool
+	// overflow is the details field that marks a run shared past maxDenialRuns: from_many_clients for requests
+	// without a principal, many_targets for one principal's. Empty for any other run.
+	overflow string
 }
 
 func newDenialThrottle(write func(*db.AuditLog)) *denialThrottle {
@@ -104,14 +108,15 @@ func newDenialThrottle(write func(*db.AuditLog)) *denialThrottle {
 
 // record writes entry if it starts a run, or counts it as a repeat.
 func (t *denialThrottle) record(entry *db.AuditLog) {
-	key := denialKey(entry)
+	principal := denialPrincipal(entry)
+	key := denialKey(principal, entry)
 	now := t.now()
 
 	t.mu.Lock()
 	run := t.runs[key]
-	overflow := false
-	if run == nil && entry.APITokenID == nil && entry.UserEmail == "" && len(t.runs) >= maxDenialRuns {
-		key, overflow = anonymousOverflowKey, true
+	overflow := ""
+	if run == nil && len(t.runs) >= maxDenialRuns {
+		key, overflow = overflowKey(principal)
 		run = t.runs[key]
 	}
 	if run != nil && now.Sub(run.started) < t.window {
@@ -190,29 +195,47 @@ func (t *denialThrottle) writeRepeats(run *denialRun) {
 		"repeats_from":  run.firstRepeat.UTC().Format(time.RFC3339),
 		"repeats_until": run.lastRepeat.UTC().Format(time.RFC3339),
 	}
-	if run.overflow {
-		// The repeats came from many clients; the entry has the last one's fields.
-		fields["from_many_clients"] = true
+	if run.overflow != "" {
+		// The repeats came from many clients, or were against many targets; the entry has the last one's fields.
+		fields[run.overflow] = true
 	}
 	entry.Details = WithDetails(entry.Details, fields)
 	t.write(&entry)
 }
 
-// denialKey identifies a denial's principal (an API token, or else a user, or else the client IP), its action and
-// its target: the resource, and for a proxied request its method and path. Only repeats against the same target
-// are counted together, so a denial against one target can't hide among denials against others.
-func denialKey(entry *db.AuditLog) string {
-	principal := entry.UserEmail
+// denialPrincipal identifies who was denied: an API token, or else a user, or else the client IP.
+func denialPrincipal(entry *db.AuditLog) string {
 	switch {
 	case entry.APITokenID != nil:
-		principal = fmt.Sprintf("token:%d", *entry.APITokenID)
-	case principal == "":
-		principal = "ip:" + entry.IPAddress
+		return fmt.Sprintf("token:%d", *entry.APITokenID)
+	case entry.UserEmail != "":
+		return entry.UserEmail
+	default:
+		return "ip:" + entry.IPAddress
 	}
+}
+
+// denialKey identifies a denial's principal, its action and its target: the resource, and for a proxied request its
+// method and path (the first maxDenialKeyPath bytes). Only repeats against the same target are counted together, so
+// a denial against one target can't hide among denials against others.
+func denialKey(principal string, entry *db.AuditLog) string {
 	method, path := detailsTarget(entry.Details)
+	if len(path) > maxDenialKeyPath {
+		path = path[:maxDenialKeyPath]
+	}
 	return strings.Join([]string{
 		principal, entry.Action, entry.ResourceType, entry.Resource, entry.Command, method, path,
 	}, "\x00")
+}
+
+// overflowKey is the run a principal's denials share once maxDenialRuns is reached, and the details field that
+// marks it: requests without a principal share one run whatever their client, and each user or API token has one
+// for all their denials.
+func overflowKey(principal string) (key, field string) {
+	if strings.HasPrefix(principal, "ip:") {
+		return anonymousOverflowKey, "from_many_clients"
+	}
+	return principal + "\x00*", "many_targets"
 }
 
 // detailsTarget returns the method and path a proxied request's details name, if any.

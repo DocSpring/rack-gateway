@@ -26,6 +26,14 @@ const CLI_LOGIN_ERRORS = new Map<string, CLILoginError>([
     },
   ],
   [
+    'account_mismatch',
+    {
+      title: 'Account not recognized',
+      description:
+        "This isn't the Google account your gateway user signs in with. If your account was re-created, ask an administrator to reset your sign-in.",
+    },
+  ],
+  [
     'exchange_failed',
     {
       title: 'Sign-in failed',

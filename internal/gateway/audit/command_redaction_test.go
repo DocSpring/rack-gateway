@@ -46,6 +46,29 @@ func TestRedactCommand(t *testing.T) {
 		{"curl https://example.com/a@b?token=abc", "curl https://example.com/a@b?token=[REDACTED]"},
 		{"tool --token", "tool --token"},
 		{"echo PASSWORD=", "echo PASSWORD="},
+		// Joined long options, and headers given to a flag
+		{"curl --user=alice:s3cret https://x", "curl --user=alice:[REDACTED] https://x"},
+		{"curl --proxy-user='bob:two words' https://x", "curl --proxy-user='bob:[REDACTED]' https://x"},
+		{
+			"curl --header='Authorization: Bearer s3cret' https://x",
+			"curl --header='Authorization: [REDACTED]' https://x",
+		},
+		{`curl -H"Authorization: Bearer s3cret" https://x`, `curl -H"Authorization: [REDACTED]" https://x`},
+		{"curl -H 'X-Trace: Bearer s3cret' https://x", "curl -H 'X-Trace: Bearer [REDACTED]' https://x"},
+		{"curl --header='X-Trace: Bearer s3cret' x", "curl --header='X-Trace: Bearer [REDACTED]' x"},
+		{"wget --header='Cookie: session=s3cret' https://x", "wget --header='Cookie: [REDACTED]' https://x"},
+		{"redis-cli --pass=s3cret ping", "redis-cli --pass=[REDACTED] ping"},
+		{"curl --header='Accept: text/plain' x", "curl --header='Accept: text/plain' x"},
+		// Every sensitive query parameter, wherever it is in the query
+		{
+			"curl 'https://api.example.com/path?mode=live&api_key=s3cret&page=2'",
+			"curl 'https://api.example.com/path?mode=live&api_key=[REDACTED]&page=2'",
+		},
+		{
+			"curl https://x/a?a=1&sig=abc&access_token=def#frag",
+			"curl https://x/a?a=1&sig=[REDACTED]&access_token=[REDACTED]#frag",
+		},
+		{"curl https://x/a?mode=live", "curl https://x/a?mode=live"},
 	} {
 		require.Equal(t, tc.want, RedactCommand(tc.command), tc.command)
 	}

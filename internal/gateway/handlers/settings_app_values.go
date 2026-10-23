@@ -35,7 +35,8 @@ func (h *SettingsHandler) updateAppSettingValue(c *gin.Context, key string) {
 	}
 
 	ops := &appSettingsOps{service: h.settingsService}
-	if err := ops.setSettings(appName, map[string]interface{}{key: value}, uid); err != nil {
+	save := func() error { return ops.setSettings(appName, map[string]interface{}{key: value}, uid) }
+	if err := changeSettings(c, ops, appName, []string{key}, save); err != nil {
 		respondSettingSaveError(c, err)
 		return
 	}
@@ -52,7 +53,8 @@ func (h *SettingsHandler) deleteAppSettingValue(c *gin.Context, key string) {
 	}
 
 	ops := &appSettingsOps{service: h.settingsService}
-	if err := ops.deleteSettings(appName, []string{key}); err != nil {
+	remove := func() error { return ops.deleteSettings(appName, []string{key}) }
+	if err := changeSettings(c, ops, appName, []string{key}, remove); err != nil {
 		gtwlog.Errorf("settings: failed to delete %s for app %s: %v", key, appName, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to delete setting: %s", key)})
 		return

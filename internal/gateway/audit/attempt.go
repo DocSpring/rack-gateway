@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
+	"sync"
 	"sync/atomic"
 
 	"github.com/google/uuid"
@@ -33,6 +35,9 @@ type Attempt struct {
 	// RequestID is the request's ID, shared by the attempt and its results.
 	RequestID string
 	results   atomic.Int32
+
+	mu      sync.Mutex
+	details map[string]any
 }
 
 type attemptContextKey struct{}
@@ -46,6 +51,24 @@ func AttemptFromContext(ctx context.Context) *Attempt {
 // Results returns how many result entries have been written for the attempt's request.
 func (a *Attempt) Results() int {
 	return int(a.results.Load())
+}
+
+// SetResultDetail adds key to the details of the result entry written for the request when its handler writes
+// none (see middleware.AuditBeforeActing), such as what a settings change changed.
+func (a *Attempt) SetResultDetail(key string, value any) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.details == nil {
+		a.details = make(map[string]any)
+	}
+	a.details[key] = value
+}
+
+// ResultDetails returns the details added with SetResultDetail.
+func (a *Attempt) ResultDetails() map[string]any {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return maps.Clone(a.details)
 }
 
 // RefusalMessage is the error a request gets when it's refused because its attempt entry couldn't be written.

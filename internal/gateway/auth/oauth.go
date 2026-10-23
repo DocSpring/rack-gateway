@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -46,8 +47,12 @@ type LoginStartResponse struct {
 
 // LoginResponse for successful OAuth completion
 type LoginResponse struct {
+	// Email is the account's verified email, lower-cased like every user's email.
 	Email string `json:"email" validate:"required"`
 	Name  string `json:"name"  validate:"required"`
+	// Subject is the identity provider's ID for the account (the ID token's sub claim), which never changes and
+	// is never reassigned, unlike the email.
+	Subject string `json:"subject" validate:"required"`
 }
 
 // NewOAuthHandler creates a new OAuth handler using vetted OIDC libraries
@@ -210,22 +215,27 @@ func (h *OAuthHandler) CompleteLogin(
 	}
 
 	return &LoginResponse{
-		Email: claims.Email,
-		Name:  claims.Name,
+		Email:   strings.ToLower(strings.TrimSpace(claims.Email)),
+		Name:    claims.Name,
+		Subject: claims.Subject,
 	}, nil
 }
 
 // identityClaims are the Google ID token claims the gateway relies on.
 type identityClaims struct {
+	Subject       string `json:"sub"`
 	Email         string `json:"email"`
 	EmailVerified bool   `json:"email_verified"`
 	Name          string `json:"name"`
 	HD            string `json:"hd,omitempty"` // Google Workspace hosted domain; absent for consumer accounts
 }
 
-// validate requires a verified email and, when an allowed domain is configured, that both the email
+// validate requires a subject, a verified email and, when an allowed domain is configured, that both the email
 // domain and the hosted-domain claim match it.
 func (c identityClaims) validate(allowedDomain string) error {
+	if strings.TrimSpace(c.Subject) == "" {
+		return errors.New("the ID token has no subject")
+	}
 	if !c.EmailVerified {
 		return fmt.Errorf("google account email %q is not verified", c.Email)
 	}

@@ -98,6 +98,25 @@ func TestVerifyAnchorsWrittenByTheAnchorWriter(t *testing.T) {
 	assert.Equal(t, jobaudit.AnchorKey(testChainID, firstHour.Add(time.Hour)), report.LatestAnchor)
 }
 
+// S3 times are whole seconds. A delayed job for an earlier hour can store its anchor in the same second as a later
+// hour's, linking to it: the verifier and the next write both follow the links, not the keys.
+func TestVerifyAnchorsStoredInTheSameSecond(t *testing.T) {
+	database := newAuditDatabase(t)
+	bucket := fakes3.New(firstHour)
+	writeEvents(t, database, 3)
+	bucket.SameSecond = true
+	stored := firstHour.Add(70 * time.Minute)
+	writeAnchorStoredAt(t, database, bucket, firstHour.Add(time.Hour), stored)
+	writeAnchorStoredAt(t, database, bucket, firstHour, stored)
+	bucket.SameSecond = false
+	writeEvents(t, database, 1)
+	writeAnchor(t, database, bucket, firstHour.Add(2*time.Hour))
+
+	report := verifyWithAnchors(t, database, bucket, firstHour.Add(3*time.Hour))
+	requireOK(t, report)
+	assert.Equal(t, 3, report.AnchorsChecked)
+}
+
 func TestVerifyWarnsAboutUnanchoredEventsAndMissingHours(t *testing.T) {
 	database := newAuditDatabase(t)
 	bucket := fakes3.New(firstHour)

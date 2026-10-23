@@ -148,7 +148,8 @@ Structured logging:
   and drop the old one in a later release
 - Denials (gateway `Authorize`, proxy RBAC/approval/destructive refusals, unknown rack routes) go through
   `RecordDenial`: throttled per principal + action + target (resource, method and path) per minute in memory (one
-  gateway per rack). The request is refused either way; a denial that can't be written is logged and sent to Sentry
+  gateway per rack). Past 1,000 runs, each principal's denials without a run share one, so memory stays bounded.
+  The request is refused either way; a denial that can't be written is logged and sent to Sentry
 
 Key files:
 

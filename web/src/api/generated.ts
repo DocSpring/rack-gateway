@@ -225,7 +225,8 @@ export const getRackGatewayAPI = () => {
   /**
    * Applies environment variable changes for a Convox app by creating a new release.
    * Secrets and values with credentials in them remain masked unless the user has secrets permissions.
-   * Answers 409 while another env change to the app is in progress.
+   * Answers 409 while another env change to the app is in progress, or while a build whose manifest
+   * the gateway checked with the app's env may still read it.
    * @summary Update environment variables
    */
   const putAppsAppEnv = (
@@ -1421,7 +1422,8 @@ export const getRackGatewayAPI = () => {
   };
 
   /**
-   * Locks a user account to prevent login
+   * Locks a user account to prevent login. An admin can't lock their own account (400) or the last
+   * unlocked admin (409).
    * @summary Lock a user account
    */
   const postUsersEmailLock = (
@@ -1529,6 +1531,25 @@ export const getRackGatewayAPI = () => {
   };
 
   /**
+   * A user is bound to the Google account that first signed in with their email, and another account
+   * with that email is refused. This unbinds it, so the next account to sign in with the email is bound
+   * to the user (for example after their Google account was re-created), and signs the user out. Their
+   * MFA methods and API tokens are kept. An admin can't reset their own sign-in.
+   * @summary Reset a user's sign-in account
+   */
+  const postUsersEmailSignInReset = (
+    email: string,
+    options?: SecondParameter<
+      typeof createGatewayClient<HandlersStatusResponse>
+    >,
+  ) => {
+    return createGatewayClient<HandlersStatusResponse>(
+      { url: `/users/${email}/sign-in/reset`, method: "POST" },
+      options,
+    );
+  };
+
+  /**
    * Unlocks a previously locked user account
    * @summary Unlock a user account
    */
@@ -1627,6 +1648,7 @@ export const getRackGatewayAPI = () => {
     getUsersEmailSessions,
     postUsersEmailSessionsRevokeAll,
     postUsersEmailSessionsSessionIDRevoke,
+    postUsersEmailSignInReset,
     postUsersEmailUnlock,
   };
 };
@@ -2055,6 +2077,13 @@ export type PostUsersEmailSessionsSessionIDRevokeResult = NonNullable<
       ReturnType<
         typeof getRackGatewayAPI
       >["postUsersEmailSessionsSessionIDRevoke"]
+    >
+  >
+>;
+export type PostUsersEmailSignInResetResult = NonNullable<
+  Awaited<
+    ReturnType<
+      ReturnType<typeof getRackGatewayAPI>["postUsersEmailSignInReset"]
     >
   >
 >;

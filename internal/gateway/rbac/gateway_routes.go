@@ -162,6 +162,7 @@ var httpRouteSpecs = []RouteSpec{
 	newHTTPRoute("POST", "/api/v1/users/:email/lock", Gateway(ResourceUser, ActionUpdate)),
 	newHTTPRoute("POST", "/api/v1/users/:email/unlock", Gateway(ResourceUser, ActionUpdate)),
 	newHTTPRoute("POST", "/api/v1/users/:email/mfa/reset", Gateway(ResourceUser, ActionUpdate)),
+	newHTTPRoute("POST", "/api/v1/users/:email/sign-in/reset", Gateway(ResourceUser, ActionUpdate)),
 	// Every user can see their own profile, sessions and audit trail, and sign out their own sessions.
 	// Other users' records need the listed permission. Revoking keeps user:update's MFA level.
 	newOwnUserRoute("GET", "/api/v1/users/:email", Gateway(ResourceUser, ActionRead)),

@@ -94,7 +94,7 @@ func TestCreateRefusesAnOverlongMessage(t *testing.T) {
 }
 
 // The create audit entry keeps every detail of the request and its GitHub verification, whatever the message. A
-// message that fills the entry once JSON-escaped ("<" becomes <) is cut short instead.
+// message that would fill the entry once JSON-escaped ("<" takes six characters) is stored without the escaping.
 func TestCreateAuditEntryKeepsVerificationDetailsWithALongMessage(t *testing.T) {
 	f := newVerifyingFixture(t, true, nil)
 	message := strings.Repeat("<", maxDeployApprovalMessageChars)
@@ -114,10 +114,7 @@ func TestCreateAuditEntryKeepsVerificationDetailsWithALongMessage(t *testing.T) 
 	} {
 		require.Equal(t, want, details[key], key)
 	}
-	cut, ok := strings.CutSuffix(details["message"], cutMarker)
-	require.True(t, ok, "the message is marked as cut")
-	require.NotEmpty(t, cut)
-	require.True(t, strings.HasPrefix(message, cut))
+	require.Equal(t, message, details["message"])
 }
 
 // Without a configured window, an approval stays open for the documented default of 15 minutes.

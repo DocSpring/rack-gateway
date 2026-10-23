@@ -1,8 +1,10 @@
 package db_test
 
 import (
+	"fmt"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -48,4 +50,29 @@ func TestDeployApprovalAuditLogsPageThroughEverythingAboutTheRequest(t *testing.
 		"deploy_approval_request.create", "deploy_approval_request.approve", "build.create",
 		"deploy_approval_request.reject",
 	}, actions)
+}
+
+// Entries written in the same microsecond page in chain order: no page repeats one and drops another.
+func TestDeployApprovalAuditLogsPageTiedEntriesInChainOrder(t *testing.T) {
+	database, userID, tokenID := newApprovalTestFixture(t)
+	approval, err := createApproval(t, database, userID, tokenID, "docspring")
+	require.NoError(t, err)
+	at := time.Now()
+	for i := range 6 {
+		require.NoError(t, database.CreateAuditLog(&gwdb.AuditLog{
+			Timestamp: at, UserEmail: "deployer@example.com", ActionType: "gateway",
+			Action: fmt.Sprintf("build.create.%d", i), Status: "success", DeployApprovalRequestID: &approval.ID,
+		}))
+	}
+
+	var indexes []int64
+	for page := range 3 {
+		logs, _, err := database.GetDeployApprovalAuditLogsPaged(approval.ID, 2, page*2)
+		require.NoError(t, err)
+		for _, log := range logs {
+			indexes = append(indexes, log.ChainIndex)
+		}
+	}
+	require.Len(t, indexes, 6)
+	require.IsDecreasing(t, indexes)
 }

@@ -205,6 +205,24 @@ func TestRunFailsWhenEventsAreRemovedFromTheEnd(t *testing.T) {
 	assert.Contains(t, status.Summary, "event 3 isn't the event an earlier verification checked")
 }
 
+// The recorded status is display-only: a run that can't read it still verifies the chain and alerts on what it
+// finds, then fails with the read error.
+func TestRunVerifiesWhenTheStatusCantBeRead(t *testing.T) {
+	h := newHarness(t, nil)
+	tampered := h.writeEvents(3)[1]
+	h.setAction(tampered, "app.delete")
+	_, err := h.database.DB().Exec(`ALTER TABLE audit_verification_status RENAME TO hidden_verification_status`)
+	require.NoError(t, err)
+
+	err = h.worker.Run(context.Background())
+	require.ErrorContains(t, err, "failed to read the audit verification status")
+	require.Len(t, h.sentryEvents, 1)
+	alerts := h.slackAlerts()
+	require.Len(t, alerts, 1)
+	assert.Equal(t, "audit_log.verification_failed", alerts[0].Action)
+	assert.Contains(t, alerts[0].Details, fmt.Sprintf("event %d (id", tampered))
+}
+
 func TestRunRecordsWhyItCouldNotVerify(t *testing.T) {
 	h := newHarness(t, unreachableStore{fakes3.New(firstRun)})
 	h.writeEvents(1)

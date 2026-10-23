@@ -3944,6 +3944,12 @@
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
@@ -4397,6 +4403,61 @@
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/handlers.RevokeSessionResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/users/{email}/sign-in/reset": {
+            "post": {
+                "security": [
+                    {
+                        "SessionCookie": []
+                    },
+                    {
+                        "CSRFToken": []
+                    }
+                ],
+                "description": "A user is bound to the Google account that first signed in with their email, and another account\nwith that email is refused. This unbinds it, so the next account to sign in with the email is bound\nto the user (for example after their Google account was re-created), and signs the user out. Their\nMFA methods and API tokens are kept. An admin can't reset their own sign-in.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Reset a user's sign-in account",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "User email",
+                        "name": "email",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.StatusResponse"
                         }
                     },
                     "400": {
@@ -4916,7 +4977,14 @@
         },
         "handlers.AuditVerificationResponse": {
             "type": "object",
+            "required": [
+                "anchors_configured"
+            ],
             "properties": {
+                "anchors_configured": {
+                    "description": "AnchorsConfigured is whether the gateway anchors the audit chain in S3 (AUDIT_ANCHOR_BUCKET). Without\nanchors, verification can't detect events removed from the end of the chain, or the whole chain.",
+                    "type": "boolean"
+                },
                 "status": {
                     "$ref": "#/definitions/db.AuditVerificationStatus"
                 }

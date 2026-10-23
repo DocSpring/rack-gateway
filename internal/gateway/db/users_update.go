@@ -133,7 +133,9 @@ func (d *Database) updateUserProfileTx(tx *sql.Tx, id int64, update UserUpdate) 
 func (d *Database) changeUserEmailTx(
 	tx *sql.Tx, id int64, oldEmail, email string, changedBy *int64, result *UserUpdateResult,
 ) error {
-	_, err := d.execTx(tx, "UPDATE users SET email = ?, updated_at = NOW() WHERE id = ?", email, id)
+	// The account bound to the old email (BindUserSignInAccount) isn't the new email's: the next sign-in binds.
+	_, err := d.execTx(tx, "UPDATE users SET email = ?, oidc_subject = NULL, updated_at = NOW() WHERE id = ?",
+		email, id)
 	if isUniqueViolation(err) {
 		return ErrUserExists
 	}

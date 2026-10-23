@@ -57,7 +57,7 @@ func redactBody(body []byte, limit int, field string) string {
 // when it holds env vars, and otherwise whatever is sensitive inside it. An array's items are redacted as values
 // of the array's field.
 func redactJSONValue(key string, value interface{}) interface{} {
-	if key != "" && isSensitiveName(key) {
+	if key != "" && IsSensitiveName(key) {
 		return Redacted
 	}
 	if _, holdsEnv := envValueFields[strings.ToLower(key)]; holdsEnv {

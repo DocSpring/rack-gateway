@@ -3,6 +3,7 @@ package db
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"time"
@@ -82,30 +83,44 @@ func (d *Database) CreateUser(email, name string, roles []string) (*User, error)
 	}, nil
 }
 
-// DeleteUser removes a user from the database and revokes all their sessions.
+// DeleteUser deletes the user with the email, revokes their sessions and removes the record of who created them, in
+// one transaction. The user's row is locked first and deleted by its ID, so an email change made at the same time
+// can't make it delete another user. It returns ErrUserNotFound when no user has the email.
 func (d *Database) DeleteUser(email string) error {
-	user, err := d.GetUser(email)
+	tx, err := d.db.Begin()
+	if err != nil {
+		return fmt.Errorf("failed to begin user deletion: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	var id int64
+	err = tx.QueryRow(d.rebind("SELECT id FROM users WHERE email = ? FOR UPDATE"), email).Scan(&id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrUserNotFound
+	}
+	if err != nil {
+		return fmt.Errorf("failed to lock user %s: %w", email, err)
+	}
+	count, err := d.revokeUserSessionsTx(tx, id, nil)
 	if err != nil {
 		return err
 	}
-
-	if user != nil {
-		count, err := d.RevokeAllUserSessions(user.ID, nil)
-		if err != nil {
-			return fmt.Errorf("failed to revoke sessions for user %s: %w", email, err)
-		}
-		log.Printf("Revoked %d sessions for user %s during deletion", count, email)
-	}
-
-	_, err = d.exec("DELETE FROM users WHERE email = ?", email)
+	res, err := d.execTx(tx, "DELETE FROM users WHERE id = ?", id)
 	if err != nil {
 		return fmt.Errorf("failed to delete user: %w", err)
 	}
+	if deleted, err := res.RowsAffected(); err != nil || deleted != 1 {
+		return fmt.Errorf("failed to delete user %s: %d rows deleted (%v)", email, deleted, err)
+	}
 	// A user created later with the same email has its own creator.
-	_, err = d.exec("DELETE FROM user_resources WHERE resource_type = 'user' AND resource_id = ?", email)
+	_, err = d.execTx(tx, "DELETE FROM user_resources WHERE resource_type = 'user' AND resource_id = ?", email)
 	if err != nil {
 		return fmt.Errorf("failed to delete the user's creator: %w", err)
 	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit user deletion: %w", err)
+	}
+	log.Printf("Revoked %d sessions for user %s during deletion", count, email)
 	return nil
 }
 

@@ -13,6 +13,9 @@ import (
 // DEV_MODE allows).
 type AuditVerificationResponse struct {
 	Status *db.AuditVerificationStatus `json:"status"`
+	// AnchorsConfigured is whether the gateway anchors the audit chain in S3 (AUDIT_ANCHOR_BUCKET). Without
+	// anchors, verification can't detect events removed from the end of the chain, or the whole chain.
+	AnchorsConfigured bool `json:"anchors_configured" validate:"required"`
 }
 
 // GetAuditVerification godoc
@@ -30,5 +33,6 @@ func (h *AdminHandler) GetAuditVerification(c *gin.Context) {
 		CaptureErrorWithStatus(c, err, http.StatusInternalServerError, "failed to load the audit verification")
 		return
 	}
-	c.JSON(http.StatusOK, AuditVerificationResponse{Status: status})
+	anchored := h.config != nil && h.config.AuditAnchorsConfigured
+	c.JSON(http.StatusOK, AuditVerificationResponse{Status: status, AnchorsConfigured: anchored})
 }

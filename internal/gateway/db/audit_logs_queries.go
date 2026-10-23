@@ -82,39 +82,6 @@ func buildAuditFilterWhereClause(filters AuditLogFilters, timestampColumn string
 	return whereClause, args
 }
 
-// GetAuditLogsPaged retrieves audit logs with proper SQL filtering and pagination
-func (d *Database) GetAuditLogsPaged(filters AuditLogFilters) ([]*AuditLog, int, error) {
-	if filters.Limit <= 0 {
-		filters.Limit = 100
-	}
-	if filters.Offset < 0 {
-		filters.Offset = 0
-	}
-
-	// Build WHERE clause with proper SQL filtering
-	whereClause, args := buildAuditFilterWhereClause(filters, "timestamp")
-
-	// Get total count for pagination
-	countQuery := "SELECT COUNT(*) FROM \"audit\".\"audit_event\" " + whereClause
-	var total int
-	if err := d.queryRow(countQuery, args...).Scan(&total); err != nil {
-		return nil, 0, fmt.Errorf("failed to count audit logs: %w", err)
-	}
-
-	query := auditLogSelect + whereClause + `
-        ORDER BY "timestamp" DESC
-		LIMIT ? OFFSET ?`
-
-	args = append(args, filters.Limit, filters.Offset)
-
-	logs, err := d.queryAuditLogs(query, args)
-	if err != nil {
-		return nil, 0, err
-	}
-
-	return logs, total, nil
-}
-
 // auditLogSelect selects audit events in the column order scanAuditLog reads.
 const auditLogSelect = `
         SELECT "id", "timestamp", "chain_index", "previous_hash", "event_hash",
@@ -157,7 +124,7 @@ func (d *Database) GetDeployApprovalAuditLogsPaged(approvalID int64, limit, offs
 	}
 
 	query := auditLogSelect + deployApprovalAuditWhere + `
-        ORDER BY "timestamp" DESC
+        ORDER BY "timestamp" DESC, "chain_index" DESC
         LIMIT ? OFFSET ?`
 	logs, err := d.queryAuditLogs(query, append(args, limit, offset))
 	if err != nil {
@@ -243,8 +210,11 @@ const selectAggregatedAuditLogs = `
         ORDER BY "last_seen" DESC, "id" DESC`
 
 // GetAuditLogsAggregated returns one page of the aggregated audit log entries that match filters, and how many match.
-// A page holds at most MaxAuditLogPageSize entries.
-func (d *Database) GetAuditLogsAggregated(filters AuditLogFilters) ([]*AuditLogAggregated, int, error) {
+// A page holds at most MaxAuditLogPageSize entries. The queries stop when ctx ends (a request's, when its client goes)
+// or after auditReadTimeout.
+func (d *Database) GetAuditLogsAggregated(
+	ctx context.Context, filters AuditLogFilters,
+) ([]*AuditLogAggregated, int, error) {
 	if filters.Limit <= 0 {
 		filters.Limit = 100
 	}
@@ -252,7 +222,7 @@ func (d *Database) GetAuditLogsAggregated(filters AuditLogFilters) ([]*AuditLogA
 	if filters.Offset < 0 {
 		filters.Offset = 0
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), auditReadTimeout)
+	ctx, cancel := context.WithTimeout(ctx, auditReadTimeout)
 	defer cancel()
 
 	// Build WHERE clause (use "last_seen" for aggregated view)

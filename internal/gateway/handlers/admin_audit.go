@@ -77,7 +77,14 @@ func (h *AdminHandler) respondWithAuditLogs(c *gin.Context, userEmail string) {
 		filters.UserEmail = userEmail
 	}
 
-	logs, total, err := h.database.GetAuditLogsAggregated(filters)
+	searcher, _ := extractAuditUserInfo(c)
+	done, err := h.auditSearches.wait(c.Request.Context(), searcher)
+	if err != nil {
+		h.respondAuditError(c, http.StatusServiceUnavailable, "audit.list", "", "the request ended", start, nil)
+		return
+	}
+	logs, total, err := h.database.GetAuditLogsAggregated(c.Request.Context(), filters)
+	done()
 	if err != nil {
 		h.respondAuditError(c, http.StatusInternalServerError, "audit.list", "", err.Error(), start, nil)
 		return

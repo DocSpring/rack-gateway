@@ -1,4 +1,4 @@
-import { Edit2, KeyRound, Lock, RefreshCw, Trash2, Unlock } from 'lucide-react'
+import { Edit2, KeyRound, Lock, LogIn, RefreshCw, Trash2, Unlock } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import type { GatewayUser } from '@/lib/api'
@@ -20,6 +20,9 @@ interface UserHeaderProps {
   // Reset MFA is offered for another user who has MFA.
   canResetMFA: boolean
   onResetMFA: () => void
+  // Reset Sign-in is offered for any other user.
+  canResetSignIn: boolean
+  onResetSignIn: () => void
   onSignOutEverywhere: () => void
   signOutPending: boolean
   hasSessions: boolean
@@ -38,9 +41,11 @@ interface AccountAdminActionsProps {
   onLock: () => void
   canResetMFA: boolean
   onResetMFA: () => void
+  canResetSignIn: boolean
+  onResetSignIn: () => void
 }
 
-// Edit, lock, unlock and Reset MFA, shown only to callers who can manage other users.
+// Edit, lock, unlock and the resets, shown only to callers who can manage other users.
 function AccountAdminActions({
   userLoading,
   userMissing,
@@ -52,6 +57,8 @@ function AccountAdminActions({
   onLock,
   canResetMFA,
   onResetMFA,
+  canResetSignIn,
+  onResetSignIn,
 }: AccountAdminActionsProps) {
   const handleUnlockClick = () => {
     onUnlock().catch(() => {
@@ -93,6 +100,12 @@ function AccountAdminActions({
           Reset MFA
         </Button>
       )}
+      {canResetSignIn && (
+        <Button disabled={userLoading} onClick={onResetSignIn} variant="secondary">
+          <LogIn className="mr-2 h-4 w-4" />
+          Reset Sign-in
+        </Button>
+      )}
     </>
   )
 }
@@ -111,6 +124,8 @@ export function UserHeaderSection({
   onLock,
   canResetMFA,
   onResetMFA,
+  canResetSignIn,
+  onResetSignIn,
   onSignOutEverywhere,
   signOutPending,
   hasSessions,
@@ -136,11 +151,13 @@ export function UserHeaderSection({
         {canManage && (
           <AccountAdminActions
             canResetMFA={canResetMFA}
+            canResetSignIn={canResetSignIn}
             isEditBusy={isEditBusy}
             locked={locked}
             onEdit={onEdit}
             onLock={onLock}
             onResetMFA={onResetMFA}
+            onResetSignIn={onResetSignIn}
             onUnlock={onUnlock}
             unlockPending={unlockPending}
             userLoading={userLoading}

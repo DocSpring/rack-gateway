@@ -57,6 +57,7 @@ const (
 	ActionVerbOAuthFailed        = "oauth_failed"
 	ActionVerbReject             = "reject"
 	ActionVerbRequireAllUsers    = "require_all_users"
+	ActionVerbSignInReset        = "sign_in_reset"
 	ActionVerbUnlock             = "unlock"
 	ActionVerbUnset              = "unset"
 	ActionVerbUnsetProtected     = "unset_protected"

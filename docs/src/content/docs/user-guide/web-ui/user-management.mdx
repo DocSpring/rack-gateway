@@ -87,6 +87,22 @@ records it as `user.mfa_reset`.
 You can't reset your own MFA: manage your methods under **Account Security**. A reset doesn't unlock an account; if
 failed MFA attempts locked it, unlock it as well.
 
+## Resetting Sign-in (Admin)
+
+A user is bound to the Google account that first signs in as them (Google's account ID, the ID token's `sub`). A
+different Google account with the same email is refused with "Account not recognized", so an address that's
+reassigned to someone else doesn't inherit the user, their roles or their API tokens. Users created before this
+binding existed are bound at their next sign-in. Changing a user's email unbinds them.
+
+If a user's Google account was deleted and re-created, choose **Reset Sign-in** on their detail page and confirm. The
+next Google account to sign in with their email is bound to them. The reset signs them out everywhere and keeps their
+MFA methods and API tokens. It needs MFA from you on the request, and the audit log records it as
+`user.sign_in_reset`. You can't reset your own sign-in.
+
+If the address now belongs to someone else, delete the user instead (and add them again if the new person needs
+access): a reset would give the new person the old user's account, and the old user's API tokens would keep
+working.
+
 ## Deleting Users (Admin)
 
 <Steps>

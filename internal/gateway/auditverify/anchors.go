@@ -2,6 +2,8 @@ package auditverify
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -39,8 +41,8 @@ const (
 	maxAnchorBytes    = 256 << 20
 )
 
-// writtenBefore orders anchors the way the writer chains them: by when they were written (S3 times are whole
-// seconds), then by key.
+// writtenBefore orders anchors by when they were written, then by key: S3 times are whole seconds, and
+// orderTiesByLinks then orders anchors written in the same second the way the writer chained them.
 func (a *anchorRecord) writtenBefore(other *anchorRecord) bool {
 	if !a.lastModified.Equal(other.lastModified) {
 		return a.lastModified.Before(other.lastModified)
@@ -79,7 +81,76 @@ func loadAnchors(ctx context.Context, opts AnchorOptions, report *Report) ([]*an
 		}
 	}
 	sort.SliceStable(records, func(i, j int) bool { return records[i].writtenBefore(records[j]) })
+	orderTiesByLinks(records)
 	return records, nil
+}
+
+// orderTiesByLinks reorders anchors S3 stored in the same second by their links, as the writer picks the latest
+// (S3 times are whole seconds): a delayed write for an earlier hour can follow a later hour's anchor within the
+// second, linking to it, so their keys don't say which came first.
+func orderTiesByLinks(records []*anchorRecord) {
+	for start := 0; start < len(records); {
+		end := start + 1
+		for end < len(records) && records[end].lastModified.Equal(records[start].lastModified) {
+			end++
+		}
+		if end-start > 1 {
+			prev := ""
+			if start > 0 {
+				prev = anchorHash(records[start-1])
+			}
+			chainTies(records[start:end], prev)
+		}
+		start = end
+	}
+}
+
+// chainTies orders tied anchors (in key order) so each follows the one its prev_anchor_hash names. The first is the
+// one that links to prev (the anchor before them), or else the first that links to none of the others. One that
+// links nowhere in the group goes after those that do, for the link checks to report.
+func chainTies(ties []*anchorRecord, prev string) {
+	remaining := append([]*anchorRecord(nil), ties...)
+	ordered := make([]*anchorRecord, 0, len(ties))
+	for len(remaining) > 0 {
+		next := linkedFrom(remaining, prev)
+		if next < 0 {
+			next = chainStart(remaining)
+		}
+		ordered = append(ordered, remaining[next])
+		prev = anchorHash(remaining[next])
+		remaining = append(remaining[:next], remaining[next+1:]...)
+	}
+	copy(ties, ordered)
+}
+
+// linkedFrom returns the index of the first record whose prev_anchor_hash is prev, or -1.
+func linkedFrom(records []*anchorRecord, prev string) int {
+	for i, record := range records {
+		if !record.invalid && strings.EqualFold(record.payload.PrevAnchorHash, prev) {
+			return i
+		}
+	}
+	return -1
+}
+
+// chainStart returns the index of the first record that links to none of the others.
+func chainStart(records []*anchorRecord) int {
+	hashes := make(map[string]bool, len(records))
+	for _, record := range records {
+		hashes[anchorHash(record)] = true
+	}
+	for i, record := range records {
+		if record.invalid || !hashes[strings.ToLower(record.payload.PrevAnchorHash)] {
+			return i
+		}
+	}
+	return 0
+}
+
+// anchorHash is the SHA-256 (hex) of an anchor's body, as the next anchor's prev_anchor_hash names it.
+func anchorHash(record *anchorRecord) string {
+	sum := sha256.Sum256(record.raw)
+	return hex.EncodeToString(sum[:])
 }
 
 func listAnchorVersions(ctx context.Context, opts AnchorOptions, report *Report) ([]*anchorRecord, error) {

@@ -2,7 +2,6 @@ package auditverify
 
 import (
 	"context"
-	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
 	"fmt"
@@ -118,8 +117,7 @@ func (w *anchorWalker) checkFormat(record *anchorRecord) {
 func (w *anchorWalker) checkLinkToPrevious(record *anchorRecord) {
 	expected := ""
 	if w.prev != nil {
-		sum := sha256.Sum256(w.prev.raw)
-		expected = hex.EncodeToString(sum[:])
+		expected = anchorHash(w.prev)
 	}
 	if strings.EqualFold(record.payload.PrevAnchorHash, expected) {
 		return

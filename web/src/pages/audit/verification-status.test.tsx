@@ -17,20 +17,29 @@ const PASSED: DbAuditVerificationStatus = {
 
 describe('AuditVerificationSummary', () => {
   it('says when the audit chain has not been verified yet', () => {
-    render(<AuditVerificationSummary status={null} />)
+    render(<AuditVerificationSummary anchored status={null} />)
     expect(screen.getByText(/Audit chain not verified yet/)).toBeInTheDocument()
   })
 
   it('shows a passing verification', () => {
-    render(<AuditVerificationSummary status={PASSED} />)
+    render(<AuditVerificationSummary anchored status={PASSED} />)
     expect(screen.getByText('Audit chain verified')).toBeInTheDocument()
     expect(screen.getByText(/last full check/)).toBeInTheDocument()
     expect(screen.queryByText(/failing since/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Without S3 anchors/)).not.toBeInTheDocument()
+  })
+
+  // Without anchors, an emptied or shortened chain still verifies: the page says so.
+  it('says when the chain has no external anchors', () => {
+    render(<AuditVerificationSummary anchored={false} status={PASSED} />)
+    expect(screen.getByText('Audit chain verified (no external anchors)')).toBeInTheDocument()
+    expect(screen.getByText(/Without S3 anchors/)).toBeInTheDocument()
   })
 
   it('shows how long a verification has been failing, and its report', () => {
     render(
       <AuditVerificationSummary
+        anchored
         status={{
           ...PASSED,
           result: 'failed',
@@ -50,6 +59,7 @@ describe('AuditVerificationSummary', () => {
   it('says when verification could not run', () => {
     render(
       <AuditVerificationSummary
+        anchored
         status={{
           ...PASSED,
           result: 'error',

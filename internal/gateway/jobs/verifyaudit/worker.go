@@ -130,13 +130,15 @@ func (w *Worker) Work(ctx context.Context, _ *river.Job[Args]) error {
 }
 
 // Run verifies the audit log, sends a failure to Sentry, sends the alert the outcome calls for and records the
-// outcome for the Audit Logs page.
+// outcome for the Audit Logs page. The recorded status is display-only, so a run that can't read it still verifies
+// and alerts, then returns that error.
 func (w *Worker) Run(ctx context.Context) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	previous, err := w.database.AuditVerificationStatus(ctx)
-	if err != nil {
-		return err
+	previous, statusErr := w.database.AuditVerificationStatus(ctx)
+	if statusErr != nil {
+		previous = nil
+		statusErr = fmt.Errorf("failed to read the audit verification status: %w", statusErr)
 	}
 	now := w.now()
 	result, err := w.verify(ctx, w.state.plan(now), now)
@@ -157,11 +159,11 @@ func (w *Worker) Run(ctx context.Context) error {
 	recordCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), recordTimeout)
 	defer cancel()
 	if err := w.database.SaveAuditVerificationStatus(recordCtx, status); err != nil {
-		return err
+		return errors.Join(statusErr, err)
 	}
 	logOutcome(result, status)
 	w.pingHeartbeat(ctx)
-	return nil
+	return statusErr
 }
 
 // pingHeartbeat tells the heartbeat monitor a run finished, whatever it found: failures alert through Sentry and

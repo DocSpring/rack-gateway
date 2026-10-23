@@ -487,7 +487,10 @@ version before hash v2 has no legacy events and needs no pin.
 - **Events that were never written**, for example when an audit write failed.
 - **Events deleted from the end of the chain before an anchor records them.** This needs only write access to the
   database, not the secret: the events that are left still form a valid chain. Anchors bound the window to about
-  an hour, and `verify-audit` fails when the latest anchor is older than `--max-anchor-age`.
+  an hour, and `verify-audit` fails when the latest anchor is older than `--max-anchor-age`. The hourly
+  verification also catches events removed after it checked them, until the gateway restarts (see below).
+- **Anything removed from the end, without anchors.** Without `AUDIT_ANCHOR_BUCKET`, a chain cut short, or emptied,
+  still verifies. The result says `no external anchors` instead of a plain OK, and so does the Audit Logs page.
 - **Changes after the latest anchor by someone who has `AUDIT_HMAC_SECRET`.** With the secret and write access to
   the database, they can rewrite the unanchored tail and recompute every hash. Only history up to the latest
   anchor is protected from them, so keep the secret away from people who administer the database.
