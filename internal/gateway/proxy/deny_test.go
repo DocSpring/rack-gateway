@@ -11,7 +11,6 @@ import (
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
 	"github.com/DocSpring/rack-gateway/internal/gateway/config"
-	"github.com/DocSpring/rack-gateway/internal/gateway/email"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 	"github.com/DocSpring/rack-gateway/internal/gateway/testutil/dbtest"
 )
@@ -44,8 +43,6 @@ func TestDeployerCannotDeleteApp(t *testing.T) {
 		audit.NewLogger(database),
 		database,
 		settings.NewService(database),
-		email.NoopSender{},
-		"testrack",
 		"testrack",
 		nil,
 		nil,

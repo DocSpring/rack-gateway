@@ -8,6 +8,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
 	gtwlog "github.com/DocSpring/rack-gateway/internal/gateway/logging"
 	"github.com/DocSpring/rack-gateway/internal/gateway/settings"
 )
@@ -145,7 +146,8 @@ func (h *SettingsHandler) updateSettings(c *gin.Context, ops settingsOperations,
 	}
 
 	// Every value is checked, then they're saved in one transaction: the request changes all of them or none
-	if err := ops.setSettings(appName, updates, uid); err != nil {
+	save := func() error { return ops.setSettings(appName, updates, uid) }
+	if err := changeSettings(c, ops, appName, keys, save); err != nil {
 		respondSettingSaveError(c, err)
 		return
 	}
@@ -185,7 +187,8 @@ func (_ *SettingsHandler) deleteSettings(c *gin.Context, ops settingsOperations,
 	}
 
 	// Delete them together, in one statement
-	if err := ops.deleteSettings(appName, keys); err != nil {
+	remove := func() error { return ops.deleteSettings(appName, keys) }
+	if err := changeSettings(c, ops, appName, keys, remove); err != nil {
 		gtwlog.Errorf("settings: failed to delete %s: %v", strings.Join(keys, ", "), err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete settings"})
 		return
@@ -199,6 +202,40 @@ func (_ *SettingsHandler) deleteSettings(c *gin.Context, ops settingsOperations,
 	}
 
 	c.JSON(http.StatusOK, result)
+}
+
+// changeSettings runs change, which saves or deletes keys, and records each key's value before and after it in
+// the request's audit result ({"changes": {key: {"from": ..., "to": ...}}}), so the audit log shows what every
+// settings change changed. No setting holds a secret. When the values can't be read first, nothing is changed.
+func changeSettings(
+	c *gin.Context,
+	ops settingsOperations,
+	appName string,
+	keys []string,
+	change func() error,
+) error {
+	before, errMsg := buildSettingsResponse(ops, appName, keys)
+	if errMsg != "" {
+		return errors.New(errMsg)
+	}
+	if err := change(); err != nil {
+		return err
+	}
+	after, errMsg := buildSettingsResponse(ops, appName, keys)
+	if errMsg != "" {
+		gtwlog.Errorf("settings: changed %s but can't read the new values: %s", strings.Join(keys, ", "), errMsg)
+	}
+	changes := make(map[string]map[string]interface{}, len(keys))
+	for _, key := range keys {
+		changes[key] = map[string]interface{}{"from": before[key].Value}
+		if after != nil {
+			changes[key]["to"] = after[key].Value
+		}
+	}
+	if attempt := audit.AttemptFromContext(c.Request.Context()); attempt != nil {
+		attempt.SetResultDetail("changes", changes)
+	}
+	return nil
 }
 
 // getSingleSettingResponse gets a single setting and returns it as a map response.

@@ -39,6 +39,9 @@ type Bucket struct {
 	// LockConfiguration is what GetObjectLockConfiguration returns: by default Object Lock with a COMPLIANCE
 	// retention of DefaultRetentionDays.
 	LockConfiguration *types.ObjectLockConfiguration
+	// SameSecond stamps each write without an explicit time one second after the clock (see AdvanceTo) rather than
+	// after the latest write, so writes in a row share a second, as S3's whole-second times can.
+	SameSecond bool
 
 	mu       sync.Mutex
 	entries  map[string][]*entry // oldest first
@@ -168,7 +171,11 @@ func (b *Bucket) PutObject(
 	}
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	versionID := b.add(&entry{key: aws.ToString(params.Key), body: body, lastModified: b.clock.Add(time.Second)})
+	clock := b.clock
+	versionID := b.add(&entry{key: aws.ToString(params.Key), body: body, lastModified: clock.Add(time.Second)})
+	if b.SameSecond {
+		b.clock = clock
+	}
 	return &s3.PutObjectOutput{VersionId: aws.String(versionID)}, nil
 }
 

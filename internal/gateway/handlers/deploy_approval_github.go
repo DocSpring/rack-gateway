@@ -138,7 +138,7 @@ func (h *APIHandler) verifyGitHubCommit(
 	prURL, err := client.VerifyCommitAndFindPR(owner, repo, gitBranch, gitCommitHash, opts)
 	if err != nil {
 		gtwlog.Warnf(
-			"deploy approvals: GitHub verification failed app=%s repo=%s/%s branch=%s commit=%s: %v",
+			"deploy approvals: GitHub verification failed app=%s repo=%s/%s branch=%q commit=%s: %q",
 			app,
 			owner,
 			repo,

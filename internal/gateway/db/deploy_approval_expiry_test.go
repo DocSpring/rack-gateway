@@ -29,7 +29,7 @@ func approvedPastItsWindow(t *testing.T) (*gwdb.Database, *gwdb.DeployApprovalRe
 	database, userID, tokenID := newApprovalTestFixture(t)
 	request, err := createApproval(t, database, userID, tokenID, "docspring")
 	require.NoError(t, err)
-	_, err = database.ApproveDeployApprovalRequest(request.ID, userID, time.Now().Add(-time.Minute), "")
+	_, err = database.ApproveDeployApprovalRequest(request.ID, userID, time.Now().Add(-time.Minute), "", 0)
 	require.NoError(t, err)
 	return database, request
 }

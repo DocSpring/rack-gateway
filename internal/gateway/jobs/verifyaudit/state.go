@@ -31,10 +31,11 @@ type runState struct {
 	fullCheckedAt time.Time
 	// failingSince is when the current failing streak started (zero: not failing).
 	failingSince time.Time
-	// alertedAt, alertedFailures and alertedKeys describe the streak's latest failure alert.
+	// alertedAt, alertedFailures, alertedKeys and alertedDigest describe the streak's latest failure alert.
 	alertedAt       time.Time
 	alertedFailures int
 	alertedKeys     map[string]bool
+	alertedDigest   string
 	// recoveryPendingSince is the start of a failing streak whose recovery alert couldn't be recorded: the next
 	// passing run sends it again (zero: none pending).
 	recoveryPendingSince time.Time
@@ -90,10 +91,12 @@ func (s *runState) record(o *outcome, now, since time.Time, kind alertKind, aler
 		s.alertedAt = now
 		s.alertedFailures = o.failureCount()
 		s.alertedKeys = map[string]bool{}
+		s.alertedDigest = ""
 		if o.report != nil {
 			for _, key := range o.report.FailureKeys() {
 				s.alertedKeys[key] = true
 			}
+			s.alertedDigest = o.report.FailureDigest()
 		}
 	}
 }

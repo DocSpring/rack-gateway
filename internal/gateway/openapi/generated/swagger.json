@@ -392,7 +392,7 @@
                         "CSRFToken": []
                     }
                 ],
-                "description": "Applies environment variable changes for a Convox app by creating a new release.\nSecrets and values with credentials in them remain masked unless the user has secrets permissions.\nAnswers 409 while another env change to the app is in progress.",
+                "description": "Applies environment variable changes for a Convox app by creating a new release.\nSecrets and values with credentials in them remain masked unless the user has secrets permissions.\nAnswers 409 while another env change to the app is in progress, or while a build whose manifest\nthe gateway checked with the app's env may still read it.",
                 "consumes": [
                     "application/json"
                 ],
@@ -2885,6 +2885,12 @@
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
@@ -3065,6 +3071,12 @@
                     },
                     "404": {
                         "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
                         "schema": {
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
@@ -3932,6 +3944,12 @@
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
@@ -4051,7 +4069,7 @@
                         "CSRFToken": []
                     }
                 ],
-                "description": "Locks a user account to prevent login",
+                "description": "Locks a user account to prevent login. An admin can't lock their own account (400) or the last\nunlocked admin (409).",
                 "consumes": [
                     "application/json"
                 ],
@@ -4095,6 +4113,12 @@
                     },
                     "404": {
                         "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
                         "schema": {
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
@@ -4379,6 +4403,61 @@
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/handlers.RevokeSessionResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/users/{email}/sign-in/reset": {
+            "post": {
+                "security": [
+                    {
+                        "SessionCookie": []
+                    },
+                    {
+                        "CSRFToken": []
+                    }
+                ],
+                "description": "A user is bound to the Google account that first signed in with their email, and another account\nwith that email is refused. This unbinds it, so the next account to sign in with the email is bound\nto the user (for example after their Google account was re-created), and signs the user out. Their\nMFA methods and API tokens are kept. An admin can't reset their own sign-in.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Reset a user's sign-in account",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "User email",
+                        "name": "email",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.StatusResponse"
                         }
                     },
                     "400": {
@@ -4774,6 +4853,9 @@
         },
         "db.SlackIntegration": {
             "type": "object",
+            "required": [
+                "id"
+            ],
             "properties": {
                 "alert_deploy_approvals_channel_id": {
                     "type": "string"
@@ -4898,7 +4980,14 @@
         },
         "handlers.AuditVerificationResponse": {
             "type": "object",
+            "required": [
+                "anchors_configured"
+            ],
             "properties": {
+                "anchors_configured": {
+                    "description": "AnchorsConfigured is whether the gateway anchors the audit chain in S3 (AUDIT_ANCHOR_BUCKET). Without\nanchors, verification can't detect events removed from the end of the chain, or the whole chain.",
+                    "type": "boolean"
+                },
                 "status": {
                     "$ref": "#/definitions/db.AuditVerificationStatus"
                 }

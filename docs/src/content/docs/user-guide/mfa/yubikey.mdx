@@ -5,11 +5,14 @@ description: "Using YubiKey OTP as an MFA code."
 
 import { Aside } from '@astrojs/starlight/components';
 
-YubiKey OTP generates a 44-character one-time password when you touch the key. The gateway can validate these OTPs if Yubico credentials are configured.
+YubiKey OTP generates a one-time password when you touch the key: the key's public ID (usually 12 characters, at most
+16) followed by 32 encrypted characters, 44 in all for most keys. The gateway can validate these OTPs if Yubico
+credentials are configured, and tells keys apart by their public IDs. A key programmed without a public ID can't be
+enrolled.
 
 <Aside type="note">
 YubiKey OTP enrollment is not in the web UI or the CLI. It needs the Yubico credentials below and a call to
-`POST /api/v1/auth/mfa/enroll/yubiotp/start` with an OTP from the key.
+`POST /api/v1/auth/mfa/enroll/yubiotp/start` with an OTP from the key, and optionally a `label` for it.
 </Aside>
 
 ## Requirements
@@ -23,8 +26,9 @@ YUBICO_SECRET_KEY=...
 
 ## Using YubiKey OTP
 
-Once a YubiKey is enrolled, you can enter its OTP anywhere the gateway asks for an MFA code: the CLI's code prompt,
-`--mfa-code`, or the web UI's MFA prompt, which opens on a YubiKey OTP field when that's your only factor and
+Once a YubiKey is enrolled, you can enter its OTP anywhere the gateway asks for an MFA code: the CLI's code prompt
+(the CLI asks for one when the YubiKey is your only factor, or with `--mfa-method yubiotp`), `--mfa-code`, or the web
+UI's MFA prompt, which opens on a YubiKey OTP field when that's your only factor and
 otherwise offers **Use a YubiKey OTP**. Touch the key with the cursor in the field; the key types the OTP and
 presses Enter.
 

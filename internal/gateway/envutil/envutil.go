@@ -304,10 +304,6 @@ func CreateReleaseWithEnv(
 	}
 
 	client := httpclient.NewRackClient(30*time.Second, tlsConfig)
-	username := strings.TrimSpace(rack.Username)
-	if username == "" {
-		username = "convox"
-	}
 	vals := url.Values{}
 	vals.Set("env", env)
 
@@ -321,8 +317,7 @@ func CreateReleaseWithEnv(
 		return "", fmt.Errorf("failed to build release request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	authHeader := "Basic " + base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", username, rack.APIKey)))
-	req.Header.Set("Authorization", authHeader)
+	req.Header.Set("Authorization", rackAuthHeader(rack))
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -364,7 +359,7 @@ func FetchLatestEnvMap(
 ) (map[string]string, error) {
 	base := strings.TrimRight(rack.URL, "/")
 	client := httpclient.NewRackClient(10*time.Second, tlsConfig)
-	authHeader := "Basic " + base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", rack.Username, rack.APIKey)))
+	authHeader := rackAuthHeader(rack)
 	var list []struct {
 		ID string `json:"id"`
 	}
@@ -389,6 +384,15 @@ func FetchLatestEnvMap(
 		return nil, fmt.Errorf("release %s has no env", list[0].ID)
 	}
 	return parseEnvLines(*rel.Env), nil
+}
+
+// rackAuthHeader is the Authorization header for the rack's API.
+func rackAuthHeader(rack config.RackConfig) string {
+	username := strings.TrimSpace(rack.Username)
+	if username == "" {
+		username = "convox"
+	}
+	return "Basic " + base64.StdEncoding.EncodeToString([]byte(username+":"+rack.APIKey))
 }
 
 // getRackJSON GETs a rack API URL and decodes its JSON answer into out. A non-2xx answer is an error.

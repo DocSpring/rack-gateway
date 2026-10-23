@@ -79,24 +79,25 @@ func (h *APIHandler) postPRCommentAsync(c *gin.Context, app, prURL, publicID, gi
 
 	comment := deployApprovalPRComment(app, rackName, gitCommitHash, approvalURL)
 
-	h.enqueueGitHubComment(c, owner, repo, prNumber, comment)
+	h.enqueueGitHubComment(c, jobgithub.PostPRCommentArgs{
+		Owner:    owner,
+		Repo:     repo,
+		PRNumber: prNumber,
+		Comment:  comment,
+		Marker:   jobgithub.DeployApprovalMarker(publicID),
+	})
 }
 
 func (h *APIHandler) buildApprovalURL(publicID string) string {
 	return fmt.Sprintf("%s/app/deploy-approval-requests/%s", h.config.PublicURL(), publicID)
 }
 
-func (h *APIHandler) enqueueGitHubComment(c *gin.Context, owner, repo string, prNumber int, comment string) {
+func (h *APIHandler) enqueueGitHubComment(c *gin.Context, args jobgithub.PostPRCommentArgs) {
 	if h.jobsClient == nil {
 		return
 	}
 
-	_, err := h.jobsClient.Insert(c.Request.Context(), jobgithub.PostPRCommentArgs{
-		Owner:    owner,
-		Repo:     repo,
-		PRNumber: prNumber,
-		Comment:  comment,
-	}, &river.InsertOpts{
+	_, err := h.jobsClient.Insert(c.Request.Context(), args, &river.InsertOpts{
 		Queue:       jobs.QueueIntegrations,
 		MaxAttempts: jobs.MaxAttemptsNotification,
 	})

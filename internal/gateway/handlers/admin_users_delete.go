@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"net/http"
 	"strings"
 	"time"
@@ -8,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
+	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 )
 
@@ -18,6 +20,7 @@ import (
 // @Param email path string true "User email"
 // @Success 204 {string} string "No Content"
 // @Failure 400 {object} ErrorResponse
+// @Failure 404 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
 // @Security SessionCookie
 // @Security CSRFToken
@@ -41,6 +44,10 @@ func (h *AdminHandler) DeleteUser(c *gin.Context) {
 	}
 
 	if err := h.rbac.DeleteUser(email); err != nil {
+		if errors.Is(err, db.ErrUserNotFound) {
+			h.respondUserNotFound(c, rbac.ActionDelete, email, start)
+			return
+		}
 		h.respondAuditError(
 			c,
 			http.StatusInternalServerError,

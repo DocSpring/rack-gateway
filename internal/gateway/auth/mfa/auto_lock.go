@@ -48,13 +48,16 @@ func (s *Service) sendAutoLockEmails(locked *db.LockedUser) {
 		return
 	}
 	reason := fmt.Sprintf("%d failed MFA attempts in %d minutes", autoLockAttempts, autoLockMinutes)
-	_ = s.emailSender.Send(locked.Email, "Account Locked - Multiple Failed Login Attempts",
+	err := s.emailSender.Send(locked.Email, "Account Locked - Multiple Failed Login Attempts",
 		"Your account has been automatically locked due to multiple failed authentication attempts.\n\n"+
 			"Reason: "+reason+"\n\nIf this was not you, please contact your administrator immediately.",
 		`<p><strong>Your account has been automatically locked</strong> due to multiple failed authentication `+
 			`attempts.</p><p><strong>Reason:</strong> `+reason+`</p>`+
 			`<p><strong style="color: #d9534f;">If this was not you, please contact your administrator `+
 			`immediately.</strong></p>`)
+	if err != nil {
+		log.Printf("mfa: couldn't email %s about their account's automatic lock: %v", locked.Email, err)
+	}
 
 	admins, err := s.db.UnlockedAdminEmails()
 	if err != nil {
@@ -64,10 +67,13 @@ func (s *Service) sendAutoLockEmails(locked *db.LockedUser) {
 	if len(admins) == 0 {
 		return
 	}
-	_ = s.emailSender.SendMany(admins, "User locked: "+locked.Email,
+	err = s.emailSender.SendMany(admins, "User locked: "+locked.Email,
 		locked.Email+" was locked automatically after "+reason+".\n\n"+
 			"Check with them before unlocking the account on the Users page: the attempts may not have been theirs.",
 		"<p><strong>"+html.EscapeString(locked.Email)+"</strong> was locked automatically after "+reason+".</p>"+
 			"<p>Check with them before unlocking the account on the Users page: the attempts may not have been "+
 			"theirs.</p>")
+	if err != nil {
+		log.Printf("mfa: couldn't email admins about the automatic lock of %s: %v", locked.Email, err)
+	}
 }

@@ -168,113 +168,134 @@ func (d *Database) handleDeployApprovalInsertError(
 	return nil, ErrDeployApprovalRequestActive
 }
 
-// updateApprovalStatus updates the status of a deploy approval request.
-// whereClause should be "id = ?" or "public_id = ?".
-// whereArg is the corresponding ID or publicID value.
-func (d *Database) updateApprovalStatus(
-	whereClause string,
-	whereArg interface{},
-	newStatus string,
-	actorUserID int64,
-	approvalExpiresAt *time.Time,
-	notes string,
-	allowedStatuses []string,
-) error {
-	trimmedNotes := strings.TrimSpace(notes)
+// approvalStatusUpdate is an approval or a rejection of a deploy approval request.
+type approvalStatusUpdate struct {
+	newStatus   string
+	actorUserID int64
+	// expiresAt is when an approval's window ends (approvals only).
+	expiresAt *time.Time
+	notes     string
+	// pendingMaxAge is DEPLOY_APPROVAL_PENDING_MAX_AGE (approvals only, 0 for none): a request pending longer has
+	// expired, even before the expiry sweep marks it.
+	pendingMaxAge time.Duration
+}
 
-	var whereColumn string
-	switch whereClause {
-	case "id = ?":
-		whereColumn = "id"
-	case "public_id = ?":
+// updateApprovalStatus approves a pending request, or rejects a pending or approved one whose promote hasn't
+// started. whereColumn is "id" or "public_id", and whereArg its value. When no row changes, it says why:
+// ErrDeployApprovalRequestTooOld, ErrDeployApprovalPromoteStarted or ErrDeployApprovalRequestNotFound.
+func (d *Database) updateApprovalStatus(whereColumn string, whereArg interface{}, update approvalStatusUpdate) error {
+	if whereColumn == "public_id" {
 		if publicID, ok := whereArg.(string); !ok || !isPublicID(publicID) {
 			return ErrDeployApprovalRequestNotFound
 		}
-		whereColumn = "public_id"
-	default:
-		return fmt.Errorf("invalid where clause: %s", whereClause)
+	} else if whereColumn != "id" {
+		return fmt.Errorf("invalid where column: %s", whereColumn)
 	}
+	notes := strings.TrimSpace(update.notes)
 
 	var updateSQL string
 	var args []interface{}
-
-	switch newStatus {
+	switch update.newStatus {
 	case DeployApprovalRequestStatusApproved:
-		if len(allowedStatuses) < 1 {
-			return fmt.Errorf("allowedStatuses must include at least one allowed status")
-		}
-		if approvalExpiresAt == nil {
+		if update.expiresAt == nil {
 			return fmt.Errorf("approval expiration timestamp required for approved status")
 		}
+		maxAgeSeconds := int64(update.pendingMaxAge / time.Second)
 		updateSQL = `UPDATE deploy_approval_requests
          SET status = ?, approved_by_user_id = ?, approved_at = NOW(),
              approval_expires_at = ?, approval_notes = ?, updated_at = NOW()
-         WHERE ` + whereColumn + ` = ? AND status = ?`
-		args = []interface{}{newStatus, actorUserID, *approvalExpiresAt, trimmedNotes, whereArg, allowedStatuses[0]}
-	case DeployApprovalRequestStatusRejected:
-		if len(allowedStatuses) < 2 {
-			return fmt.Errorf("allowedStatuses must include two allowed statuses for rejection")
+         WHERE ` + whereColumn + ` = ? AND status = ?
+           AND (?::bigint = 0 OR created_at > NOW() - make_interval(secs => ?::bigint))`
+		args = []interface{}{
+			update.newStatus, update.actorUserID, *update.expiresAt, notes, whereArg,
+			DeployApprovalRequestStatusPending, maxAgeSeconds, maxAgeSeconds,
 		}
+	case DeployApprovalRequestStatusRejected:
+		// Once a promote has been claimed the rack may be applying it, and its outcome must be recorded against an
+		// approval that still says approved.
 		updateSQL = `UPDATE deploy_approval_requests
          SET status = ?, rejected_by_user_id = ?, rejected_at = NOW(), approval_notes = ?, updated_at = NOW()
-         WHERE ` + whereColumn + ` = ? AND status IN (?, ?)`
-		args = []interface{}{newStatus, actorUserID, trimmedNotes, whereArg, allowedStatuses[0], allowedStatuses[1]}
+         WHERE ` + whereColumn + ` = ? AND status IN (?, ?) AND promote_started_at IS NULL`
+		args = []interface{}{
+			update.newStatus, update.actorUserID, notes, whereArg,
+			DeployApprovalRequestStatusPending, DeployApprovalRequestStatusApproved,
+		}
 	default:
-		return fmt.Errorf("unsupported status: %s", newStatus)
+		return fmt.Errorf("unsupported status: %s", update.newStatus)
 	}
 
-	res, err := d.exec(updateSQL, args...)
+	updated, err := updatedOneRow(d.exec(updateSQL, args...))
 	if err != nil {
 		return fmt.Errorf("failed to update deploy approval request status: %w", err)
 	}
-	rows, err := res.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("failed to update deploy approval request status: %w", err)
+	if updated {
+		return nil
 	}
-	if rows == 0 {
-		return ErrDeployApprovalRequestNotFound
-	}
-	return nil
+	return d.approvalStatusUnchangedReason(whereColumn, whereArg, update)
 }
 
-// ApproveDeployApprovalRequest approves a pending deploy approval request by internal ID
+// approvalStatusUnchangedReason says why updateApprovalStatus changed nothing.
+func (d *Database) approvalStatusUnchangedReason(
+	whereColumn string,
+	whereArg interface{},
+	update approvalStatusUpdate,
+) error {
+	var status string
+	var promoteStarted bool
+	var ageSeconds float64
+	err := d.queryRow(`SELECT status, promote_started_at IS NOT NULL, EXTRACT(EPOCH FROM NOW() - created_at)
+		FROM deploy_approval_requests WHERE `+whereColumn+` = ?`, whereArg).Scan(&status, &promoteStarted, &ageSeconds)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrDeployApprovalRequestNotFound
+	}
+	if err != nil {
+		return fmt.Errorf("failed to read deploy approval request status: %w", err)
+	}
+	age := time.Duration(ageSeconds * float64(time.Second))
+	switch {
+	case update.newStatus == DeployApprovalRequestStatusApproved && status == DeployApprovalRequestStatusPending &&
+		update.pendingMaxAge > 0 && age >= update.pendingMaxAge:
+		return ErrDeployApprovalRequestTooOld
+	case update.newStatus == DeployApprovalRequestStatusRejected && promoteStarted &&
+		status == DeployApprovalRequestStatusApproved:
+		return ErrDeployApprovalPromoteStarted
+	default:
+		return ErrDeployApprovalRequestNotFound
+	}
+}
+
+// ApproveDeployApprovalRequest approves a pending deploy approval request by internal ID. pendingMaxAge is
+// DEPLOY_APPROVAL_PENDING_MAX_AGE (0 for none).
 func (d *Database) ApproveDeployApprovalRequest(
 	id int64,
 	approverUserID int64,
 	expiresAt time.Time,
 	notes string,
+	pendingMaxAge time.Duration,
 ) (*DeployApprovalRequest, error) {
-	err := d.updateApprovalStatus(
-		"id = ?",
-		id,
-		DeployApprovalRequestStatusApproved,
-		approverUserID,
-		&expiresAt,
-		notes,
-		[]string{DeployApprovalRequestStatusPending},
-	)
+	err := d.updateApprovalStatus("id", id, approvalStatusUpdate{
+		newStatus: DeployApprovalRequestStatusApproved, actorUserID: approverUserID, expiresAt: &expiresAt,
+		notes: notes, pendingMaxAge: pendingMaxAge,
+	})
 	if err != nil {
 		return nil, err
 	}
 	return d.GetDeployApprovalRequest(id)
 }
 
-// ApproveDeployApprovalRequestByPublicID approves a pending deploy approval request by public ID
+// ApproveDeployApprovalRequestByPublicID approves a pending deploy approval request by public ID. pendingMaxAge
+// is DEPLOY_APPROVAL_PENDING_MAX_AGE (0 for none).
 func (d *Database) ApproveDeployApprovalRequestByPublicID(
 	publicID string,
 	approverUserID int64,
 	expiresAt time.Time,
 	notes string,
+	pendingMaxAge time.Duration,
 ) (*DeployApprovalRequest, error) {
-	err := d.updateApprovalStatus(
-		"public_id = ?",
-		publicID,
-		DeployApprovalRequestStatusApproved,
-		approverUserID,
-		&expiresAt,
-		notes,
-		[]string{DeployApprovalRequestStatusPending},
-	)
+	err := d.updateApprovalStatus("public_id", publicID, approvalStatusUpdate{
+		newStatus: DeployApprovalRequestStatusApproved, actorUserID: approverUserID, expiresAt: &expiresAt,
+		notes: notes, pendingMaxAge: pendingMaxAge,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -287,15 +308,9 @@ func (d *Database) RejectDeployApprovalRequest(
 	approverUserID int64,
 	notes string,
 ) (*DeployApprovalRequest, error) {
-	err := d.updateApprovalStatus(
-		"id = ?",
-		id,
-		DeployApprovalRequestStatusRejected,
-		approverUserID,
-		nil,
-		notes,
-		[]string{DeployApprovalRequestStatusPending, DeployApprovalRequestStatusApproved},
-	)
+	err := d.updateApprovalStatus("id", id, approvalStatusUpdate{
+		newStatus: DeployApprovalRequestStatusRejected, actorUserID: approverUserID, notes: notes,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -308,15 +323,9 @@ func (d *Database) RejectDeployApprovalRequestByPublicID(
 	approverUserID int64,
 	notes string,
 ) (*DeployApprovalRequest, error) {
-	err := d.updateApprovalStatus(
-		"public_id = ?",
-		publicID,
-		DeployApprovalRequestStatusRejected,
-		approverUserID,
-		nil,
-		notes,
-		[]string{DeployApprovalRequestStatusPending, DeployApprovalRequestStatusApproved},
-	)
+	err := d.updateApprovalStatus("public_id", publicID, approvalStatusUpdate{
+		newStatus: DeployApprovalRequestStatusRejected, actorUserID: approverUserID, notes: notes,
+	})
 	if err != nil {
 		return nil, err
 	}

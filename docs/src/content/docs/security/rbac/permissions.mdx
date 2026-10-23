@@ -204,7 +204,6 @@ Secret values come back masked unless the caller also holds `convox:secret:read`
 | `convox:instance:list` | List instances | viewer, ops, deployer, cicd, admin |
 | `convox:instance:read` | View instance details | viewer, ops, deployer, cicd, admin |
 | `convox:rack:read` | View rack configuration | viewer, ops, deployer, cicd, admin |
-| `convox:rack:update` | Update the rack, change its parameters or scale it | admin |
 | `convox:log:read` | Stream logs | viewer, ops, deployer, admin |
 | `convox:object:create` | Upload build artifacts | deployer, admin |
 
@@ -336,7 +335,7 @@ Reads and lists need none. Any other permission needs **always** unless it's lis
 |-------|-------------|
 | None | `convox:object:create`, `gateway:deploy_approval_request:create`, `auth:mfa_verification:create`, and the settings `ci_provider`, `circleci_approval_job_name`, `default_branch`, `github_post_pr_comment`, `vcs_provider`, `vcs_repo` |
 | Step-up once enrolled | `auth:mfa_method:create` |
-| Step-up | `convox:app:create`, `convox:app:update`, `convox:app:restart`, `convox:build:create`, `convox:build:update`, `convox:release:create`, `convox:release:promote`, `convox:env:set`, `convox:env:unset`, `convox:process:start`, `convox:process:exec`, `convox:process:stop`, `convox:process:terminate`, `convox:rack:update`, `convox:secret:read`, `gateway:user:update_name`, `gateway:integration:create`, `gateway:integration:update`, `gateway:integration:delete`, `gateway:job:update`, `gateway:job:delete`, the `vcs_and_ci_defaults` and `session_configuration` setting groups, the settings `allow_deploy_from_default_branch`, `approved_deploy_commands`, `audit_visible_env_vars`, `circleci_auto_approve_on_approval`, `service_image_patterns`, `verify_git_commit_mode`, and the `auth` permissions other than those above and `auth:mfa_method:delete` |
+| Step-up | `convox:app:create`, `convox:app:update`, `convox:app:restart`, `convox:build:create`, `convox:build:update`, `convox:release:create`, `convox:release:promote`, `convox:env:set`, `convox:env:unset`, `convox:process:start`, `convox:process:exec`, `convox:process:stop`, `convox:process:terminate`, `convox:secret:read`, `gateway:user:update_name`, `gateway:integration:create`, `gateway:integration:update`, `gateway:integration:delete`, `gateway:job:update`, `gateway:job:delete`, the `vcs_and_ci_defaults` and `session_configuration` setting groups, the settings `allow_deploy_from_default_branch`, `approved_deploy_commands`, `audit_visible_env_vars`, `circleci_auto_approve_on_approval`, `service_image_patterns`, `verify_git_commit_mode`, and the `auth` permissions other than those above and `auth:mfa_method:delete` |
 
 So these always need MFA on the request itself: deleting apps, importing builds, creating, changing, locking and
 deleting users, revoking sessions, creating, changing and deleting API tokens, approving, rejecting and extending deploy approvals, removing an MFA method, refreshing the rack TLS certificate,
@@ -440,7 +439,9 @@ These are the only rack API routes the gateway forwards (under `/api/v1/rack-pro
 | App, process, build and rack logs (`.../logs`, HTTP or WebSocket) | `convox:log:read` |
 | `GET /instances`, `GET /instances/{id}` | `convox:instance:list`, `convox:instance:read` |
 | `GET /system`, `/system/capacity`, `/system/metrics`, `/system/processes`, `/system/releases` | `convox:rack:read` |
-| `PUT /system` | `convox:rack:update` |
+
+The gateway doesn't route `PUT /system` (`convox rack update`, `rack scale` and `rack params set`): Convox v3 racks
+don't implement it, and racks are updated with Terraform.
 
 ## Next Steps
 

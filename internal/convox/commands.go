@@ -276,24 +276,6 @@ var Commands = []Command{
 		AllowedFlags: []string{},
 		Description:  "List rack processes",
 	},
-	{
-		Command:      "rack params",
-		Permissions:  []string{rbac.Convox(rbac.ResourceRack, rbac.ActionRead)},
-		AllowedFlags: []string{},
-		Description:  "Display rack parameters",
-	},
-	{
-		Command:      "rack params set",
-		Permissions:  []string{rbac.Convox(rbac.ResourceRack, rbac.ActionUpdate)},
-		AllowedFlags: []string{},
-		Description:  "Set rack parameters",
-	},
-	{
-		Command:      "rack update",
-		Permissions:  []string{rbac.Convox(rbac.ResourceRack, rbac.ActionUpdate)},
-		AllowedFlags: []string{"version"},
-		Description:  "Update the rack",
-	},
 }
 
 // commandMap indexes commands for fast lookup

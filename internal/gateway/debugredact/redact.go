@@ -19,6 +19,7 @@ const Redacted = "[REDACTED]"
 // they appear in its name: "Authorization", "Cookie", "X-CSRF-Token", "X-Postmark-Server-Token", "api_token",
 // "assertion_response".
 var sensitiveNameParts = []string{
+	"apikey",
 	"assertion",
 	"authorization",
 	"cookie",
@@ -34,13 +35,16 @@ var sensitiveNameParts = []string{
 }
 
 // sensitiveNameWords mark a credential when they're a whole word of a name ("code", "login_code",
-// "backup_codes", "session_data", "X-Api-Key"). They're too common inside other words to match anywhere.
+// "backup_codes", "session_data", "X-Api-Key", a presigned URL's "sig"). They're too common inside other words to
+// match anywhere.
 var sensitiveNameWords = map[string]struct{}{
+	"auth":    {},
 	"code":    {},
 	"codes":   {},
 	"key":     {},
 	"pin":     {},
 	"session": {},
+	"sig":     {},
 	"state":   {},
 }
 
@@ -63,9 +67,9 @@ var urlHeaders = map[string]struct{}{
 // absoluteURLPattern finds absolute URLs inside a longer value, such as a Link header or a JSON string.
 var absoluteURLPattern = regexp.MustCompile(`[A-Za-z][A-Za-z0-9+.-]*://[^\s<>"']+`)
 
-// isSensitiveName reports whether a header, JSON field or query parameter named name carries a credential or
+// IsSensitiveName reports whether a header, JSON field or query parameter named name carries a credential or
 // secret.
-func isSensitiveName(name string) bool {
+func IsSensitiveName(name string) bool {
 	lower := strings.ToLower(name)
 	if _, ok := sensitiveNames[lower]; ok {
 		return true
@@ -87,7 +91,7 @@ func isSensitiveName(name string) bool {
 // isSensitiveHeader reports whether a header's value must not be logged at all. Every MFA header (X-MFA-TOTP,
 // X-MFA-WebAuthn, ...) is, since some carry a code or an assertion.
 func isSensitiveHeader(name string) bool {
-	return strings.HasPrefix(strings.ToLower(name), "x-mfa-") || isSensitiveName(name)
+	return strings.HasPrefix(strings.ToLower(name), "x-mfa-") || IsSensitiveName(name)
 }
 
 // HeaderValue is a header's value as it may be logged. A sensitive header's value is redacted. A URL in any other
@@ -141,7 +145,7 @@ func URL(raw string) string {
 }
 
 // RedactQuery redacts the values of sensitive parameters in a query string (an api_key, a client_secret, a login
-// code; see isSensitiveName), or all of it when it can't be parsed. The audit log and the request logs keep a
+// code; see IsSensitiveName), or all of it when it can't be parsed. The audit log and the request logs keep a
 // request's query this way too.
 func RedactQuery(rawQuery string) string {
 	values, err := url.ParseQuery(rawQuery)
@@ -149,9 +153,29 @@ func RedactQuery(rawQuery string) string {
 		return url.QueryEscape(Redacted)
 	}
 	for key := range values {
-		if isSensitiveName(key) {
+		if IsSensitiveName(key) {
 			values[key] = []string{Redacted}
 		}
 	}
 	return values.Encode()
+}
+
+// HasSensitiveQuery reports whether a query string gives a value to a sensitive parameter (an api_key, a token, a
+// signature; see IsSensitiveName). One that can't be parsed counts as sensitive, as RedactQuery redacts it whole.
+func HasSensitiveQuery(rawQuery string) bool {
+	values, err := url.ParseQuery(rawQuery)
+	if err != nil {
+		return true
+	}
+	for key, vals := range values {
+		if !IsSensitiveName(key) {
+			continue
+		}
+		for _, value := range vals {
+			if value != "" {
+				return true
+			}
+		}
+	}
+	return false
 }

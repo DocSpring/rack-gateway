@@ -70,7 +70,8 @@ or a canceled login leaves the existing session alone.
 - `current` - Currently selected rack name
 - `gateways` - Map of rack configurations (see GatewayConfig below)
 - `machine_id` - Unique machine identifier
-- `mfa_preference` - Default MFA method: `"default"`, `"webauthn"`, or `"totp"`
+- `mfa_preference` - Default MFA method: `"default"`, `"webauthn"`, `"totp"` or `"yubiotp"` (a YubiKey OTP is
+  typed at the code prompt and sent like a TOTP code)
 - `notification_sound` - Default notification sound: `"default"`, `"disabled"`, or path to MP3 file
 - `sound_volume` - Default sound volume: 0.0 to 1.0 (default: 0.6 = 60%)
 - `touch_notifications` - Show a desktop notification each time a security key touch is needed (default: `true`;

@@ -7,10 +7,10 @@ import { Card, CardContent } from '@/components/ui/card'
 import { api } from '@/lib/api'
 import { cn } from '@/lib/utils'
 
-function headline(status: DbAuditVerificationStatus): string {
+function headline(status: DbAuditVerificationStatus, anchored: boolean): string {
   switch (status.result) {
     case 'passed':
-      return 'Audit chain verified'
+      return anchored ? 'Audit chain verified' : 'Audit chain verified (no external anchors)'
     case 'failed':
       return `Audit chain verification failed: ${status.failure_count} integrity failures`
     default:
@@ -21,9 +21,12 @@ function headline(status: DbAuditVerificationStatus): string {
 // The outcome of the gateway's hourly check of the audit hash chain and its S3 anchors.
 export function AuditVerificationSummary({
   status,
+  anchored,
 }: {
   // null before the first run (the generated type only allows the field to be missing)
   status?: DbAuditVerificationStatus | null
+  // whether the gateway anchors the chain in S3 (AUDIT_ANCHOR_BUCKET)
+  anchored: boolean
 }) {
   if (!status) {
     return (
@@ -46,8 +49,14 @@ export function AuditVerificationSummary({
       <CardContent className="space-y-2 text-sm">
         <div className="flex items-center gap-3">
           <Icon className={cn('size-5 shrink-0', passed ? 'text-green-600' : 'text-destructive')} />
-          <span className="font-medium">{headline(status)}</span>
+          <span className="font-medium">{headline(status, anchored)}</span>
         </div>
+        {!anchored && (
+          <p className="text-muted-foreground">
+            Without S3 anchors (AUDIT_ANCHOR_BUCKET), verification can&apos;t detect events removed
+            from the end of the chain, or the whole chain.
+          </p>
+        )}
         <p className="text-muted-foreground">
           Checked <TimeAgo date={status.checked_at} />
           {status.failing_since && (
@@ -83,5 +92,5 @@ export function AuditVerificationCard() {
   if (!data) {
     return null
   }
-  return <AuditVerificationSummary status={data.status} />
+  return <AuditVerificationSummary anchored={data.anchors_configured} status={data.status} />
 }

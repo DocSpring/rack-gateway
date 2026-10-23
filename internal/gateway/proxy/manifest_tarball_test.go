@@ -6,6 +6,7 @@ import (
 	"compress/gzip"
 	"fmt"
 	"io"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -19,6 +20,7 @@ type tarEntry struct {
 	typeflag byte
 	linkname string
 	body     []byte
+	pax      map[string]string
 }
 
 // writeTarball writes entries to w as a gzipped tarball.
@@ -32,7 +34,9 @@ func writeGzippedTar(w io.Writer, endArchive bool, entries ...tarEntry) error {
 	gz := gzip.NewWriter(w)
 	tw := tar.NewWriter(gz)
 	for _, entry := range entries {
-		header := &tar.Header{Name: entry.name, Typeflag: entry.typeflag, Linkname: entry.linkname, Mode: 0o644}
+		header := &tar.Header{
+			Name: entry.name, Typeflag: entry.typeflag, Linkname: entry.linkname, Mode: 0o644, PAXRecords: entry.pax,
+		}
 		if header.Typeflag == 0 {
 			header.Typeflag = tar.TypeReg
 			header.Size = int64(len(entry.body))
@@ -210,6 +214,23 @@ func TestManifestScanRefusesAnArchiveThatReachesTheSizeLimit(t *testing.T) {
 	// Read in full, the same archive has two manifests.
 	_, err = readArchiveManifest(bytes.NewReader(archive), defaultManifestPath, int64(len(archive)+1))
 	require.ErrorContains(t, err, "tarball contains convox.yml more than once")
+}
+
+// The tar reader reads each entry's metadata (PAX records, up to 1MiB each) before the scan sees the entry, so the
+// uncompressed stream is bounded as a whole.
+func TestManifestScanBoundsTheUncompressedStream(t *testing.T) {
+	padding := map[string]string{"RGW.padding": strings.Repeat("x", 600*1024)}
+	var archive bytes.Buffer
+	require.NoError(t, writeTarball(&archive,
+		tarEntry{name: "a", pax: padding}, tarEntry{name: "b", pax: padding}, tarEntry{name: "c", pax: padding},
+		tarEntry{name: "convox.yml", body: []byte(webManifest)}))
+
+	_, err := readManifestFromTarball(bytes.NewReader(archive.Bytes()), defaultManifestPath, 1024*1024)
+	require.ErrorContains(t, err, "tarball expands to more than 1048576 bytes")
+
+	data, err := readManifestFromTarball(bytes.NewReader(archive.Bytes()), defaultManifestPath, 4*1024*1024)
+	require.NoError(t, err)
+	require.Equal(t, webManifest, string(data))
 }
 
 // parseArchiveManifest reads and parses the manifest in an archive, as a build's check does.

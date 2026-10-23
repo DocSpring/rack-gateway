@@ -93,8 +93,8 @@ type MFAAttemptRequest struct {
 	SessionID  *int64
 }
 
-// MFAAttempt is an MFA verification attempt recorded by ReserveMFAAttempt. It counts as failed until Finish records
-// its outcome.
+// MFAAttempt is an MFA verification attempt recorded by ReserveMFAAttempt. It counts toward the rate limit at once,
+// and toward the automatic lock (CountRecentFailedMFAAttempts) once Finish records that it failed.
 type MFAAttempt struct {
 	db *Database
 	ID int64
@@ -171,7 +171,8 @@ func (a *MFAAttempt) Finish(methodID *int64, success bool, failureReason string)
 	return nil
 }
 
-// CountRecentFailedMFAAttempts counts all failed MFA attempts (TOTP + WebAuthn) in the last N minutes.
+// CountRecentFailedMFAAttempts counts the failed MFA verifications (TOTP + WebAuthn) in the last N minutes. An
+// attempt still being verified (in_progress) hasn't failed, and a rate-limited one verified nothing.
 func (d *Database) CountRecentFailedMFAAttempts(userID int64, minutes int) (int, error) {
 	var count int
 	query := `
@@ -179,79 +180,11 @@ func (d *Database) CountRecentFailedMFAAttempts(userID int64, minutes int) (int,
         WHERE user_id = $1
           AND attempted_at > NOW() - INTERVAL '1 minute' * $2
           AND success = FALSE
+          AND COALESCE(failure_reason, '') NOT IN ('in_progress', 'rate_limited')
     `
 	err := d.queryRow(query, userID, minutes).Scan(&count)
 	if err != nil {
 		return 0, fmt.Errorf("failed to count failed MFA attempts: %w", err)
 	}
 	return count, nil
-}
-
-// LockUser locks a user account
-func (d *Database) LockUser(userID int64, reason string, lockedByUserID *int64) error {
-	tx, err := d.db.Begin()
-	if err != nil {
-		return fmt.Errorf("failed to begin user lock: %w", err)
-	}
-	defer func() { _ = tx.Rollback() }()
-	_, err = d.execTx(tx, `
-        UPDATE users
-        SET locked_at = NOW(), locked_reason = ?, locked_by_user_id = ?, updated_at = NOW()
-        WHERE id = ? AND locked_at IS NULL
-    `, nullableString(reason, 255), lockedByUserID, userID)
-	if err != nil {
-		return fmt.Errorf("failed to lock user: %w", err)
-	}
-	if _, err := d.revokeUserSessionsTx(tx, userID, lockedByUserID); err != nil {
-		return err
-	}
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("failed to commit user lock: %w", err)
-	}
-	return nil
-}
-
-// revokeUserSessionsTx revokes all of a user's sessions in tx and returns how many it revoked. A lock revokes them
-// with it: a session left alive while the user is locked would work again once they're unlocked.
-func (d *Database) revokeUserSessionsTx(tx *sql.Tx, userID int64, revokedBy *int64) (int64, error) {
-	var revokedByVal interface{}
-	if revokedBy != nil {
-		revokedByVal = *revokedBy
-	}
-	res, err := d.execTx(tx, `UPDATE user_sessions SET revoked_at = NOW(), revoked_by_user_id = ?, updated_at = NOW()
-		WHERE user_id = ? AND revoked_at IS NULL`, revokedByVal, userID)
-	if err != nil {
-		return 0, fmt.Errorf("failed to revoke the user's sessions: %w", err)
-	}
-	count, err := res.RowsAffected()
-	if err != nil {
-		return 0, fmt.Errorf("failed to revoke the user's sessions: %w", err)
-	}
-	return count, nil
-}
-
-// UnlockUser unlocks a user account by clearing the lock fields.
-func (d *Database) UnlockUser(userID int64, _ int64) error {
-	_, err := d.exec(`
-        UPDATE users
-        SET locked_at = NULL, locked_reason = NULL, locked_by_user_id = NULL, updated_at = NOW()
-        WHERE id = ?
-    `, userID)
-	if err != nil {
-		return fmt.Errorf("failed to unlock user: %w", err)
-	}
-	return nil
-}
-
-// IsUserLocked checks if a user account is currently locked
-func (d *Database) IsUserLocked(userID int64) (bool, error) {
-	var locked bool
-	err := d.queryRow(`
-        SELECT locked_at IS NOT NULL
-        FROM users WHERE id = ?
-    `, userID).Scan(&locked)
-	if err != nil {
-		return false, fmt.Errorf("failed to check if user is locked: %w", err)
-	}
-	return locked, nil
 }

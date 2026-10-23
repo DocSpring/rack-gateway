@@ -15,7 +15,6 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth/mfa"
 	"github.com/DocSpring/rack-gateway/internal/gateway/config"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
-	"github.com/DocSpring/rack-gateway/internal/gateway/email"
 	"github.com/DocSpring/rack-gateway/internal/gateway/envutil"
 	"github.com/DocSpring/rack-gateway/internal/gateway/httpclient"
 	gtwlog "github.com/DocSpring/rack-gateway/internal/gateway/logging"
@@ -35,15 +34,11 @@ type Handler struct {
 	secretNamesErr  error // CONVOX_SECRET_ENV_VARS can't be read: every env var counts as secret
 	database        *db.Database
 	settingsService *settings.Service
-	emailer         email.Sender
 	rackName        string
-	rackAlias       string
 	rackCertManager *rackcert.Manager
 	mfaService      *mfa.Service
 	sessionManager  *auth.SessionManager
 }
-
-// no async jobs client here; emailer may be an async sender
 
 const maskedSecret = envutil.MaskedSecret
 
@@ -54,8 +49,7 @@ func NewHandler(
 	auditLogger *audit.Logger,
 	database *db.Database,
 	settingsService *settings.Service,
-	mailer email.Sender,
-	rackName, rackAlias string,
+	rackName string,
 	rackCertManager *rackcert.Manager,
 	mfaService *mfa.Service,
 	sessionManager *auth.SessionManager,
@@ -67,9 +61,7 @@ func NewHandler(
 		secretNames:     make(map[string]struct{}),
 		database:        database,
 		settingsService: settingsService,
-		emailer:         mailer,
 		rackName:        rackName,
-		rackAlias:       strings.TrimSpace(rackAlias),
 		rackCertManager: rackCertManager,
 		mfaService:      mfaService,
 		sessionManager:  sessionManager,
@@ -107,13 +99,6 @@ func logRackTLSMismatch(scope string, err *rackcert.FingerprintMismatchError) {
 	)
 }
 
-func (h *Handler) rackDisplay() string {
-	if alias := strings.TrimSpace(h.rackAlias); alias != "" {
-		return alias
-	}
-	return h.rackName
-}
-
 // ProxyToRack handles proxying requests to the Convox rack with RBAC, MFA, and audit logging.
 func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
@@ -143,7 +128,7 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 	// Only an allowed request gets longer deadlines. Nothing before this point reads an upload's body.
 	extendDeadlines(w, r, rackPath)
 
-	if err := h.checkPromoteImages(r, rackPath, approvalTracker); err != nil {
+	if err := h.checkBeforeRecording(r, rackPath, authUser, approvalTracker); err != nil {
 		h.handleForwardError(w, r, err, rackConfig.Name, start)
 		return
 	}
@@ -165,10 +150,9 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	r, paramsUpdate := h.captureRackParamsIfNeeded(r, rackPath, rackConfig)
-
 	status, err := h.forwardRequest(w, r, rackConfig, rackPath, authUser)
 	h.releaseDeployApprovalClaims(r, rackPath, status, err)
+	h.settleCheckedBuild(r, status, err)
 	if err != nil {
 		if answered := h.handleForwardError(w, r, err, rackConfig.Name, start); answered != 0 {
 			status = answered
@@ -183,9 +167,29 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 
 	h.createAuditLogIfNeeded(r, authUser, path, status, start)
 	h.logRequestToCloudWatch(r, authUser.Email, rackConfig.Name, status, start)
-	h.handleSuccessAuditing(r, w, authUser, path, status, envDiffs, paramsUpdate, rackConfig, start)
+	h.handleSuccessAuditing(r, w, authUser, path, status, envDiffs, rackConfig, start)
 
 	r.Header.Del("X-Release-Created")
+}
+
+// checkBeforeRecording runs the checks that refuse a request outright, before it's recorded and before it claims
+// anything (an upload's object key, a deploy approval step) that a refused request would otherwise hold.
+func (h *Handler) checkBeforeRecording(
+	r *http.Request,
+	rackPath string,
+	authUser *auth.User,
+	approvalTracker *deployApprovalTracker,
+) error {
+	if err := h.checkForwardableOptions(r, authUser); err != nil {
+		return err
+	}
+	if err := h.checkPromoteImages(r, rackPath, approvalTracker); err != nil {
+		return err
+	}
+	if err := audit.CheckCommandRecordable(r); err != nil {
+		return refuse(http.StatusBadRequest, err)
+	}
+	return nil
 }
 
 func (h *Handler) getRackConfig() (config.RackConfig, error) {
@@ -412,40 +416,6 @@ func (h *Handler) handlePermissionError(
 		start,
 	)
 	return false, nil, err
-}
-
-func (h *Handler) prepareReleaseIfNeeded(
-	r *http.Request,
-	w http.ResponseWriter,
-	allowed bool,
-	rackPath string,
-	rackConfig config.RackConfig,
-	userEmail string,
-	start time.Time,
-) ([]envutil.EnvDiff, error) {
-	if !allowed || r.Method != http.MethodPost || !strings.Contains(rackPath, "/releases") {
-		return nil, nil
-	}
-
-	diffs, err := h.prepareReleaseCreate(r, rackConfig, userEmail)
-	if err == nil {
-		return diffs, nil
-	}
-	if writeEnvChangeRefusal(w, err) {
-		return nil, err
-	}
-	if errors.Is(err, db.ErrAppEnvLockBusy) {
-		h.handleError(w, r, "Another env change to this app is in progress. Try again.", http.StatusConflict,
-			rackConfig.Name, start)
-		return nil, err
-	}
-	if fpErr, ok := rackcert.AsFingerprintMismatch(err); ok {
-		logRackTLSMismatch("env_fetch", fpErr)
-		h.handleError(w, r, "rack certificate verification failed", http.StatusBadGateway, rackConfig.Name, start)
-		return nil, err
-	}
-	h.handleError(w, r, err.Error(), bodyErrorStatus(err, http.StatusBadRequest), rackConfig.Name, start)
-	return nil, err
 }
 
 func (h *Handler) enforceDestructivePolicy(

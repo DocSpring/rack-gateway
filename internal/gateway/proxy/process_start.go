@@ -1,7 +1,6 @@
 package proxy
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"net/http"
@@ -34,7 +33,7 @@ func checkHeaderOnlyRequest(r *http.Request, path string, body []byte) error {
 	if r.URL.RawQuery != "" {
 		return refuse(http.StatusBadRequest, errors.New("this request takes no query parameters"))
 	}
-	if len(bytes.TrimSpace(body)) > 0 {
+	if len(body) > 0 {
 		return refuse(http.StatusBadRequest, errors.New("this request takes no body: its options are headers"))
 	}
 	return nil
@@ -51,15 +50,16 @@ func matchesAnyRoute(path string, routes []string) bool {
 }
 
 // validateProcessCommand refuses a process start under a deploy approval whose command isn't one of the app's
-// approved_deploy_commands. The refusal, which the audit log keeps, names the command without the credentials it
-// may carry.
+// approved_deploy_commands, or whose approval is no longer approved and unexpired now that the whole request has
+// been read (the approval was looked up when it began). The refusal, which the audit log keeps, names the command
+// without the credentials it may carry.
 func (h *Handler) validateProcessCommand(r *http.Request, original string) error {
 	if r.Method != http.MethodPost || !rbac.KeyMatch3(original, processStartRoute) {
 		return nil
 	}
 
 	tracker := getDeployApprovalTracker(r.Context())
-	if tracker == nil {
+	if tracker == nil || tracker.request == nil {
 		return nil
 	}
 
@@ -69,5 +69,13 @@ func (h *Handler) validateProcessCommand(r *http.Request, original string) error
 		return refuse(http.StatusForbidden, fmt.Errorf("command not approved: %s", audit.RedactCommand(command)))
 	}
 
+	authorizes, err := h.database.DeployApprovalAuthorizes(tracker.request.ID)
+	if err != nil {
+		return err
+	}
+	if !authorizes {
+		return refuse(http.StatusForbidden,
+			fmt.Errorf("deploy approval %s is no longer approved", tracker.request.PublicID))
+	}
 	return nil
 }

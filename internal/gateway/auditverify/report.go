@@ -1,8 +1,10 @@
 package auditverify
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"io"
+	"math/big"
 	"time"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
@@ -37,6 +39,9 @@ type Report struct {
 	// HashV2StartAnchors counts the format 2 anchors checked, each of which records where hash v2 starts.
 	HashV2StartAnchors int
 
+	// Anchored is whether the run checked the chain against external anchors. Without them, events removed from
+	// the end of the chain (or the whole chain) leave a valid chain behind.
+	Anchored bool
 	// AnchorsChecked counts anchor versions read from the bucket (0 when anchors weren't checked).
 	AnchorsChecked int
 	// LatestAnchor is the key of the most recently written anchor, and LatestAnchorWritten when S3 stored it.
@@ -56,7 +61,12 @@ type Report struct {
 
 	// failureKeys identify the failures found (the first maxFailureKeys of them).
 	failureKeys []string
+	// failureDigest is the sum of every failure key's SHA-256 (mod 2^256), past maxFailureKeys too.
+	failureDigest big.Int
 }
+
+// digestModulus is 2^256: failureDigest stays 256 bits.
+var digestModulus = new(big.Int).Lsh(big.NewInt(1), 256)
 
 // OK reports whether no integrity failure was found.
 func (r *Report) OK() bool {
@@ -82,12 +92,26 @@ func (r *Report) addFailure(message, key string) {
 	if len(r.failureKeys) < maxFailureKeys {
 		r.failureKeys = append(r.failureKeys, key)
 	}
+	sum := sha256.Sum256([]byte(key))
+	r.failureDigest.Add(&r.failureDigest, new(big.Int).SetBytes(sum[:]))
+	r.failureDigest.Mod(&r.failureDigest, digestModulus)
 }
 
 // FailureKeys identifies the failures found, up to maxFailureKeys of them. A failure found again by a later run has
 // the same key, so a failure that wasn't found before stands out even when the count stays the same.
 func (r *Report) FailureKeys() []string {
 	return r.failureKeys
+}
+
+// AllFailureKeys reports whether FailureKeys holds every failure's key.
+func (r *Report) AllFailureKeys() bool {
+	return r.FailureCount <= maxFailureKeys
+}
+
+// FailureDigest identifies every failure found, however many: it doesn't depend on their order, and two runs that
+// found the same failures have the same digest.
+func (r *Report) FailureDigest() string {
+	return r.failureDigest.Text(16)
 }
 
 func (r *Report) warn(format string, args ...interface{}) {
@@ -124,14 +148,25 @@ func (r *Report) Write(w io.Writer) error {
 	case r.StoppedBy != "":
 		p.line("Result: FAILED (%d integrity failures, and stopped before it finished: %s)", r.FailureCount,
 			r.StoppedBy)
-	case r.OK() && r.LegacyEvents > 0:
-		p.line("Result: OK, except that the content of %d legacy (v1) events can't be verified", r.LegacyEvents)
 	case r.OK():
-		p.line("Result: OK")
+		p.line("Result: OK%s", r.caveats())
 	default:
 		p.line("Result: FAILED (%d integrity failures)", r.FailureCount)
 	}
 	return p.err
+}
+
+// caveats are what a passing run couldn't check.
+func (r *Report) caveats() string {
+	var caveats string
+	if r.LegacyEvents > 0 {
+		caveats = fmt.Sprintf(", except that the content of %d legacy (v1) events can't be verified", r.LegacyEvents)
+	}
+	if !r.Anchored {
+		caveats += "; no external anchors (AUDIT_ANCHOR_BUCKET), so events removed from the end of the chain, or " +
+			"the whole chain, can't be detected"
+	}
+	return caveats
 }
 
 func (r *Report) writeChain(p *summaryPrinter) {

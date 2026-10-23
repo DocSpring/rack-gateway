@@ -133,7 +133,7 @@ func TestCreateDeployApprovalRequestExpiresLapsedApprovalsFirst(t *testing.T) {
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&first))
 	lapsed, err := f.handler.database.GetDeployApprovalRequestByPublicID(first.PublicID)
 	require.NoError(t, err)
-	_, err = f.handler.database.ApproveDeployApprovalRequest(lapsed.ID, f.user.ID, time.Now().Add(-time.Minute), "")
+	_, err = f.handler.database.ApproveDeployApprovalRequest(lapsed.ID, f.user.ID, time.Now().Add(-time.Minute), "", 0)
 	require.NoError(t, err)
 
 	resp = f.create(t, commit)

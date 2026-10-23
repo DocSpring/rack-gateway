@@ -17,7 +17,7 @@ These flags work with any command:
 | `--config` | | Override config directory |
 | `--api-token` | | Use API token for authentication |
 | `--mfa-code` | | Provide MFA code for step-up auth |
-| `--mfa-method` | | Specify MFA method (totp/webauthn) |
+| `--mfa-method` | | Specify MFA method (webauthn/totp/yubiotp) |
 | `--help` | `-h` | Show help for a command |
 
 ## Authentication Commands
@@ -207,8 +207,8 @@ rack-gateway env [command] -a <app>
 **Subcommands:**
 - `rack-gateway env -a <app>` - List environment variables (secret and protected values, and values with
   credentials in them, masked)
-- `rack-gateway env get VAR -a <app>` - Show one variable. `--unmask` shows a secret value (needs `convox:secret:read`
-  and a step-up)
+- `rack-gateway env get VAR -a <app>` - Show one variable. `--unmask` shows a secret or protected value (needs
+  `convox:secret:read` and a step-up)
 - `rack-gateway env set VAR=value -a <app>` - Set variables
 - `rack-gateway env unset VAR -a <app>` - Remove variables
 - `rack-gateway env edit -a <app>` - Edit the variables in `$EDITOR`
@@ -226,8 +226,9 @@ rack-gateway env unset DEBUG -a myapp --promote
 
 #### Protected env vars
 
-An app's protected env vars (set under **Apps → `{app}` → Settings**) are masked everywhere and can't be
-changed or removed by accident: `env set` and `env unset` refuse them. To rotate or remove one without
+An app's protected env vars (set under **Apps → `{app}` → Settings**) are masked like secrets (only a caller with
+`convox:secret:read` who asks to reveal them sees their values) and can't be changed or removed by accident:
+`env set` and `env unset` refuse them. To rotate or remove one without
 unprotecting it, an admin names it in the command and passes `--allow-protected`:
 
 ```bash
@@ -396,6 +397,9 @@ rack-gateway deploy-approval show <request-id>
 rack-gateway deploy-approval request --app myapp --git-commit <sha> --message "Deploy"
 rack-gateway deploy-approval wait --commit <sha> --approve
 ```
+
+Each approval needs its own MFA proof (a key touch, a TOTP code, a YubiKey OTP), and the gateway accepts each TOTP
+code once. So `--mfa-code` can approve one request: with more pending, `approve` refuses before approving any.
 
 See [Deploy Approvals](/integrations/deploy-approvals/workflow/) for the full workflow.
 

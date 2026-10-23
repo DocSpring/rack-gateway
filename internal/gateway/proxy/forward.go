@@ -267,10 +267,6 @@ func (h *Handler) forwardRequest(
 		return 0, &requestNotSentError{err}
 	}
 
-	if status := h.refuseUnforwardableOptions(w, r, authUser); status != 0 {
-		return status, nil
-	}
-
 	if strings.Contains(strings.ToLower(r.Header.Get("Connection")), "upgrade") &&
 		strings.ToLower(r.Header.Get("Upgrade")) == "websocket" {
 		return h.proxyWebSocket(w, r, rack, targetURL, authUser, path)
@@ -361,7 +357,6 @@ func (h *Handler) requestBodyForRack(r *http.Request, path string, authUser *aut
 	if err != nil {
 		return rackRequestBody{}, err
 	}
-	noteRequestedRackParams(r, bodyBytes)
 
 	if err := checkHeaderOnlyRequest(r, path, bodyBytes); err != nil {
 		return rackRequestBody{}, err

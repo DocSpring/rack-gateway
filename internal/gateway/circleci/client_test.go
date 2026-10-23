@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -28,6 +29,9 @@ type fakeCircleCI struct {
 	pipeline  fakePipeline
 	workflows []fakeWorkflow
 	listing   []string // the workflow IDs GET /pipeline/{id}/workflow returns, newest first
+	// pageSize, when set, splits the workflow listing into pages of that many workflows, and puts a build job on
+	// the first page of each workflow's job listing, before its approval job.
+	pageSize int
 
 	mu        sync.Mutex
 	approvals []string // "<workflow id>/<job id>"
@@ -55,12 +59,16 @@ func (f *fakeCircleCI) listingCount() int {
 	return f.listings
 }
 
-func (f *fakeCircleCI) serveWorkflow(w http.ResponseWriter, path string) {
+func (f *fakeCircleCI) serveWorkflow(w http.ResponseWriter, path, token string) {
 	id, jobs := strings.CutSuffix(strings.TrimPrefix(path, "/workflow/"), "/job")
 	wf, ok := f.workflow(id)
 	switch {
 	case !ok:
 		w.WriteHeader(http.StatusNotFound)
+	case jobs && f.pageSize > 0 && token == "":
+		writeJSON(w, map[string]interface{}{"next_page_token": "jobs-2", "items": []map[string]string{
+			{"id": "build-" + wf.id, "name": "build", "type": "build", "status": "success"},
+		}})
 	case jobs:
 		writeJSON(w, map[string]interface{}{"items": []map[string]string{
 			{"id": "hold-" + wf.id, "name": "approve_deploy_us", "type": "approval", "status": wf.hold},
@@ -72,7 +80,7 @@ func (f *fakeCircleCI) serveWorkflow(w http.ResponseWriter, path string) {
 	}
 }
 
-func (f *fakeCircleCI) servePipeline(w http.ResponseWriter, path string) {
+func (f *fakeCircleCI) servePipeline(w http.ResponseWriter, path, token string) {
 	switch path {
 	case "/pipeline/" + testPipelineID:
 		vcs := map[string]string{
@@ -87,15 +95,30 @@ func (f *fakeCircleCI) servePipeline(w http.ResponseWriter, path string) {
 		f.mu.Lock()
 		f.listings++
 		f.mu.Unlock()
-		items := make([]map[string]string, 0, len(f.listing))
-		for _, id := range f.listing {
+		listing, next := f.listingPage(token)
+		items := make([]map[string]string, 0, len(listing))
+		for _, id := range listing {
 			wf, _ := f.workflow(id)
 			items = append(items, map[string]string{"id": wf.id, "name": wf.name, "created_at": wf.createdAt})
 		}
-		writeJSON(w, map[string]interface{}{"items": items})
+		writeJSON(w, map[string]interface{}{"items": items, "next_page_token": next})
 	default:
 		w.WriteHeader(http.StatusNotFound)
 	}
+}
+
+// listingPage returns the page of the workflow listing that token (a start index, "" for 0) starts, and the next
+// page's token ("" for none).
+func (f *fakeCircleCI) listingPage(token string) ([]string, string) {
+	if f.pageSize == 0 {
+		return f.listing, ""
+	}
+	start, _ := strconv.Atoi(token)
+	end := min(start+f.pageSize, len(f.listing))
+	if end == len(f.listing) {
+		return f.listing[start:end], ""
+	}
+	return f.listing[start:end], strconv.Itoa(end)
 }
 
 func (f *fakeCircleCI) client(t *testing.T) *Client {
@@ -109,9 +132,9 @@ func (f *fakeCircleCI) client(t *testing.T) *Client {
 			f.mu.Unlock()
 			writeJSON(w, map[string]string{"message": "Accepted."})
 		case strings.HasPrefix(r.URL.Path, "/workflow/"):
-			f.serveWorkflow(w, r.URL.Path)
+			f.serveWorkflow(w, r.URL.Path, r.URL.Query().Get("page-token"))
 		default:
-			f.servePipeline(w, r.URL.Path)
+			f.servePipeline(w, r.URL.Path, r.URL.Query().Get("page-token"))
 		}
 	}))
 	t.Cleanup(server.Close)
@@ -168,6 +191,22 @@ func TestApproveJobApprovesTheNewestRerun(t *testing.T) {
 			{id: setupWorkflowID, name: "setup-workflow", createdAt: "2026-10-13T03:00:00Z", hold: "success"},
 		},
 		listing: []string{rerunWorkflowID, testWorkflowID, setupWorkflowID},
+	}
+	require.NoError(t, approveForTest(fake.client(t)))
+	require.Equal(t, []string{rerunWorkflowID + "/hold-" + rerunWorkflowID}, fake.approved())
+}
+
+// The rerun and the hold job can be on later pages of CircleCI's listings.
+func TestApproveJobFollowsListingPages(t *testing.T) {
+	fake := &fakeCircleCI{
+		pipeline: matchingPipeline,
+		workflows: []fakeWorkflow{
+			{id: testWorkflowID, name: "test_build_deploy", createdAt: "2026-10-13T03:00:01Z", hold: "canceled"},
+			{id: rerunWorkflowID, name: "test_build_deploy", createdAt: "2026-10-13T04:00:00Z", hold: "on_hold"},
+			{id: setupWorkflowID, name: "setup-workflow", createdAt: "2026-10-13T03:00:00Z", hold: "success"},
+		},
+		listing:  []string{setupWorkflowID, testWorkflowID, rerunWorkflowID},
+		pageSize: 1,
 	}
 	require.NoError(t, approveForTest(fake.client(t)))
 	require.Equal(t, []string{rerunWorkflowID + "/hold-" + rerunWorkflowID}, fake.approved())

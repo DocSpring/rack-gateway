@@ -2,6 +2,7 @@ package mfa
 
 import (
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -48,7 +49,8 @@ func (s *Service) StartTOTPEnrollment(user *db.User) (*StartTOTPEnrollmentResult
 	}, nil
 }
 
-// ConfirmTOTP finalizes enrollment by validating the provided code.
+// ConfirmTOTP finalizes enrollment by validating the provided code. The code's time step is consumed before the
+// method is confirmed, as a verification consumes it, so the code can't then verify anything else.
 func (s *Service) ConfirmTOTP(user *db.User, methodID int64, code string) error {
 	if user == nil {
 		return fmt.Errorf("user required")
@@ -64,8 +66,17 @@ func (s *Service) ConfirmTOTP(user *db.User, methodID int64, code string) error 
 		reportUnusableSecret(method)
 		return fmt.Errorf("invalid MFA method")
 	}
-	if err := s.validateTOTPCode(method.Secret, user.Email, code); err != nil {
+	timeStep, err := s.validateTOTPCodeWithTimeStep(method.Secret, code)
+	if err != nil {
 		return err
+	}
+	consumed, err := s.db.ConsumeTOTPTimeStep(user.ID, timeStep, &method.ID, "", "", nil)
+	if err != nil {
+		log.Printf("mfa: couldn't record the TOTP enrollment code of user %d: %v", user.ID, err)
+		return fmt.Errorf("couldn't confirm the code; try again")
+	}
+	if !consumed {
+		return fmt.Errorf("this code has already been used; wait for the next one")
 	}
 
 	return s.finalizeEnrollment(user.ID, method.ID, nil)
@@ -127,7 +138,7 @@ func (s *Service) VerifyTOTP(
 }
 
 func (s *Service) tryYubiOTP(user *db.User, code string) (*VerificationResult, bool) {
-	if len(code) == 44 && s.yubiAuth != nil {
+	if _, ok := yubiOTPPublicID(code); ok && s.yubiAuth != nil {
 		if result, err := s.VerifyYubiOTP(user, code); err == nil {
 			return result, true
 		}
@@ -226,9 +237,4 @@ func (_ *Service) validateTOTPCodeWithTimeStep(secret, code string) (int64, erro
 	}
 
 	return 0, fmt.Errorf("invalid code")
-}
-
-func (s *Service) validateTOTPCode(secret, _ /* email */, code string) error {
-	_, err := s.validateTOTPCodeWithTimeStep(secret, code)
-	return err
 }

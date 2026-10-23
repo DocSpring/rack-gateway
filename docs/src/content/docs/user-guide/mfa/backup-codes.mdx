@@ -50,6 +50,11 @@ Enter a backup code when prompted for MFA.
 At the CLI's MFA code prompt (`Enter MFA code (TOTP or backup code):`), enter a backup code instead of a TOTP code,
 or pass it with `--mfa-code`. Login MFA happens in the browser, where **Use a backup code** switches the prompt.
 
+A code is spent once the gateway accepts it, even if the request it was sent with is then refused. That happens when
+the gateway can't write to its audit log ("audit log unavailable"): it refuses every request, after checking the
+code that came with it. Wait for the audit log to recover and use another code; if it was your last one, an admin
+can reset your MFA.
+
 ## Best Practices
 
 - Store codes in a password manager or secure vault

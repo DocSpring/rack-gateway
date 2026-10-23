@@ -54,7 +54,7 @@ func (o *loopbackOAuth) CompleteLogin(_ context.Context, code, _, _ string) (*au
 	if code != "google-code" {
 		return nil, errors.New("invalid authorization code")
 	}
-	return &auth.LoginResponse{Email: o.email, Name: "Loopback User"}, nil
+	return &auth.LoginResponse{Email: o.email, Name: "Loopback User", Subject: "subject-" + o.email}, nil
 }
 
 type loopbackEnv struct {

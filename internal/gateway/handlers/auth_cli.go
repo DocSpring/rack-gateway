@@ -135,12 +135,15 @@ func (h *AuthHandler) CLILoginCallback(c *gin.Context) {
 		cliRedirectWithError(c, "missing_state")
 		return
 	}
-	email, name, errCode := h.cliExchangeOAuthCode(c.Request.Context(), code, record)
+	login, errCode := h.cliExchangeOAuthCode(c.Request.Context(), code, record)
+	if errCode == "" {
+		errCode = h.cliCheckSignInAccount(c, login.Email, login.Name, login.Subject)
+	}
 	if errCode != "" {
 		returnErrorToCLI(c, record, errCode)
 		return
 	}
-	h.bindCLILoginBrowser(c, record, email, name)
+	h.bindCLILoginBrowser(c, record, login.Email, login.Name)
 }
 
 // cliProviderErrorCode maps an identity provider error (e.g. the user declined consent) to a CLI error code.
@@ -152,22 +155,23 @@ func cliProviderErrorCode(providerError string) string {
 }
 
 // cliExchangeOAuthCode exchanges the identity provider code for the signed-in identity.
-// Returns the email and name, or an error code for the CLI.
+// Returns the identity, or an error code for the CLI.
 func (h *AuthHandler) cliExchangeOAuthCode(
 	ctx context.Context, code string, record *db.CLILoginState,
-) (string, string, string) {
+) (*auth.LoginResponse, string) {
 	if !record.OAuthCodeVerifier.Valid {
-		return "", "", "session_incomplete"
+		return nil, "session_incomplete"
 	}
 	loginResp, err := h.oauth.CompleteLogin(ctx, code, record.State, record.OAuthCodeVerifier.String)
 	if err != nil {
 		var domainErr *auth.DomainNotAllowedError
 		if errors.As(err, &domainErr) {
-			return "", "", "unauthorized"
+			return nil, "unauthorized"
 		}
-		return "", "", "exchange_failed"
+		return nil, "exchange_failed"
 	}
-	return strings.TrimSpace(loginResp.Email), loginResp.Name, ""
+	loginResp.Email = strings.TrimSpace(loginResp.Email)
+	return loginResp, ""
 }
 
 // bindCLILoginBrowser binds the login to this browser, which has just completed the identity provider

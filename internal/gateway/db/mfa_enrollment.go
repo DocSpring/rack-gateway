@@ -32,7 +32,8 @@ type WebAuthnCredential struct {
 //
 // On a first enrollment, every session of the user loses its MFA verification in the same transaction: they were
 // exempt only because the user had no factor. ExemptSessionFromMFAChallenge checks enrollment under the same lock,
-// so a racing login can't exempt its new session afterwards.
+// so a racing login can't exempt its new session afterwards. Any device trusted before the user had a factor is
+// revoked too: trusting it verified nothing.
 func (d *Database) FinalizeMFAEnrollment(
 	userID, methodID int64, confirmedAt time.Time, credential *WebAuthnCredential,
 ) error {
@@ -42,13 +43,9 @@ func (d *Database) FinalizeMFAEnrollment(
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	var enrolled bool
-	err = tx.QueryRow(d.rebind("SELECT mfa_enrolled FROM users WHERE id = ? FOR UPDATE"), userID).Scan(&enrolled)
-	if errors.Is(err, sql.ErrNoRows) {
-		return ErrUserNotFound
-	}
+	enrolled, err := d.lockUserMFAEnrollmentTx(tx, userID)
 	if err != nil {
-		return fmt.Errorf("failed to lock user for MFA enrollment: %w", err)
+		return err
 	}
 	if err := d.confirmMethodTx(tx, userID, methodID, confirmedAt, credential); err != nil {
 		return err
@@ -62,9 +59,54 @@ func (d *Database) FinalizeMFAEnrollment(
 			updated_at = NOW() WHERE user_id = ? AND revoked_at IS NULL`, userID); err != nil {
 			return fmt.Errorf("failed to clear session MFA verification: %w", err)
 		}
+		if err := d.revokeTrustedDevicesTx(tx, userID, "first_mfa_enrollment"); err != nil {
+			return err
+		}
 	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("failed to commit MFA enrollment: %w", err)
+	}
+	return nil
+}
+
+// DeleteUserMFAMethod deletes one of the user's MFA methods (ErrMFAMethodNotFound if they have no such method).
+// When it was their last confirmed method, the same transaction marks them not enrolled and revokes their trusted
+// devices, which would otherwise skip the MFA challenge once they enroll again. It holds the user's row lock, so an
+// enrollment finalized at the same time is counted.
+func (d *Database) DeleteUserMFAMethod(userID, methodID int64) error {
+	tx, err := d.db.Begin()
+	if err != nil {
+		return fmt.Errorf("failed to begin MFA method deletion: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	if err := d.lockUserTx(tx, userID); err != nil {
+		return err
+	}
+	res, err := d.execTx(tx, "DELETE FROM mfa_methods WHERE id = ? AND user_id = ?", methodID, userID)
+	if err != nil {
+		return fmt.Errorf("failed to delete MFA method: %w", err)
+	}
+	if err := requireAffectedRow(res, ErrMFAMethodNotFound); err != nil {
+		return err
+	}
+	var remaining int
+	err = tx.QueryRow(d.rebind("SELECT COUNT(*) FROM mfa_methods WHERE user_id = ? AND confirmed_at IS NOT NULL"),
+		userID).Scan(&remaining)
+	if err != nil {
+		return fmt.Errorf("failed to count the remaining MFA methods: %w", err)
+	}
+	if remaining == 0 {
+		if _, err := d.execTx(tx, "UPDATE users SET mfa_enrolled = FALSE, updated_at = NOW() WHERE id = ?",
+			userID); err != nil {
+			return fmt.Errorf("failed to update user MFA enrollment: %w", err)
+		}
+		if err := d.revokeTrustedDevicesTx(tx, userID, "mfa_disabled"); err != nil {
+			return err
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit MFA method deletion: %w", err)
 	}
 	return nil
 }

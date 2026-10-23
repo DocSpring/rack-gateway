@@ -120,8 +120,8 @@ The review UI shows:
 
 | Action | Requires | Result |
 |--------|----------|--------|
-| **Approve** | Admin, MFA every time | Request approved, CI auto-approved |
-| **Reject** | Admin, MFA every time | Request rejected with notes |
+| **Approve** | Admin, MFA every time | Request approved, CI auto-approved. A request pending longer than `DEPLOY_APPROVAL_PENDING_MAX_AGE` has expired and can't be (`409`) |
+| **Reject** | Admin, MFA every time | Request rejected with notes. Refused (`409`) once a promote has started under the approval: the rack may be applying it |
 | **Extend** | Admin, MFA every time | A lapsed approval is approved again for a new window |
 | **Ignore** | None | A pending request expires after `DEPLOY_APPROVAL_PENDING_MAX_AGE` (7 days) |
 
@@ -288,6 +288,12 @@ approval-bound build:
   manifest. So the gateway also loads the manifest with Convox's own parser, with the app's current environment and
   the build's arguments substituted, and checks the images in that result too. A manifest the rack couldn't load
   (a missing required environment variable, say) is refused.
+- **The environment can't change under a checked build.** The rack's build reads the app's environment when it
+  starts, after the gateway's check. So the gateway holds the app's env lock from reading the environment until the
+  rack has created the build, and refuses an env change to the app (`env set`, `env unset`, a rollback, the web env
+  editor) with `409 Conflict` until every build it checked has finished. A build stops holding up env changes when
+  the rack reports it complete or failed, or an hour after it started (by then it has read the environment). Run
+  the env change again once the build is done.
 - **Plain YAML structure.** Merge keys (`<<`) are refused, because the rack's YAML parser applies them in a different
   order than the gateway's. An anchor can't hold an image (write each image out where it's used), and a mapping
   can't repeat a key.
@@ -345,6 +351,10 @@ A promote the gateway refuses is answered with 403 and isn't forwarded, and one 
 
 Each check also requires that the token's owner could do the action themselves: an approval never gives a token
 more than its owner's role.
+
+The approval's `exec_commands` lists the commands it let through to each of its processes, in order. A command is
+written to it before the exec reaches the rack (an exec the gateway can't record is refused), so a command whose
+connection then failed is listed too. The audit log's `process.exec.start` events are the execs that started.
 
 ### Validation Flow
 

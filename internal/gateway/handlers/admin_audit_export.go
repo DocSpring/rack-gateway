@@ -66,7 +66,14 @@ func (h *AdminHandler) ExportAuditLogs(c *gin.Context) {
 
 	ctx, cancel := context.WithTimeout(c.Request.Context(), auditExportTimeout)
 	defer cancel()
+	searcher, _ := extractAuditUserInfo(c)
+	done, err := h.auditSearches.wait(ctx, searcher)
+	if err != nil {
+		h.respondAuditError(c, http.StatusServiceUnavailable, "audit.export", "", "the request ended", start, nil)
+		return
+	}
 	export, err := spoolAuditCSV(ctx, h.database, filters)
+	done()
 	if err != nil {
 		log.Printf("audit export failed: %v", err)
 		h.respondAuditError(c, http.StatusInternalServerError, "audit.export", "", "failed to export audit logs",

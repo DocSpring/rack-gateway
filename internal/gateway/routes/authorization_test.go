@@ -155,6 +155,7 @@ var adminOnlyCalls = []routeCall{
 	{http.MethodPut, "/api/v1/users/admin@example.com", map[string]interface{}{"roles": []string{"viewer"}}},
 	{http.MethodDelete, "/api/v1/users/admin@example.com", nil},
 	{http.MethodPost, "/api/v1/users/admin@example.com/lock", map[string]interface{}{"reason": "x"}},
+	{http.MethodPost, "/api/v1/users/admin@example.com/sign-in/reset", nil},
 	{http.MethodGet, "/api/v1/users/admin@example.com", nil},
 	{http.MethodGet, "/api/v1/users/admin@example.com/sessions", nil},
 	{http.MethodPost, "/api/v1/users/admin@example.com/sessions/revoke_all", nil},

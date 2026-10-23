@@ -40,6 +40,21 @@ func TestCLILoginMFAResultNeedsALiveBoundLogin(t *testing.T) {
 	require.ErrorIs(t, database.MarkCLILoginVerified("unbound", nil), gwdb.ErrCLILoginEnded)
 }
 
+// A login canceled after its login code was issued can't be completed with that code.
+func TestCanceledCLILoginCodeCantBeRedeemed(t *testing.T) {
+	database := dbtest.NewDatabase(t)
+	startBoundCLILogin(t, database, "issued", "user@example.com")
+	require.NoError(t, database.MarkCLILoginVerified("issued", nil))
+	ok, err := database.SetCLILoginCode("issued", "issued-code-hash")
+	require.NoError(t, err)
+	require.True(t, ok)
+
+	require.NoError(t, database.FailCLILoginState("issued", "access_denied"))
+	record, err := database.ConsumeCLILoginCode("issued-code-hash")
+	require.NoError(t, err)
+	require.Nil(t, record, "a canceled login's code is void")
+}
+
 // An admin's MFA reset ends the user's CLI logins in progress, even one that already passed MFA, and a login that
 // loaded the user before the reset can't create a session after it.
 func TestResetUserMFAEndsCLILoginsInProgress(t *testing.T) {

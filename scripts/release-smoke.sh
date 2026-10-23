@@ -97,6 +97,13 @@ for command in "" "./rack-gateway-api migrate"; do
 done
 echo "Refused, naming every bypass"
 
+echo "== Refuses a plain-http rack"
+if output="$(run_gateway -e RACK_HOST=http://mock-convox:5443 "$SERVICE")"; then
+  fail "the release image started with an http:// RACK_HOST:"$'\n'"${output}"
+fi
+expect "plain-http rack refusal" "$output" "RACK_HOST must be an https:// URL"
+echo "Refused"
+
 echo "== Refuses the development column encryption key"
 if output="$(run_gateway -e COLUMN_ENCRYPTION_KEY="$DEV_COLUMN_KEY" "$SERVICE" ./rack-gateway-api migrate)"; then
   fail "the release image ran migrate with the development column key:"$'\n'"${output}"

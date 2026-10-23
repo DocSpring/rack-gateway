@@ -65,6 +65,16 @@ func TestApproveJobRefusesMismatchedPipelines(t *testing.T) {
 		"fork pipeline": {
 			revision: approvedSHA, targetRepo: docspringRepo, originRepo: "https://github.com/attacker/docspring",
 		},
+		// Without a target URL, the origin is compared with the repository the project slug names.
+		"fork pipeline without a target URL": {
+			revision: approvedSHA, originRepo: "https://github.com/attacker/docspring", slug: "gh/DocSpring/docspring",
+		},
+		"unreadable target URL": {
+			revision: approvedSHA, targetRepo: "https://github.com/DocSpring", slug: "gh/DocSpring/docspring",
+		},
+		"unreadable origin URL": {
+			revision: approvedSHA, targetRepo: docspringRepo, originRepo: "attacker/docspring",
+		},
 		"different project slug":       {revision: approvedSHA, slug: "gh/attacker/other"},
 		"project slug on another host": {revision: approvedSHA, slug: "bb/DocSpring/docspring"},
 		// A GitHub App project slug doesn't name the repository; with no repository URL either, it

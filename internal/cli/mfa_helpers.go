@@ -243,8 +243,10 @@ func CollectMFAAuthWithPIN(
 
 		return "webauthn." + assertionData, pinUsed, nil
 
-	case "totp":
-		if err := writeLine(out, "Multi-factor authentication required (TOTP)."); err != nil {
+	case "totp", "yubiotp":
+		// The gateway takes a YubiKey OTP (or a backup code) where it takes a TOTP code.
+		label := codeMethodName(method.Type)
+		if err := writeLine(out, "Multi-factor authentication required ("+label+")."); err != nil {
 			return "", "", err
 		}
 
@@ -258,6 +260,14 @@ func CollectMFAAuthWithPIN(
 	default:
 		return "", "", fmt.Errorf("unsupported MFA method for inline verification: %s", method.Type)
 	}
+}
+
+// codeMethodName names an MFA method that answers with a typed code.
+func codeMethodName(methodType string) string {
+	if methodType == "yubiotp" {
+		return "YubiKey OTP"
+	}
+	return "TOTP"
 }
 
 // collectWebAuthnAssertionWithPIN collects a WebAuthn assertion, optionally using a cached PIN.

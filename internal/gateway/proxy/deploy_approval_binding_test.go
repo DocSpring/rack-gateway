@@ -64,7 +64,7 @@ func newBindingFixture(t *testing.T) *bindingFixture {
 		"Deploy", "docspring", approvedCommit, "feature/x", "", nil, owner.ID, &token.ID, token.ID,
 	)
 	require.NoError(t, err)
-	_, err = database.ApproveDeployApprovalRequest(approval.ID, owner.ID, time.Now().Add(time.Hour), "ok")
+	_, err = database.ApproveDeployApprovalRequest(approval.ID, owner.ID, time.Now().Add(time.Hour), "ok", 0)
 	require.NoError(t, err)
 	bindApprovalArchive(t, database, approval.ID, approvedObjectURL)
 	f.approval = approval
@@ -87,6 +87,8 @@ func (f *bindingFixture) setImagePatterns(t *testing.T, patterns map[string]stri
 func (f *bindingFixture) build(t *testing.T, body string) error {
 	t.Helper()
 	r := httptest.NewRequest(http.MethodPost, buildPath, strings.NewReader(body))
+	r, releaseEnvLock := withEnvLockHolder(r)
+	defer releaseEnvLock()
 	allowed, tracker, err := f.h.evaluateAPITokenPermission(r, f.authUser, rbac.ResourceBuild, rbac.ActionCreate)
 	if err != nil {
 		return err
@@ -269,11 +271,12 @@ func TestImagePatternsAreAnchoredAndEscapeCommit(t *testing.T) {
 
 func TestImageTaggedWithCommit(t *testing.T) {
 	cases := map[string]bool{
-		"docspringcom/app:" + approvedCommit:                              true,
-		"docspringcom/app:" + approvedCommit + "-amd64":                   true,
-		"docspringcom/app:" + strings.ToUpper(approvedCommit) + "-amd64":  true,
-		"localhost:5000/app:" + approvedCommit:                            true,
-		"docspringcom/app:" + approvedCommit + "@sha256:" + otherCommit:   true,
+		"docspringcom/app:" + approvedCommit:                             true,
+		"docspringcom/app:" + approvedCommit + "-amd64":                  true,
+		"docspringcom/app:" + strings.ToUpper(approvedCommit) + "-amd64": true,
+		"localhost:5000/app:" + approvedCommit:                           true,
+		// The runtime pulls the digest whatever the tag says, so a digest-qualified image isn't tied to the commit.
+		"docspringcom/app:" + approvedCommit + "@sha256:" + otherCommit:   false,
 		"docspringcom/app:" + approvedCommit + "x":                        false,
 		"docspringcom/app:" + approvedCommit[:7] + "-amd64":               false,
 		"docspringcom/app:latest":                                         false,
@@ -368,7 +371,7 @@ func newApprovalExecHarness(t *testing.T) *approvalExecHarness {
 	approval, err := database.CreateDeployApprovalRequest("Deploy", app,
 		"abc123def4567890abc123def4567890abc123de", "main", "", nil, deployer.ID, nil, token.ID)
 	require.NoError(t, err)
-	approval, err = database.ApproveDeployApprovalRequest(approval.ID, deployer.ID, time.Now().Add(time.Hour), "")
+	approval, err = database.ApproveDeployApprovalRequest(approval.ID, deployer.ID, time.Now().Add(time.Hour), "", 0)
 	require.NoError(t, err)
 	return &approvalExecHarness{h: h, database: database, approval: approval, approver: deployer.ID}
 }

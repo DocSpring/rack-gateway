@@ -26,6 +26,9 @@ const (
 	webLoginExchangeFailed webLoginError = "exchange_failed"
 	// webLoginUnauthorized is a user who isn't allowed to use this gateway.
 	webLoginUnauthorized webLoginError = "unauthorized"
+	// webLoginAccountMismatch is an account signing in with a user's email that isn't the account bound to the
+	// user (db.BindUserSignInAccount).
+	webLoginAccountMismatch webLoginError = errCodeAccountMismatch
 	// webLoginSessionFailed is a login the gateway couldn't start a session for.
 	webLoginSessionFailed webLoginError = "session_failed"
 	// webLoginAuditUnavailable is a login refused because the audit log couldn't record it.

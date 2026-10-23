@@ -10,17 +10,18 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 )
 
-// completeBrowserSessionMFA marks the browser's web session as MFA-verified once the user has
-// approved a CLI login with a factor. CLILoginMFAForm signs the browser in with a new web session,
-// and without this step that session would stay pending, so every web UI request afterwards would
-// demand MFA again.
+// completeBrowserSessionMFA marks the browser's web session as MFA-verified, and opens its step-up
+// window, once the user has approved a CLI login with a factor. CLILoginMFAForm signs the browser in
+// with a new web session, and without this step that session would stay pending, so every web UI
+// request afterwards would demand MFA again. A session that was already verified (by a trusted
+// device, or a factor whose step-up window has closed) gets a new step-up window too.
 //
 // The factor is proven in the same request that carries the session cookie, so this is the same
 // guarantee the web challenge gives. Only a web session belonging to the verified user is touched.
 // Failures are logged rather than returned because the CLI login itself is already approved.
 func (h *AuthHandler) completeBrowserSessionMFA(c *gin.Context, user *db.User) {
 	session := h.cliBrowserSession(c, user)
-	if session == nil || session.MFAVerifiedAt != nil {
+	if session == nil {
 		return
 	}
 	if err := h.sessions.UpdateSessionMFAVerified(session.ID, time.Now(), nil); err != nil {

@@ -133,6 +133,12 @@ func approveByID(cmd *cobra.Command, racks []string, publicID, notes string) err
 			"deploy approval request %s is %s; only a pending request can be approved", publicID, displayText(status),
 		)
 	}
+	// The gateway marks an approval expired a little after its window ends; it no longer allows a deploy either way.
+	if expires := found.req.ApprovalExpiresAt; found.req.Status == "approved" && expires != nil &&
+		!expires.After(time.Now()) {
+		return fmt.Errorf("deploy approval request %s's approval expired at %s; extend it in the web UI, "+
+			"or open a new request", publicID, expires.UTC().Format(time.RFC3339))
+	}
 	return approvePendingRequests(cmd, requests, notes, len(racks) > 1)
 }
 
@@ -164,6 +170,11 @@ func approvePendingRequests(cmd *cobra.Command, requests []rackApproval, notes s
 	pending := filterPendingRequests(requests)
 	if len(pending) == 0 {
 		return writeLine(cmd.OutOrStdout(), "\nNothing to approve: every request is already approved or deployed.")
+	}
+	// Each approval needs its own MFA proof, and the gateway refuses a TOTP code it has already accepted.
+	if strings.TrimSpace(MFACodeFlag) != "" && len(pending) > 1 {
+		return fmt.Errorf("--mfa-code can approve one request, and %d are pending; nothing was approved. "+
+			"Approve them without --mfa-code, or one at a time by ID", len(pending))
 	}
 
 	if IsInteractive() {

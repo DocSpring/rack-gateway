@@ -134,6 +134,14 @@ func (h *AuthHandler) WebLoginCallback(c *gin.Context) {
 		h.handleWebLoginUnauthorized(c, resp.Email, resp.Name)
 		return
 	}
+	if ok, err := h.bindSignInAccount(c, userRecord, resp.Subject, resp.Name, "web"); !ok {
+		reason := webLoginAccountMismatch
+		if err != nil {
+			reason = webLoginSessionFailed
+		}
+		redirectToWebLoginError(c, reason)
+		return
+	}
 	h.fillUserName(userRecord, resp.Name)
 
 	if !h.recordAuthAttempt(c, audit.ActionSessionCreate, "web", userRecord.Email, userRecord.Name) {

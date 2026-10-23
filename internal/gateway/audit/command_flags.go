@@ -16,6 +16,10 @@ const (
 	// userPassword flags carry user:password (curl -u admin:secret) in the next word or joined to them. Only the part
 	// after the colon is the credential.
 	userPassword
+	// header flags carry a header joined to them (curl -H'Authorization: Bearer ...' or --header=...): a credential
+	// header's value is redacted (see redactHeader), and any other header as a command of its own. A header in the
+	// next word is redacted as any other word is.
+	header
 )
 
 var (
@@ -33,7 +37,10 @@ var credentialFlags = map[string]map[string]flagKind{
 	"mongoexport": mongoFlags, "mongoimport": mongoFlags,
 	"redis-cli": {"-a": valueNext, "--pass": valueNext},
 	"sshpass":   {"-p": valueNext},
-	"curl":      {"-u": userPassword, "--user": userPassword, "-U": userPassword, "--proxy-user": userPassword},
+	"curl": {
+		"-u": userPassword, "--user": userPassword, "-U": userPassword, "--proxy-user": userPassword,
+		"-H": header, "--header": header, "--proxy-header": header,
+	},
 }
 
 // programName is the name of the program word runs, when that program has credential flags (see credentialFlags):
@@ -46,15 +53,19 @@ func programName(word string) (string, bool) {
 
 // redactProgramFlag redacts a credential joined to one of program's credential flags, and returns how to redact
 // the next word when that's the flag's credential (nil when it isn't). ok reports whether word was such a flag.
-// Only a short flag (-p) takes its credential joined to it.
+// A short flag takes its credential joined to it (-psecret), a long one after an = (--user=admin:secret).
 func redactProgramFlag(program, word string) (redacted string, next func(string) string, ok bool) {
 	bare := strings.Trim(word, `"'`)
 	for flag, kind := range credentialFlags[program] {
 		if bare == flag {
 			return word, kind.nextWord(), true
 		}
-		if len(flag) == 2 && len(bare) > 2 && strings.HasPrefix(bare, flag) {
-			at := strings.Index(word, flag) + len(flag)
+		joined := flag
+		if len(flag) > 2 {
+			joined += "="
+		}
+		if len(bare) > len(joined) && strings.HasPrefix(bare, joined) {
+			at := strings.Index(word, joined) + len(joined)
 			return word[:at] + kind.redactWord(word[at:]), nil, true
 		}
 	}
@@ -63,16 +74,23 @@ func redactProgramFlag(program, word string) (redacted string, next func(string)
 
 // redactWord redacts the credential the flag carries in word, keeping any quotes around it.
 func (k flagKind) redactWord(word string) string {
-	if k != userPassword {
+	bare := strings.Trim(word, `"'`)
+	switch k {
+	case userPassword:
+		return strings.Replace(word, bare, redactPassword(bare), 1)
+	case header:
+		if redacted, ok := redactHeader(bare); ok {
+			return strings.Replace(word, bare, redacted, 1)
+		}
+		return strings.Replace(word, bare, RedactCommand(bare), 1)
+	default:
 		return redactQuoted(word)
 	}
-	bare := strings.Trim(word, `"'`)
-	return strings.Replace(word, bare, redactPassword(bare), 1)
 }
 
 // nextWord is how to redact the word after the flag alone, or nil when the flag alone carries no credential.
 func (k flagKind) nextWord() func(string) string {
-	if k == joinedOnly {
+	if k == joinedOnly || k == header {
 		return nil
 	}
 	return k.redactWord

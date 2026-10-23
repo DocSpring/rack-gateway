@@ -41,7 +41,7 @@ func TestARejectionWaitsForAHeldApproval(t *testing.T) {
 	database, userID, tokenID := newApprovalTestFixture(t)
 	request, err := createApproval(t, database, userID, tokenID, "docspring")
 	require.NoError(t, err)
-	_, err = database.ApproveDeployApprovalRequest(request.ID, userID, time.Now().Add(time.Hour), "")
+	_, err = database.ApproveDeployApprovalRequest(request.ID, userID, time.Now().Add(time.Hour), "", 0)
 	require.NoError(t, err)
 
 	status, release := holdApproval(t, database, request.ID)

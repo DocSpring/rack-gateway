@@ -96,6 +96,7 @@ describe('IntegrationsPage Slack channels', () => {
 
     await waitFor(() => {
       expect(api.put).toHaveBeenCalledWith(CHANNELS_PATH, {
+        integration_id: 1,
         channel_actions: security('login.*_failed'),
         previous_channel_actions: security('login.*_failed', 'audit_log.verify'),
       })

@@ -19,7 +19,8 @@ func TestGetAuditVerification(t *testing.T) {
 	c, w := newGinContext(http.MethodGet, "/api/v1/audit-logs/verification", nil)
 	handler.GetAuditVerification(c)
 	require.Equal(t, http.StatusOK, w.Code)
-	assert.JSONEq(t, `{"status":null}`, w.Body.String(), "no status before the first run")
+	assert.JSONEq(t, `{"status":null,"anchors_configured":false}`, w.Body.String(),
+		"no status before the first run")
 
 	checked := time.Date(2026, 5, 1, 0, 30, 0, 0, time.UTC)
 	require.NoError(t, database.SaveAuditVerificationStatus(context.Background(), &db.AuditVerificationStatus{

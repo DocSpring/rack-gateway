@@ -87,6 +87,29 @@ func TestGetLatestAnchorUsesWriteOrder(t *testing.T) {
 	assert.Equal(t, sha256Hex(lateRetry), hash)
 }
 
+// Anchors S3 stored in the same second: the latest is the one the others don't link to, whatever the keys say.
+func TestGetLatestAnchorFollowsLinksWithinASecond(t *testing.T) {
+	bucket := fakes3.New(firstAnchorHour)
+	hour10 := firstAnchorHour.Add(10 * time.Hour)
+	hour11 := firstAnchorHour.Add(11 * time.Hour)
+	stored := hour11.Add(5 * time.Minute)
+	later := []byte(`{"hour":11}`)
+	bucket.PutAt(AnchorKey(testChainID, hour11), later, stored)
+	lateRetry := []byte(fmt.Sprintf(`{"hour":10,"prev_anchor_hash":%q}`, sha256Hex(later)))
+	bucket.PutAt(AnchorKey(testChainID, hour10), lateRetry, stored)
+
+	hash, err := newTestWorker(nil, bucket).getLatestAnchor(context.Background(), hour11.Add(time.Hour))
+	require.NoError(t, err)
+	assert.Equal(t, sha256Hex(lateRetry), hash)
+
+	// Two anchors stored in the same second that link to neither: nothing says which came last.
+	hour12 := firstAnchorHour.Add(12 * time.Hour)
+	bucket.PutAt(AnchorKey(testChainID, hour12), []byte(`{"hour":12}`), hour12.Add(time.Minute))
+	bucket.PutAt(AnchorKey(testChainID, hour12.Add(time.Hour)), []byte(`{"hour":13}`), hour12.Add(time.Minute))
+	_, err = newTestWorker(nil, bucket).getLatestAnchor(context.Background(), hour12.Add(2*time.Hour))
+	require.ErrorContains(t, err, "can't tell which of the 2 anchors")
+}
+
 func TestAnchorWriterRecordsFormatAndHashV2Start(t *testing.T) {
 	database := dbtest.NewDatabase(t)
 	var last *db.AuditLog

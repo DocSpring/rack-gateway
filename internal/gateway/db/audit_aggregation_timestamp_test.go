@@ -1,6 +1,7 @@
 package db_test
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -39,7 +40,7 @@ func TestAuditAggregationTimestamps(t *testing.T) {
 	require.NoError(t, db.CreateAuditLog(log2))
 
 	// Get aggregated results
-	aggs, total, err := db.GetAuditLogsAggregated(gwdb.AuditLogFilters{
+	aggs, total, err := db.GetAuditLogsAggregated(context.Background(), gwdb.AuditLogFilters{
 		UserEmail: "test@example.com",
 	})
 	require.NoError(t, err)

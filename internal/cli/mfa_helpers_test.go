@@ -101,3 +101,16 @@ func TestIsStepUpFresh(t *testing.T) {
 func timePtr(t time.Time) *time.Time {
 	return &t
 }
+
+// The gateway takes a YubiKey OTP where it takes a TOTP code, so a user whose only factor is a YubiKey OTP gets a
+// code prompt rather than no MFA at all.
+func TestYubiKeyOTPIsACLIMethod(t *testing.T) {
+	methods := []MFAMethodResponse{{Type: "yubiotp"}, {Type: "totp"}, {Type: "webauthn"}}
+	got := filterMethodsByPreference(methods, "default")
+	if len(got) != 3 || got[0].Type != "webauthn" || got[1].Type != "totp" || got[2].Type != "yubiotp" {
+		t.Fatalf("expected webauthn, totp, yubiotp; got %+v", got)
+	}
+	if name := codeMethodName("yubiotp"); name != "YubiKey OTP" {
+		t.Fatalf("expected YubiKey OTP, got %q", name)
+	}
+}

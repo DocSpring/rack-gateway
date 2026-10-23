@@ -1,6 +1,7 @@
 package db_test
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -34,7 +35,7 @@ func TestAuditAggregationMergeProcessExec(t *testing.T) {
 	require.NoError(t, db.CreateAuditLog(startLog))
 
 	// Verify it exists as process.exec.start
-	aggs, total, err := db.GetAuditLogsAggregated(gwdb.AuditLogFilters{
+	aggs, total, err := db.GetAuditLogsAggregated(context.Background(), gwdb.AuditLogFilters{
 		UserEmail: "dev@example.com",
 	})
 	require.NoError(t, err)
@@ -59,7 +60,7 @@ func TestAuditAggregationMergeProcessExec(t *testing.T) {
 	require.NoError(t, db.CreateAuditLog(execLog))
 
 	// 3. Verify they merged into a single process.exec entry
-	aggs, total, err = db.GetAuditLogsAggregated(gwdb.AuditLogFilters{
+	aggs, total, err = db.GetAuditLogsAggregated(context.Background(), gwdb.AuditLogFilters{
 		UserEmail: "dev@example.com",
 	})
 	require.NoError(t, err)

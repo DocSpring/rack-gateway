@@ -423,6 +423,10 @@ type UpdateDeployApprovalRequestStatusRequest struct {
 
 // DeployApprovalRequestResponse exposes deploy approval state to the CLI and admin UI.
 //
+// ExecCommands maps each process started under the approval to the commands the approval let through to it, in
+// order. A command is recorded before the exec reaches the rack, so one whose connection then failed is listed too;
+// the process.exec.start audit events are the execs that started.
+//
 //nolint:lll
 type DeployApprovalRequestResponse struct {
 	PublicID                  string                 `json:"public_id"                                  validate:"required"`

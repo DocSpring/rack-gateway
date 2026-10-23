@@ -136,6 +136,16 @@ func TestBodyRedactsRackSecrets(t *testing.T) {
 		`{"id":"RABC","env":"[REDACTED]","build_url":"https://ci.example.com/1"}]`, logged)
 }
 
+// Rack and app parameters and manifests can hold secrets under any name, so they're redacted whole.
+func TestBodyRedactsParametersAndManifests(t *testing.T) {
+	body := `{"name":"rack","parameters":{"CustomCredential":"hidden-1","Private":"Yes"},` +
+		`"releases":[{"id":"RABC","manifest":"environment:\n  - TOKEN=hidden-2"}],"Params":{"Key":"hidden-3"}}`
+	logged := Body([]byte(body), 1000)
+	require.NotContains(t, logged, "hidden")
+	require.JSONEq(t, `{"name":"rack","parameters":"[REDACTED]","releases":[{"id":"RABC","manifest":"[REDACTED]"}],`+
+		`"Params":"[REDACTED]"}`, logged)
+}
+
 // An app's environment maps env var names to values: every value is redacted, whatever its name.
 func TestEnvBodyRedactsEveryValue(t *testing.T) {
 	logged := EnvBody([]byte(`{"RAILS_ENV":"hidden-1","DATABASE_URL":"hidden-2","PORT":"3000"}`), 1000)

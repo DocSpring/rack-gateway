@@ -16,6 +16,7 @@ func TestResourceIDsAreReadAtTheirPositionInTheRackPath(t *testing.T) {
 	require.Empty(t, extractReleaseIDFromPath("/apps/myapp/releases/"))
 
 	require.Equal(t, "B1", extractBuildIDFromPath("/apps/builds/builds/B1"))
+	require.Equal(t, "B1", extractBuildIDFromPath("/apps/myapp/builds/B1.tgz"), "a build export names its build")
 	require.Empty(t, extractBuildIDFromPath("/apps/builds/processes"))
 
 	require.Equal(t, "P1", extractProcessIDFromPath("/apps/processes/processes/P1/exec"))

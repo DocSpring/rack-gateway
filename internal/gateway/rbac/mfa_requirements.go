@@ -61,7 +61,6 @@ var MFARequirements = map[string]MFALevel{
 	Convox(ResourceEnv, ActionUnset): MFAStepUp,
 
 	// Rack operations
-	Convox(ResourceRack, ActionUpdate): MFAStepUp,
 
 	// Object uploads for builds (write operation but low risk)
 	Convox(ResourceObject, ActionCreate): MFANone,

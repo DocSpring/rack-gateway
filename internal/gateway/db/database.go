@@ -338,6 +338,9 @@ func (d *Database) ResetDatabase() error {
 		return err
 	}
 
+	if err := d.removeRiver(context.Background()); err != nil {
+		return err
+	}
 	if err := d.dropAllTables(); err != nil {
 		return err
 	}
@@ -388,28 +391,17 @@ func (d *Database) dropAllTables() error {
 		return fmt.Errorf("failed to drop audit schema: %w", err)
 	}
 
-	// Drop dependent tables first to satisfy foreign keys.
-	tables := []string{
-		"webauthn_challenges",
-		"audit_verification_status",
-		"user_resources",
-		"rack_object_keys",
-		"deploy_approval_requests",
-		"api_tokens",
-		"cli_login_states",
-		"mfa_backup_codes",
-		"mfa_methods",
-		"trusted_devices",
-		"user_sessions",
-		"settings",
-		"users",
-		"rgw_internal_metadata",
-	}
-
-	for _, table := range tables {
-		if _, err := d.exec("DROP TABLE IF EXISTS " + table + " CASCADE"); err != nil {
-			return fmt.Errorf("failed to drop %s: %w", table, err)
-		}
+	// Every other table the migrations created (River's are already gone), so a table a new migration adds can't
+	// survive the reset and break the next migration run.
+	if _, err := d.exec(`DO $$
+DECLARE
+	t text;
+BEGIN
+	FOR t IN SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename <> 'schema_migrations' LOOP
+		EXECUTE format('DROP TABLE IF EXISTS public.%I CASCADE', t);
+	END LOOP;
+END $$`); err != nil {
+		return fmt.Errorf("failed to drop tables: %w", err)
 	}
 
 	return nil

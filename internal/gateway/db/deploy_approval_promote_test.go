@@ -17,7 +17,7 @@ func TestDeployApprovalPromoteClaim(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, claimed, "a pending request can't be promoted")
 
-	_, err = database.ApproveDeployApprovalRequest(approval.ID, userID, time.Now().Add(time.Hour), "")
+	_, err = database.ApproveDeployApprovalRequest(approval.ID, userID, time.Now().Add(time.Hour), "", 0)
 	require.NoError(t, err)
 
 	claimed, err = database.ClaimDeployApprovalPromote(approval.ID)
@@ -41,7 +41,7 @@ func TestDeployApprovalPromoteClaim(t *testing.T) {
 
 	lapsed, err := createApproval(t, database, userID, tokenID, "other-app")
 	require.NoError(t, err)
-	_, err = database.ApproveDeployApprovalRequest(lapsed.ID, userID, time.Now().Add(-time.Minute), "")
+	_, err = database.ApproveDeployApprovalRequest(lapsed.ID, userID, time.Now().Add(-time.Minute), "", 0)
 	require.NoError(t, err)
 	claimed, err = database.ClaimDeployApprovalPromote(lapsed.ID)
 	require.NoError(t, err)

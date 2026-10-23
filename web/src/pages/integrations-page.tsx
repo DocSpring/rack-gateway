@@ -84,12 +84,22 @@ export function IntegrationsPage() {
     },
   })
 
-  // Each save sends the configuration the change was made to, and the gateway refuses it (409) if that has changed
-  // since, so an edit can't undo one saved from another tab. Returning the refetch keeps the controls disabled until
-  // the saved configuration is on screen, so the next edit is made to it.
+  // Each save sends the integration and configuration the change was made to, and the gateway refuses it (409) if
+  // either has changed since, so an edit can't undo one saved from another tab or change an integration a reconnect
+  // replaced. Returning the refetch keeps the controls disabled until the saved configuration is on screen, so the
+  // next edit is made to it.
   const updateChannelsMutation = useMutation({
-    mutationFn: async ({ previous, next }: { previous: ChannelActions; next: ChannelActions }) => {
+    mutationFn: async ({
+      integrationId,
+      previous,
+      next,
+    }: {
+      integrationId: number
+      previous: ChannelActions
+      next: ChannelActions
+    }) => {
       await api.put('/api/v1/integrations/slack/channels', {
+        integration_id: integrationId,
         channel_actions: next,
         previous_channel_actions: previous,
       })
@@ -153,7 +163,11 @@ export function IntegrationsPage() {
       return
     }
     const previous = integration.channel_actions as ChannelActions
-    updateChannelsMutation.mutate({ previous, next: change(previous) })
+    updateChannelsMutation.mutate({
+      integrationId: integration.id,
+      previous,
+      next: change(previous),
+    })
   }
 
   const handleUpdateChannel = (key: string, channelId: string, channelName: string) => {

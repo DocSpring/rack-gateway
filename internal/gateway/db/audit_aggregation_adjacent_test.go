@@ -1,6 +1,7 @@
 package db_test
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -63,7 +64,7 @@ func TestAuditAggregationOnlyAdjacentEvents(t *testing.T) {
 	require.NoError(t, db.CreateAuditLog(login3))
 
 	// Get aggregated results
-	aggs, total, err := db.GetAuditLogsAggregated(gwdb.AuditLogFilters{
+	aggs, total, err := db.GetAuditLogsAggregated(context.Background(), gwdb.AuditLogFilters{
 		UserEmail: "user@example.com",
 		Limit:     50,
 	})
@@ -140,7 +141,7 @@ func TestAuditAggregationDifferentActionsBreakSequence(t *testing.T) {
 	}
 	require.NoError(t, db.CreateAuditLog(read3))
 
-	aggs, total, err := db.GetAuditLogsAggregated(gwdb.AuditLogFilters{
+	aggs, total, err := db.GetAuditLogsAggregated(context.Background(), gwdb.AuditLogFilters{
 		UserEmail: "dev@example.com",
 		Limit:     50,
 	})

@@ -206,6 +206,7 @@ for each code (never text from the URL or from Google):
 | Code | Cause |
 |------|-------|
 | `unauthorized` | The account is outside `GOOGLE_ALLOWED_DOMAIN`, or isn't a gateway user. An admin must add them |
+| `account_mismatch` | Another Google account is bound to the gateway user with this email. If the user's Google account was re-created, an admin resets their sign-in ([User Management](/user-guide/web-ui/user-management/#resetting-sign-in-admin)) |
 | `access_denied` | The user canceled or declined the sign-in at Google |
 | `identity_provider_error` | Google returned another error |
 | `missing_code` | The callback had no authorization code or state |

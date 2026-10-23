@@ -60,13 +60,17 @@ func (s *runState) decideAlert(previous *db.AuditVerificationStatus, o *outcome,
 }
 
 // foundNewFailures reports whether the run found failures the streak's latest alert didn't report: more of them,
-// or one it didn't list, even when the count is the same (one fixed, another found).
+// or one it didn't list, even when the count is the same (one fixed, another found). Past the failure keys a report
+// keeps, any change to the failures counts.
 func (s *runState) foundNewFailures(o *outcome) bool {
 	if o.failureCount() > s.alertedFailures {
 		return true
 	}
 	if o.report == nil {
 		return false
+	}
+	if !o.report.AllFailureKeys() && o.report.FailureDigest() != s.alertedDigest {
+		return true
 	}
 	for _, key := range o.report.FailureKeys() {
 		if !s.alertedKeys[key] {

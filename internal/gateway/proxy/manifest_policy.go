@@ -163,6 +163,10 @@ func (p imagePolicy) validateImage(owner, image string, pattern imagePattern) er
 	if strings.Contains(image, "${") {
 		return fmt.Errorf("%s image %q uses ${...}, which the rack substitutes after the check", owner, image)
 	}
+	if p.commit != "" && strings.Contains(image, "@") {
+		return fmt.Errorf("%s image %q names a digest, which the runtime pulls whatever the tag says: refer to the "+
+			"approved commit's image by its tag alone", owner, image)
+	}
 	if p.commit != "" && !imageTaggedWithCommit(image, p.commit) {
 		return fmt.Errorf("%s image %q is not tagged with the approved commit %s", owner, image, p.commit)
 	}
@@ -181,11 +185,13 @@ func substituteCommit(templates map[string]string, commit string) map[string]str
 	return patterns
 }
 
-// imageTaggedWithCommit reports whether an image reference's tag is commit or starts with commit+"-".
+// imageTaggedWithCommit reports whether an image reference's tag is commit or starts with commit+"-". A reference
+// with a digest (name:tag@sha256:...) never is: the runtime pulls the digest and ignores the tag, so the image needn't
+// be the one built from the commit.
 func imageTaggedWithCommit(image, commit string) bool {
 	ref := image
-	if at := strings.Index(ref, "@"); at >= 0 {
-		ref = ref[:at]
+	if strings.Contains(ref, "@") {
+		return false
 	}
 	colon := strings.LastIndex(ref, ":")
 	if colon <= strings.LastIndex(ref, "/") {

@@ -93,8 +93,21 @@ func TestCreateRefusesAnOverlongMessage(t *testing.T) {
 	require.Equal(t, http.StatusCreated, resp.StatusCode, responseError(t, resp))
 }
 
+// A branch name with a control character (which git refuses) could forge lines in the gateway's logs.
+func TestCreateRefusesBranchNamesWithControlCharacters(t *testing.T) {
+	f := newCreateApprovalFixture(t)
+	for _, branch := range []string{"main\nlevel=error msg=forged", "main\r", "main\x00", "main\u0085"} {
+		resp := f.createWith(t, map[string]string{"git_branch": branch})
+		require.Equalf(t, http.StatusBadRequest, resp.StatusCode, "branch %q", branch)
+		require.Contains(t, responseError(t, resp), "control characters")
+	}
+	resp := f.createWith(t, map[string]string{"git_branch": strings.Repeat("b", 256)})
+	require.Equal(t, http.StatusBadRequest, resp.StatusCode)
+	requireNoRequestCreated(t, f)
+}
+
 // The create audit entry keeps every detail of the request and its GitHub verification, whatever the message. A
-// message that fills the entry once JSON-escaped ("<" becomes <) is cut short instead.
+// message that would fill the entry once JSON-escaped ("<" takes six characters) is stored without the escaping.
 func TestCreateAuditEntryKeepsVerificationDetailsWithALongMessage(t *testing.T) {
 	f := newVerifyingFixture(t, true, nil)
 	message := strings.Repeat("<", maxDeployApprovalMessageChars)
@@ -114,10 +127,7 @@ func TestCreateAuditEntryKeepsVerificationDetailsWithALongMessage(t *testing.T) 
 	} {
 		require.Equal(t, want, details[key], key)
 	}
-	cut, ok := strings.CutSuffix(details["message"], cutMarker)
-	require.True(t, ok, "the message is marked as cut")
-	require.NotEmpty(t, cut)
-	require.True(t, strings.HasPrefix(message, cut))
+	require.Equal(t, message, details["message"])
 }
 
 // Without a configured window, an approval stays open for the documented default of 15 minutes.

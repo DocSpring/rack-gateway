@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"fmt"
 	"html"
 	"net/http"
@@ -21,7 +22,8 @@ type LockUserRequest struct {
 
 // LockUser godoc
 // @Summary Lock a user account
-// @Description Locks a user account to prevent login
+// @Description Locks a user account to prevent login. An admin can't lock their own account (400) or the last
+// @Description unlocked admin (409).
 // @Tags admin
 // @Accept json
 // @Produce json
@@ -30,6 +32,7 @@ type LockUserRequest struct {
 // @Success 200 {object} StatusResponse
 // @Failure 400 {object} ErrorResponse
 // @Failure 404 {object} ErrorResponse
+// @Failure 409 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
 // @Security SessionCookie
 // @Security CSRFToken
@@ -70,12 +73,19 @@ func (h *AdminHandler) LockUser(c *gin.Context) {
 	}
 
 	if err := h.database.LockUser(user.ID, req.Reason, &adminUser.ID); err != nil {
+		status, message := http.StatusInternalServerError, "failed to lock user"
+		switch {
+		case errors.Is(err, db.ErrLockOwnAccount):
+			status, message = http.StatusBadRequest, "you can't lock your own account"
+		case errors.Is(err, db.ErrLockLastAdmin):
+			status, message = http.StatusConflict, "this is the last unlocked admin; nobody could unlock anyone"
+		}
 		h.respondAuditError(
 			c,
-			http.StatusInternalServerError,
+			status,
 			audit.BuildAction(rbac.ResourceUser.String(), audit.ActionVerbLock),
 			userEmail,
-			"failed to lock user",
+			message,
 			start,
 			nil,
 		)

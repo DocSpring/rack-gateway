@@ -26,6 +26,7 @@ type AdminHandler struct {
 	auditLogger     *audit.Logger
 	settingsService *settings.Service
 	jobsClient      *jobs.Client
+	auditSearches   auditSearchQueue
 }
 
 // NewAdminHandler creates a new AdminHandler with all required dependencies.

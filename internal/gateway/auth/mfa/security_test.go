@@ -203,7 +203,7 @@ func createConfirmedTOTP(t *testing.T, database *db.Database, user *db.User) *ot
 	if err != nil {
 		t.Fatalf("failed to create MFA method: %v", err)
 	}
-	if err := database.ConfirmMFAMethod(method.ID, time.Now()); err != nil {
+	if err := database.FinalizeMFAEnrollment(user.ID, method.ID, time.Now(), nil); err != nil {
 		t.Fatalf("failed to confirm MFA method: %v", err)
 	}
 	return key

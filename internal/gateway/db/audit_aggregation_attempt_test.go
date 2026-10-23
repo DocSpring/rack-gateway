@@ -1,6 +1,7 @@
 package db_test
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -32,7 +33,8 @@ func TestAggregationReplacesAnAttemptWithItsResult(t *testing.T) {
 	attempt := attemptLog("req-1")
 	require.NoError(t, database.CreateAuditLog(attempt))
 
-	aggs, total, err := database.GetAuditLogsAggregated(gwdb.AuditLogFilters{UserEmail: "admin@example.com"})
+	aggs, total, err := database.GetAuditLogsAggregated(context.Background(),
+		gwdb.AuditLogFilters{UserEmail: "admin@example.com"})
 	require.NoError(t, err)
 	require.Equal(t, 1, total)
 	assert.Equal(t, "attempted", aggs[0].Status)
@@ -56,7 +58,8 @@ func TestAggregationReplacesAnAttemptWithItsResult(t *testing.T) {
 	}
 	require.NoError(t, database.CreateAuditLog(result))
 
-	aggs, total, err = database.GetAuditLogsAggregated(gwdb.AuditLogFilters{UserEmail: "admin@example.com"})
+	aggs, total, err = database.GetAuditLogsAggregated(context.Background(),
+		gwdb.AuditLogFilters{UserEmail: "admin@example.com"})
 	require.NoError(t, err)
 	require.Equal(t, 2, total, "the result takes over the attempt's row")
 	byAction := map[string]*gwdb.AuditLogAggregated{}
@@ -81,7 +84,8 @@ func TestAggregationReplacesAnAttemptWithItsResult(t *testing.T) {
 		Status:     "success",
 	}
 	require.NoError(t, database.CreateAuditLog(second))
-	_, total, err = database.GetAuditLogsAggregated(gwdb.AuditLogFilters{UserEmail: "admin@example.com"})
+	_, total, err = database.GetAuditLogsAggregated(context.Background(),
+		gwdb.AuditLogFilters{UserEmail: "admin@example.com"})
 	require.NoError(t, err)
 	assert.Equal(t, 3, total)
 }
@@ -94,7 +98,8 @@ func TestAggregationKeepsAttemptsApart(t *testing.T) {
 	require.NoError(t, database.CreateAuditLog(attemptLog("req-1")))
 	require.NoError(t, database.CreateAuditLog(attemptLog("req-2")))
 
-	_, total, err := database.GetAuditLogsAggregated(gwdb.AuditLogFilters{UserEmail: "admin@example.com"})
+	_, total, err := database.GetAuditLogsAggregated(context.Background(),
+		gwdb.AuditLogFilters{UserEmail: "admin@example.com"})
 	require.NoError(t, err)
 	assert.Equal(t, 2, total)
 }
@@ -117,13 +122,15 @@ func TestAggregationAddsEventCounts(t *testing.T) {
 	}
 	require.NoError(t, database.CreateAuditLog(denial(4)))
 
-	aggs, _, err := database.GetAuditLogsAggregated(gwdb.AuditLogFilters{UserEmail: "viewer@example.com"})
+	aggs, _, err := database.GetAuditLogsAggregated(context.Background(),
+		gwdb.AuditLogFilters{UserEmail: "viewer@example.com"})
 	require.NoError(t, err)
 	require.Len(t, aggs, 1)
 	assert.Equal(t, 4, aggs[0].EventCount)
 
 	require.NoError(t, database.CreateAuditLog(denial(3)))
-	aggs, _, err = database.GetAuditLogsAggregated(gwdb.AuditLogFilters{UserEmail: "viewer@example.com"})
+	aggs, _, err = database.GetAuditLogsAggregated(context.Background(),
+		gwdb.AuditLogFilters{UserEmail: "viewer@example.com"})
 	require.NoError(t, err)
 	require.Len(t, aggs, 1, "identical consecutive entries still share a row")
 	assert.Equal(t, 7, aggs[0].EventCount)

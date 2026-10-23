@@ -26,6 +26,8 @@ Rack management:
   rack-gateway racks               # List all racks
   rack-gateway switch <rack>       # Switch to a different rack
   rack-gateway login <rack> <url>  # Login to a new rack`,
+		// Every step of a command uses the rack that was current when it started.
+		PersistentPreRun: func(*cobra.Command, []string) { pinCurrentRack() },
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			// If no subcommand is specified, show help
 			return cmd.Help()
@@ -38,7 +40,8 @@ Rack management:
 		StringVarP(&RackFlag, "rack", "r", "", "Rack to use (deploy approvals accept comma-separated names or all)")
 	rootCmd.PersistentFlags().
 		StringVar(&APITokenFlag, "api-token", "", "API token for CLI requests (overrides RACK_GATEWAY_API_TOKEN)")
-	rootCmd.PersistentFlags().StringVar(&MFAMethodFlag, "mfa-method", "", "MFA method to use (totp or webauthn)")
+	rootCmd.PersistentFlags().
+		StringVar(&MFAMethodFlag, "mfa-method", "", "MFA method to use (webauthn, totp or yubiotp)")
 	rootCmd.PersistentFlags().
 		StringVar(&MFACodeFlag, "mfa-code", "", "MFA code (TOTP/Yubikey/backup) for step-up authentication")
 

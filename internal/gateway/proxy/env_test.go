@@ -17,7 +17,6 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
 	"github.com/DocSpring/rack-gateway/internal/gateway/config"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
-	"github.com/DocSpring/rack-gateway/internal/gateway/email"
 	"github.com/DocSpring/rack-gateway/internal/gateway/envutil"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 	"github.com/DocSpring/rack-gateway/internal/gateway/settings"
@@ -38,8 +37,6 @@ func newProxyForEnvTest(t *testing.T) (*Handler, *db.Database, rbac.Manager) {
 		audit.NewLogger(database),
 		database,
 		settingsService,
-		email.NoopSender{},
-		"testrack",
 		"testrack",
 		nil,
 		nil,

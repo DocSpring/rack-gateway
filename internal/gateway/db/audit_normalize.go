@@ -28,7 +28,8 @@ const (
 	auditRBACDecisionMax = 16
 )
 
-// AuditDetailsMaxChars is how many characters of an audit entry's details are kept; longer details are cut.
+// AuditDetailsMaxChars is how many characters of an audit entry's details are kept; longer details are shortened
+// (see fitAuditDetails).
 const AuditDetailsMaxChars = auditDetailsMax
 
 // newAuditChainRow converts an audit log into the exact values its row will hold. Every value is normalized
@@ -52,7 +53,7 @@ func newAuditChainRow(log *AuditLog) *AuditChainRow {
 		Command:                 presentAuditText(log.Command, auditCommandMax),
 		Resource:                presentAuditText(log.Resource, auditResourceMax),
 		ResourceType:            presentAuditText(log.ResourceType, auditResourceTypeMax),
-		Details:                 presentAuditText(log.Details, auditDetailsMax),
+		Details:                 sql.NullString{String: fitAuditDetails(log.Details), Valid: true},
 		RequestID:               optionalAuditText(log.RequestID, auditRequestIDMax),
 		IPAddress:               canonicalAuditIP(log.IPAddress),
 		UserAgent:               presentAuditText(log.UserAgent, auditUserAgentMax),
@@ -145,12 +146,17 @@ func truncateAuditText(value string, limit int) string {
 	if length <= limit {
 		return value
 	}
-	marker := fmt.Sprintf("…[truncated from %d characters]", length)
+	marker := truncationMarker(length)
 	keep := limit - utf8.RuneCountInString(marker)
 	if keep < 0 {
 		return string([]rune(value)[:limit])
 	}
 	return string([]rune(value)[:keep]) + marker
+}
+
+// truncationMarker ends text cut short, saying how many characters it had.
+func truncationMarker(length int) string {
+	return fmt.Sprintf("…[truncated from %d characters]", length)
 }
 
 // canonicalAuditIP is the stored form of the ip_address (INET) column: the address in Go's canonical text form

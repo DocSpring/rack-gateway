@@ -16,7 +16,6 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
 	"github.com/DocSpring/rack-gateway/internal/gateway/config"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
-	"github.com/DocSpring/rack-gateway/internal/gateway/email"
 	"github.com/DocSpring/rack-gateway/internal/gateway/envutil"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 	"github.com/DocSpring/rack-gateway/internal/gateway/testutil/dbtest"
@@ -41,8 +40,6 @@ func newProxyForCreatorTest(t *testing.T) (*Handler, *db.Database, rbac.Manager)
 		audit.NewLogger(database),
 		database,
 		settings.NewService(database),
-		email.NoopSender{},
-		"default",
 		"default",
 		nil,
 		nil,
@@ -76,8 +73,6 @@ func newProxyWithRackServer(t *testing.T, rackHandler http.HandlerFunc) (*Handle
 		audit.NewLogger(database),
 		database,
 		settings.NewService(database),
-		email.NoopSender{},
-		"default",
 		"default",
 		nil,
 		nil,

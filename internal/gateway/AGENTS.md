@@ -85,6 +85,9 @@ Request forwarding with WebSocket support:
   `manifest_interpolation.go`) and as the rack will load them (`loadManifestAsRack`: Convox's own `manifest.Load`
   with the app's env and the build args substituted). Promotes are checked with the release's env
   (`proxy/promote_images.go`). Keep the `github.com/convox/convox` module in step with the racks' Convox version
+- The rack's build reads the app's env after that check, so a checked build holds the app's env lock until the rack
+  answers and is recorded in `checked_builds`; every env change (proxy release create, web env editor) calls
+  `envutil.CheckNoBuildReadingEnv` under the env lock and waits for those builds to finish
 - Refuse a request after looking at the rack with `refuse(status, err)` (`proxy/error_handling.go`), so the client
   gets that status and the audit log a deny, never a 500
 - Sets `X-Convox-Actor` (user email or `token:<name>`); internal identity headers sent by clients are
@@ -129,7 +132,7 @@ Structured logging:
 - The logger doesn't redact: whatever writes an entry's `Details` keeps secrets out of it, and Slack copies
   `Details` verbatim. Env change entries get their details from `envutil.AuditVisibleKeys.AuditDetails`
   (every value `[REDACTED]` unless the app's `audit_visible_env_vars` lists the key and it is neither secret
-  nor protected); rack param changes log key names only; query strings go through `debugredact.RedactQuery`
+  nor protected); query strings go through `debugredact.RedactQuery`
 - Everything fails closed, with no exceptions (reads, logins, MFA and logouts included): nothing may act unless its
   audit entry was written first. `middleware.AuditBeforeActing` (every gateway API route) and the proxy's
   `recordAttempt` (every rack request) write an `attempted` entry first and refuse with 503 when it can't be
@@ -145,7 +148,8 @@ Structured logging:
   and drop the old one in a later release
 - Denials (gateway `Authorize`, proxy RBAC/approval/destructive refusals, unknown rack routes) go through
   `RecordDenial`: throttled per principal + action + target (resource, method and path) per minute in memory (one
-  gateway per rack). The request is refused either way; a denial that can't be written is logged and sent to Sentry
+  gateway per rack). Past 1,000 runs, each principal's denials without a run share one, so memory stays bounded.
+  The request is refused either way; a denial that can't be written is logged and sent to Sentry
 
 Key files:
 

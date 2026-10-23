@@ -38,6 +38,27 @@ func TestRunAlertsAFailureThatReplacesAnother(t *testing.T) {
 	assert.Len(t, h.slackAlerts(), 2, "the same failure isn't alerted again within the day")
 }
 
+// Past the failure keys a report keeps, a failure that replaces another is still alerted.
+func TestRunAlertsAFailureThatReplacesAnotherPastTheKeyCap(t *testing.T) {
+	h := newHarness(t, nil)
+	events := h.writeEvents(1003)
+	first, last := events[1], events[len(events)-1]
+	h.tamper(fmt.Sprintf(`UPDATE audit.audit_event SET action = 'app.delete' WHERE chain_index BETWEEN %d AND %d`,
+		first, last))
+	status := h.runAt(firstRun)
+	require.Equal(t, 1002, status.FailureCount)
+	require.Len(t, h.slackAlerts(), 1)
+
+	h.setAction(last, "app.list")
+	h.setAction(events[0], "app.delete")
+	status = h.runAt(firstRun.Add(time.Hour))
+	assert.Equal(t, 1002, status.FailureCount)
+	require.Len(t, h.slackAlerts(), 2, "the new failure is alerted")
+
+	h.runAt(firstRun.Add(2 * time.Hour))
+	assert.Len(t, h.slackAlerts(), 2, "the same failures aren't alerted again within the day")
+}
+
 // An alert whose Slack notification can't be queued isn't counted as sent: the next run sends it again. So is a
 // recovery alert.
 func TestRunSendsAlertsSlackDidntGetAgain(t *testing.T) {

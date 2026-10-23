@@ -176,6 +176,27 @@ func (_ *Database) recordMigration(tx *sql.Tx, version string) error {
 	return err
 }
 
+// removeRiver migrates River's schema all the way down, which drops its tables with the jobs queued in them, so a
+// reset database doesn't run jobs queued for the old one (with IDs the new one reuses). migrateAll creates them again.
+func (d *Database) removeRiver(ctx context.Context) error {
+	var installed bool
+	if err := d.queryRowContext(ctx, "SELECT to_regclass('river_migration') IS NOT NULL").Scan(&installed); err != nil {
+		return fmt.Errorf("failed to check for River's tables: %w", err)
+	}
+	if !installed {
+		return nil
+	}
+	migrator, err := rivermigrate.New(riverpgxv5.New(d.pool), nil)
+	if err != nil {
+		return fmt.Errorf("failed to create River migrator: %w", err)
+	}
+	opts := &rivermigrate.MigrateOpts{TargetVersion: -1}
+	if _, err := migrator.Migrate(ctx, rivermigrate.DirectionDown, opts); err != nil {
+		return fmt.Errorf("failed to remove River's tables: %w", err)
+	}
+	return nil
+}
+
 // migrateRiver runs River's database migrations using the rivermigrate package.
 // This creates the necessary tables (river_queue, river_job, etc.) for River job processing.
 func (d *Database) migrateRiver(ctx context.Context) error {

@@ -361,7 +361,8 @@ func TestUpdateSlackChannels_RequiresPrevious(t *testing.T) {
 	require.Equal(t, http.StatusBadRequest, w.Code)
 }
 
-// putSlackChannels sends PUT /integrations/slack/channels as user. A nil previous is left out of the request.
+// putSlackChannels sends PUT /integrations/slack/channels as user, for the current integration (ID 1 when there's
+// none). A nil previous is left out of the request.
 func putSlackChannels(
 	t *testing.T,
 	handler *AdminHandler,
@@ -369,7 +370,13 @@ func putSlackChannels(
 	previous, next map[string]interface{},
 ) *httptest.ResponseRecorder {
 	t.Helper()
-	body := map[string]interface{}{"channel_actions": next}
+	integrationID := int64(1)
+	current, err := handler.database.GetSlackIntegration()
+	require.NoError(t, err)
+	if current != nil {
+		integrationID = current.ID
+	}
+	body := map[string]interface{}{"integration_id": integrationID, "channel_actions": next}
 	if previous != nil {
 		body["previous_channel_actions"] = previous
 	}

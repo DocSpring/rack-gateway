@@ -129,6 +129,7 @@ func (h *AdminHandler) getDeployApprovalExpiry() (time.Time, error) {
 // @Success 200 {object} DeployApprovalRequestResponse
 // @Failure 403 {object} ErrorResponse
 // @Failure 404 {object} ErrorResponse
+// @Failure 409 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
 // @Security SessionCookie
 // @Router /deploy-approval-requests/{id}/approve [post]
@@ -138,15 +139,27 @@ func (h *AdminHandler) ApproveDeployApprovalRequest(c *gin.Context) {
 		return
 	}
 
+	var pendingMaxAge time.Duration
+	if h.config != nil {
+		pendingMaxAge = h.config.DeployApprovalPendingMaxAge
+	}
 	record, err := h.database.ApproveDeployApprovalRequestByPublicID(
 		input.publicID,
 		input.approver.ID,
 		input.expiresAt,
 		input.notes,
+		pendingMaxAge,
 	)
 	if err != nil {
 		if errors.Is(err, db.ErrDeployApprovalRequestNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "deploy approval request not found"})
+			return
+		}
+		if errors.Is(err, db.ErrDeployApprovalRequestTooOld) {
+			c.JSON(http.StatusConflict, gin.H{
+				"error": "this request was pending longer than the gateway allows and has expired; " +
+					"request a new approval",
+			})
 			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to approve deploy approval request"})
@@ -167,6 +180,7 @@ func (h *AdminHandler) ApproveDeployApprovalRequest(c *gin.Context) {
 // @Param body body UpdateDeployApprovalRequestStatusRequest false "Rejection notes"
 // @Success 200 {object} DeployApprovalRequestResponse
 // @Failure 404 {object} ErrorResponse
+// @Failure 409 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
 // @Security SessionCookie
 // @Router /deploy-approval-requests/{id}/reject [post]
@@ -180,6 +194,12 @@ func (h *AdminHandler) RejectDeployApprovalRequest(c *gin.Context) {
 	if err != nil {
 		if errors.Is(err, db.ErrDeployApprovalRequestNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "deploy approval request not found"})
+			return
+		}
+		if errors.Is(err, db.ErrDeployApprovalPromoteStarted) {
+			c.JSON(http.StatusConflict, gin.H{
+				"error": "a promote has started under this approval, so it can't be rejected now",
+			})
 			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to reject deploy approval request"})

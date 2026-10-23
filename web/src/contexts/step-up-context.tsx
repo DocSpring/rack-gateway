@@ -56,6 +56,9 @@ export function StepUpProvider({ children }: { children: ReactNode }): React.Rea
   const { client } = useHttpClient()
   const [isOpen, setIsOpen] = useState(false)
   const [isVerifying, setIsVerifying] = useState(false)
+  // Only an answer the gateway checks (a verify prompt) can trust the device. An answer sent as a retried request's
+  // inline MFA proof trusts nothing, so that prompt doesn't offer it.
+  const [answerChecked, setAnswerChecked] = useState(false)
 
   // Every request waiting on the current MFA prompt
   const queueRef = useRef(new StepUpQueue())
@@ -76,6 +79,7 @@ export function StepUpProvider({ children }: { children: ReactNode }): React.Rea
       document.activeElement.blur()
     }
     queueRef.current.enqueue(request ?? {})
+    setAnswerChecked(queueRef.current.primary()?.verify === true)
     setIsOpen(true)
   }, [])
 
@@ -333,7 +337,7 @@ export function StepUpProvider({ children }: { children: ReactNode }): React.Rea
         onCancel={closeStepUp}
         onOpenChange={handleDialogOpenChange}
         onVerify={handleDialogVerify}
-        showTrustDevice={!user?.has_trusted_device}
+        showTrustDevice={answerChecked && !user?.has_trusted_device}
       />
     </StepUpContext.Provider>
   )

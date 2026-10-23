@@ -32,7 +32,7 @@ func getMFAStatus(baseURL, sessionToken string) (*MFAStatusResponse, error) {
 func filterMethodsByPreference(methods []MFAMethodResponse, preference string) []MFAMethodResponse {
 	priorities := []string{preference}
 	if preference == "" || preference == "default" {
-		priorities = []string{"webauthn", "totp", "backup_code"}
+		priorities = []string{"webauthn", "totp", "yubiotp"}
 	}
 	return filterMethodsByPriority(methods, priorities)
 }

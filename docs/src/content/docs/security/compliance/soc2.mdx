@@ -273,7 +273,7 @@ A: Audit events are never deleted: the table is append-only. S3 anchors are lock
 Object Lock retention (400 days in the example Terraform).
 
 **Q: How are secrets protected in logs?**
-A: Audit entries never record env var values unless an admin lists the key in the app's `audit_visible_env_vars`, and never for secret or protected keys. Rack parameter changes record the parameter names only. See [Secret Redaction](/security/compliance/audit-trail/#secret-redaction).
+A: Audit entries never record env var values unless an admin lists the key in the app's `audit_visible_env_vars`, and never for secret or protected keys. See [Secret Redaction](/security/compliance/audit-trail/#secret-redaction).
 
 **Q: How is the audit log protected from tampering?**
 A: Each event's HMAC covers its fields and the previous event's hash, and hourly anchors in an S3 Object Lock bucket

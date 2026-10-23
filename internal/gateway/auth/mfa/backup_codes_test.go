@@ -25,10 +25,16 @@ func TestNormalizeBackupCode(t *testing.T) {
 func TestVerifyTOTP_AcceptsBackupCodeOnceInAnyFormat(t *testing.T) {
 	t.Parallel()
 
-	svc, _, user := setupMFAService(t, "backup@example.com", "Backup User")
+	svc, database, user := setupMFAService(t, "backup@example.com", "Backup User")
 	codes, err := svc.GenerateBackupCodes(user.ID)
 	if err != nil {
 		t.Fatalf("failed to generate backup codes: %v", err)
+	}
+	if _, err := svc.VerifyTOTP(user, codes[0], "1.2.3.4", "test-agent", nil); err == nil {
+		t.Fatal("expected a backup code to verify nothing before the user has confirmed a factor")
+	}
+	if err := database.SetUserMFAEnrolled(user.ID, true); err != nil {
+		t.Fatalf("failed to enroll user: %v", err)
 	}
 	code := codes[0]
 	typed := strings.ToLower(code[:6]) + "-" + strings.ToLower(code[6:])

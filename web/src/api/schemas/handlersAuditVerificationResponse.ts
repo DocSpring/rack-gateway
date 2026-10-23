@@ -8,5 +8,10 @@
 import type { DbAuditVerificationStatus } from "./dbAuditVerificationStatus";
 
 export interface HandlersAuditVerificationResponse {
+  /**
+   * AnchorsConfigured is whether the gateway anchors the audit chain in S3 (AUDIT_ANCHOR_BUCKET). Without
+   * anchors, verification can't detect events removed from the end of the chain, or the whole chain.
+   */
+  anchors_configured: boolean;
   status?: DbAuditVerificationStatus;
 }

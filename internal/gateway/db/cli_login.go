@@ -141,11 +141,14 @@ func (d *Database) MarkCLILoginEnrollmentRequired(state string) error {
 	return nil
 }
 
-// FailCLILoginState stores a terminal error for a CLI login attempt.
+// FailCLILoginState stores a terminal error for a CLI login attempt, and invalidates any login code it was issued:
+// a failed or canceled login can't be completed.
 func (d *Database) FailCLILoginState(state, reason string) error {
 	_, err := d.exec(`
         UPDATE cli_login_states
         SET login_error = ?,
+            login_code_hash = NULL,
+            login_code_expires_at = NULL,
             updated_at = NOW()
         WHERE state = ?
     `, nullableString(reason, 255), state)
@@ -188,11 +191,12 @@ func (d *Database) SetCLILoginCode(state, codeHash string) (bool, error) {
 }
 
 // ConsumeCLILoginCode atomically deletes and returns the live CLI login holding the login code.
-// Each code can be redeemed at most once. Returns nil when no live login holds the code.
+// Each code can be redeemed at most once, and never once the login has failed. Returns nil when no live login holds
+// the code.
 func (d *Database) ConsumeCLILoginCode(codeHash string) (*CLILoginState, error) {
 	row := d.queryRow(`
         DELETE FROM cli_login_states
-        WHERE login_code_hash = ? AND login_code_expires_at > NOW() AND `+cliLoginLive+`
+        WHERE login_code_hash = ? AND login_code_expires_at > NOW() AND login_error IS NULL AND `+cliLoginLive+`
         RETURNING `+cliLoginColumns, codeHash)
 	record, err := scanCLILoginState(row)
 	if err != nil {

@@ -108,15 +108,18 @@ func withCLIConfig(t *testing.T, cfg Config) {
 	previousConfigPath := ConfigPath
 	previousRackFlag := RackFlag
 	previousAPITokenFlag := APITokenFlag
+	previousPinnedRack := pinnedCurrentRack
 	t.Cleanup(func() {
 		ConfigPath = previousConfigPath
 		RackFlag = previousRackFlag
 		APITokenFlag = previousAPITokenFlag
+		pinnedCurrentRack = previousPinnedRack
 	})
 
 	ConfigPath = t.TempDir()
 	RackFlag = ""
 	APITokenFlag = ""
+	pinnedCurrentRack = ""
 	t.Setenv("RACK_GATEWAY_URL", "")
 	t.Setenv("RACK_GATEWAY_RACK", "")
 	t.Setenv("RACK_GATEWAY_API_TOKEN", "")

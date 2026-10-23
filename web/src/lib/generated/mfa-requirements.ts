@@ -452,6 +452,12 @@ export const HTTP_ROUTE_MFA_REQUIREMENTS: HttpRouteMfaRequirement[] = [
   },
   {
     method: "POST",
+    pattern: "/api/v1/users/:email/sign-in/reset",
+    permissions: ["gateway:user:update"],
+    mfaLevel: "always",
+  },
+  {
+    method: "POST",
     pattern: "/api/v1/users/:email/unlock",
     permissions: ["gateway:user:update"],
     mfaLevel: "always",

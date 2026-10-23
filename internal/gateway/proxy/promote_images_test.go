@@ -157,7 +157,7 @@ func TestApprovalPromoteRequiresTheApprovedCommit(t *testing.T) {
 	approval, err := f.database.CreateDeployApprovalRequest("Deploy", promoteApp, promoteCommit, "main", "", nil,
 		owner.ID, nil, ci.ID)
 	require.NoError(t, err)
-	_, err = f.database.ApproveDeployApprovalRequest(approval.ID, owner.ID, time.Now().Add(time.Hour), "")
+	_, err = f.database.ApproveDeployApprovalRequest(approval.ID, owner.ID, time.Now().Add(time.Hour), "", 0)
 	require.NoError(t, err)
 	bindApprovalRelease(t, f.database, approval.ID)
 

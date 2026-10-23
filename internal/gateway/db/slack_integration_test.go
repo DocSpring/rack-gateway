@@ -69,7 +69,7 @@ func TestSlackIntegrationCRUD(t *testing.T) {
 		},
 	}
 
-	err = database.UpdateSlackIntegrationChannels(channelActions, updatedActions)
+	err = database.UpdateSlackIntegrationChannels(integration.ID, channelActions, updatedActions)
 	require.NoError(t, err)
 
 	retrieved, err = database.GetSlackIntegration()
@@ -135,7 +135,7 @@ func TestReplaceSlackIntegrationKeepsOne(t *testing.T) {
 func TestUpdateSlackChannels_NoIntegration(t *testing.T) {
 	database := dbtest.NewDatabase(t)
 
-	err := database.UpdateSlackIntegrationChannels(map[string]interface{}{}, map[string]interface{}{})
+	err := database.UpdateSlackIntegrationChannels(1, map[string]interface{}{}, map[string]interface{}{})
 	require.ErrorIs(t, err, db.ErrNoSlackIntegration)
 }
 
@@ -147,14 +147,14 @@ func TestUpdateSlackChannels_RefusesAChangeToAnOlderConfiguration(t *testing.T) 
 			"id": "C123456", "name": "security", "actions": actions,
 		}}
 	}
-	_, err := database.ReplaceSlackIntegration("T123456", "Test Workspace", fakeSlackBot, "U123456",
+	si, err := database.ReplaceSlackIntegration("T123456", "Test Workspace", fakeSlackBot, "U123456",
 		"channels:read,chat:write", channel("login.*_failed"), nil)
 	require.NoError(t, err)
 
 	// Two edits made to the same configuration: the first saves, the second is refused.
-	require.NoError(t, database.UpdateSlackIntegrationChannels(
+	require.NoError(t, database.UpdateSlackIntegrationChannels(si.ID,
 		channel("login.*_failed"), channel("login.*_failed", "audit_log.verification_*")))
-	err = database.UpdateSlackIntegrationChannels(channel("login.*_failed"), channel())
+	err = database.UpdateSlackIntegrationChannels(si.ID, channel("login.*_failed"), channel())
 	require.ErrorIs(t, err, db.ErrSlackChannelsChanged)
 
 	stored, err := database.GetSlackIntegration()
@@ -166,7 +166,15 @@ func TestUpdateSlackChannels_RefusesAChangeToAnOlderConfiguration(t *testing.T) 
 	reordered := map[string]interface{}{"security": map[string]interface{}{
 		"name": "security", "actions": []string{"login.*_failed", "audit_log.verification_*"}, "id": "C123456",
 	}}
-	require.NoError(t, database.UpdateSlackIntegrationChannels(reordered, channel("mfa.verify_failed")))
+	require.NoError(t, database.UpdateSlackIntegrationChannels(si.ID, reordered, channel("mfa.verify_failed")))
+
+	// After a reconnect, an edit made to the replaced integration is refused, even with the same channels.
+	reconnected, err := database.ReplaceSlackIntegration("T999999", "New Workspace", fakeSlackBot, "U999999",
+		"channels:read,chat:write", channel("mfa.verify_failed"), nil)
+	require.NoError(t, err)
+	err = database.UpdateSlackIntegrationChannels(si.ID, channel("mfa.verify_failed"), channel())
+	require.ErrorIs(t, err, db.ErrSlackChannelsChanged)
+	require.NoError(t, database.UpdateSlackIntegrationChannels(reconnected.ID, channel("mfa.verify_failed"), channel()))
 }
 
 // A disconnect waits for a reconnect in progress, so it disconnects the integration the reconnect stores rather

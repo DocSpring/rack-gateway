@@ -25,6 +25,12 @@ var (
 	)
 	// ErrDeployApprovalRequestNotFound is returned when a deploy approval request cannot be found
 	ErrDeployApprovalRequestNotFound = errors.New("deploy approval request not found")
+	// ErrDeployApprovalRequestTooOld is returned when approving a request that has been pending longer than
+	// DEPLOY_APPROVAL_PENDING_MAX_AGE: it has expired, even if the expiry sweep hasn't marked it yet.
+	ErrDeployApprovalRequestTooOld = errors.New("deploy approval request was pending too long and has expired")
+	// ErrDeployApprovalPromoteStarted is returned when rejecting an approval whose promote has started: the rack
+	// may be applying it.
+	ErrDeployApprovalPromoteStarted = errors.New("a promote has started under this deploy approval")
 )
 
 // DeployApprovalRequestConflictError wraps an existing approval request when a conflict is detected

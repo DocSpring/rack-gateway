@@ -129,6 +129,16 @@ func (d *Database) RevokeTrustedDevice(id int64, reason string) error {
 	return nil
 }
 
+// revokeTrustedDevicesTx revokes all of the user's trusted devices in tx, recording why.
+func (d *Database) revokeTrustedDevicesTx(tx *sql.Tx, userID int64, reason string) error {
+	_, err := d.execTx(tx, `UPDATE trusted_devices SET revoked_at = NOW(), revoked_reason = ?, updated_at = NOW()
+		WHERE user_id = ? AND revoked_at IS NULL`, reason, userID)
+	if err != nil {
+		return fmt.Errorf("failed to revoke trusted devices: %w", err)
+	}
+	return nil
+}
+
 // ListTrustedDevices lists all trusted devices for a user, ordered by creation date.
 func (d *Database) ListTrustedDevices(userID int64) ([]*TrustedDevice, error) {
 	rows, err := d.query(

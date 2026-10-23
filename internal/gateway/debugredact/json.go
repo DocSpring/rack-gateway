@@ -23,6 +23,15 @@ var envValueFields = map[string]struct{}{
 	"set":         {},
 }
 
+// opaqueFields hold rack or app configuration whose values can be secrets under any name, such as a rack's or an
+// app's parameters (a database password, a custom credential) or a release's or build's manifest (a convox.yml can
+// set env values): they're redacted whole.
+var opaqueFields = map[string]struct{}{
+	"manifest":   {},
+	"parameters": {},
+	"params":     {},
+}
+
 // Body is a JSON body as it may be logged, with sensitive values redacted (see redactJSONValue). body is what was
 // read of it, and limit how much was read: only a whole body of valid JSON can be redacted, so any other is left
 // out, and a placeholder says why.
@@ -53,11 +62,14 @@ func redactBody(body []byte, limit int, field string) string {
 	return string(redacted)
 }
 
-// redactJSONValue redacts the value of the field named key: all of it when key is sensitive, every value in it
-// when it holds env vars, and otherwise whatever is sensitive inside it. An array's items are redacted as values
-// of the array's field.
+// redactJSONValue redacts the value of the field named key: all of it when key is sensitive or holds configuration
+// (opaqueFields), every value in it when it holds env vars, and otherwise whatever is sensitive inside it. An
+// array's items are redacted as values of the array's field.
 func redactJSONValue(key string, value interface{}) interface{} {
-	if key != "" && isSensitiveName(key) {
+	if key != "" && IsSensitiveName(key) {
+		return Redacted
+	}
+	if _, opaque := opaqueFields[strings.ToLower(key)]; opaque {
 		return Redacted
 	}
 	if _, holdsEnv := envValueFields[strings.ToLower(key)]; holdsEnv {

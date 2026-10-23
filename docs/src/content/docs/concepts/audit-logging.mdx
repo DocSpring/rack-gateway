@@ -137,7 +137,6 @@ their values in the audit log and Slack. Secret and protected env vars are redac
 | Data | Logged as |
 |------|-----------|
 | **Env var values** | `[REDACTED]`, unless listed in `audit_visible_env_vars` |
-| **Rack parameter values** | `[REDACTED]`; the changed parameter names are logged |
 | **Login codes, OAuth values and tokens in query strings** | `[REDACTED]` |
 
 See [Secret Redaction](/security/compliance/audit-trail/#secret-redaction) for the details.
@@ -199,6 +198,12 @@ chain: rewriting any event up to an anchor would change the hash the anchor reco
 Events written after the latest anchor aren't pinned yet. Anyone with write access to the database can delete
 them without the secret (and with the secret, rewrite them) until the next anchor records them. Anchors are
 written hourly, and verification fails when the latest one is too old, which keeps that window to about an hour.
+The hourly verification also remembers the last event it checked, and fails if that event goes, but it keeps that
+in memory, where a database writer can't change it, so a gateway restart forgets it.
+
+Without anchors (`AUDIT_ANCHOR_BUCKET` unset), nothing outside the database records the chain: someone with write
+access to the database can delete events from its end, or every event, and verification still passes. The result
+then says `no external anchors`, and so does the Audit Logs page. Configure anchors in production.
 
 ### Failing Closed
 
@@ -311,7 +316,7 @@ flowchart TD
 | **Convox API** | Every proxied request and its outcome (status, not the response body) |
 | **Admin Actions** | User management, role changes |
 | **API Tokens** | Creation, deletion, usage |
-| **Settings** | Configuration changes |
+| **Settings** | Configuration changes, with each setting's value before and after (`changes` in the details) |
 
 ### What Doesn't Get Logged
 

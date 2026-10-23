@@ -90,22 +90,31 @@ func TestCheckProductionSafetyRefusesWeakSecrets(t *testing.T) {
 	}
 }
 
-// `migrate` runs the weak secret check in a release build, so a deploy fails before it promotes the release.
+// `migrate` runs the release secret checks in a release build, so a deploy fails before it migrates the database
+// for a release that couldn't start.
 func TestCheckReleaseSecrets(t *testing.T) {
-	weak := fakeEnv(map[string]string{"APP_SECRET_KEY": developmentAppKey, "AUDIT_HMAC_SECRET": " "})
-	err := refuseWeakReleaseSecrets(true, weak)
+	weak := fakeEnv(map[string]string{
+		"APP_SECRET_KEY": developmentAppKey, "AUDIT_HMAC_SECRET": " ", colcrypt.EnvVar: randomBase64,
+	})
+	err := refuseReleaseSecrets(true, weak)
 	if err == nil || !strings.Contains(err.Error(), "APP_SECRET_KEY (the development value published in this "+
 		"repository), AUDIT_HMAC_SECRET (blank: only whitespace)") {
 		t.Errorf("release build with weak secrets: err=%v, want a refusal naming both", err)
 	}
-	if err := refuseWeakReleaseSecrets(false, weak); err != nil {
+	if err := refuseReleaseSecrets(false, weak); err != nil {
 		t.Errorf("testbypass build with weak secrets: err=%v, want nil", err)
 	}
-	strong := fakeEnv(map[string]string{"APP_SECRET_KEY": randomBase64, "AUDIT_HMAC_SECRET": randomBase64})
-	if err := refuseWeakReleaseSecrets(true, strong); err != nil {
+	strong := fakeEnv(map[string]string{
+		"APP_SECRET_KEY": randomBase64, "AUDIT_HMAC_SECRET": randomBase64, colcrypt.EnvVar: randomBase64,
+	})
+	if err := refuseReleaseSecrets(true, strong); err != nil {
 		t.Errorf("release build with strong secrets: err=%v, want nil", err)
 	}
-	if err := refuseWeakReleaseSecrets(true, fakeEnv(nil)); err != nil {
-		t.Errorf("release build with the secrets unset: err=%v, want nil", err)
+	err = refuseReleaseSecrets(true, fakeEnv(map[string]string{"APP_SECRET_KEY": randomBase64}))
+	if err == nil || !strings.Contains(err.Error(), "needs AUDIT_HMAC_SECRET, COLUMN_ENCRYPTION_KEY set") {
+		t.Errorf("release build with secrets unset: err=%v, want a refusal naming them", err)
+	}
+	if err := refuseReleaseSecrets(false, fakeEnv(nil)); err != nil {
+		t.Errorf("testbypass build with the secrets unset: err=%v, want nil", err)
 	}
 }

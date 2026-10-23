@@ -18,7 +18,7 @@ func approveForUploadTest(
 	req, err := database.CreateDeployApprovalRequest("Deploy", "test-app", commit, "main", "", nil, userID, nil,
 		tokenID)
 	require.NoError(t, err)
-	req, err = database.ApproveDeployApprovalRequest(req.ID, userID, time.Now().Add(time.Hour), "")
+	req, err = database.ApproveDeployApprovalRequest(req.ID, userID, time.Now().Add(time.Hour), "", 0)
 	require.NoError(t, err)
 	return req
 }

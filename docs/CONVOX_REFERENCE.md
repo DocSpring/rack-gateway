@@ -269,14 +269,14 @@ Instead of reimplementing all Convox commands, `rack-gateway` acts as a wrapper:
 
 ### Blocked Operations
 
-For security, the proxy should block rack management operations:
+The gateway doesn't route rack management operations:
 
-- `convox rack update`
+- `convox rack update`, `rack scale` and `rack params set` (`PUT /system`, which a v3 rack doesn't implement:
+  `SystemUpdate` returns "not implemented")
 - `convox rack uninstall`
-- `convox rack params set`
 - Any terraform state modifications
 
-These should only be done by infrastructure team with direct terraform access.
+These are done by the infrastructure team with direct Terraform access.
 
 ## Testing the Integration
 

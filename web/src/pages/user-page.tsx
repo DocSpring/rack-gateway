@@ -6,7 +6,7 @@ import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog'
 import { toast } from '@/components/ui/use-toast'
 import { UserEditDialog } from '@/components/user-edit-dialog'
 import { UserLockDialog } from '@/components/user-lock-dialog'
-import { UserMFAResetDialog } from '@/components/user-mfa-reset-dialog'
+import { UserResetDialog } from '@/components/user-reset-dialog'
 import { useAuth } from '@/contexts/auth-context'
 import { useCan } from '@/hooks/use-can'
 import type { RoleName } from '@/lib/api'
@@ -87,6 +87,7 @@ export function UserPage() {
         canDelete={can(PERMISSIONS.userDelete)}
         canManage={can(PERMISSIONS.userUpdate)}
         canResetMFA={dangerZone.canResetMFA}
+        canResetSignIn={dangerZone.canResetSignIn}
         decodedEmail={decodedEmail}
         deletePending={dangerZone.deleteUserMutation.isPending}
         hasSessions={sessions.length > 0}
@@ -96,6 +97,7 @@ export function UserPage() {
         onEdit={editing.handleOpenEdit}
         onLock={dangerZone.handleRequestLockUser}
         onResetMFA={() => dangerZone.setIsResetMFAOpen(true)}
+        onResetSignIn={() => dangerZone.setIsResetSignInOpen(true)}
         onSignOutEverywhere={() => sessionControl.revokeAllMutation.mutate()}
         onUnlock={dangerZone.handleUnlockUser}
         signOutPending={sessionControl.revokeAllMutation.isPending}
@@ -164,9 +166,17 @@ export function UserPage() {
         userEmail={dangerZone.userToLock?.email ?? decodedEmail}
       />
 
-      <UserMFAResetDialog
+      <UserResetDialog
         onOpenChange={dangerZone.setIsResetMFAOpen}
         open={dangerZone.isResetMFAOpen}
+        reset="mfa"
+        userEmail={decodedEmail}
+      />
+
+      <UserResetDialog
+        onOpenChange={dangerZone.setIsResetSignInOpen}
+        open={dangerZone.isResetSignInOpen}
+        reset="sign-in"
         userEmail={decodedEmail}
       />
     </div>

@@ -1,6 +1,7 @@
 package db_test
 
 import (
+	"context"
 	"os"
 	"strings"
 	"testing"
@@ -184,7 +185,7 @@ func TestDatabaseAuditAggregation(t *testing.T) {
 	require.NoError(t, db.CreateAuditLog(follow))
 
 	// Aggregated view should combine events with same fields (different request_id)
-	aggs, total, err := db.GetAuditLogsAggregated(gwdb.AuditLogFilters{
+	aggs, total, err := db.GetAuditLogsAggregated(context.Background(), gwdb.AuditLogFilters{
 		UserEmail: base.UserEmail,
 		Limit:     50,
 	})
@@ -215,7 +216,7 @@ func TestDatabaseAuditAggregation(t *testing.T) {
 	require.NoError(t, db.CreateAuditLog(different))
 
 	// Should now have 2 aggregated entries
-	all, total, err := db.GetAuditLogsAggregated(gwdb.AuditLogFilters{
+	all, total, err := db.GetAuditLogsAggregated(context.Background(), gwdb.AuditLogFilters{
 		UserEmail: base.UserEmail,
 		Limit:     50,
 	})
@@ -266,7 +267,7 @@ func TestDatabaseAuditAggregationNoTimeWindow(t *testing.T) {
 	assert.Equal(t, 1, logs[1].EventCount)
 
 	// Aggregated table should combine them (no time window restriction)
-	aggs, total, err := db.GetAuditLogsAggregated(gwdb.AuditLogFilters{
+	aggs, total, err := db.GetAuditLogsAggregated(context.Background(), gwdb.AuditLogFilters{
 		UserEmail: first.UserEmail,
 		Limit:     50,
 	})
@@ -276,7 +277,7 @@ func TestDatabaseAuditAggregationNoTimeWindow(t *testing.T) {
 	assert.Equal(t, 2, aggs[0].EventCount)
 }
 
-func TestGetAuditLogsPaged(t *testing.T) {
+func TestGetAuditLogsAggregatedFilters(t *testing.T) {
 	db := dbtest.NewDatabase(t)
 	defer func() { _ = db.Close() }()
 
@@ -332,23 +333,23 @@ func TestGetAuditLogsPaged(t *testing.T) {
 		Since:      base.Add(-3 * time.Hour),
 		Limit:      50,
 	}
-	paged, total, err := db.GetAuditLogsPaged(filters)
+	paged, total, err := db.GetAuditLogsAggregated(context.Background(), filters)
 	require.NoError(t, err)
 	assert.Equal(t, 2, total)
 	assert.Len(t, paged, 2)
 
 	filters.Search = "Example"
-	_, total, err = db.GetAuditLogsPaged(filters)
+	_, total, err = db.GetAuditLogsAggregated(context.Background(), filters)
 	require.NoError(t, err)
 	assert.Equal(t, 2, total)
 
 	filters.Search = "Nonexistent"
-	paged, total, err = db.GetAuditLogsPaged(filters)
+	paged, total, err = db.GetAuditLogsAggregated(context.Background(), filters)
 	require.NoError(t, err)
 	assert.Equal(t, 0, total)
 	assert.Len(t, paged, 0)
 
-	timeFiltered, timeTotal, err := db.GetAuditLogsPaged(gwdb.AuditLogFilters{
+	timeFiltered, timeTotal, err := db.GetAuditLogsAggregated(context.Background(), gwdb.AuditLogFilters{
 		Since: base.Add(-3 * time.Hour),
 		Until: base.Add(-90 * time.Minute),
 		Limit: 50,

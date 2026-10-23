@@ -29,10 +29,8 @@ func verifyMFAMethod(
 	switch method.Type {
 	case "webauthn":
 		return handleWebAuthnVerification(out, baseURL, bearer, allMethods)
-	case "totp":
+	case "totp", "yubiotp":
 		return handleTOTPVerification(out, baseURL, bearer, allMethods)
-	case "backup_code":
-		return handleBackupCodeVerification(out, baseURL, bearer)
 	default:
 		return fmt.Errorf("unsupported MFA method: %s", method.Type)
 	}
@@ -87,20 +85,6 @@ func attemptTOTPVerification(out io.Writer, baseURL, bearer string) error {
 		return writeLine(out, "MFA verified.")
 	}
 	return fmt.Errorf("failed to verify MFA after multiple attempts")
-}
-
-func handleBackupCodeVerification(out io.Writer, baseURL, bearer string) error {
-	if err := writeLine(out, "Multi-factor authentication required."); err != nil {
-		return err
-	}
-	code, err := promptMFACode()
-	if err != nil {
-		return err
-	}
-	if err := submitMFAVerification(baseURL, bearer, code); err != nil {
-		return fmt.Errorf("backup code verification failed: %w", err)
-	}
-	return writeLine(out, "MFA verified.")
 }
 
 // tryWebAuthnVerification performs WebAuthn assertion flow.
@@ -280,7 +264,7 @@ func promptMFACode() (string, error) {
 	}
 	fd := int(stdinFd)
 	if term.IsTerminal(fd) {
-		fmt.Fprint(os.Stderr, "Enter MFA code (TOTP or backup code): ")
+		fmt.Fprint(os.Stderr, "Enter MFA code (TOTP, YubiKey OTP or backup code): ")
 		codeBytes, err := term.ReadPassword(fd)
 		fmt.Fprintln(os.Stderr)
 		if err != nil {
@@ -290,7 +274,7 @@ func promptMFACode() (string, error) {
 	}
 
 	reader := bufio.NewReader(os.Stdin)
-	fmt.Fprint(os.Stderr, "Enter MFA code (TOTP, Yubikey OTP, or backup code): ")
+	fmt.Fprint(os.Stderr, "Enter MFA code (TOTP, YubiKey OTP or backup code): ")
 	code, err := reader.ReadString('\n')
 	if err != nil {
 		return "", err

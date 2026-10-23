@@ -53,7 +53,8 @@ func AuditBeforeActing(logger *audit.Logger, database *db.Database) gin.HandlerF
 }
 
 // recordOutcomeIfMissing writes the result of an attempted request whose handler wrote no audit entry for it
-// (many handlers, such as the settings ones, write none), so every attempt has a recorded outcome.
+// (many handlers, such as the settings ones, write none), so every attempt has a recorded outcome. Its details
+// include those the handler added with audit.Attempt.SetResultDetail.
 func recordOutcomeIfMissing(
 	c *gin.Context,
 	logger *audit.Logger,
@@ -67,6 +68,9 @@ func recordOutcomeIfMissing(
 	}
 	status := c.Writer.Status()
 	result := routeAuditEntry(c, spec, authUser)
+	if extra := attempt.ResultDetails(); len(extra) > 0 {
+		result.Details = audit.WithDetails(result.Details, extra)
+	}
 	result.Status = logger.MapHTTPStatusToStatus(status)
 	result.HTTPStatus = status
 	result.ResponseTimeMs = int(time.Since(start).Milliseconds())

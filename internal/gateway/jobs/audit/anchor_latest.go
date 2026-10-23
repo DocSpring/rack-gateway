@@ -4,10 +4,12 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"path"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -51,37 +53,56 @@ type anchorObject struct {
 	lastModified time.Time
 }
 
-// newerThan orders anchors by when they were written, then by key (S3 times are in whole seconds).
-func (a anchorObject) newerThan(other anchorObject) bool {
-	if !a.lastModified.Equal(other.lastModified) {
-		return a.lastModified.After(other.lastModified)
-	}
-	return a.key > other.key
-}
-
 // getLatestAnchor returns the SHA-256 (hex) of the most recently written anchor, or "" if there is none. It
 // lists every page, so the answer stays right however many anchors the bucket holds.
 func (w *AnchorWriterWorker) getLatestAnchor(ctx context.Context, now time.Time) (string, error) {
 	recent := w.chainID + "/" + now.UTC().Add(-recentAnchorWindow).Format("2006/01/02")
-	latest, err := w.findLatestAnchor(ctx, recent)
+	latest, err := w.findLatestAnchors(ctx, recent)
 	if err != nil {
 		return "", err
 	}
-	if latest.key == "" {
-		if latest, err = w.findLatestAnchor(ctx, ""); err != nil {
+	if len(latest) == 0 {
+		if latest, err = w.findLatestAnchors(ctx, ""); err != nil {
 			return "", err
 		}
 	}
-	if latest.key == "" {
+	if len(latest) == 0 {
 		return "", nil // No previous anchors
 	}
+	return w.chainTip(ctx, latest)
+}
 
-	body, err := w.readAnchor(ctx, latest.key)
-	if err != nil {
-		return "", fmt.Errorf("failed to get previous anchor: %w", err)
+// chainTip returns the SHA-256 (hex) of the anchor written last among anchors S3 stored in the same second (its
+// times are whole seconds): the one no other links to. A delayed write for an earlier hour can follow a later hour's
+// anchor within the second, so their keys don't say which came last.
+func (w *AnchorWriterWorker) chainTip(ctx context.Context, anchors []anchorObject) (string, error) {
+	hashes := make([]string, 0, len(anchors))
+	linked := map[string]bool{}
+	for _, anchor := range anchors {
+		body, err := w.readAnchor(ctx, anchor.key)
+		if err != nil {
+			return "", fmt.Errorf("failed to get previous anchor: %w", err)
+		}
+		hash := sha256.Sum256(body)
+		hashes = append(hashes, hex.EncodeToString(hash[:]))
+		if len(anchors) > 1 {
+			var payload AnchorPayload
+			if err := json.Unmarshal(body, &payload); err == nil && payload.PrevAnchorHash != "" {
+				linked[strings.ToLower(payload.PrevAnchorHash)] = true
+			}
+		}
 	}
-	hash := sha256.Sum256(body)
-	return hex.EncodeToString(hash[:]), nil
+	var tips []string
+	for _, hash := range hashes {
+		if !linked[hash] {
+			tips = append(tips, hash)
+		}
+	}
+	if len(tips) != 1 {
+		return "", fmt.Errorf("can't tell which of the %d anchors stored at %s was written last",
+			len(anchors), anchors[0].lastModified.UTC().Format(time.RFC3339))
+	}
+	return tips[0], nil
 }
 
 // readAnchor returns the body of the anchor at key.
@@ -101,9 +122,9 @@ func (w *AnchorWriterWorker) readAnchor(ctx context.Context, key string) ([]byte
 	return body, nil
 }
 
-// findLatestAnchor lists the chain's anchors with keys after startAfter ("" for all of them), page by page,
-// and returns the most recently written one (a zero anchorObject if there are none).
-func (w *AnchorWriterWorker) findLatestAnchor(ctx context.Context, startAfter string) (anchorObject, error) {
+// findLatestAnchors lists the chain's anchors with keys after startAfter ("" for all of them), page by page,
+// and returns the most recently written ones: every anchor S3 stored in the latest second (none if there are none).
+func (w *AnchorWriterWorker) findLatestAnchors(ctx context.Context, startAfter string) ([]anchorObject, error) {
 	input := &s3.ListObjectsV2Input{
 		Bucket: aws.String(w.bucket),
 		Prefix: aws.String(w.chainID + "/"),
@@ -112,20 +133,16 @@ func (w *AnchorWriterWorker) findLatestAnchor(ctx context.Context, startAfter st
 		input.StartAfter = aws.String(startAfter)
 	}
 
-	var latest anchorObject
+	var latest []anchorObject
 	for {
 		page, err := w.s3Client.ListObjectsV2(ctx, input)
 		if err != nil {
-			return anchorObject{}, fmt.Errorf("failed to list anchors: %w", err)
+			return nil, fmt.Errorf("failed to list anchors: %w", err)
 		}
 		for _, obj := range page.Contents {
 			key := aws.ToString(obj.Key)
-			if !isAnchorKey(w.chainID, key) {
-				continue
-			}
-			candidate := anchorObject{key: key, lastModified: aws.ToTime(obj.LastModified)}
-			if candidate.newerThan(latest) {
-				latest = candidate
+			if isAnchorKey(w.chainID, key) {
+				latest = keepLatest(latest, anchorObject{key: key, lastModified: aws.ToTime(obj.LastModified)})
 			}
 		}
 		if !aws.ToBool(page.IsTruncated) || aws.ToString(page.NextContinuationToken) == "" {
@@ -133,4 +150,15 @@ func (w *AnchorWriterWorker) findLatestAnchor(ctx context.Context, startAfter st
 		}
 		input.ContinuationToken = page.NextContinuationToken
 	}
+}
+
+// keepLatest adds candidate to latest, the anchors stored in the latest second so far.
+func keepLatest(latest []anchorObject, candidate anchorObject) []anchorObject {
+	switch {
+	case len(latest) == 0 || candidate.lastModified.After(latest[0].lastModified):
+		return append(latest[:0], candidate)
+	case candidate.lastModified.Equal(latest[0].lastModified):
+		return append(latest, candidate)
+	}
+	return latest
 }

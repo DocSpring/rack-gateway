@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -13,6 +14,7 @@ import (
 	"github.com/riverqueue/river"
 	"github.com/riverqueue/river/rivertype"
 
+	gtwlog "github.com/DocSpring/rack-gateway/internal/gateway/logging"
 	"github.com/DocSpring/rack-gateway/internal/gateway/pagination"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 )
@@ -127,8 +129,10 @@ func (h *AdminHandler) ListJobs(c *gin.Context) {
 	}
 
 	// Fetch jobs
-	jobs, err := h.fetchJobsWithFilters(c, cursorID, limit+1, riverState, kind, queue)
+	jobs, err := h.fetchJobsWithFilters(c.Request.Context(), cursorID, limit+1, riverState, kind, queue)
 	if err != nil {
+		gtwlog.Errorf("jobs: failed to list jobs: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list jobs"})
 		return
 	}
 
@@ -137,7 +141,7 @@ func (h *AdminHandler) ListJobs(c *gin.Context) {
 }
 
 func (h *AdminHandler) fetchJobsWithFilters(
-	c *gin.Context,
+	ctx context.Context,
 	cursorID *int64,
 	limit int,
 	state *rivertype.JobState,
@@ -145,7 +149,7 @@ func (h *AdminHandler) fetchJobsWithFilters(
 ) ([]*rivertype.JobRow, error) {
 	if cursorID != nil {
 		// Use custom SQL for cursor-based filtering
-		return h.jobsClient.JobListWithCursor(c.Request.Context(), cursorID, limit, state, kind, queue)
+		return h.jobsClient.JobListWithCursor(ctx, cursorID, limit, state, kind, queue)
 	}
 
 	// No cursor - use River's native API
@@ -163,9 +167,8 @@ func (h *AdminHandler) fetchJobsWithFilters(
 		params = params.Kinds(kind)
 	}
 
-	result, err := h.jobsClient.JobList(c.Request.Context(), params)
+	result, err := h.jobsClient.JobList(ctx, params)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list jobs"})
 		return nil, err
 	}
 

@@ -614,10 +614,13 @@ a PR with green CI (admins can bypass). The Release workflow only runs on `v*` t
 
 The Release workflow (`.github/workflows/release.yml`):
 - Checks the tag matches `web/package.json` and waits for CI + E2E to pass on the tagged commit
-- Builds the Docker image without any build cache and pushes `:vX.Y.Z`, `:<short-sha>` and `:latest`
+- Builds the Docker image without any build cache and pushes it by digest, without a tag
 - Builds the CLI (`rack-gateway version` reports the release version) with checksums
 - Publishes signed build provenance attestations for the image and the CLI archive
-- Creates a GitHub release with the CLI archive and checksum
+- Creates a draft GitHub release with the CLI archive and checksum
+- Only then tags the image `:vX.Y.Z` and `:<short-sha>` (plus `:latest` when this is the highest stable version,
+  whatever order releases finish in) and publishes the release. If that last job fails, re-run it: nothing public
+  points at a release that didn't finish
 
 **Deployment to Convox:** once the Release workflow has published `:vX.Y.Z`, run `./scripts/deploy_all.sh` from the
 repo root (each rack in its `RACKS` list, in order). For each rack it builds (`convox.yml` already points at the new tag), runs

@@ -23,6 +23,10 @@ const (
 	maxFiles         = 10000             // Max number of entries in a tarball
 	maxFileSize      = 10 * 1024 * 1024  // 10MB max per file
 	maxTarballSize   = 500 * 1024 * 1024 // 500MB max tarball read
+	// maxTarStreamSize bounds a tarball's tar stream, uncompressed: its files (maxExtractedSize) plus every header,
+	// block padding and metadata record (PAX, GNU long names), which the tar reader reads before checkLimits sees
+	// an entry.
+	maxTarStreamSize = maxExtractedSize + 64*1024*1024
 
 	// maxManifestSize bounds convox.yml. A real one is a few kilobytes. The YAML parser builds a node for every
 	// scalar before anything is checked (a couple of hundred bytes each, even for keys the gateway ignores), so a
@@ -34,7 +38,12 @@ const (
 // policy twice: as written (parseManifest, which also refuses what the rack's parser could read differently), and as
 // the rack will load it, with the app's env and the build's arguments substituted (loadManifestAsRack). A refusal is
 // a 403; a failure to read from the rack a 502.
-func (h *Handler) validateBuildManifest(ctx context.Context, app string, vals url.Values, policy imagePolicy) error {
+//
+// The rack's build reads the app's env when it starts, after this check. The app's env lock is held from reading
+// the env until the rack has answered, and the build is recorded as checked (recordCheckedBuild), so the env can't
+// change until the build has finished.
+func (h *Handler) validateBuildManifest(r *http.Request, app string, vals url.Values, policy imagePolicy) error {
+	ctx := r.Context()
 	objectURL := vals.Get("url")
 	if objectURL == "" {
 		return refuse(http.StatusBadRequest, errors.New("build request missing object URL"))
@@ -69,6 +78,12 @@ func (h *Handler) validateBuildManifest(ctx context.Context, app string, vals ur
 		return refuseManifest(err)
 	}
 
+	if err := h.lockAppEnv(r, app); err != nil {
+		if errors.Is(err, db.ErrAppEnvLockBusy) {
+			return refuse(http.StatusConflict, err)
+		}
+		return err
+	}
 	appEnv, err := h.fetchLatestReleaseEnv(ctx, app)
 	if err != nil {
 		return refuse(http.StatusBadGateway, fmt.Errorf("failed to read the app's env to check the manifest: %w", err))
@@ -80,7 +95,7 @@ func (h *Handler) validateBuildManifest(ctx context.Context, app string, vals ur
 	if err := policy.validate(asRack); err != nil {
 		return refuseManifest(fmt.Errorf("with the app's env and build arguments substituted, %w", err))
 	}
-	return nil
+	return h.recordCheckedBuild(r, app)
 }
 
 // refuseManifest refuses a build whose manifest failed a check.
@@ -227,7 +242,7 @@ func sanitizeObjectFetchPath(value string) (string, error) {
 // the rack would still extract the rest (which could hold another manifest).
 func readArchiveManifest(r io.Reader, manifestPath string, limit int64) ([]byte, error) {
 	limited := &io.LimitedReader{R: r, N: limit}
-	manifestData, err := readManifestFromTarball(limited, manifestPath)
+	manifestData, err := readManifestFromTarball(limited, manifestPath, maxTarStreamSize)
 	if limited.N <= 0 {
 		return nil, fmt.Errorf("tarball exceeds maximum size of %d bytes", limit)
 	}
@@ -240,17 +255,22 @@ func readArchiveManifest(r io.Reader, manifestPath string, limit int64) ([]byte,
 // readManifestFromTarball returns the contents of the manifest at manifestPath in a gzipped tarball. It reads the
 // whole archive rather than stopping at the manifest: the rack extracts every entry in order, writing each file over
 // any earlier one at the same path, so a second manifest entry would change the manifest the rack builds from after
-// this one was checked. An archive with more than one is refused.
-func readManifestFromTarball(r io.Reader, manifestPath string) ([]byte, error) {
+// this one was checked. An archive with more than one is refused, and so is one whose tar stream (uncompressed) is
+// longer than streamLimit.
+func readManifestFromTarball(r io.Reader, manifestPath string, streamLimit int64) ([]byte, error) {
 	gzr, err := gzip.NewReader(r)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create gzip reader: %w", err)
 	}
 
-	tr := tar.NewReader(gzr)
+	stream := &io.LimitedReader{R: gzr, N: streamLimit + 1}
+	tr := tar.NewReader(stream)
 	scan := manifestScan{path: filepath.Clean(manifestPath)}
 	for {
 		header, err := tr.Next()
+		if stream.N <= 0 {
+			return nil, fmt.Errorf("tarball expands to more than %d bytes", streamLimit)
+		}
 		if errors.Is(err, io.EOF) {
 			break
 		}

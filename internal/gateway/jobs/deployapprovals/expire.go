@@ -49,17 +49,25 @@ func (w *ExpireWorker) Work(_ context.Context, _ *river.Job[ExpireArgs]) error {
 	return Expire(w.store, w.pendingMaxAge)
 }
 
-// Expire runs one expiry sweep. Each request it expires is audit-logged in the same transaction, so a sweep that
-// can't write the audit log expires nothing and fails, loudly. It also runs before a deploy approval request is
-// created, so a lapsed request can't block it.
+// Expire runs one expiry sweep, a batch at a time until a batch isn't full. Each request it expires is audit-logged
+// in the same transaction as its batch, so a batch that can't write the audit log expires nothing and fails,
+// loudly; the batches before it stay expired. It also runs before a deploy approval request is created, so a
+// lapsed request can't block it.
 func Expire(store Expirer, pendingMaxAge time.Duration) error {
-	expired, events, err := store.ExpireDeployApprovalRequests(pendingMaxAge, audit.DeployApprovalExpiredEntry)
-	audit.RecordedInTransaction(events, err)
-	if err != nil {
-		return fmt.Errorf("expire deploy approvals: %w", err)
+	total := 0
+	for {
+		expired, events, err := store.ExpireDeployApprovalRequests(pendingMaxAge, audit.DeployApprovalExpiredEntry)
+		audit.RecordedInTransaction(events, err)
+		if err != nil {
+			return fmt.Errorf("expire deploy approvals: %w", err)
+		}
+		total += len(expired)
+		if len(expired) < db.DeployApprovalExpiryBatchSize {
+			break
+		}
 	}
-	if len(expired) > 0 {
-		log.Printf("deploy approvals: expired %d request(s)", len(expired))
+	if total > 0 {
+		log.Printf("deploy approvals: expired %d request(s)", total)
 	}
 	return nil
 }

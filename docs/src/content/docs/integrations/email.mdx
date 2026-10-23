@@ -11,7 +11,7 @@ Rack Gateway sends email notifications for security events, user management acti
 
 - **Security Alerts**: New CLI logins, failed logins, MFA failures, rate limits
 - **User Notifications**: Welcome emails, API tokens created for you, account locks and unlocks
-- **Admin Alerts**: Users added, API tokens created, rack parameter changes, rate limits
+- **Admin Alerts**: Users added, API tokens created, rate limits
 - **Async Processing**: Background job queue for reliable delivery
 
 ## Architecture
@@ -204,11 +204,6 @@ unlocking the account.
 When an API token is created, its owner gets **New API token created** (the token's name and who created it),
 and every other admin gets **API token created for \{email\}**.
 
-### Rack Parameters
-
-When rack parameters are changed through the gateway, every admin gets **\{email\} changed rack parameters**. It
-names the changed parameters but never their values, which can hold credentials.
-
 ## Job Queue
 
 Email notifications use River for async processing:
@@ -217,7 +212,7 @@ Email notifications use River for async processing:
 
 | Job Kind | Description |
 |----------|-------------|
-| `email:send:single` / `email:send:many` | Emails built by request handlers (API tokens, account locks and unlocks, MFA auto-lock, rack parameter changes) |
+| `email:send:single` / `email:send:many` | Emails built by request handlers (API tokens, account locks and unlocks, MFA auto-lock) |
 | `email:security:new_cli_session` | New CLI login notification |
 | `email:security:failed_mfa` | Failed MFA notification |
 | `email:security:failed_login` | Failed login notification |
@@ -345,7 +340,7 @@ graph TD
 
 ### Content
 
-- Emails never contain tokens, secrets or env var values; rack parameter emails name the parameters only
+- Emails never contain tokens, secrets or env var values
 - Names and other user-supplied values are escaped in HTML emails
 - Repeated security emails to the same recipient are suppressed for 15 minutes
 

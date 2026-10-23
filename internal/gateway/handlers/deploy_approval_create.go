@@ -312,7 +312,8 @@ func (h *APIHandler) logApprovalCreation(
 	fields["token_uuid"] = tokenUUID
 	fields["git_commit_hash"] = record.GitCommitHash
 	fields["git_branch"] = record.GitBranch
-	details := auditDetailsWithMessage(fields, record.Message)
+	fields["message"] = strings.TrimSpace(record.Message)
+	details := auditDetails(fields)
 
 	action := audit.BuildAction(rbac.ResourceDeployApprovalRequest.String(), rbac.ActionCreate.String())
 	_ = h.auditLogger.LogRequestEntry(ctx, &db.AuditLog{

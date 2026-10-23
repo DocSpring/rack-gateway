@@ -14,7 +14,7 @@ const { client, mockVerifyMFA } = vi.hoisted(() => {
 })
 
 vi.mock('@/contexts/auth-context', () => ({
-  useAuth: () => ({ user: { has_trusted_device: true } }),
+  useAuth: () => ({ user: { has_trusted_device: false } }),
 }))
 vi.mock('@/contexts/http-client-context', () => ({ useHttpClient: () => ({ client }) }))
 vi.mock('@/lib/api', () => ({
@@ -29,12 +29,15 @@ vi.mock('@/components/mfa-verification-form', async () => {
   return {
     MFAVerificationForm: ({
       onVerify,
+      showTrustDevice,
     }: {
       onVerify: (params: { method: 'totp'; code: string; trust_device: boolean }) => Promise<void>
+      showTrustDevice: boolean
     }) => {
       const [error, setError] = useState<string | null>(null)
       return (
         <>
+          {showTrustDevice && <p>Trust this device</p>}
           <button
             onClick={() => {
               onVerify({ method: 'totp', code: '123456', trust_device: false }).then(
@@ -92,6 +95,19 @@ describe('StepUpProvider', () => {
     await waitFor(() => expect(action).toHaveBeenCalled())
     expect(mockVerifyMFA).toHaveBeenLastCalledWith({ code: '123456', trust_device: false })
     await waitFor(() => expect(screen.queryByRole('button', { name: 'Verify' })).toBeNull())
+  })
+
+  // An answer sent as a retried request's inline MFA proof can't trust the device, so only a prompt the gateway
+  // checks offers it.
+  it('offers to trust the device only when the gateway checks the answer', async () => {
+    renderPrompt([{ action: vi.fn() }])
+    await screen.findByRole('button', { name: 'Verify' })
+    expect(screen.queryByText('Trust this device')).toBeNull()
+  })
+
+  it('offers to trust the device on a standalone prompt', async () => {
+    renderPrompt([{ verify: true, action: vi.fn() }])
+    expect(await screen.findByText('Trust this device')).toBeInTheDocument()
   })
 
   // When the retried request fails for a reason other than MFA, it's settled with that error and the requests

@@ -177,7 +177,9 @@ func (s *loopbackServer) redirectToResult(w http.ResponseWriter, r *http.Request
 
 // loginErrorMessages maps the gateway's login error codes to messages for the terminal.
 var loginErrorMessages = map[string]string{
-	"unauthorized":            "your account is not authorized for this gateway",
+	"unauthorized": "your account is not authorized for this gateway",
+	"account_mismatch": "this isn't the Google account your gateway user signs in with; if your account was " +
+		"re-created, ask an administrator to reset your sign-in",
 	"exchange_failed":         "the identity provider login could not be completed",
 	"session_incomplete":      "the login session was incomplete; run rack-gateway login again",
 	"canceled":                "the login was canceled in the browser",

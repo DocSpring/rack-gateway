@@ -2,12 +2,14 @@ package proxy
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"mime"
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
 	"github.com/DocSpring/rack-gateway/internal/gateway/config"
@@ -42,6 +44,44 @@ func (h *Handler) logDeniedRBACAction(
 		HTTPStatus:     status,
 		ResponseTimeMs: 0,
 	})
+}
+
+func (h *Handler) prepareReleaseIfNeeded(
+	r *http.Request,
+	w http.ResponseWriter,
+	allowed bool,
+	rackPath string,
+	rackConfig config.RackConfig,
+	userEmail string,
+	start time.Time,
+) ([]envutil.EnvDiff, error) {
+	if !allowed || r.Method != http.MethodPost || !strings.Contains(rackPath, "/releases") {
+		return nil, nil
+	}
+
+	diffs, err := h.prepareReleaseCreate(r, rackConfig, userEmail)
+	if err == nil {
+		return diffs, nil
+	}
+	if writeEnvChangeRefusal(w, err) {
+		return nil, err
+	}
+	if errors.Is(err, db.ErrAppEnvLockBusy) {
+		h.handleError(w, r, "Another env change to this app is in progress. Try again.", http.StatusConflict,
+			rackConfig.Name, start)
+		return nil, err
+	}
+	if errors.Is(err, envutil.ErrBuildReadingEnv) {
+		h.handleError(w, r, err.Error(), http.StatusConflict, rackConfig.Name, start)
+		return nil, err
+	}
+	if fpErr, ok := rackcert.AsFingerprintMismatch(err); ok {
+		logRackTLSMismatch("env_fetch", fpErr)
+		h.handleError(w, r, "rack certificate verification failed", http.StatusBadGateway, rackConfig.Name, start)
+		return nil, err
+	}
+	h.handleError(w, r, err.Error(), bodyErrorStatus(err, http.StatusBadRequest), rackConfig.Name, start)
+	return nil, err
 }
 
 // prepareReleaseCreate checks the env in a release create request against the caller's permissions and the
@@ -94,6 +134,9 @@ func (h *Handler) prepareReleaseCreate(
 	if err := h.lockAppEnv(r, app); err != nil {
 		return nil, err
 	}
+	if err := h.checkNoBuildReadingEnv(r, rack, app); err != nil {
+		return nil, err
+	}
 	baseEnv, err := h.fetchBaseEnv(r, rack, app, bodyBuf)
 	if err != nil {
 		return nil, err
@@ -119,6 +162,16 @@ func (h *Handler) prepareReleaseCreate(
 	r.Body = io.NopCloser(bytes.NewReader(newBody))
 	r.ContentLength = int64(len(newBody))
 	return diffs, nil
+}
+
+// checkNoBuildReadingEnv refuses the env change while a build the gateway checked may still read the app's env
+// (envutil.CheckNoBuildReadingEnv).
+func (h *Handler) checkNoBuildReadingEnv(r *http.Request, rack config.RackConfig, app string) error {
+	tlsCfg, err := h.rackTLSConfig(r.Context())
+	if err != nil {
+		return fmt.Errorf("failed to prepare rack TLS: %w", err)
+	}
+	return envutil.CheckNoBuildReadingEnv(r.Context(), h.database, rack, tlsCfg, app)
 }
 
 // readAndParseRequestBody reads a form-encoded body. Any other body is refused: the rack would parse fields (such

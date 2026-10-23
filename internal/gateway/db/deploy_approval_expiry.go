@@ -16,9 +16,15 @@ type ExpiredDeployApproval struct {
 	PreviousStatus string
 }
 
-// ExpireDeployApprovalRequests marks requests expired: approvals whose window has passed, and pending requests
-// created more than pendingMaxAge ago (when pendingMaxAge is positive). Expired requests no longer count as open,
-// so they don't block a new request for the same commit, token and app.
+// DeployApprovalExpiryBatchSize is the most requests one ExpireDeployApprovalRequests call expires. Each takes an
+// audit event in the same transaction, so a backlog (after downtime, say) is expired a batch at a time, each well
+// inside the transaction's deadline, rather than in one transaction that could never finish.
+const DeployApprovalExpiryBatchSize = 200
+
+// ExpireDeployApprovalRequests marks up to DeployApprovalExpiryBatchSize requests expired: approvals whose window
+// has passed, and pending requests created more than pendingMaxAge ago (when pendingMaxAge is positive). Expired
+// requests no longer count as open, so they don't block a new request for the same commit, token and app. A full
+// batch means there may be more.
 //
 // Each expiry's audit event, entry(e), is appended in the same transaction, so a request is never expired without
 // its event: when an append fails, nothing is expired and the error wraps ErrAuditAppend. It returns the requests
@@ -72,6 +78,8 @@ func (d *Database) expireDeployApprovalRows(
 			SELECT id, status FROM deploy_approval_requests
 			WHERE (status = ? AND approval_expires_at IS NOT NULL AND approval_expires_at <= NOW())
 			   OR (status = ? AND created_at <= ?)
+			ORDER BY id
+			LIMIT ?
 			FOR UPDATE SKIP LOCKED
 		)
 		UPDATE deploy_approval_requests r SET status = ?, updated_at = NOW()
@@ -79,6 +87,7 @@ func (d *Database) expireDeployApprovalRows(
 		RETURNING r.id, r.public_id, r.app, r.git_commit_hash, expiring.status`),
 		DeployApprovalRequestStatusApproved,
 		DeployApprovalRequestStatusPending, pendingCutoff,
+		DeployApprovalExpiryBatchSize,
 		DeployApprovalRequestStatusExpired,
 	)
 	if err != nil {

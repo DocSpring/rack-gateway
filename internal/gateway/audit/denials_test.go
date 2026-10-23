@@ -3,6 +3,7 @@ package audit
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -130,7 +131,7 @@ func TestDenialsAgainstDifferentTargetsAreNotRepeats(t *testing.T) {
 }
 
 // Requests without a principal are throttled per client IP. Past maxDenialRuns they share one run, so many
-// addresses can't grow the throttle or the log without bound; users' denials keep their own runs.
+// addresses can't grow the throttle or the log without bound; a user's denials share another.
 func TestAnonymousDenialsAreThrottledPerClientAndBounded(t *testing.T) {
 	h := newThrottleHarness()
 	anonymous := func(ip string) *db.AuditLog {
@@ -152,13 +153,50 @@ func TestAnonymousDenialsAreThrottledPerClientAndBounded(t *testing.T) {
 	require.Len(t, h.written, written+1, "the overflow run's first denial is written")
 
 	h.deny("viewer@example.com", "user.create")
-	require.Len(t, h.written, written+2, "a user's denial still gets its own run")
+	require.Len(t, h.written, written+2, "a user's denial is written, in a run of its own principal")
 
 	h.fireTimers()
 	last := h.written[len(h.written)-1]
 	require.Equal(t, 49, last.EventCount)
 	require.Equal(t, "198.51.100.49", last.IPAddress)
 	require.Contains(t, last.Details, `"from_many_clients":true`)
+}
+
+// Past maxDenialRuns, a user's denials of new targets share one run, so one principal can't grow the throttle
+// without bound by requesting distinct paths. Paths only count up to maxDenialKeyPath bytes.
+func TestPrincipalDenialsAreBounded(t *testing.T) {
+	h := newThrottleHarness()
+	denyPath := func(email, path string) {
+		h.throttle.record(&db.AuditLog{
+			UserEmail: email, Action: "convox.request", Details: fmt.Sprintf(`{"method":"GET","path":%q}`, path),
+		})
+	}
+	long := "/apps/" + strings.Repeat("a", maxDenialKeyPath)
+	denyPath("viewer@example.com", long+"1")
+	denyPath("viewer@example.com", long+"2")
+	require.Equal(t, []int{1}, h.counts(), "paths that differ past maxDenialKeyPath are one target")
+
+	for i := len(h.throttle.runs); i < maxDenialRuns; i++ {
+		denyPath("viewer@example.com", fmt.Sprintf("/apps/%d", i))
+	}
+	written := len(h.written)
+	for i := 0; i < 50; i++ {
+		denyPath("viewer@example.com", fmt.Sprintf("/builds/%d", i))
+	}
+	denyPath("ops@example.com", "/builds/x")
+	require.Len(t, h.throttle.runs, maxDenialRuns+2, "each principal past the cap shares one run")
+	require.Len(t, h.written, written+2, "each overflow run's first denial is written")
+
+	h.fireTimers()
+	var overflow *db.AuditLog
+	for _, entry := range h.written {
+		if strings.Contains(entry.Details, `"many_targets":true`) {
+			overflow = entry
+		}
+	}
+	require.NotNil(t, overflow)
+	require.Equal(t, 49, overflow.EventCount)
+	require.Equal(t, "viewer@example.com", overflow.UserEmail)
 }
 
 func TestFlushWritesTheRepeatsBeingCounted(t *testing.T) {
