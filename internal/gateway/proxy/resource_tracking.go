@@ -133,6 +133,7 @@ func (h *Handler) captureBuildCreation(
 
 	if buildID != "" {
 		h.setResourceWithAudit(r, "build", buildID, email, true)
+		h.nameCheckedBuild(r, buildID)
 	}
 	if releaseID != "" {
 		if h.recordResourceCreator("release", releaseID, email) {

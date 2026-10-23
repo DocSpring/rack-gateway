@@ -39,12 +39,13 @@ const (
 	stepUpAgeExpired    = 30 * time.Minute // outside it
 )
 
-// protectedEnvRack is a fake rack with one release, whose env is env (protectedEnvRackEnv by default). It records
-// every release created through it.
+// protectedEnvRack is a fake rack with one release, whose env is env (protectedEnvRackEnv by default), and the
+// builds in buildStatus. It records every release created through it.
 type protectedEnvRack struct {
-	mu      sync.Mutex
-	env     string
-	created []createdRelease
+	mu          sync.Mutex
+	env         string
+	created     []createdRelease
+	buildStatus map[string]string
 }
 
 type createdRelease struct {
@@ -71,9 +72,34 @@ func (rk *protectedEnvRack) handler(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`{"id":"R2"}`))
 	case r.Method == http.MethodDelete && r.URL.Path == "/apps/app":
 		_, _ = w.Write([]byte(`{"name":"app"}`))
+	case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/apps/app/builds/"):
+		rk.serveBuild(w, r)
 	default:
 		http.NotFound(w, r)
 	}
+}
+
+func (rk *protectedEnvRack) serveBuild(w http.ResponseWriter, r *http.Request) {
+	id := strings.TrimPrefix(r.URL.Path, "/apps/app/builds/")
+	rk.mu.Lock()
+	status, ok := rk.buildStatus[id]
+	rk.mu.Unlock()
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+	body, _ := json.Marshal(map[string]string{"id": id, "status": status})
+	_, _ = w.Write(body)
+}
+
+// setBuildStatus gives the rack a build with status.
+func (rk *protectedEnvRack) setBuildStatus(id, status string) {
+	rk.mu.Lock()
+	defer rk.mu.Unlock()
+	if rk.buildStatus == nil {
+		rk.buildStatus = map[string]string{}
+	}
+	rk.buildStatus[id] = status
 }
 
 // setEnv replaces the env of the rack's release.

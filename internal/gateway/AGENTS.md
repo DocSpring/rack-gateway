@@ -85,6 +85,9 @@ Request forwarding with WebSocket support:
   `manifest_interpolation.go`) and as the rack will load them (`loadManifestAsRack`: Convox's own `manifest.Load`
   with the app's env and the build args substituted). Promotes are checked with the release's env
   (`proxy/promote_images.go`). Keep the `github.com/convox/convox` module in step with the racks' Convox version
+- The rack's build reads the app's env after that check, so a checked build holds the app's env lock until the rack
+  answers and is recorded in `checked_builds`; every env change (proxy release create, web env editor) calls
+  `envutil.CheckNoBuildReadingEnv` under the env lock and waits for those builds to finish
 - Refuse a request after looking at the rack with `refuse(status, err)` (`proxy/error_handling.go`), so the client
   gets that status and the audit log a deny, never a 500
 - Sets `X-Convox-Actor` (user email or `token:<name>`); internal identity headers sent by clients are

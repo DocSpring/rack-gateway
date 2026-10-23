@@ -87,6 +87,8 @@ func (f *bindingFixture) setImagePatterns(t *testing.T, patterns map[string]stri
 func (f *bindingFixture) build(t *testing.T, body string) error {
 	t.Helper()
 	r := httptest.NewRequest(http.MethodPost, buildPath, strings.NewReader(body))
+	r, releaseEnvLock := withEnvLockHolder(r)
+	defer releaseEnvLock()
 	allowed, tracker, err := f.h.evaluateAPITokenPermission(r, f.authUser, rbac.ResourceBuild, rbac.ActionCreate)
 	if err != nil {
 		return err

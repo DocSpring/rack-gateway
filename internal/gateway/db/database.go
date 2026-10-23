@@ -394,6 +394,7 @@ func (d *Database) dropAllTables() error {
 		"audit_verification_status",
 		"user_resources",
 		"rack_object_keys",
+		"checked_builds",
 		"deploy_approval_requests",
 		"api_tokens",
 		"cli_login_states",

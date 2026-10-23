@@ -143,12 +143,8 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 	// Only an allowed request gets longer deadlines. Nothing before this point reads an upload's body.
 	extendDeadlines(w, r, rackPath)
 
-	if err := h.checkPromoteImages(r, rackPath, approvalTracker); err != nil {
+	if err := h.checkBeforeRecording(r, rackPath, authUser, approvalTracker); err != nil {
 		h.handleForwardError(w, r, err, rackConfig.Name, start)
-		return
-	}
-	if err := audit.CheckCommandRecordable(r); err != nil {
-		h.handleForwardError(w, r, refuse(http.StatusBadRequest, err), rackConfig.Name, start)
 		return
 	}
 
@@ -173,6 +169,7 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 
 	status, err := h.forwardRequest(w, r, rackConfig, rackPath, authUser)
 	h.releaseDeployApprovalClaims(r, rackPath, status, err)
+	h.settleCheckedBuild(r, status, err)
 	if err != nil {
 		if answered := h.handleForwardError(w, r, err, rackConfig.Name, start); answered != 0 {
 			status = answered
@@ -190,6 +187,26 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 	h.handleSuccessAuditing(r, w, authUser, path, status, envDiffs, paramsUpdate, rackConfig, start)
 
 	r.Header.Del("X-Release-Created")
+}
+
+// checkBeforeRecording runs the checks that refuse a request outright, before it's recorded and before it claims
+// anything (an upload's object key, a deploy approval step) that a refused request would otherwise hold.
+func (h *Handler) checkBeforeRecording(
+	r *http.Request,
+	rackPath string,
+	authUser *auth.User,
+	approvalTracker *deployApprovalTracker,
+) error {
+	if err := h.checkForwardableOptions(r, authUser); err != nil {
+		return err
+	}
+	if err := h.checkPromoteImages(r, rackPath, approvalTracker); err != nil {
+		return err
+	}
+	if err := audit.CheckCommandRecordable(r); err != nil {
+		return refuse(http.StatusBadRequest, err)
+	}
+	return nil
 }
 
 func (h *Handler) getRackConfig() (config.RackConfig, error) {
@@ -416,40 +433,6 @@ func (h *Handler) handlePermissionError(
 		start,
 	)
 	return false, nil, err
-}
-
-func (h *Handler) prepareReleaseIfNeeded(
-	r *http.Request,
-	w http.ResponseWriter,
-	allowed bool,
-	rackPath string,
-	rackConfig config.RackConfig,
-	userEmail string,
-	start time.Time,
-) ([]envutil.EnvDiff, error) {
-	if !allowed || r.Method != http.MethodPost || !strings.Contains(rackPath, "/releases") {
-		return nil, nil
-	}
-
-	diffs, err := h.prepareReleaseCreate(r, rackConfig, userEmail)
-	if err == nil {
-		return diffs, nil
-	}
-	if writeEnvChangeRefusal(w, err) {
-		return nil, err
-	}
-	if errors.Is(err, db.ErrAppEnvLockBusy) {
-		h.handleError(w, r, "Another env change to this app is in progress. Try again.", http.StatusConflict,
-			rackConfig.Name, start)
-		return nil, err
-	}
-	if fpErr, ok := rackcert.AsFingerprintMismatch(err); ok {
-		logRackTLSMismatch("env_fetch", fpErr)
-		h.handleError(w, r, "rack certificate verification failed", http.StatusBadGateway, rackConfig.Name, start)
-		return nil, err
-	}
-	h.handleError(w, r, err.Error(), bodyErrorStatus(err, http.StatusBadRequest), rackConfig.Name, start)
-	return nil, err
 }
 
 func (h *Handler) enforceDestructivePolicy(

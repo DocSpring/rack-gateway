@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -57,29 +58,24 @@ func validListLimit(values url.Values) bool {
 	return true
 }
 
-// refuseUnforwardableOptions answers the request with an error and returns its status when it carries query
-// parameters the gateway does not forward, a list limit over maxListLimit, or privileged run options the caller
-// may not use. A query string that does not parse is refused as a whole. It returns 0 when the request may be
-// forwarded.
-func (h *Handler) refuseUnforwardableOptions(w http.ResponseWriter, r *http.Request, authUser *auth.User) int {
+// checkForwardableOptions refuses a request that carries query parameters the gateway does not forward, a list
+// limit over maxListLimit, or privileged run options the caller may not use. A query string that does not parse is
+// refused as a whole.
+func (h *Handler) checkForwardableOptions(r *http.Request, authUser *auth.User) error {
 	values, err := url.ParseQuery(r.URL.RawQuery)
 	if err != nil {
-		http.Error(w, "invalid query string", http.StatusBadRequest)
-		return http.StatusBadRequest
+		return refuse(http.StatusBadRequest, errors.New("invalid query string"))
 	}
 	if disallowedQuery := disallowedQueryParams(values); len(disallowedQuery) > 0 {
-		msg := fmt.Sprintf("unsupported query parameters: %s", strings.Join(disallowedQuery, ", "))
-		http.Error(w, msg, http.StatusBadRequest)
-		return http.StatusBadRequest
+		return refuse(http.StatusBadRequest,
+			fmt.Errorf("unsupported query parameters: %s", strings.Join(disallowedQuery, ", ")))
 	}
 	if !validListLimit(values) {
-		http.Error(w, fmt.Sprintf("limit must be a whole number from 1 to %d", maxListLimit), http.StatusBadRequest)
-		return http.StatusBadRequest
+		return refuse(http.StatusBadRequest, fmt.Errorf("limit must be a whole number from 1 to %d", maxListLimit))
 	}
 	if disallowed := h.disallowedRunOptions(r, authUser); len(disallowed) > 0 {
-		msg := fmt.Sprintf("only admins can use these process options: %s", strings.Join(disallowed, ", "))
-		http.Error(w, msg, http.StatusForbidden)
-		return http.StatusForbidden
+		return refuse(http.StatusForbidden,
+			fmt.Errorf("only admins can use these process options: %s", strings.Join(disallowed, ", ")))
 	}
-	return 0
+	return nil
 }

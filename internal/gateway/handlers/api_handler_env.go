@@ -230,7 +230,8 @@ func (h *APIHandler) logEnvRead(
 // @Summary Update environment variables
 // @Description Applies environment variable changes for a Convox app by creating a new release.
 // @Description Secrets and values with credentials in them remain masked unless the user has secrets permissions.
-// @Description Answers 409 while another env change to the app is in progress.
+// @Description Answers 409 while another env change to the app is in progress, or while a build whose manifest
+// @Description the gateway checked with the app's env may still read it.
 // @Tags Environment
 // @Accept json
 // @Produce json
@@ -260,6 +261,9 @@ func (h *APIHandler) UpdateEnvValues(c *gin.Context) {
 
 	if len(diffs) == 0 {
 		h.respondNoEnvChanges(c, ctx, merged)
+		return
+	}
+	if !h.checkNoBuildReadingEnv(c, ctx) {
 		return
 	}
 
@@ -355,6 +359,23 @@ func (h *APIHandler) prepareEnvUpdateContext(c *gin.Context) (*envUpdateContext,
 	ctx.baseEnv = baseEnv
 
 	return ctx, true
+}
+
+// checkNoBuildReadingEnv answers 409 while a build the gateway checked may still read the app's env
+// (envutil.CheckNoBuildReadingEnv), and reports whether the change may go ahead.
+func (h *APIHandler) checkNoBuildReadingEnv(c *gin.Context, ctx *envUpdateContext) bool {
+	err := envutil.CheckNoBuildReadingEnv(c.Request.Context(), h.database, ctx.rackConfig, ctx.tlsCfg, ctx.app)
+	switch {
+	case err == nil:
+		return true
+	case errors.Is(err, envutil.ErrBuildReadingEnv):
+		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+	default:
+		log.Printf(`{"level":"error","event":"env_update_build_check_failed","app":%q,"error":%q}`,
+			ctx.app, err.Error())
+		c.JSON(http.StatusBadGateway, gin.H{"error": "failed to check the app's builds"})
+	}
+	return false
 }
 
 // lockAppEnv takes the app's env write lock (db.LockAppEnv), or answers 409 when another change holds it.

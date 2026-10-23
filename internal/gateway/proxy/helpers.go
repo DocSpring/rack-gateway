@@ -105,9 +105,10 @@ func extractReleaseIDFromPath(path string) string {
 	return appResourceID(path, "releases")
 }
 
-// extractBuildIDFromPath returns the build ID of /apps/{app}/builds/{id}[/...].
+// extractBuildIDFromPath returns the build ID of /apps/{app}/builds/{id}[/...], or of a build export,
+// /apps/{app}/builds/{id}.tgz.
 func extractBuildIDFromPath(path string) string {
-	return appResourceID(path, "builds")
+	return strings.TrimSuffix(appResourceID(path, "builds"), ".tgz")
 }
 
 // isBuildLogPath reports whether path is a build's logs, /apps/{app}/builds/{id}/logs.

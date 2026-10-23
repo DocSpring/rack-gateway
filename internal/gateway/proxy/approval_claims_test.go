@@ -288,6 +288,19 @@ func TestObjectKeysAreWriteOnce(t *testing.T) {
 	require.Equal(t, http.StatusConflict, rr.Code, rr.Body.String())
 }
 
+// An upload the gateway refuses before forwarding it (here, for a query parameter it doesn't forward) doesn't
+// claim its object key, so the archive can still be uploaded to that key.
+func TestRefusedUploadDoesNotClaimItsObjectKey(t *testing.T) {
+	f := newClaimsFixture(t)
+	rr := f.post(f.deployer, "/apps/test-app/objects/tmp/mine.tgz?command=x", "archive")
+	require.Equal(t, http.StatusBadRequest, rr.Code, rr.Body.String())
+	require.Zero(t, f.rack.writeCount())
+
+	rr = f.post(f.deployer, "/apps/test-app/objects/tmp/mine.tgz", "archive")
+	require.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
+	require.Equal(t, 1, f.rack.writeCount())
+}
+
 // A build can't use an archive whose upload is still in flight: the gateway would check what the rack holds now,
 // and the rack build what the upload leaves.
 func TestBuildOfAnArchiveStillUploadingIsRefused(t *testing.T) {

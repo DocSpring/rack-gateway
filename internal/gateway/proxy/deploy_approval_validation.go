@@ -34,7 +34,7 @@ func (h *Handler) validateBuildManifestForAllUsers(r *http.Request, app string, 
 		return refuse(http.StatusBadRequest,
 			errors.New("git-sha is required when image pattern validation is configured"))
 	}
-	return h.validateBuildManifest(r.Context(), app, vals, newImagePolicy(patterns, gitSHA, false))
+	return h.validateBuildManifest(r, app, vals, newImagePolicy(patterns, gitSHA, false))
 }
 
 // validateTokenBuildBinding binds an API-token build to the deploy approval that authorized it:
@@ -65,7 +65,7 @@ func (h *Handler) validateTokenBuildBinding(r *http.Request, vals url.Values, tr
 	}
 
 	policy := newImagePolicy(patterns, commit, true)
-	if err := h.validateBuildManifest(r.Context(), tracker.app, vals, policy); err != nil {
+	if err := h.validateBuildManifest(r, tracker.app, vals, policy); err != nil {
 		gtwlog.Warnf("deploy approval %s: build manifest rejected: %v", approval.PublicID, err)
 		return err
 	}

@@ -34,7 +34,12 @@ const (
 // policy twice: as written (parseManifest, which also refuses what the rack's parser could read differently), and as
 // the rack will load it, with the app's env and the build's arguments substituted (loadManifestAsRack). A refusal is
 // a 403; a failure to read from the rack a 502.
-func (h *Handler) validateBuildManifest(ctx context.Context, app string, vals url.Values, policy imagePolicy) error {
+//
+// The rack's build reads the app's env when it starts, after this check. The app's env lock is held from reading
+// the env until the rack has answered, and the build is recorded as checked (recordCheckedBuild), so the env can't
+// change until the build has finished.
+func (h *Handler) validateBuildManifest(r *http.Request, app string, vals url.Values, policy imagePolicy) error {
+	ctx := r.Context()
 	objectURL := vals.Get("url")
 	if objectURL == "" {
 		return refuse(http.StatusBadRequest, errors.New("build request missing object URL"))
@@ -69,6 +74,12 @@ func (h *Handler) validateBuildManifest(ctx context.Context, app string, vals ur
 		return refuseManifest(err)
 	}
 
+	if err := h.lockAppEnv(r, app); err != nil {
+		if errors.Is(err, db.ErrAppEnvLockBusy) {
+			return refuse(http.StatusConflict, err)
+		}
+		return err
+	}
 	appEnv, err := h.fetchLatestReleaseEnv(ctx, app)
 	if err != nil {
 		return refuse(http.StatusBadGateway, fmt.Errorf("failed to read the app's env to check the manifest: %w", err))
@@ -80,7 +91,7 @@ func (h *Handler) validateBuildManifest(ctx context.Context, app string, vals ur
 	if err := policy.validate(asRack); err != nil {
 		return refuseManifest(fmt.Errorf("with the app's env and build arguments substituted, %w", err))
 	}
-	return nil
+	return h.recordCheckedBuild(r, app)
 }
 
 // refuseManifest refuses a build whose manifest failed a check.
