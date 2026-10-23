@@ -18,12 +18,7 @@ function renderDialog(reset: UserReset, onOpenChange = vi.fn()) {
   const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } })
   render(
     <QueryClientProvider client={queryClient}>
-      <UserResetDialog
-        onOpenChange={onOpenChange}
-        open={true}
-        reset={reset}
-        userEmail="dev@example.com"
-      />
+      <UserResetDialog onOpenChange={onOpenChange} open reset={reset} userEmail="dev@example.com" />
     </QueryClientProvider>
   )
   return onOpenChange

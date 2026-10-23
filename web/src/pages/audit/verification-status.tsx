@@ -53,8 +53,8 @@ export function AuditVerificationSummary({
         </div>
         {!anchored && (
           <p className="text-muted-foreground">
-            Without S3 anchors (AUDIT_ANCHOR_BUCKET), verification can't detect events removed from
-            the end of the chain, or the whole chain.
+            Without S3 anchors (AUDIT_ANCHOR_BUCKET), verification can&apos;t detect events removed
+            from the end of the chain, or the whole chain.
           </p>
         )}
         <p className="text-muted-foreground">
