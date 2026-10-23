@@ -87,8 +87,8 @@ func newMFARouteEnv(t *testing.T, enrolledEmail string) *mfaRouteEnv {
 		MFAService:      mfaService,
 		SettingsService: settingsService,
 		AuditLogger:     auditLogger,
-		ProxyHandler: proxy.NewHandler(cfg, rbacManager, auditLogger, database, settingsService, nil,
-			"default", "default", nil, mfaService, sessions),
+		ProxyHandler: proxy.NewHandler(cfg, rbacManager, auditLogger, database, settingsService,
+			"default", nil, mfaService, sessions),
 	}
 	router := gin.New()
 	if err := router.SetTrustedProxies(nil); err != nil {

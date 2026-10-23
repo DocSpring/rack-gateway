@@ -20,7 +20,6 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth/mfa"
 	"github.com/DocSpring/rack-gateway/internal/gateway/config"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
-	"github.com/DocSpring/rack-gateway/internal/gateway/email"
 	"github.com/DocSpring/rack-gateway/internal/gateway/envutil"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 	"github.com/DocSpring/rack-gateway/internal/gateway/settings"
@@ -146,8 +145,8 @@ func newProtectedEnvFixture(t *testing.T) *protectedEnvFixture {
 		"default": {Name: "default", URL: server.URL, Username: "convox", APIKey: "token", Enabled: true},
 	}}
 	h := NewHandler(
-		cfg, mgr, audit.NewLogger(database), database, settings.NewService(database), email.NoopSender{},
-		"default", "default", nil, mfaService, sessions,
+		cfg, mgr, audit.NewLogger(database), database, settings.NewService(database),
+		"default", nil, mfaService, sessions,
 	)
 
 	app := "app"

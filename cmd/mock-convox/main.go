@@ -170,7 +170,6 @@ func registerSystemRoutes(r *mux.Router) {
 	r.HandleFunc("/instances", getInstances).Methods("GET")
 	r.HandleFunc("/instances/{id}", getInstance).Methods("GET")
 	r.HandleFunc("/system", getSystem).Methods("GET")
-	r.HandleFunc("/system", putSystem).Methods("PUT")
 	r.HandleFunc("/system/processes", getSystemProcesses).Methods("GET")
 }
 

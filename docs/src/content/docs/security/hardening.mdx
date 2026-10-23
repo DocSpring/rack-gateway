@@ -260,8 +260,8 @@ See [S3 WORM Storage](/deployment/terraform/s3-worm-storage/) for the bucket, IA
 Connect the [Slack integration](/integrations/slack/) and route security events to a channel by action pattern,
 for example `login.*_failed`, `mfa.verify_failed`, `mfa_method.*`, `user.update_roles`, `api_token.*` and
 `audit_log.verification_*`. With `POSTMARK_API_TOKEN` set, the gateway also emails users about failed logins, new CLI
-logins, locks and new API tokens, and admins about new users, new API tokens, rack parameter changes and rate
-limiting (see [Email](/integrations/email/)).
+logins, locks and new API tokens, and admins about new users, new API tokens and rate limiting (see
+[Email](/integrations/email/)).
 
 **Alert on:**
 - Failed logins and MFA verifications

@@ -10,6 +10,26 @@ import (
 // rackFromEnvironment is the selected rack when RACK_GATEWAY_URL names the gateway and no rack is named.
 const rackFromEnvironment = "(from environment)"
 
+// pinnedCurrentRack is the config's current rack as the running command read it before it started
+// (pinCurrentRack). A command resolves its rack more than once (to collect MFA, then to send the request), so
+// another CLI process switching racks in between mustn't send the later steps to a different rack.
+var pinnedCurrentRack string
+
+// pinCurrentRack reads the config's current rack for the running command. A config without one pins nothing.
+func pinCurrentRack() {
+	if rack, err := GetCurrentRack(); err == nil {
+		pinnedCurrentRack = rack
+	}
+}
+
+// currentRack is the rack pinned for the running command, or else the config's current rack.
+func currentRack() (string, error) {
+	if pinnedCurrentRack != "" {
+		return pinnedCurrentRack, nil
+	}
+	return GetCurrentRack()
+}
+
 // SelectedRack determines which rack to use based on flags, env vars, or config
 func SelectedRack() (string, error) {
 	if RackFlag != "" {
@@ -24,7 +44,7 @@ func SelectedRack() (string, error) {
 		}
 		return rackFromEnvironment, nil
 	}
-	rack, err := GetCurrentRack()
+	rack, err := currentRack()
 	if err != nil {
 		return "", fmt.Errorf("no rack selected. Run: rack-gateway login <rack> <gateway-url> or use --rack flag")
 	}

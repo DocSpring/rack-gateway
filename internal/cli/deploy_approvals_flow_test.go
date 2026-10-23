@@ -214,6 +214,8 @@ func TestApproveByIDReportsAnUnknownRequest(t *testing.T) {
 	require.Empty(t, gateway.seen())
 }
 
+// Every request is shown before anything is approved. A TOTP code is accepted once, so --mfa-code can't approve
+// more than one: the command refuses before approving any.
 func TestApproveBySearchShowsEveryRequestBeforeApproving(t *testing.T) {
 	gateway := startFakeDeployGateway(t,
 		shownRequest("p-web", "web", "pending"),
@@ -222,13 +224,26 @@ func TestApproveBySearchShowsEveryRequestBeforeApproving(t *testing.T) {
 	apps := approvalApps{names: []string{"web", "worker"}}
 
 	err := approveBySearch(gateway.command("\n"), []string{"staging"}, apps, "", appsTestCommit, "")
-	require.NoError(t, err)
+	require.ErrorContains(t, err, "--mfa-code can approve one request, and 2 are pending; nothing was approved")
 
-	approvals := gateway.seen()
-	require.Len(t, approvals, 2)
+	require.Empty(t, gateway.seen())
 	for _, want := range []string{"p-web", "p-worker", "Deploy web", "Deploy worker", appsTestCommit} {
-		require.Contains(t, approvals[0].outputBefore, want, "every request is shown before the first approval")
+		require.Contains(t, gateway.output.String(), want, "every request is shown")
 	}
+}
+
+// An approved request whose window has passed no longer allows a deploy, though the gateway may not have marked it
+// expired yet: approving it by ID says so rather than reporting nothing to do.
+func TestApproveByIDReportsAnExpiredApproval(t *testing.T) {
+	expired := shownRequest(approveFlowRequestID, "web", "approved")
+	expiredAt := time.Now().Add(-time.Minute)
+	expired.ApprovalExpiresAt = &expiredAt
+	gateway := startFakeDeployGateway(t, expired)
+
+	err := approveByID(gateway.command("\n"), []string{"staging"}, approveFlowRequestID, "")
+	require.ErrorContains(t, err, "deploy approval request "+approveFlowRequestID+"'s approval expired at")
+	require.NotContains(t, gateway.output.String(), "Nothing to approve")
+	require.Empty(t, gateway.seen())
 }
 
 // The search reads every page of requests: an app whose request comes after the gateway's first 200 still counts.

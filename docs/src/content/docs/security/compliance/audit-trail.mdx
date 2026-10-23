@@ -98,7 +98,6 @@ stdout, CloudWatch or Slack:
 | Data | What's logged |
 |------|---------------|
 | Env var values | `[REDACTED]`, unless the app's `audit_visible_env_vars` lists the key (see below) |
-| Rack parameter values (`rack params set`) | The names of the changed parameters; values are `[REDACTED]` |
 | Query parameters carrying login codes, OAuth values or tokens | `[REDACTED]` |
 | Request bodies | Not logged |
 
@@ -355,7 +354,6 @@ ORDER BY day DESC;
 | Category | What's Redacted |
 |----------|-----------------|
 | **Environment Variables** | Values, unless listed in `audit_visible_env_vars` |
-| **Rack Parameters** | Values |
 | **API Tokens** | Token strings |
 
 ### Not Logged
@@ -381,7 +379,7 @@ app lists the key as audit-visible. See [Slack](/integrations/slack/).
 
 With `POSTMARK_API_TOKEN` set, the gateway emails users about security events on their account (new CLI logins,
 failed logins and MFA verifications, locks, new API tokens, rate limiting) and admins about new users, new API
-tokens, rack parameter changes and rate limiting. See [Email](/integrations/email/).
+tokens and rate limiting. See [Email](/integrations/email/).
 
 ## Log Integrity
 

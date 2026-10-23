@@ -15,7 +15,6 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth/mfa"
 	"github.com/DocSpring/rack-gateway/internal/gateway/config"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
-	"github.com/DocSpring/rack-gateway/internal/gateway/email"
 	"github.com/DocSpring/rack-gateway/internal/gateway/envutil"
 	"github.com/DocSpring/rack-gateway/internal/gateway/httpclient"
 	gtwlog "github.com/DocSpring/rack-gateway/internal/gateway/logging"
@@ -35,15 +34,11 @@ type Handler struct {
 	secretNamesErr  error // CONVOX_SECRET_ENV_VARS can't be read: every env var counts as secret
 	database        *db.Database
 	settingsService *settings.Service
-	emailer         email.Sender
 	rackName        string
-	rackAlias       string
 	rackCertManager *rackcert.Manager
 	mfaService      *mfa.Service
 	sessionManager  *auth.SessionManager
 }
-
-// no async jobs client here; emailer may be an async sender
 
 const maskedSecret = envutil.MaskedSecret
 
@@ -54,8 +49,7 @@ func NewHandler(
 	auditLogger *audit.Logger,
 	database *db.Database,
 	settingsService *settings.Service,
-	mailer email.Sender,
-	rackName, rackAlias string,
+	rackName string,
 	rackCertManager *rackcert.Manager,
 	mfaService *mfa.Service,
 	sessionManager *auth.SessionManager,
@@ -67,9 +61,7 @@ func NewHandler(
 		secretNames:     make(map[string]struct{}),
 		database:        database,
 		settingsService: settingsService,
-		emailer:         mailer,
 		rackName:        rackName,
-		rackAlias:       strings.TrimSpace(rackAlias),
 		rackCertManager: rackCertManager,
 		mfaService:      mfaService,
 		sessionManager:  sessionManager,
@@ -105,13 +97,6 @@ func logRackTLSMismatch(scope string, err *rackcert.FingerprintMismatchError) {
 		logutil.SanitizeForLog(err.Expected),
 		logutil.SanitizeForLog(err.Actual),
 	)
-}
-
-func (h *Handler) rackDisplay() string {
-	if alias := strings.TrimSpace(h.rackAlias); alias != "" {
-		return alias
-	}
-	return h.rackName
 }
 
 // ProxyToRack handles proxying requests to the Convox rack with RBAC, MFA, and audit logging.
@@ -165,8 +150,6 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	r, paramsUpdate := h.captureRackParamsIfNeeded(r, rackPath, rackConfig)
-
 	status, err := h.forwardRequest(w, r, rackConfig, rackPath, authUser)
 	h.releaseDeployApprovalClaims(r, rackPath, status, err)
 	h.settleCheckedBuild(r, status, err)
@@ -184,7 +167,7 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 
 	h.createAuditLogIfNeeded(r, authUser, path, status, start)
 	h.logRequestToCloudWatch(r, authUser.Email, rackConfig.Name, status, start)
-	h.handleSuccessAuditing(r, w, authUser, path, status, envDiffs, paramsUpdate, rackConfig, start)
+	h.handleSuccessAuditing(r, w, authUser, path, status, envDiffs, rackConfig, start)
 
 	r.Header.Del("X-Release-Created")
 }

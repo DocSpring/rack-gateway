@@ -352,6 +352,10 @@ A promote the gateway refuses is answered with 403 and isn't forwarded, and one 
 Each check also requires that the token's owner could do the action themselves: an approval never gives a token
 more than its owner's role.
 
+The approval's `exec_commands` lists the commands it let through to each of its processes, in order. A command is
+written to it before the exec reaches the rack (an exec the gateway can't record is refused), so a command whose
+connection then failed is listed too. The audit log's `process.exec.start` events are the execs that started.
+
 ### Validation Flow
 
 ```mermaid

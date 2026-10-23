@@ -181,7 +181,6 @@ var rackRouteSpecs = []RouteSpec{
 
 	// System
 	newRackRoute("GET", "/system", ResourceRack, ActionRead),
-	newRackRoute("PUT", "/system", ResourceRack, ActionUpdate),
 	newRackRoute("GET", "/system/capacity", ResourceRack, ActionRead),
 	newRackRoute("GET", "/system/metrics", ResourceRack, ActionRead),
 	newRackRoute("GET", "/system/processes", ResourceRack, ActionRead),

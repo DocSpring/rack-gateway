@@ -17,7 +17,7 @@ These flags work with any command:
 | `--config` | | Override config directory |
 | `--api-token` | | Use API token for authentication |
 | `--mfa-code` | | Provide MFA code for step-up auth |
-| `--mfa-method` | | Specify MFA method (totp/webauthn) |
+| `--mfa-method` | | Specify MFA method (webauthn/totp/yubiotp) |
 | `--help` | `-h` | Show help for a command |
 
 ## Authentication Commands
@@ -397,6 +397,9 @@ rack-gateway deploy-approval show <request-id>
 rack-gateway deploy-approval request --app myapp --git-commit <sha> --message "Deploy"
 rack-gateway deploy-approval wait --commit <sha> --approve
 ```
+
+Each approval needs its own MFA proof (a key touch, a TOTP code, a YubiKey OTP), and the gateway accepts each TOTP
+code once. So `--mfa-code` can approve one request: with more pending, `approve` refuses before approving any.
 
 See [Deploy Approvals](/integrations/deploy-approvals/workflow/) for the full workflow.
 

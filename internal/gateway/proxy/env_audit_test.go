@@ -1,10 +1,8 @@
 package proxy
 
 import (
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -14,7 +12,6 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
 	"github.com/DocSpring/rack-gateway/internal/gateway/config"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
-	"github.com/DocSpring/rack-gateway/internal/gateway/email"
 	"github.com/DocSpring/rack-gateway/internal/gateway/envutil"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 	"github.com/DocSpring/rack-gateway/internal/gateway/settings"
@@ -28,8 +25,8 @@ const (
 )
 
 // newEnvAuditProxy returns a proxy with no CONVOX_SECRET_ENV_VARS (mise.toml names DATABASE_URL a secret, which
-// would redact it for another reason) and the given emailer.
-func newEnvAuditProxy(t *testing.T, rackURL string, mailer email.Sender) (*Handler, *db.Database) {
+// would redact it for another reason).
+func newEnvAuditProxy(t *testing.T) (*Handler, *db.Database) {
 	t.Helper()
 	t.Setenv("CONVOX_SECRET_ENV_VARS", "")
 	database := dbtest.NewDatabase(t)
@@ -37,11 +34,11 @@ func newEnvAuditProxy(t *testing.T, rackURL string, mailer email.Sender) (*Handl
 	require.NoError(t, err)
 	require.NoError(t, mgr.CreateUser(envAuditActor, &rbac.UserConfig{Name: "Admin", Roles: []string{"admin"}}))
 	cfg := &config.Config{Racks: map[string]config.RackConfig{
-		"default": {Name: "default", URL: rackURL, Username: "convox", APIKey: "token", Enabled: true},
+		"default": {Name: "default", URL: "http://mock", Username: "convox", APIKey: "token", Enabled: true},
 	}}
 	h := NewHandler(
-		cfg, mgr, audit.NewLogger(database), database, settings.NewService(database), mailer,
-		"testrack", "testrack", nil, nil, nil,
+		cfg, mgr, audit.NewLogger(database), database, settings.NewService(database),
+		"testrack", nil, nil, nil,
 	)
 	return h, database
 }
@@ -81,14 +78,14 @@ var ordinaryEnvDiffs = []envutil.EnvDiff{
 
 // Audit entries (and so Slack) used to show every value that wasn't secret by name or protected.
 func TestLogEnvDiffsRedactsEveryValueByDefault(t *testing.T) {
-	h, database := newEnvAuditProxy(t, "http://mock", email.NoopSender{})
+	h, database := newEnvAuditProxy(t)
 	for key, details := range logEnvAuditDetails(t, h, database, ordinaryEnvDiffs) {
 		require.Equal(t, redactedEnvDetails, details, key)
 	}
 }
 
 func TestLogEnvDiffsShowsAuditVisibleValues(t *testing.T) {
-	h, database := newEnvAuditProxy(t, "http://mock", email.NoopSender{})
+	h, database := newEnvAuditProxy(t)
 	setEnvAuditAppSetting(t, database, settings.KeyAuditVisibleEnvVars, []string{"port", "RAILS_ENV"})
 
 	details := logEnvAuditDetails(t, h, database, ordinaryEnvDiffs)
@@ -101,7 +98,7 @@ func TestLogEnvDiffsShowsAuditVisibleValues(t *testing.T) {
 // A listed key stays redacted when it is secret (by name, the app's secret_env_vars or CONVOX_SECRET_ENV_VARS)
 // or protected. The diffs are flagged as the proxy flags them: it doesn't read secret_env_vars.
 func TestLogEnvDiffsKeepsListedSecretAndProtectedValuesRedacted(t *testing.T) {
-	h, database := newEnvAuditProxy(t, "http://mock", email.NoopSender{})
+	h, database := newEnvAuditProxy(t)
 	h.secretNames["REDIS_URL"] = struct{}{}
 	setEnvAuditAppSetting(t, database, settings.KeyAuditVisibleEnvVars,
 		[]string{"PORT", "STRIPE_SECRET", "BILLING_ID", "REDIS_URL", "ADMIN_EMAIL"})
@@ -119,117 +116,4 @@ func TestLogEnvDiffsKeepsListedSecretAndProtectedValuesRedacted(t *testing.T) {
 	for _, key := range []string{"STRIPE_SECRET", "BILLING_ID", "REDIS_URL", "ADMIN_EMAIL"} {
 		require.Equal(t, redactedEnvDetails, details[key], key)
 	}
-}
-
-type capturedEmail struct {
-	to                          []string
-	subject, textBody, htmlBody string
-}
-
-type capturingSender struct{ sent []capturedEmail }
-
-func (c *capturingSender) Send(to, subject, textBody, htmlBody string) error {
-	return c.SendMany([]string{to}, subject, textBody, htmlBody)
-}
-
-func (c *capturingSender) SendMany(to []string, subject, textBody, htmlBody string) error {
-	c.sent = append(c.sent, capturedEmail{to: to, subject: subject, textBody: textBody, htmlBody: htmlBody})
-	return nil
-}
-
-// Rack parameters can hold credentials. The admin email and the audit log name the changed parameters, never
-// their values.
-func TestRackParamsChangeRedactsValues(t *testing.T) {
-	after := map[string]string{"Ami": "ami-new", "NodeType": "t3.large", "Private": "true"}
-	rack := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/system" {
-			http.NotFound(w, r)
-			return
-		}
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{"parameters": after})
-	}))
-	t.Cleanup(rack.Close)
-	sender := &capturingSender{}
-	h, database := newEnvAuditProxy(t, rack.URL, sender)
-
-	before := map[string]string{"Ami": "ami-old", "NodeType": "t3.medium", "Private": "true"}
-	req := httptest.NewRequest(http.MethodPut, "/system", nil)
-	h.auditRackParamsUpdate(req, envAuditActor, &rackParamsUpdate{before: before}, h.config.Racks["default"])
-
-	require.Len(t, sender.sent, 1)
-	require.Contains(t, sender.sent[0].to, envAuditActor)
-	require.Equal(t, envAuditActor+" changed rack parameters", sender.sent[0].subject)
-	for _, body := range []string{sender.sent[0].textBody, sender.sent[0].htmlBody} {
-		require.Contains(t, body, "Ami\nNodeType")
-		require.NotContains(t, body, "Private")
-		for _, value := range []string{"ami-old", "ami-new", "t3.medium", "t3.large"} {
-			require.NotContains(t, body, value)
-		}
-	}
-
-	logs, err := database.GetAuditLogs(envAuditActor, time.Time{}, 10)
-	require.NoError(t, err)
-	paramsSet := audit.BuildAction(rbac.ResourceRack.String(), audit.ActionVerbParamsSet)
-	var details []string
-	for _, entry := range logs {
-		if entry.Action == paramsSet {
-			details = append(details, entry.Details)
-		}
-	}
-	require.Len(t, details, 1)
-	require.JSONEq(t, `{"changes":{
-		"Ami":{"old":"[REDACTED]","new":"[REDACTED]"},
-		"NodeType":{"old":"[REDACTED]","new":"[REDACTED]"}
-	}}`, details[0])
-}
-
-// rackParamsSetDetails returns the details of the rack.params_set entries recorded for envAuditActor.
-func rackParamsSetDetails(t *testing.T, database *db.Database) []string {
-	t.Helper()
-	logs, err := database.GetAuditLogs(envAuditActor, time.Time{}, 10)
-	require.NoError(t, err)
-	paramsSet := audit.BuildAction(rbac.ResourceRack.String(), audit.ActionVerbParamsSet)
-	var details []string
-	for _, entry := range logs {
-		if entry.Action == paramsSet {
-			details = append(details, entry.Details)
-		}
-	}
-	return details
-}
-
-// When the rack's parameters can't be read to compare, the update's own parameter names are recorded (and
-// emailed), marked as taken from the request, rather than nothing.
-func TestRackParamsUpdateRecordsTheRequestedNamesWhenTheRackCantBeRead(t *testing.T) {
-	rack := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.Error(w, "unavailable", http.StatusServiceUnavailable)
-	}))
-	t.Cleanup(rack.Close)
-	sender := &capturingSender{}
-	h, database := newEnvAuditProxy(t, rack.URL, sender)
-
-	// The Convox SDK form-encodes the parameters as one field.
-	body := url.Values{"parameters": {url.Values{"NodeType": {"t3.large"}, "Ami": {""}}.Encode()}}.Encode()
-	req := httptest.NewRequest(http.MethodPut, "/system", nil)
-	req, update := h.captureRackParamsIfNeeded(req, "/system", h.config.Racks["default"])
-	require.NotNil(t, update)
-	require.Nil(t, update.before)
-	noteRequestedRackParams(req, []byte(body))
-	h.auditRackParamsUpdate(req, envAuditActor, update, h.config.Racks["default"])
-
-	require.Len(t, sender.sent, 1)
-	require.Contains(t, sender.sent[0].textBody, "Ami\nNodeType")
-	details := rackParamsSetDetails(t, database)
-	require.Len(t, details, 1)
-	require.JSONEq(t, `{"from_request":true,"changes":{
-		"Ami":{"old":"[REDACTED]","new":"[REDACTED]"},
-		"NodeType":{"old":"[REDACTED]","new":"[REDACTED]"}
-	}}`, details[0])
-}
-
-// A parameter added or removed with an empty value is a change too.
-func TestChangedParamsCountsEmptyValuedAdditionsAndRemovals(t *testing.T) {
-	before := map[string]string{"Kept": "x", "Removed": "", "Changed": "a"}
-	after := map[string]string{"Kept": "x", "Added": "", "Changed": "b"}
-	require.Equal(t, []string{"Added", "Changed", "Removed"}, changedParams(before, after))
 }

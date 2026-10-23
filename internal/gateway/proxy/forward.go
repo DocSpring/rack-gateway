@@ -357,7 +357,6 @@ func (h *Handler) requestBodyForRack(r *http.Request, path string, authUser *aut
 	if err != nil {
 		return rackRequestBody{}, err
 	}
-	noteRequestedRackParams(r, bodyBytes)
 
 	if err := checkHeaderOnlyRequest(r, path, bodyBytes); err != nil {
 		return rackRequestBody{}, err

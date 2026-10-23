@@ -35,11 +35,8 @@ func RackCommand() *cobra.Command {
 	// Add subcommands for remote rack operations
 	cmd.AddCommand(rackInfoCommand())
 	cmd.AddCommand(rackLogsCommand())
-	cmd.AddCommand(rackParamsCommand())
 	cmd.AddCommand(rackPsCommand())
 	cmd.AddCommand(rackReleasesCommand())
-	cmd.AddCommand(rackScaleCommand())
-	cmd.AddCommand(rackUpdateCommand())
 
 	return cmd
 }
@@ -93,55 +90,6 @@ func rackLogsCommand() *cobra.Command {
 	return cmd
 }
 
-func rackParamsCommand() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "params",
-		Short: "display rack parameters",
-		Args:  cobra.NoArgs,
-		RunE: SilenceOnError(func(cobraCmd *cobra.Command, args []string) error {
-			mfaAuth, err := checkMFAAndGetAuth(cobraCmd, "rack params")
-			if err != nil {
-				return err
-			}
-
-			client, ctx, err := SetupConvoxCommandWithMFA(cobraCmd, args, mfaAuth)
-			if err != nil {
-				return err
-			}
-			return cli.RackParams(client, ctx)
-		}),
-	}
-
-	// Add subcommands
-	cmd.AddCommand(rackParamsSetCommand())
-
-	return cmd
-}
-
-func rackParamsSetCommand() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "set <key=value>...",
-		Short: "set rack parameters",
-		Args:  cobra.MinimumNArgs(1),
-		RunE: SilenceOnError(func(cobraCmd *cobra.Command, args []string) error {
-			mfaAuth, err := checkMFAAndGetAuth(cobraCmd, "rack params set")
-			if err != nil {
-				return err
-			}
-
-			client, ctx, err := SetupConvoxCommandWithMFA(cobraCmd, args, mfaAuth)
-			if err != nil {
-				return err
-			}
-			return cli.RackParamsSet(client, ctx)
-		}),
-	}
-
-	cmd.Flags().Bool("wait", false, "wait for update to complete")
-
-	return cmd
-}
-
 func rackPsCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "ps",
@@ -184,56 +132,6 @@ func rackReleasesCommand() *cobra.Command {
 			return cli.RackReleases(client, ctx)
 		}),
 	}
-
-	return cmd
-}
-
-func rackScaleCommand() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "scale",
-		Short: "scale the rack",
-		Args:  cobra.NoArgs,
-		RunE: SilenceOnError(func(cobraCmd *cobra.Command, args []string) error {
-			mfaAuth, err := checkMFAAndGetAuth(cobraCmd, "rack scale")
-			if err != nil {
-				return err
-			}
-
-			client, ctx, err := SetupConvoxCommandWithMFA(cobraCmd, args, mfaAuth)
-			if err != nil {
-				return err
-			}
-			return cli.RackScale(client, ctx)
-		}),
-	}
-
-	cmd.Flags().Int("count", 0, "number of instances")
-	cmd.Flags().String("type", "", "instance type")
-
-	return cmd
-}
-
-func rackUpdateCommand() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "update",
-		Short: "update the rack",
-		Args:  cobra.NoArgs,
-		RunE: SilenceOnError(func(cobraCmd *cobra.Command, args []string) error {
-			mfaAuth, err := checkMFAAndGetAuth(cobraCmd, "rack update")
-			if err != nil {
-				return err
-			}
-
-			client, ctx, err := SetupConvoxCommandWithMFA(cobraCmd, args, mfaAuth)
-			if err != nil {
-				return err
-			}
-			return cli.RackUpdate(client, ctx)
-		}),
-	}
-
-	cmd.Flags().String("version", "", "rack version")
-	cmd.Flags().Bool("wait", false, "wait for update to complete")
 
 	return cmd
 }

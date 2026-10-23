@@ -88,7 +88,6 @@ type System struct {
 	Domain     string            `json:"domain"`
 	Name       string            `json:"name"`
 	Outputs    map[string]string `json:"outputs,omitempty"`
-	Parameters map[string]string `json:"parameters,omitempty"`
 	Provider   string            `json:"provider"`
 	RackDomain string            `json:"rack-domain"`
 	Region     string            `json:"region"`
@@ -124,17 +123,6 @@ var (
 				Env:         envString(),
 			},
 		},
-	}
-	mockSystemParameters = map[string]string{
-		"access_log_retention_in_days": "7",
-		"availability_zones":           "us-east-1a,us-east-1b,us-east-1d,us-east-1e,us-east-1f",
-		"cidr":                         "10.2.0.0/16",
-		"internal_router":              "false",
-		"node_capacity_type":           "on_demand",
-		"node_type":                    "t3a.large",
-		"proxy_protocol":               "true",
-		"schedule_rack_scale_down":     "30 9 * * *",
-		"schedule_rack_scale_up":       "30 18 * * MON-THU",
 	}
 	objectStorageDir string
 )

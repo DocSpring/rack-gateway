@@ -23,8 +23,9 @@ YUBICO_SECRET_KEY=...
 
 ## Using YubiKey OTP
 
-Once a YubiKey is enrolled, you can enter its OTP anywhere the gateway asks for an MFA code: the CLI's code prompt,
-`--mfa-code`, or the web UI's MFA prompt, which opens on a YubiKey OTP field when that's your only factor and
+Once a YubiKey is enrolled, you can enter its OTP anywhere the gateway asks for an MFA code: the CLI's code prompt
+(the CLI asks for one when the YubiKey is your only factor, or with `--mfa-method yubiotp`), `--mfa-code`, or the web
+UI's MFA prompt, which opens on a YubiKey OTP field when that's your only factor and
 otherwise offers **Use a YubiKey OTP**. Touch the key with the cursor in the field; the key types the OTP and
 presses Enter.
 

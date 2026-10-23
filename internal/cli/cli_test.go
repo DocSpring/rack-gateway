@@ -148,6 +148,20 @@ func TestSelectedRackFallsBackToURL(t *testing.T) {
 	assert.Equal(t, "(from environment)", rack)
 }
 
+// A command keeps the rack that was current when it started: another CLI process switching racks while it collects
+// MFA mustn't send its request to the other rack.
+func TestCommandKeepsTheRackCurrentWhenItStarted(t *testing.T) {
+	withCLIConfig(t, Config{Current: "staging", Gateways: map[string]GatewayConfig{
+		"staging": {URL: "https://staging.example.com"}, "us": {URL: "https://us.example.com"},
+	}})
+	pinCurrentRack()
+
+	require.NoError(t, SetCurrentRack("us"))
+	rack, err := SelectedRack()
+	require.NoError(t, err)
+	assert.Equal(t, "staging", rack)
+}
+
 func TestLoginSetsCurrentRack(t *testing.T) {
 	// Create a temporary config directory
 	tmpDir := t.TempDir()

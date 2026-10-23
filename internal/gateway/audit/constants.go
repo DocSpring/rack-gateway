@@ -55,7 +55,6 @@ const (
 	ActionVerbLock               = "lock"
 	ActionVerbMFAReset           = "mfa_reset"
 	ActionVerbOAuthFailed        = "oauth_failed"
-	ActionVerbParamsSet          = "params.set"
 	ActionVerbReject             = "reject"
 	ActionVerbRequireAllUsers    = "require_all_users"
 	ActionVerbUnlock             = "unlock"

@@ -83,10 +83,12 @@ MFA method yet, the browser has you enroll one. See [CLI Authentication](/user-g
 
 For a command, the CLI uses one method, the first of:
 
-1. `--mfa-method totp` or `--mfa-method webauthn`
+1. `--mfa-method webauthn`, `--mfa-method totp` or `--mfa-method yubiotp`
 2. Your preferred method, set under **Account Security** in the web UI
 3. `mfa_preference` in `~/.config/rack-gateway/config.json` (for all racks, or in one rack's entry)
-4. A CLI-compatible security key, then TOTP, then a backup code
+4. A CLI-compatible security key, then TOTP, then a YubiKey OTP
+
+The code prompt (TOTP or YubiKey OTP) also takes a backup code.
 
 The CLI doesn't fall back to another method if that one fails: run the command again with `--mfa-method`.
 
@@ -107,7 +109,7 @@ The CLI asks before sending the command, unless your step-up window is still ope
 - `deploy`, `build`, `releases promote` and `releases rollback`
 - `env set`, `env unset` and `env edit`, and `env get` / `env --unmask` when they show secret values
 - `run`, `exec`, `ps stop` and `restart`
-- `scale`, `apps create` and other app changes, and `rack update`
+- `scale`, `apps create` and other app changes
 
 ### Step-Up Window
 
