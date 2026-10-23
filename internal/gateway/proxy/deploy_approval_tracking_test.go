@@ -93,7 +93,8 @@ func TestUpdateObjectURLApprovalTracking_WithTracker(t *testing.T) {
 		approvalReq.ID, // id
 		user.ID,        // approverUserID
 		expiresAt,      // expiresAt
-		"Approved",     // notes
+		"Approved",     // notes,
+		0,
 	)
 	require.NoError(t, err)
 
@@ -184,7 +185,8 @@ func TestUpdateBuildApprovalTracking_WithTracker(t *testing.T) {
 		approvalReq.ID, // id
 		user.ID,        // approverUserID
 		expiresAt,      // expiresAt
-		"Approved",     // notes
+		"Approved",     // notes,
+		0,
 	)
 	require.NoError(t, err)
 
@@ -292,7 +294,8 @@ func TestCaptureObjectUpload_CallsUpdateObjectURLApprovalTracking(t *testing.T) 
 		approvalReq.ID, // id
 		user.ID,        // approverUserID
 		expiresAt,      // expiresAt
-		"Approved",     // notes
+		"Approved",     // notes,
+		0,
 	)
 	require.NoError(t, err)
 
@@ -382,7 +385,8 @@ func TestCaptureBuildCreation_CallsUpdateBuildApprovalTracking(t *testing.T) {
 		approvalReq.ID, // id
 		user.ID,        // approverUserID
 		expiresAt,      // expiresAt
-		"Approved",     // notes
+		"Approved",     // notes,
+		0,
 	)
 	require.NoError(t, err)
 

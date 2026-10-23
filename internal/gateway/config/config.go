@@ -3,7 +3,9 @@ package config
 import (
 	"crypto/rand"
 	"encoding/base64"
+	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -94,7 +96,9 @@ func Load() (*Config, error) {
 
 	cfg.loadUserRoles()
 	cfg.loadTrustedProxies()
-	cfg.loadRacksFromEnv()
+	if err := cfg.loadRacksFromEnv(); err != nil {
+		return nil, err
+	}
 	cfg.loadIntegrationTokens()
 	cfg.DeployApprovalPendingMaxAge = getEnvDuration("DEPLOY_APPROVAL_PENDING_MAX_AGE", 7*24*time.Hour)
 
@@ -190,7 +194,7 @@ func (c *Config) loadIntegrationTokens() {
 	c.CircleCIToken = strings.TrimSpace(getEnv("CIRCLECI_TOKEN", ""))
 }
 
-func (c *Config) loadRacksFromEnv() {
+func (c *Config) loadRacksFromEnv() error {
 	rackHost := os.Getenv("RACK_HOST")
 	rackToken := os.Getenv("RACK_TOKEN")
 	rackUsername := getEnv("RACK_USERNAME", "convox")
@@ -198,10 +202,41 @@ func (c *Config) loadRacksFromEnv() {
 	rackHost = c.resolveRackHost(rackHost)
 
 	if rackHost != "" && rackToken != "" {
-		c.configureRack(rackHost, rackToken, rackUsername)
+		rackURL, err := parseRackURL(rackHost, testbypass.Compiled)
+		if err != nil {
+			return err
+		}
+		c.configureRack(rackURL, rackToken, rackUsername)
 	} else if c.DevMode {
 		c.setupDevRacks()
 	}
+	return nil
+}
+
+// parseRackURL checks RACK_HOST and returns the rack API's URL. A host without a scheme is https: the rack API only
+// serves TLS. The gateway sends the rack's credential with every request, so a release build refuses plain http
+// (allowHTTP is for the mock rack in development and tests), and the URL can't carry credentials of its own: /info
+// shows every signed-in user the rack's address.
+func parseRackURL(raw string, allowHTTP bool) (string, error) {
+	raw = strings.TrimSpace(raw)
+	if !strings.Contains(raw, "://") {
+		raw = "https://" + raw
+	}
+	u, err := url.Parse(raw)
+	if err != nil {
+		return "", fmt.Errorf("RACK_HOST isn't a valid URL: %w", err)
+	}
+	switch {
+	case u.Scheme != "https" && u.Scheme != "http":
+		return "", fmt.Errorf("RACK_HOST must be an https:// URL, not %s://", u.Scheme)
+	case u.Scheme == "http" && !allowHTTP:
+		return "", errors.New("RACK_HOST must be an https:// URL: the gateway sends the rack's credential to it")
+	case u.User != nil:
+		return "", errors.New("RACK_HOST can't include credentials: set RACK_USERNAME and RACK_TOKEN")
+	case u.Host == "" || u.RawQuery != "" || u.Fragment != "" || strings.Trim(u.Path, "/") != "":
+		return "", errors.New("RACK_HOST must be the rack API's scheme, host and port, with no path or query")
+	}
+	return u.Scheme + "://" + u.Host, nil
 }
 
 func (_ *Config) resolveRackHost(rackHost string) string {
@@ -219,10 +254,6 @@ func (_ *Config) resolveRackHost(rackHost string) string {
 }
 
 func (c *Config) configureRack(rackHost, rackToken, rackUsername string) {
-	if !strings.HasPrefix(rackHost, "http://") && !strings.HasPrefix(rackHost, "https://") {
-		rackHost = "http://" + rackHost
-	}
-
 	rackName := strings.TrimSpace(os.Getenv("RACK"))
 	if rackName == "" {
 		rackName = "default"

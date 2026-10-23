@@ -51,7 +51,7 @@ func TestOpenDeployApprovalRequestsAreUniquePerApp(t *testing.T) {
 	require.Equal(t, apiProxy.ID, conflict.Request.ID)
 
 	// Also once the existing request is approved.
-	_, err = database.ApproveDeployApprovalRequest(docspring.ID, userID, time.Now().Add(time.Hour), "")
+	_, err = database.ApproveDeployApprovalRequest(docspring.ID, userID, time.Now().Add(time.Hour), "", 0)
 	require.NoError(t, err)
 	_, err = createApproval(t, database, userID, tokenID, "docspring")
 	require.True(t, errors.As(err, &conflict), "expected a conflict, got %v", err)
@@ -65,7 +65,7 @@ func TestExpiredApprovalDoesNotBlockNewRequest(t *testing.T) {
 
 	stale, err := createApproval(t, database, userID, tokenID, "docspring")
 	require.NoError(t, err)
-	_, err = database.ApproveDeployApprovalRequest(stale.ID, userID, time.Now().Add(-time.Minute), "")
+	_, err = database.ApproveDeployApprovalRequest(stale.ID, userID, time.Now().Add(-time.Minute), "", 0)
 	require.NoError(t, err)
 	_, _, err = database.ExpireDeployApprovalRequests(0, expiryEvent)
 	require.NoError(t, err)
@@ -86,9 +86,9 @@ func TestExpireDeployApprovalRequestsOnlyExpiresPastWindows(t *testing.T) {
 	require.NoError(t, err)
 	live, err := createApproval(t, database, userID, tokenID, "api-proxy")
 	require.NoError(t, err)
-	_, err = database.ApproveDeployApprovalRequest(stale.ID, userID, time.Now().Add(-time.Minute), "")
+	_, err = database.ApproveDeployApprovalRequest(stale.ID, userID, time.Now().Add(-time.Minute), "", 0)
 	require.NoError(t, err)
-	_, err = database.ApproveDeployApprovalRequest(live.ID, userID, time.Now().Add(time.Hour), "")
+	_, err = database.ApproveDeployApprovalRequest(live.ID, userID, time.Now().Add(time.Hour), "", 0)
 	require.NoError(t, err)
 
 	expired, _, err := database.ExpireDeployApprovalRequests(0, expiryEvent)
@@ -115,7 +115,7 @@ func TestExtendRevivesExpiredApprovalUnlessAnotherIsOpen(t *testing.T) {
 
 	lapsed, err := createApproval(t, database, userID, tokenID, "api-proxy")
 	require.NoError(t, err)
-	_, err = database.ApproveDeployApprovalRequest(lapsed.ID, userID, time.Now().Add(-time.Minute), "")
+	_, err = database.ApproveDeployApprovalRequest(lapsed.ID, userID, time.Now().Add(-time.Minute), "", 0)
 	require.NoError(t, err)
 	_, _, err = database.ExpireDeployApprovalRequests(0, expiryEvent)
 	require.NoError(t, err)
@@ -126,7 +126,7 @@ func TestExtendRevivesExpiredApprovalUnlessAnotherIsOpen(t *testing.T) {
 	// A lapsed approval with a newer open request for the same app can't be revived: that would make two.
 	old, err := createApproval(t, database, userID, tokenID, "docspring")
 	require.NoError(t, err)
-	_, err = database.ApproveDeployApprovalRequest(old.ID, userID, time.Now().Add(-time.Minute), "")
+	_, err = database.ApproveDeployApprovalRequest(old.ID, userID, time.Now().Add(-time.Minute), "", 0)
 	require.NoError(t, err)
 	_, _, err = database.ExpireDeployApprovalRequests(0, expiryEvent)
 	require.NoError(t, err)
@@ -143,7 +143,7 @@ func TestApprovalExpiredDuringPromoteIsMarkedDeployed(t *testing.T) {
 
 	approval, err := createApproval(t, database, userID, tokenID, "docspring")
 	require.NoError(t, err)
-	_, err = database.ApproveDeployApprovalRequest(approval.ID, userID, time.Now().Add(time.Hour), "")
+	_, err = database.ApproveDeployApprovalRequest(approval.ID, userID, time.Now().Add(time.Hour), "", 0)
 	require.NoError(t, err)
 	bindArchiveAndBuild(t, database, approval.ID, "object://docspring/tmp/a.tgz", "B1")
 	require.NoError(t, database.MarkDeployApprovalRequestBuildStarted(approval.ID, "B1", "R1"))

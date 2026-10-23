@@ -106,6 +106,22 @@ func (d *Database) ClaimDeployApprovalPromote(id int64) (bool, error) {
 	return claimResult(res, err, "promote")
 }
 
+// DeployApprovalAuthorizes reports whether a request is still approved and unexpired. A process start has no claim
+// of its own: the gateway checks this again once it has read the whole request, just before forwarding it, so a
+// request sent slowly can't carry the approval past its window.
+func (d *Database) DeployApprovalAuthorizes(id int64) (bool, error) {
+	var authorizes bool
+	err := d.queryRow(
+		`SELECT EXISTS (SELECT 1 FROM deploy_approval_requests
+         WHERE id = ? AND status = ? AND (approval_expires_at IS NULL OR approval_expires_at > NOW()))`,
+		id, DeployApprovalRequestStatusApproved,
+	).Scan(&authorizes)
+	if err != nil {
+		return false, fmt.Errorf("failed to check deploy approval %d: %w", id, err)
+	}
+	return authorizes, nil
+}
+
 // ReleaseDeployApprovalPromote releases the promote claim after a promote failed, so it can be retried (also after
 // the approval is extended, if it expired meanwhile). A promote that succeeded marked the approval deployed, which
 // this leaves alone.

@@ -120,8 +120,8 @@ The review UI shows:
 
 | Action | Requires | Result |
 |--------|----------|--------|
-| **Approve** | Admin, MFA every time | Request approved, CI auto-approved |
-| **Reject** | Admin, MFA every time | Request rejected with notes |
+| **Approve** | Admin, MFA every time | Request approved, CI auto-approved. A request pending longer than `DEPLOY_APPROVAL_PENDING_MAX_AGE` has expired and can't be (`409`) |
+| **Reject** | Admin, MFA every time | Request rejected with notes. Refused (`409`) once a promote has started under the approval: the rack may be applying it |
 | **Extend** | Admin, MFA every time | A lapsed approval is approved again for a new window |
 | **Ignore** | None | A pending request expires after `DEPLOY_APPROVAL_PENDING_MAX_AGE` (7 days) |
 

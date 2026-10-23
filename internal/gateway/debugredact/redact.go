@@ -19,6 +19,7 @@ const Redacted = "[REDACTED]"
 // they appear in its name: "Authorization", "Cookie", "X-CSRF-Token", "X-Postmark-Server-Token", "api_token",
 // "assertion_response".
 var sensitiveNameParts = []string{
+	"apikey",
 	"assertion",
 	"authorization",
 	"cookie",
@@ -34,13 +35,16 @@ var sensitiveNameParts = []string{
 }
 
 // sensitiveNameWords mark a credential when they're a whole word of a name ("code", "login_code",
-// "backup_codes", "session_data", "X-Api-Key"). They're too common inside other words to match anywhere.
+// "backup_codes", "session_data", "X-Api-Key", a presigned URL's "sig"). They're too common inside other words to
+// match anywhere.
 var sensitiveNameWords = map[string]struct{}{
+	"auth":    {},
 	"code":    {},
 	"codes":   {},
 	"key":     {},
 	"pin":     {},
 	"session": {},
+	"sig":     {},
 	"state":   {},
 }
 
@@ -154,4 +158,24 @@ func RedactQuery(rawQuery string) string {
 		}
 	}
 	return values.Encode()
+}
+
+// HasSensitiveQuery reports whether a query string gives a value to a sensitive parameter (an api_key, a token, a
+// signature; see isSensitiveName). One that can't be parsed counts as sensitive, as RedactQuery redacts it whole.
+func HasSensitiveQuery(rawQuery string) bool {
+	values, err := url.ParseQuery(rawQuery)
+	if err != nil {
+		return true
+	}
+	for key, vals := range values {
+		if !isSensitiveName(key) {
+			continue
+		}
+		for _, value := range vals {
+			if value != "" {
+				return true
+			}
+		}
+	}
+	return false
 }

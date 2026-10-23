@@ -28,7 +28,7 @@ func TestMalformedPublicIDsAreNotFound(t *testing.T) {
 		_, err = database.GetDeployApprovalRequestByPublicID(id)
 		require.ErrorIs(t, err, gwdb.ErrDeployApprovalRequestNotFound, id)
 
-		_, err = database.ApproveDeployApprovalRequestByPublicID(id, 1, time.Now().Add(time.Hour), "")
+		_, err = database.ApproveDeployApprovalRequestByPublicID(id, 1, time.Now().Add(time.Hour), "", 0)
 		require.ErrorIs(t, err, gwdb.ErrDeployApprovalRequestNotFound, id)
 
 		_, err = database.RejectDeployApprovalRequestByPublicID(id, 1, "")

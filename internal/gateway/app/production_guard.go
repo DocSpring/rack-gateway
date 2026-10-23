@@ -40,17 +40,29 @@ func checkProductionSafety(dbEnvironment string, releaseBuild bool, getenv func(
 	)
 }
 
-// CheckReleaseSecrets refuses to run a release build (one without the testbypass tag) with a weak secret (see
-// weakSecrets). The server checks this when it starts (checkProductionSafety); main runs it before `migrate` too,
-// so a deploy, which migrates before it promotes, fails before the new release could start and crash. getenv is
-// os.Getenv outside tests.
+// releaseSecrets are the secrets a release build's server refuses to start without.
+var releaseSecrets = []string{"APP_SECRET_KEY", "AUDIT_HMAC_SECRET", colcrypt.EnvVar}
+
+// CheckReleaseSecrets refuses to run a release build (one without the testbypass tag) with a secret the server
+// would refuse: one of releaseSecrets unset, or a weak one (see weakSecrets). The server checks these when it
+// starts; main runs this before `migrate` too, so a deploy, which migrates before it promotes, fails before the
+// migrations change the database for a release that couldn't start. getenv is os.Getenv outside tests.
 func CheckReleaseSecrets(getenv func(string) string) error {
-	return refuseWeakReleaseSecrets(!testbypass.Compiled, getenv)
+	return refuseReleaseSecrets(!testbypass.Compiled, getenv)
 }
 
-func refuseWeakReleaseSecrets(releaseBuild bool, getenv func(string) string) error {
+func refuseReleaseSecrets(releaseBuild bool, getenv func(string) string) error {
 	if !releaseBuild {
 		return nil
+	}
+	var missing []string
+	for _, name := range releaseSecrets {
+		if getenv(name) == "" {
+			missing = append(missing, name)
+		}
+	}
+	if len(missing) > 0 {
+		return fmt.Errorf("refusing to run: a release build needs %s set", strings.Join(missing, ", "))
 	}
 	if weak := weakSecrets(getenv); len(weak) > 0 {
 		return fmt.Errorf("refusing to run: a release build can't use these weak secrets: %s", strings.Join(weak, ", "))

@@ -172,10 +172,12 @@ Mark sensitive environment variables in each app's settings (or pin them with `R
   changed only with `convox:secret:set`. Names containing `SECRET`, `TOKEN`, `PASSWORD`, `PASSWD`, `PASSPHRASE` or
   `CREDENTIAL`, or ending in `_KEY`, `_KEY_ID` or `_PASS`, are secrets already; `CONVOX_SECRET_ENV_VARS` adds names
   for every app.
-- A value with credentials in it, such as `postgres://app:password@db/app` or a connection string with `password=`,
-  is masked the same way whatever its name. Changing it still needs only `convox:env:set`, so a deployer can replace
-  a `DATABASE_URL` they can't read.
-- **`protected_env_vars`**: values masked, and changed only by an admin with `--allow-protected` and MFA.
+- A value with credentials in it, such as `postgres://app:password@db/app`, a URL with a secret query parameter
+  (`?api_key=...`, `?token=...`, `?sig=...`) or a connection string with `password=`, is masked the same way whatever
+  its name. Changing it still needs only `convox:env:set`, so a deployer can replace a `DATABASE_URL` they can't
+  read.
+- **`protected_env_vars`**: values masked as secrets are (a `convox:secret:read` holder who asks to reveal them sees
+  them), and changed only by an admin with `--allow-protected` and MFA.
 
 Changing either list needs MFA on that request, even within the step-up window, as changing a protected value does.
 

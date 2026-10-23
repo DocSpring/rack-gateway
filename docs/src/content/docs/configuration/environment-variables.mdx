@@ -110,7 +110,7 @@ or delete them in the web UI and remove them from the list. Each user it creates
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `RACK_HOST` | | Convox rack API URL. Inside a Convox v3 rack it can be left unset: the gateway then uses `https://api.<RACK>-system.svc.cluster.local:5443` |
+| `RACK_HOST` | | Convox rack API URL: `https://`, host and port (a host alone means `https://`). Release builds refuse `http://` and a URL with credentials in it: the gateway sends `RACK_TOKEN` to this address. Inside a Convox v3 rack it can be left unset: the gateway then uses `https://api.<RACK>-system.svc.cluster.local:5443` |
 | `RACK_TOKEN` | | Convox rack API token |
 | `RACK_USERNAME` | `convox` | Basic auth username |
 | `RACK` | `default` | Rack name (internal identifier). Convox sets it for apps running on a rack |

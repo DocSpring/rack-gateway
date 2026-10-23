@@ -145,7 +145,7 @@ func TestAnUnreadableApprovalWindowRefusesApprovals(t *testing.T) {
 func TestDifferentApproverRequiredToExtend(t *testing.T) {
 	f := newDifferentApproverFixture(t, true)
 	req := f.request(t, f.alice)
-	_, err := f.database.ApproveDeployApprovalRequest(req.ID, f.bob.ID, time.Now().Add(-time.Minute), "")
+	_, err := f.database.ApproveDeployApprovalRequest(req.ID, f.bob.ID, time.Now().Add(-time.Minute), "", 0)
 	require.NoError(t, err)
 
 	status, msg := callDeployApprovalAction(t, f.handler.ExtendDeployApprovalRequest, f.alice, req)

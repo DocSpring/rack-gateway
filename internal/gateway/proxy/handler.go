@@ -147,6 +147,10 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 		h.handleForwardError(w, r, err, rackConfig.Name, start)
 		return
 	}
+	if err := audit.CheckCommandRecordable(r); err != nil {
+		h.handleForwardError(w, r, refuse(http.StatusBadRequest, err), rackConfig.Name, start)
+		return
+	}
 
 	// Every request is recorded before anything acts on it, the deploy approval claim included.
 	r, recorded := h.recordAttempt(w, r, authUser, rackConfig.Name, start)

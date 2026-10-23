@@ -3,6 +3,8 @@ package envutil
 import (
 	"net/url"
 	"strings"
+
+	"github.com/DocSpring/rack-gateway/internal/gateway/debugredact"
 )
 
 // secretNameParts make an env var name secret wherever they appear in it.
@@ -35,15 +37,22 @@ func IsSecretKey(key string, explicit []string) bool {
 }
 
 // HasCredentials reports whether an env var's value carries a credential the name doesn't reveal: a URL with
-// credentials in it (scheme://user:password@host, such as a DATABASE_URL), or a keyword connection string with a
-// password (host=db password=...).
+// credentials in it (scheme://user:password@host, such as a DATABASE_URL), a URL with a secret query parameter
+// (?api_key=..., ?token=...; see debugredact.HasSensitiveQuery), or a keyword connection string with a password
+// (host=db password=...).
 func HasCredentials(value string) bool {
 	trimmed := strings.TrimSpace(value)
 	if strings.Contains(strings.ToLower(trimmed), "password=") {
 		return true
 	}
 	parsed, err := url.Parse(trimmed)
-	return err == nil && parsed.Scheme != "" && parsed.User != nil && parsed.User.String() != ""
+	if err != nil || parsed.Scheme == "" {
+		return false
+	}
+	if parsed.User != nil && parsed.User.String() != "" {
+		return true
+	}
+	return parsed.RawQuery != "" && debugredact.HasSensitiveQuery(parsed.RawQuery)
 }
 
 // MaskedForReaders reports whether an env var's value is masked for callers without convox:secret:read: a secret

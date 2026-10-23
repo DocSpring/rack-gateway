@@ -11,9 +11,10 @@ import (
 var ErrDeployApprovalNotRecordable = errors.New("deployment approval not found or not approved")
 
 // recordableApproval matches an approval that was approved, whether or not it has expired since. A step the
-// approval authorized records its result (a build, a process, an exec command) even when the approval expired while
-// the step ran, so extending the approval can carry on from it. Recording never authorizes anything: every new step
-// claims an approved, unexpired approval first. Its two placeholders take recordableApprovalStatuses.
+// approval authorized records its result (a build, a process) even when the approval expired while the step ran, so
+// extending the approval can carry on from it. Recording never authorizes anything: every new step claims (or, for
+// a process start, checks again) an approved, unexpired approval first, and an exec command is recorded before it
+// runs, against an unexpired approval only. Its two placeholders take recordableApprovalStatuses.
 const recordableApproval = `status IN (?, ?) AND approved_at IS NOT NULL`
 
 var recordableApprovalStatuses = []interface{}{DeployApprovalRequestStatusApproved, DeployApprovalRequestStatusExpired}
@@ -74,7 +75,10 @@ func (d *Database) AppendProcessIDToDeployApprovalRequest(id int64, processID st
 	return nil
 }
 
-// AppendExecCommandToDeployApprovalRequest records an exec command executed as part of a deploy approval request
+// AppendExecCommandToDeployApprovalRequest adds an exec command to the approval's record, before the exec runs: an
+// exec runs only once it's on the record. Unlike the steps recorded after they ran, this authorizes the exec, so the
+// approval must still be approved and unexpired. exec_commands lists each process's commands in the order they ran.
+// A process's value written as a single string (by a release before the lists) becomes the list's first item.
 func (d *Database) AppendExecCommandToDeployApprovalRequest(id int64, processID, command string) error {
 	if strings.TrimSpace(processID) == "" {
 		return fmt.Errorf("process id required")
@@ -83,13 +87,14 @@ func (d *Database) AppendExecCommandToDeployApprovalRequest(id int64, processID,
 		return fmt.Errorf("command required")
 	}
 
-	// Add command to exec_commands JSONB object
 	res, err := d.exec(
 		`UPDATE deploy_approval_requests
-         SET exec_commands = COALESCE(exec_commands, '{}'::jsonb) || jsonb_build_object(?::text, ?::text),
+         SET exec_commands = jsonb_set(
+               COALESCE(exec_commands, '{}'::jsonb), ARRAY[?::text],
+               COALESCE(exec_commands -> ?::text, '[]'::jsonb) || to_jsonb(?::text)),
              updated_at = NOW()
-         WHERE id = ? AND `+recordableApproval,
-		append([]interface{}{processID, command, id}, recordableApprovalStatuses...)...,
+         WHERE id = ? AND status = ? AND (approval_expires_at IS NULL OR approval_expires_at > NOW())`,
+		processID, processID, command, id, DeployApprovalRequestStatusApproved,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to append exec command to deploy approval request: %w", err)

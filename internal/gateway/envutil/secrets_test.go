@@ -27,12 +27,17 @@ func TestHasCredentialsMatchesURLsAndConnectionStrings(t *testing.T) {
 		" amqp://guest:guest@mq ",
 		"host=db port=5432 password=hunter2",
 		"Server=db;Database=app;User Id=app;Password=hunter2;",
+		"https://api.example.com/?api_key=hunter2",
+		"https://api.example.com/v1?mode=live&access_token=hunter2",
+		"https://vendor.example/hook?apiKey=hunter2",
+		"https://bucket.s3.example/object?X-Amz-Signature=abc&X-Amz-Credential=key",
+		"https://api.example.com/?sig=abc",
 	} {
 		require.True(t, HasCredentials(value), value)
 	}
 	for _, value := range []string{
 		"", "3000", "postgres://db.internal:5432/app", "https://example.com/path?q=1", "user@example.com",
-		"not a url", "mailto:user@example.com",
+		"not a url", "mailto:user@example.com", "https://api.example.com/?api_key=", "https://example.com/?keyword=x",
 	} {
 		require.False(t, HasCredentials(value), value)
 	}

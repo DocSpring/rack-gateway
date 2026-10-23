@@ -41,7 +41,9 @@ func TestSuccessfulPromoteMarksApprovalDeployed(t *testing.T) {
 			approval, err := database.CreateDeployApprovalRequest("Deploy", "test-app",
 				"abc123def4567890abc123def4567890abc123de", "main", "", nil, user.ID, nil, token.ID)
 			require.NoError(t, err)
-			approval, err = database.ApproveDeployApprovalRequest(approval.ID, user.ID, time.Now().Add(time.Hour), "")
+			approval, err = database.ApproveDeployApprovalRequest(
+				approval.ID, user.ID, time.Now().Add(time.Hour), "", 0,
+			)
 			require.NoError(t, err)
 
 			bindApprovalRelease(t, database, approval.ID)
@@ -105,7 +107,7 @@ func TestPromoteClaimThroughTheProxy(t *testing.T) {
 	approval, err := database.CreateDeployApprovalRequest("Deploy", "test-app",
 		"abc123def4567890abc123def4567890abc123de", "main", "", nil, deployer.ID, nil, token.ID)
 	require.NoError(t, err)
-	approval, err = database.ApproveDeployApprovalRequest(approval.ID, deployer.ID, time.Now().Add(time.Hour), "")
+	approval, err = database.ApproveDeployApprovalRequest(approval.ID, deployer.ID, time.Now().Add(time.Hour), "", 0)
 	require.NoError(t, err)
 	bindApprovalRelease(t, database, approval.ID)
 	_, err = database.DB().Exec("UPDATE deploy_approval_requests SET approval_expires_at = $1 WHERE id = $2",
@@ -181,7 +183,7 @@ func TestAPromoteThatWasNeverSentReleasesItsClaim(t *testing.T) {
 	approval, err := database.CreateDeployApprovalRequest("Deploy", "test-app",
 		"abc123def4567890abc123def4567890abc123de", "main", "", nil, deployer.ID, nil, token.ID)
 	require.NoError(t, err)
-	_, err = database.ApproveDeployApprovalRequest(approval.ID, deployer.ID, time.Now().Add(time.Hour), "")
+	_, err = database.ApproveDeployApprovalRequest(approval.ID, deployer.ID, time.Now().Add(time.Hour), "", 0)
 	require.NoError(t, err)
 	bindApprovalRelease(t, database, approval.ID)
 

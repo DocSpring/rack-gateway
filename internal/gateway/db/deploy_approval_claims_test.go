@@ -16,7 +16,7 @@ func approvedForClaims(
 	t.Helper()
 	approval, err := createApproval(t, database, userID, tokenID, app)
 	require.NoError(t, err)
-	approval, err = database.ApproveDeployApprovalRequest(approval.ID, userID, time.Now().Add(time.Hour), "")
+	approval, err = database.ApproveDeployApprovalRequest(approval.ID, userID, time.Now().Add(time.Hour), "", 0)
 	require.NoError(t, err)
 	return approval
 }
@@ -129,8 +129,8 @@ func TestDeployApprovalReleaseIsNeverReplaced(t *testing.T) {
 }
 
 // A step the approval authorized records its result even when the approval expired while the step ran, so
-// extending the approval can carry on from it. An expired approval authorizes nothing new, and a request that was
-// never approved records nothing.
+// extending the approval can carry on from it. An expired approval authorizes nothing new (an exec command is
+// recorded before it runs, so that's new too), and a request that was never approved records nothing.
 func TestApprovedStepRecordsItsResultAfterExpiry(t *testing.T) {
 	database, userID, tokenID := newApprovalTestFixture(t)
 	approval := approvedForClaims(t, database, userID, tokenID, "docspring")
@@ -150,7 +150,8 @@ func TestApprovedStepRecordsItsResultAfterExpiry(t *testing.T) {
 
 	require.NoError(t, database.MarkDeployApprovalRequestBuildStarted(approval.ID, "B1", "R1"))
 	require.NoError(t, database.AppendProcessIDToDeployApprovalRequest(approval.ID, "P1"))
-	require.NoError(t, database.AppendExecCommandToDeployApprovalRequest(approval.ID, "P1", "bin/migrate"))
+	require.ErrorIs(t, database.AppendExecCommandToDeployApprovalRequest(approval.ID, "P1", "bin/migrate"),
+		gwdb.ErrDeployApprovalNotRecordable)
 	reloaded, err := database.GetDeployApprovalRequest(approval.ID)
 	require.NoError(t, err)
 	require.Equal(t, gwdb.DeployApprovalRequestStatusExpired, reloaded.Status)

@@ -70,6 +70,41 @@ func TestExpireWorkerReturnsErrorsForRetry(t *testing.T) {
 	require.ErrorContains(t, err, "db down")
 }
 
+// batchingExpirer hands out a backlog a batch at a time, as the database does.
+type batchingExpirer struct {
+	backlog int
+	calls   int
+}
+
+func (b *batchingExpirer) ExpireDeployApprovalRequests(
+	_ time.Duration,
+	entry func(db.ExpiredDeployApproval) *db.AuditLog,
+) ([]db.ExpiredDeployApproval, []*db.AuditLog, error) {
+	b.calls++
+	n := min(b.backlog, db.DeployApprovalExpiryBatchSize)
+	b.backlog -= n
+	expired := make([]db.ExpiredDeployApproval, n)
+	events := make([]*db.AuditLog, 0, n)
+	for i := range expired {
+		expired[i] = db.ExpiredDeployApproval{ID: int64(i + 1), PreviousStatus: "pending"}
+		events = append(events, entry(expired[i]))
+	}
+	return expired, events, nil
+}
+
+// A backlog larger than a batch is worked through in several transactions, each of which makes progress.
+func TestExpireWorksThroughABacklogInBatches(t *testing.T) {
+	store := &batchingExpirer{backlog: 2*db.DeployApprovalExpiryBatchSize + 3}
+	require.NoError(t, Expire(store, time.Hour))
+	require.Equal(t, 3, store.calls)
+	require.Zero(t, store.backlog)
+
+	// A backlog of exactly one batch takes one more (empty) call to see it's done.
+	store = &batchingExpirer{backlog: db.DeployApprovalExpiryBatchSize}
+	require.NoError(t, Expire(store, time.Hour))
+	require.Equal(t, 2, store.calls)
+}
+
 // recordingExpirer keeps the events its expirer returned.
 type recordingExpirer struct {
 	*fakeExpirer

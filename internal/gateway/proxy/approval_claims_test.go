@@ -171,7 +171,7 @@ func newClaimsFixture(t *testing.T) *claimsFixture {
 		"Deploy", claimsApp, approvedCommit, "main", "", nil, deployer.ID, nil, token.ID,
 	)
 	require.NoError(t, err)
-	f.approval, err = database.ApproveDeployApprovalRequest(approval.ID, deployer.ID, time.Now().Add(time.Hour), "")
+	f.approval, err = database.ApproveDeployApprovalRequest(approval.ID, deployer.ID, time.Now().Add(time.Hour), "", 0)
 	require.NoError(t, err)
 	return f
 }
