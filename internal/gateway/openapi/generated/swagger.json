@@ -392,7 +392,7 @@
                         "CSRFToken": []
                     }
                 ],
-                "description": "Applies environment variable changes for a Convox app by creating a new release.\nSecrets and values with credentials in them remain masked unless the user has secrets permissions.\nAnswers 409 while another env change to the app is in progress.",
+                "description": "Applies environment variable changes for a Convox app by creating a new release.\nSecrets and values with credentials in them remain masked unless the user has secrets permissions.\nAnswers 409 while another env change to the app is in progress, or while a build whose manifest\nthe gateway checked with the app's env may still read it.",
                 "consumes": [
                     "application/json"
                 ],
@@ -2885,6 +2885,12 @@
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
@@ -3065,6 +3071,12 @@
                     },
                     "404": {
                         "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
                         "schema": {
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
@@ -4051,7 +4063,7 @@
                         "CSRFToken": []
                     }
                 ],
-                "description": "Locks a user account to prevent login",
+                "description": "Locks a user account to prevent login. An admin can't lock their own account (400) or the last\nunlocked admin (409).",
                 "consumes": [
                     "application/json"
                 ],
@@ -4095,6 +4107,12 @@
                     },
                     "404": {
                         "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
                         "schema": {
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }

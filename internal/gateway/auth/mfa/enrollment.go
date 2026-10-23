@@ -7,29 +7,25 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 )
 
-// ensureBackupCodes generates backup codes if the user doesn't have any yet.
-// Returns backup codes only on first enrollment, nil otherwise.
-func (s *Service) ensureBackupCodes(userID int64) ([]string, error) {
-	existing, err := s.db.ListBackupCodes(userID)
+// backupCodesForEnrollment returns backup codes to show while a factor is being enrolled.
+// A user who is not enrolled yet gets a fresh set: their codes verify nothing until the first
+// factor is confirmed, and a restarted enrollment must show codes again. An enrolled user's
+// existing codes are never replaced here (regeneration is a separate step-up protected action);
+// they only get codes if they have none. The database decides under the user's row lock, and
+// refuses when the enrollment changed after the request was authorized.
+func (s *Service) backupCodesForEnrollment(user *db.User) ([]string, error) {
+	codes, hashes, err := s.genBackupCodes()
 	if err != nil {
 		return nil, err
 	}
-	if len(existing) > 0 {
-		return nil, nil
+	issued, err := s.db.IssueEnrollmentBackupCodes(user.ID, user.MFAEnrolled, hashes)
+	if errors.Is(err, db.ErrMFAEnrollmentChanged) {
+		return nil, fmt.Errorf("MFA was enabled or disabled for this account meanwhile; reload and start again")
 	}
-	return s.GenerateBackupCodes(userID)
-}
-
-// backupCodesForEnrollment returns backup codes to show while a factor is being enrolled.
-// A user who is not enrolled yet gets a fresh set: their codes protect nothing until the first
-// factor is confirmed, and a restarted enrollment must show codes again. An enrolled user's
-// existing codes are never replaced here (regeneration is a separate step-up protected action);
-// they only get codes if they have none.
-func (s *Service) backupCodesForEnrollment(user *db.User) ([]string, error) {
-	if user.MFAEnrolled {
-		return s.ensureBackupCodes(user.ID)
+	if err != nil || !issued {
+		return nil, err
 	}
-	return s.GenerateBackupCodes(user.ID)
+	return codes, nil
 }
 
 // finalizeEnrollment confirms the method (storing credential, for a security key) and marks the user MFA

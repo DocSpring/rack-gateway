@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 )
@@ -82,6 +83,27 @@ func TestCLILoginMFAVerifiesBrowserSession(t *testing.T) {
 		t.Fatal("expected the CLI login MFA to verify the browser session")
 	}
 	assertStatus(t, e.do("GET", "/api/v1/users", "", browser.headers), http.StatusOK, "web UI after CLI login")
+}
+
+// A browser session that was already verified, but whose step-up window has closed, gets a new window from the
+// factor that approved the CLI login.
+func TestCLILoginMFAOpensVerifiedBrowserSessionStepUp(t *testing.T) {
+	e := newMFARouteEnv(t, "cli-browser-stepup@example.com")
+	browser := e.newSession(t, e.user)
+	e.markVerified(t, browser, false)
+	binding := e.startCLILogin(t, "cli-state-stepup", e.user)
+
+	w := e.do("POST", "/api/v1/auth/cli/mfa", cliMFABody("cli-state-stepup", e.currentCode(t)),
+		boundBrowser(browser, binding))
+	assertStatus(t, w, http.StatusOK, "CLI MFA submit")
+
+	result, err := e.sessions.ValidateSession(browser.token, "10.1.2.3", "mfa-route-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stepUp := result.Session.RecentStepUpAt; stepUp == nil || time.Since(*stepUp) > time.Minute {
+		t.Fatalf("expected the CLI login MFA to open the browser session's step-up window, got %v", stepUp)
+	}
 }
 
 func TestCLILoginMFALeavesOtherUsersSessionsPending(t *testing.T) {

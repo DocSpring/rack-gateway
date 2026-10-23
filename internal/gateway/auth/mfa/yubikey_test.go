@@ -1,6 +1,7 @@
 package mfa
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/GeertJohan/yubigo"
@@ -46,7 +47,7 @@ func TestYubiOTPEnrollment_Success(t *testing.T) {
 	}
 
 	validOTP := "ccccccbcgujh" + "nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn"
-	result, err := service.StartYubiOTPEnrollment(user, validOTP)
+	result, err := service.StartYubiOTPEnrollment(user, validOTP, "")
 	if err != nil {
 		t.Fatalf("expected successful enrollment, got error: %v", err)
 	}
@@ -107,7 +108,7 @@ func TestYubiOTPEnrollment_InvalidFormat(t *testing.T) {
 
 	user, _ := database.CreateUser("test2@example.com", "Test User", []string{"admin"})
 
-	_, err = service.StartYubiOTPEnrollment(user, "short")
+	_, err = service.StartYubiOTPEnrollment(user, "short", "")
 	if err == nil {
 		t.Error("expected error for invalid OTP format")
 	}
@@ -136,13 +137,13 @@ func TestYubiOTPEnrollment_Duplicate(t *testing.T) {
 	user, _ := database.CreateUser("test3@example.com", "Test User", []string{"admin"})
 
 	validOTP := "ccccccbcgujh" + "nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn"
-	_, err = service.StartYubiOTPEnrollment(user, validOTP)
+	_, err = service.StartYubiOTPEnrollment(user, validOTP, "")
 	if err != nil {
 		t.Fatalf("first enrollment failed: %v", err)
 	}
 
 	// Try to enroll the same Yubikey again
-	_, err = service.StartYubiOTPEnrollment(user, validOTP)
+	_, err = service.StartYubiOTPEnrollment(user, validOTP, "")
 	if err == nil {
 		t.Error("expected error for duplicate Yubikey")
 	}
@@ -160,7 +161,7 @@ func TestYubiOTPEnrollment_NotConfigured(t *testing.T) {
 
 	user, _ := database.CreateUser("test4@example.com", "Test User", []string{"admin"})
 
-	_, err := serviceWithoutYubi.StartYubiOTPEnrollment(user, "ccccccbcgujhnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn")
+	_, err := serviceWithoutYubi.StartYubiOTPEnrollment(user, "ccccccbcgujhnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn", "")
 	if err == nil {
 		t.Error("expected error when Yubico OTP not configured")
 	}
@@ -192,14 +193,14 @@ func TestYubiOTPVerification(t *testing.T) {
 
 	// Enroll a Yubikey
 	enrollOTP := "ccccccbcgujh" + "nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn"
-	result, err := service.StartYubiOTPEnrollment(user, enrollOTP)
+	result, err := service.StartYubiOTPEnrollment(user, enrollOTP, "")
 	if err != nil {
 		t.Fatalf("failed to enroll: %v", err)
 	}
 	methodID := result.MethodID
 
 	t.Run("successfully verifies correct OTP", func(t *testing.T) {
-		verifyOTP := "ccccccbcgujh" + "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm" // Different OTP, same public ID
+		verifyOTP := "ccccccbcgujh" + "llllllllllllllllllllllllllllllll" // Different OTP, same public ID
 		verifyResult, err := service.VerifyYubiOTP(user, verifyOTP)
 		if err != nil {
 			t.Fatalf("expected successful verification, got error: %v", err)
@@ -229,4 +230,44 @@ func TestYubiOTPVerification(t *testing.T) {
 			t.Error("expected error for invalid format")
 		}
 	})
+}
+
+// A YubiKey's public ID is everything before the OTP's 32-character encrypted part, 1 to 16 characters long. A key
+// with a public ID other than 12 characters enrolls, keeps its label, and verifies through VerifyTOTP like any other.
+func TestYubiOTPPublicIDLengths(t *testing.T) {
+	t.Parallel()
+
+	service, database, user := setupMFAService(t, "yubi-lengths@example.com", "Yubi Lengths")
+	service.yubiAuth = &mockYubiAuth{}
+
+	encrypted := strings.Repeat("n", 32)
+	if _, err := service.StartYubiOTPEnrollment(user, encrypted, ""); err == nil {
+		t.Fatal("expected an OTP without a public ID to be refused")
+	}
+	if _, err := service.StartYubiOTPEnrollment(user, strings.Repeat("c", 17)+encrypted, ""); err == nil {
+		t.Fatal("expected an OTP with a 17-character public ID to be refused")
+	}
+
+	publicID := "vvccccbcgujhnrtu"
+	result, err := service.StartYubiOTPEnrollment(user, publicID+encrypted, "  Desk key  ")
+	if err != nil {
+		t.Fatalf("expected a 16-character public ID to enroll: %v", err)
+	}
+	method, err := database.GetMFAMethodByID(result.MethodID)
+	if err != nil {
+		t.Fatalf("failed to load the method: %v", err)
+	}
+	if method.Secret != publicID || method.Label != "Desk key" {
+		t.Fatalf("expected public ID %q labeled %q, got %q labeled %q", publicID, "Desk key", method.Secret,
+			method.Label)
+	}
+
+	enrolled, err := database.GetUserByID(user.ID)
+	if err != nil {
+		t.Fatalf("failed to reload the user: %v", err)
+	}
+	verified, err := service.VerifyTOTP(enrolled, publicID+strings.Repeat("l", 32), "127.0.0.1", "test", nil)
+	if err != nil || verified.MethodID != result.MethodID {
+		t.Fatalf("expected the key's next OTP to verify, got %+v, %v", verified, err)
+	}
 }

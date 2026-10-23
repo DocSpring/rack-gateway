@@ -92,13 +92,8 @@ func (d *Database) ResetUserMFA(userID, resetBy int64) error {
 		return fmt.Errorf("failed to delete backup codes: %w", err)
 	}
 
-	revokeDevicesQuery := `
-		UPDATE trusted_devices
-		SET revoked_at = NOW(), revoked_reason = 'admin_mfa_reset', updated_at = NOW()
-		WHERE user_id = ? AND revoked_at IS NULL
-	`
-	if _, err := d.execTx(tx, revokeDevicesQuery, userID); err != nil {
-		return fmt.Errorf("failed to revoke trusted devices: %w", err)
+	if err := d.revokeTrustedDevicesTx(tx, userID, "admin_mfa_reset"); err != nil {
+		return err
 	}
 
 	revokeSessionsQuery := `
@@ -227,15 +222,6 @@ func (d *Database) UpdateMFAMethodLastUsed(methodID int64, lastUsedAt time.Time)
 	return nil
 }
 
-// DeleteMFAMethod removes an MFA method by its ID.
-func (d *Database) DeleteMFAMethod(methodID int64) error {
-	_, err := d.exec("DELETE FROM mfa_methods WHERE id = ?", methodID)
-	if err != nil {
-		return fmt.Errorf("failed to delete MFA method: %w", err)
-	}
-	return nil
-}
-
 // ListMFAMethods returns all confirmed MFA methods for a user.
 func (d *Database) ListMFAMethods(userID int64) ([]*MFAMethod, error) {
 	return d.queryMFAMethods(userID, false)
@@ -324,99 +310,4 @@ func (d *Database) lockUserTx(tx *sql.Tx, userID int64) error {
 		return fmt.Errorf("failed to lock user %d: %w", userID, err)
 	}
 	return nil
-}
-
-// ReplaceBackupCodes replaces all backup codes for a user with a new set. It holds the user's row lock, so two
-// replacements at once can't both keep their codes: the second deletes the first's.
-func (d *Database) ReplaceBackupCodes(userID int64, codeHashes []string) error {
-	tx, err := d.db.Begin()
-	if err != nil {
-		return fmt.Errorf("failed to start transaction for backup codes: %w", err)
-	}
-	defer func() { _ = tx.Rollback() }()
-
-	if err := d.lockUserTx(tx, userID); err != nil {
-		return err
-	}
-	if _, err := d.execTx(tx, "DELETE FROM mfa_backup_codes WHERE user_id = ?", userID); err != nil {
-		return fmt.Errorf("failed to clear backup codes: %w", err)
-	}
-
-	// Filter empty hashes
-	validHashes := make([]string, 0, len(codeHashes))
-	for _, hash := range codeHashes {
-		if strings.TrimSpace(hash) != "" {
-			validHashes = append(validHashes, hash)
-		}
-	}
-
-	// Bulk insert all backup codes in a single query
-	if len(validHashes) > 0 {
-		placeholders := make([]string, len(validHashes))
-		args := make([]interface{}, 0, len(validHashes)*2)
-		for i, hash := range validHashes {
-			placeholders[i] = "(?, ?)"
-			args = append(args, userID, hash)
-		}
-		query := "INSERT INTO mfa_backup_codes (user_id, code_hash) VALUES " + strings.Join(placeholders, ", ")
-		if _, err := d.execTx(tx, query, args...); err != nil {
-			return fmt.Errorf("failed to insert backup codes: %w", err)
-		}
-	}
-
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("failed to commit backup code replacement: %w", err)
-	}
-	return nil
-}
-
-// ListBackupCodes returns all backup codes for a user.
-func (d *Database) ListBackupCodes(userID int64) ([]*MFABackupCode, error) {
-	query := `
-		SELECT id, user_id, code_hash, created_at, used_at
-		FROM mfa_backup_codes
-		WHERE user_id = ?
-		ORDER BY created_at
-	`
-	rows, err := d.query(query, userID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to list backup codes: %w", err)
-	}
-	defer func() { _ = rows.Close() }()
-
-	var codes []*MFABackupCode
-	for rows.Next() {
-		var code MFABackupCode
-		var used sql.NullTime
-		if err := rows.Scan(&code.ID, &code.UserID, &code.CodeHash, &code.CreatedAt, &used); err != nil {
-			return nil, fmt.Errorf("failed to scan backup code: %w", err)
-		}
-		if used.Valid {
-			t := used.Time
-			code.UsedAt = &t
-		}
-		codes = append(codes, &code)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("failed to iterate backup codes: %w", err)
-	}
-	return codes, nil
-}
-
-// MarkBackupCodeUsed marks a backup code as used for a user.
-// Returns true if a code was successfully marked, false if it was already used.
-func (d *Database) MarkBackupCodeUsed(userID int64, hash string) (bool, error) {
-	res, err := d.exec(
-		"UPDATE mfa_backup_codes SET used_at = NOW() WHERE user_id = ? AND code_hash = ? AND used_at IS NULL",
-		userID,
-		hash,
-	)
-	if err != nil {
-		return false, fmt.Errorf("failed to mark backup code used: %w", err)
-	}
-	n, err := res.RowsAffected()
-	if err != nil {
-		return false, fmt.Errorf("failed to inspect backup code update: %w", err)
-	}
-	return n > 0, nil
 }

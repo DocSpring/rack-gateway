@@ -1,6 +1,7 @@
-// A YubiKey's Yubico OTP: 44 modhex characters, which the key types followed by Enter (see
-// internal/gateway/auth/mfa/totp.go).
-const YUBIKEY_OTP_REGEX = /^[cbdefghijklnrtuv]{44}$/
+// A YubiKey's Yubico OTP, which the key types followed by Enter: its public ID (1 to 16 modhex
+// characters, usually 12) then 32 encrypted ones (see yubiOTPPublicID in
+// internal/gateway/auth/mfa/yubiotp.go).
+const YUBIKEY_OTP_REGEX = /^[cbdefghijklnrtuv]{33,48}$/
 
 export function normalizeYubiKeyOTP(value: string): string {
   return value.trim().toLowerCase()

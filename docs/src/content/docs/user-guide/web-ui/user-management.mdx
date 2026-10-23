@@ -70,7 +70,9 @@ unlocked. A lock needs a reason: the user's email includes it, and in the web UI
 
 </Steps>
 
-**Unlock Account** reverses it. The user is emailed when locked and when unlocked. You can't lock or delete your own account.
+**Unlock Account** reverses it. The user is emailed when locked and when unlocked. You can't lock or delete your own
+account, or lock the last unlocked admin: only an admin can unlock anyone. If failed MFA attempts lock the last admin,
+see [Troubleshooting](/operations/troubleshooting/#account-locked-after-failed-mfa).
 
 ## Resetting MFA (Admin)
 

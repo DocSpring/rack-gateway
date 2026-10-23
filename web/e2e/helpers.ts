@@ -449,6 +449,8 @@ export async function startTotpEnrollmentViaUi(
     throw new Error(`Failed to retrieve pending TOTP secret during enrollment for ${email}`)
   }
 
+  // Confirming consumes the code's time step, so an earlier step-up in this time step would refuse it.
+  await clearMfaAttempts()
   const code = generateSync({ secret })
   await typeOtpCode(page, enrollmentDialog, code)
 

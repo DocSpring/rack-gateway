@@ -145,6 +145,19 @@ Five failed MFA attempts in five minutes lock the account. The admins are emaile
 as `user.lock` by `system`. An admin unlocks it on the Users page once they've confirmed the attempts were the
 user's.
 
+The automatic lock applies to admins too, because it stops someone guessing an admin's codes. An admin can't lock
+their own account or the last unlocked admin, but failed attempts can, and then nobody can unlock anyone in the
+gateway. Unlock an admin directly in the database, connected as its admin user (see
+[Database Maintenance](/operations/database-maintenance/)), once you've confirmed the attempts were theirs:
+
+```sql
+UPDATE users SET locked_at = NULL, locked_reason = NULL, locked_by_user_id = NULL, updated_at = NOW()
+WHERE email = 'admin@example.com';
+```
+
+A change made in the database isn't in the gateway's audit log: record who unlocked the account and why, in the same
+place you record other break-glass access. Adding a second admin keeps this from happening.
+
 ### Lost MFA Device
 
 1. Sign in with a backup code, then remove the lost method and enroll a new one under **Account Security**

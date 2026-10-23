@@ -2,14 +2,31 @@ package mfa
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 )
 
-// StartYubiOTPEnrollment provisions a Yubico OTP method for the user.
+// yubiOTPPattern is a Yubico OTP: a public ID of 1 to 16 modhex characters, then 32 encrypted ones. An OTP from a key
+// without a public ID couldn't be told apart from another key's.
+var yubiOTPPattern = regexp.MustCompile(`^[cbdefghijklnrtuv]{33,48}$`)
+
+// yubiOTPPublicID returns the public ID of a Yubico OTP, which identifies the key, or false for anything else.
+// (yubigo.ParseOTP would take some modhex OTPs for Dvorak keystrokes and translate them.)
+func yubiOTPPublicID(otp string) (string, bool) {
+	otp = strings.ToLower(otp)
+	if !yubiOTPPattern.MatchString(otp) {
+		return "", false
+	}
+	return otp[:len(otp)-32], true
+}
+
+// StartYubiOTPEnrollment provisions a Yubico OTP method for the user, labeled label ("Yubikey" when blank).
 // Auto-confirms since we validate the OTP during enrollment.
-func (s *Service) StartYubiOTPEnrollment(user *db.User, yubiOTP string) (*StartYubiOTPEnrollmentResult, error) {
+func (s *Service) StartYubiOTPEnrollment(
+	user *db.User, yubiOTP, label string,
+) (*StartYubiOTPEnrollmentResult, error) {
 	if user == nil {
 		return nil, fmt.Errorf("user required")
 	}
@@ -18,7 +35,8 @@ func (s *Service) StartYubiOTPEnrollment(user *db.User, yubiOTP string) (*StartY
 	}
 
 	yubiOTP = strings.TrimSpace(yubiOTP)
-	if len(yubiOTP) < 32 {
+	publicID, ok := yubiOTPPublicID(yubiOTP)
+	if !ok {
 		return nil, fmt.Errorf("invalid Yubikey OTP format")
 	}
 
@@ -31,9 +49,6 @@ func (s *Service) StartYubiOTPEnrollment(user *db.User, yubiOTP string) (*StartY
 		return nil, fmt.Errorf("invalid Yubikey OTP")
 	}
 
-	// Extract the public ID (first 12 characters)
-	publicID := yubiOTP[:12]
-
 	if err := s.prepareEnrollment(user.ID); err != nil {
 		return nil, err
 	}
@@ -42,7 +57,11 @@ func (s *Service) StartYubiOTPEnrollment(user *db.User, yubiOTP string) (*StartY
 		return nil, err
 	}
 
-	method, err := s.db.CreateMFAMethod(user.ID, "yubiotp", "Yubikey", publicID, nil, nil, nil, nil)
+	label = strings.TrimSpace(label)
+	if label == "" {
+		label = "Yubikey"
+	}
+	method, err := s.db.CreateMFAMethod(user.ID, "yubiotp", label, publicID, nil, nil, nil, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -74,7 +93,8 @@ func (s *Service) VerifyYubiOTP(user *db.User, otp string) (*VerificationResult,
 	}
 
 	otp = strings.TrimSpace(otp)
-	if len(otp) < 32 {
+	publicID, ok := yubiOTPPublicID(otp)
+	if !ok {
 		return nil, fmt.Errorf("invalid Yubikey OTP format")
 	}
 
@@ -86,9 +106,6 @@ func (s *Service) VerifyYubiOTP(user *db.User, otp string) (*VerificationResult,
 	if !ok {
 		return nil, fmt.Errorf("invalid Yubikey OTP")
 	}
-
-	// Extract public ID
-	publicID := otp[:12]
 
 	// Find matching method
 	methods, err := s.db.ListMFAMethods(user.ID)

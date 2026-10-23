@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"log"
 	"net/http"
 	"strconv"
@@ -163,7 +164,13 @@ func (h *AuthHandler) DeleteMFAMethod(c *gin.Context) {
 	if !ok {
 		return
 	}
-	if err := h.database.DeleteMFAMethod(method.ID); err != nil {
+	err := h.database.DeleteUserMFAMethod(userCtx.userRecord.ID, method.ID)
+	if errors.Is(err, db.ErrMFAMethodNotFound) {
+		c.JSON(http.StatusNotFound, gin.H{"error": "mfa method not found"})
+		return
+	}
+	if err != nil {
+		log.Printf("failed to delete mfa method %d: %v", method.ID, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete mfa method"})
 		return
 	}
@@ -175,7 +182,6 @@ func (h *AuthHandler) DeleteMFAMethod(c *gin.Context) {
 		details:      map[string]interface{}{"type": method.Type, "label": method.Label},
 	})
 
-	h.handleMFADisablement(userCtx.userRecord.ID)
 	c.JSON(http.StatusOK, StatusResponse{Status: "deleted"})
 }
 

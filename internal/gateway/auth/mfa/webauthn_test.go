@@ -346,30 +346,39 @@ func TestWebAuthnUserInterface_FilterNonWebAuthn(t *testing.T) {
 	}
 }
 
-func TestEnsureBackupCodes_GeneratesOnce(t *testing.T) {
+// An enrollment shows fresh backup codes until the first factor is confirmed, then never replaces them. A request
+// authorized before the enrollment changed gets none.
+func TestBackupCodesForEnrollment(t *testing.T) {
 	t.Parallel()
 
 	database := dbtest.NewDatabase(t)
-	pepper := []byte("test-pepper")
-	service, _ := NewService(database, "Test", nil, pepper, "", "", "", "", nil)
+	service, _ := NewService(database, "Test", nil, []byte("test-pepper"), "", "", "", "", nil)
 	user, _ := database.CreateUser("helper@example.com", "Helper Test", []string{"ops"})
 
-	// First call should generate codes
-	codes1, err := service.ensureBackupCodes(user.ID)
-	if err != nil {
-		t.Fatalf("failed to generate backup codes: %v", err)
+	first, err := service.backupCodesForEnrollment(user)
+	if err != nil || len(first) == 0 {
+		t.Fatalf("expected backup codes for a first enrollment, got %v, %v", first, err)
 	}
-	if len(codes1) == 0 {
-		t.Error("expected backup codes to be generated")
+	restarted, err := service.backupCodesForEnrollment(user)
+	if err != nil || len(restarted) == 0 || restarted[0] == first[0] {
+		t.Fatalf("expected a restarted first enrollment to show new codes, got %v, %v", restarted, err)
 	}
 
-	// Second call should return nil (codes already exist)
-	codes2, err := service.ensureBackupCodes(user.ID)
-	if err != nil {
-		t.Fatalf("failed on second call: %v", err)
+	if err := database.SetUserMFAEnrolled(user.ID, true); err != nil {
+		t.Fatalf("failed to enroll user: %v", err)
 	}
-	if codes2 != nil {
-		t.Error("expected nil codes on second call")
+	if codes, err := service.backupCodesForEnrollment(user); err == nil || codes != nil {
+		t.Fatalf("expected a first enrollment authorized before the user enrolled to get no codes, got %v", codes)
+	}
+
+	enrolled, _ := database.GetUserByID(user.ID)
+	codes, err := service.backupCodesForEnrollment(enrolled)
+	if err != nil || codes != nil {
+		t.Fatalf("expected an enrolled user's codes to be kept, got %v, %v", codes, err)
+	}
+	stored, _ := database.ListBackupCodes(user.ID)
+	if len(stored) != len(restarted) {
+		t.Fatalf("expected the user's %d codes to be kept, got %d", len(restarted), len(stored))
 	}
 }
 

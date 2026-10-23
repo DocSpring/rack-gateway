@@ -134,7 +134,7 @@ func (h *AuthHandler) StartYubiOTPEnrollment(c *gin.Context) {
 		return
 	}
 
-	result, err := h.mfaService.StartYubiOTPEnrollment(ctx.userRecord, req.YubiOTP)
+	result, err := h.mfaService.StartYubiOTPEnrollment(ctx.userRecord, req.YubiOTP, req.Label)
 	if err != nil {
 		log.Printf(
 			`{"level":"error","event":"yubiotp_enrollment_failed","user":%q,"error":%q}`,
@@ -150,7 +150,7 @@ func (h *AuthHandler) StartYubiOTPEnrollment(c *gin.Context) {
 		return
 	}
 
-	h.logMFAEnrollmentCompletion(c, ctx.userRecord, "", "yubiotp")
+	h.logMFAEnrollmentCompletion(c, ctx.userRecord, req.Label, "yubiotp")
 	c.JSON(http.StatusOK, result)
 }
 
