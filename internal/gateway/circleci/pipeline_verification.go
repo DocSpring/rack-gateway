@@ -99,15 +99,24 @@ func verifyPipeline(pipeline *pipelineDetails, expect ApprovalExpectation) error
 			ErrPipelineMismatch, pipeline.Number, expect.PipelineNumber)
 	}
 
-	target := repoIdentityFromURL(pipeline.VCS.TargetRepositoryURL)
-	origin := repoIdentityFromURL(pipeline.VCS.OriginRepositoryURL)
-	if origin != "" && target != "" && !strings.EqualFold(origin, target) {
-		return fmt.Errorf("%w: pipeline builds code from fork %s", ErrPipelineMismatch, origin)
-	}
+	return checkPipelineRepository(pipeline, expect.Repo)
+}
 
-	expectedRepo := strings.TrimSpace(expect.Repo)
+// checkPipelineRepository checks that the pipeline builds expectedRepo's own code: its repository (the target
+// repository URL, else the project slug) is expectedRepo, and its origin repository, when CircleCI gives one, is the
+// same repository rather than a fork. A repository URL that's given but can't be read is refused.
+func checkPipelineRepository(pipeline *pipelineDetails, expectedRepo string) error {
+	expectedRepo = strings.TrimSpace(expectedRepo)
 	if expectedRepo == "" {
 		return fmt.Errorf("%w: the app has no repository (vcs_repo) to check the pipeline against", ErrPipelineMismatch)
+	}
+	target, err := pipelineRepoURL("target", pipeline.VCS.TargetRepositoryURL)
+	if err != nil {
+		return err
+	}
+	origin, err := pipelineRepoURL("origin", pipeline.VCS.OriginRepositoryURL)
+	if err != nil {
+		return err
 	}
 	actual := target
 	if actual == "" {
@@ -120,7 +129,23 @@ func verifyPipeline(pipeline *pipelineDetails, expect ApprovalExpectation) error
 	if !strings.EqualFold(actual, expectedRepo) {
 		return fmt.Errorf("%w: pipeline repository %s, expected %s", ErrPipelineMismatch, actual, expectedRepo)
 	}
+	if origin != "" && !strings.EqualFold(origin, actual) {
+		return fmt.Errorf("%w: pipeline builds code from fork %s", ErrPipelineMismatch, origin)
+	}
 	return nil
+}
+
+// pipelineRepoURL returns the repository a pipeline's repository URL (role is "target" or "origin") names, "" when
+// there's none, or an error when it can't be read.
+func pipelineRepoURL(role, raw string) (string, error) {
+	if strings.TrimSpace(raw) == "" {
+		return "", nil
+	}
+	identity := repoIdentityFromURL(raw)
+	if identity == "" {
+		return "", fmt.Errorf("%w: can't read the pipeline's %s repository URL %q", ErrPipelineMismatch, role, raw)
+	}
+	return identity, nil
 }
 
 // repoIdentityFromURL returns "host/owner/repo" for a repository URL like https://github.com/owner/repo(.git).

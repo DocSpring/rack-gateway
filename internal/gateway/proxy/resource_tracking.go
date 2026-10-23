@@ -10,32 +10,62 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 )
 
-// recordResourceCreator stores the user->resource mapping if possible
+// recordResourceCreator records email's user as the creator of a resource the request created, unless a creator is
+// recorded already, and reports whether it recorded one. The rack has already created the resource, so a failed
+// write is tried once more and then logged as an error.
 func (h *Handler) recordResourceCreator(resourceType, resourceID, email string) bool {
 	if h.database == nil || h.rbacManager == nil {
 		return false
 	}
-	u, err := h.rbacManager.GetUserWithID(email)
-	if err != nil || u == nil {
+	userID, ok := h.creatorID(resourceType, resourceID, email)
+	if !ok {
 		return false
 	}
-	created, err := h.database.CreateUserResource(u.ID, resourceType, resourceID)
+	var created bool
+	err := retryOnce(func() error {
+		var err error
+		created, err = h.database.CreateUserResource(userID, resourceType, resourceID)
+		return err
+	})
 	if err != nil {
+		gtwlog.Errorf("can't record %s as the creator of %s %s: %v", email, resourceType, resourceID, err)
 		return false
 	}
 	return created
 }
 
 // setResourceCreator records email's user as the creator of a resource the request just created, replacing the
-// record of an earlier resource with the same ID (an app deleted and created again).
+// record of an earlier resource with the same ID (an app deleted and created again). A failed write is tried once
+// more, then logged as an error.
 func (h *Handler) setResourceCreator(resourceType, resourceID, email string) {
-	u, err := h.rbacManager.GetUserWithID(email)
-	if err != nil || u == nil {
+	userID, ok := h.creatorID(resourceType, resourceID, email)
+	if !ok {
 		return
 	}
-	if err := h.database.SetResourceCreator(u.ID, resourceType, resourceID); err != nil {
-		gtwlog.Warnf("setResourceCreator: can't record the creator of %s %s: %v", resourceType, resourceID, err)
+	if err := retryOnce(func() error {
+		return h.database.SetResourceCreator(userID, resourceType, resourceID)
+	}); err != nil {
+		gtwlog.Errorf("can't record %s as the creator of %s %s: %v", email, resourceType, resourceID, err)
 	}
+}
+
+// creatorID returns the ID of email's user, who created a resource, or logs why it can't.
+func (h *Handler) creatorID(resourceType, resourceID, email string) (int64, bool) {
+	u, err := h.rbacManager.GetUserWithID(email)
+	if err != nil || u == nil {
+		gtwlog.Errorf("can't load user %s to record them as the creator of %s %s: %v",
+			email, resourceType, resourceID, err)
+		return 0, false
+	}
+	return u.ID, true
+}
+
+// retryOnce runs write, and runs it again if it fails.
+func retryOnce(write func() error) error {
+	if err := write(); err == nil {
+		return nil
+	}
+	return write()
 }
 
 // captureResourceCreator persists the creator information for app/build/release create responses
@@ -226,8 +256,11 @@ func (h *Handler) recordBuildRelease(buildID, releaseID string) {
 	if !ok {
 		return
 	}
-	if _, err := h.database.CreateUserResource(creatorID, "release", releaseID); err != nil {
-		gtwlog.Warnf("recordBuildRelease: can't record the creator of release %s: %v", releaseID, err)
+	if err := retryOnce(func() error {
+		_, err := h.database.CreateUserResource(creatorID, "release", releaseID)
+		return err
+	}); err != nil {
+		gtwlog.Errorf("recordBuildRelease: can't record the creator of release %s: %v", releaseID, err)
 	}
 }
 

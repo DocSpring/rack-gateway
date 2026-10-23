@@ -157,22 +157,14 @@ type workflowJob struct {
 
 // findApprovalJob returns the approval job named jobName in a workflow.
 func (c *Client) findApprovalJob(workflowID, jobName string) (*workflowJob, error) {
-	url := fmt.Sprintf("%s/workflow/%s/job", c.BaseURL, workflowID)
-	body, err := c.doRequest(http.MethodGet, url)
+	jobs, err := listItems[workflowJob](c, fmt.Sprintf("%s/workflow/%s/job", c.BaseURL, workflowID))
 	if err != nil {
 		return nil, fmt.Errorf("failed to get workflow jobs: %w", err)
 	}
 
-	var result struct {
-		Items []workflowJob `json:"items"`
-	}
-	if err := json.Unmarshal(body, &result); err != nil {
-		return nil, fmt.Errorf("failed to parse workflow jobs: %w", err)
-	}
-
-	for i := range result.Items {
-		if result.Items[i].Name == jobName && result.Items[i].Type == "approval" {
-			return &result.Items[i], nil
+	for i := range jobs {
+		if jobs[i].Name == jobName && jobs[i].Type == "approval" {
+			return &jobs[i], nil
 		}
 	}
 	return nil, fmt.Errorf("approval job %q not found in workflow %s", jobName, workflowID)
@@ -209,25 +201,14 @@ func (c *Client) findRerun(original *workflowDetails) (string, error) {
 		return "", fmt.Errorf("failed to parse the workflow's created_at %q: %w", original.CreatedAt, err)
 	}
 
-	url := fmt.Sprintf("%s/pipeline/%s/workflow", c.BaseURL, original.PipelineID)
-	body, err := c.doRequest(http.MethodGet, url)
+	workflows, err := listItems[workflowDetails](c, fmt.Sprintf("%s/pipeline/%s/workflow", c.BaseURL,
+		original.PipelineID))
 	if err != nil {
-		return "", err
-	}
-
-	var result struct {
-		Items []struct {
-			ID        string `json:"id"`
-			Name      string `json:"name"`
-			CreatedAt string `json:"created_at"`
-		} `json:"items"`
-	}
-	if err := json.Unmarshal(body, &result); err != nil {
-		return "", fmt.Errorf("failed to parse pipeline workflows: %w", err)
+		return "", fmt.Errorf("failed to get pipeline workflows: %w", err)
 	}
 
 	rerunID, newest := "", originalCreated
-	for _, wf := range result.Items {
+	for _, wf := range workflows {
 		created, err := time.Parse(time.RFC3339, wf.CreatedAt)
 		if wf.Name != original.Name || wf.ID == original.ID || err != nil || !created.After(newest) {
 			continue

@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"unicode"
 	"unicode/utf8"
 
 	"github.com/gin-gonic/gin"
@@ -24,6 +25,9 @@ import (
 // maxDeployApprovalMessageChars caps the message CI sends with a request. It's shown to the approver and kept in
 // the audit log, where a long one would crowd out the request's other details.
 const maxDeployApprovalMessageChars = 2000
+
+// maxGitBranchChars is the longest branch name a request can name (the git_branch column's length).
+const maxGitBranchChars = 255
 
 // convoxAppName matches the app names a Convox rack accepts. Each app is a Kubernetes namespace (<rack>-<app>), so
 // its name is a lowercase RFC 1123 label: letters, digits and dashes, starting and ending with a letter or digit.
@@ -99,6 +103,18 @@ func rackAppStatus(ctx context.Context, rack config.RackConfig, tlsCfg *tls.Conf
 // validateRequestFields validates and extracts required fields from the create request.
 // Returns the validated message, git commit hash, and app name.
 // If validation fails, it writes an appropriate error response and returns false.
+// gitBranchProblem says why branch can't be a request's branch, or returns "". Git refuses control characters in
+// branch names, and one in a request could forge lines in the gateway's logs.
+func gitBranchProblem(branch string) string {
+	if strings.IndexFunc(branch, unicode.IsControl) >= 0 {
+		return "git_branch can't contain control characters"
+	}
+	if utf8.RuneCountInString(strings.TrimSpace(branch)) > maxGitBranchChars {
+		return fmt.Sprintf("git_branch must be at most %d characters", maxGitBranchChars)
+	}
+	return ""
+}
+
 func (h *APIHandler) validateRequestFields(
 	c *gin.Context,
 	req CreateDeployApprovalRequestRequest,
@@ -118,6 +134,11 @@ func (h *APIHandler) validateRequestFields(
 	gitCommitHash, ok := db.NormalizeCommitSHA(req.GitCommitHash)
 	if !ok {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "git_commit_hash must be a full 40-character commit SHA"})
+		return "", "", "", false
+	}
+
+	if problem := gitBranchProblem(req.GitBranch); problem != "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": problem})
 		return "", "", "", false
 	}
 

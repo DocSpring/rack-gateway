@@ -14,7 +14,7 @@ export interface DbSlackIntegration {
   channel_actions?: DbSlackIntegrationChannelActions;
   created_at?: string;
   created_by_user_id?: number;
-  id?: number;
+  id: number;
   scope?: string;
   updated_at?: string;
   workspace_id?: string;

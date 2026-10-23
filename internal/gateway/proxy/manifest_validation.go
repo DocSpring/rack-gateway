@@ -23,6 +23,10 @@ const (
 	maxFiles         = 10000             // Max number of entries in a tarball
 	maxFileSize      = 10 * 1024 * 1024  // 10MB max per file
 	maxTarballSize   = 500 * 1024 * 1024 // 500MB max tarball read
+	// maxTarStreamSize bounds a tarball's tar stream, uncompressed: its files (maxExtractedSize) plus every header,
+	// block padding and metadata record (PAX, GNU long names), which the tar reader reads before checkLimits sees
+	// an entry.
+	maxTarStreamSize = maxExtractedSize + 64*1024*1024
 
 	// maxManifestSize bounds convox.yml. A real one is a few kilobytes. The YAML parser builds a node for every
 	// scalar before anything is checked (a couple of hundred bytes each, even for keys the gateway ignores), so a
@@ -238,7 +242,7 @@ func sanitizeObjectFetchPath(value string) (string, error) {
 // the rack would still extract the rest (which could hold another manifest).
 func readArchiveManifest(r io.Reader, manifestPath string, limit int64) ([]byte, error) {
 	limited := &io.LimitedReader{R: r, N: limit}
-	manifestData, err := readManifestFromTarball(limited, manifestPath)
+	manifestData, err := readManifestFromTarball(limited, manifestPath, maxTarStreamSize)
 	if limited.N <= 0 {
 		return nil, fmt.Errorf("tarball exceeds maximum size of %d bytes", limit)
 	}
@@ -251,17 +255,22 @@ func readArchiveManifest(r io.Reader, manifestPath string, limit int64) ([]byte,
 // readManifestFromTarball returns the contents of the manifest at manifestPath in a gzipped tarball. It reads the
 // whole archive rather than stopping at the manifest: the rack extracts every entry in order, writing each file over
 // any earlier one at the same path, so a second manifest entry would change the manifest the rack builds from after
-// this one was checked. An archive with more than one is refused.
-func readManifestFromTarball(r io.Reader, manifestPath string) ([]byte, error) {
+// this one was checked. An archive with more than one is refused, and so is one whose tar stream (uncompressed) is
+// longer than streamLimit.
+func readManifestFromTarball(r io.Reader, manifestPath string, streamLimit int64) ([]byte, error) {
 	gzr, err := gzip.NewReader(r)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create gzip reader: %w", err)
 	}
 
-	tr := tar.NewReader(gzr)
+	stream := &io.LimitedReader{R: gzr, N: streamLimit + 1}
+	tr := tar.NewReader(stream)
 	scan := manifestScan{path: filepath.Clean(manifestPath)}
 	for {
 		header, err := tr.Next()
+		if stream.N <= 0 {
+			return nil, fmt.Errorf("tarball expands to more than %d bytes", streamLimit)
+		}
 		if errors.Is(err, io.EOF) {
 			break
 		}

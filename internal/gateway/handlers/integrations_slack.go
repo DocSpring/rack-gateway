@@ -168,9 +168,11 @@ func (h *AdminHandler) UpdateSlackChannelsHandler(c *gin.Context) {
 		return
 	}
 
-	// previous_channel_actions is the configuration the change was made to: the update is refused if it has changed
-	// since, so a change made to an older one can't undo another save.
+	// integration_id and previous_channel_actions are the integration and configuration the change was made to: the
+	// update is refused if either has changed since, so a change made to an older one can't undo another save or
+	// change an integration a reconnect has replaced.
 	var req struct {
+		IntegrationID          int64                  `json:"integration_id"           binding:"required"`
 		ChannelActions         map[string]interface{} `json:"channel_actions"          binding:"required"`
 		PreviousChannelActions map[string]interface{} `json:"previous_channel_actions" binding:"required"`
 	}
@@ -179,7 +181,7 @@ func (h *AdminHandler) UpdateSlackChannelsHandler(c *gin.Context) {
 		return
 	}
 
-	err := h.database.UpdateSlackIntegrationChannels(req.PreviousChannelActions, req.ChannelActions)
+	err := h.database.UpdateSlackIntegrationChannels(req.IntegrationID, req.PreviousChannelActions, req.ChannelActions)
 	switch {
 	case errors.Is(err, db.ErrNoSlackIntegration):
 		c.JSON(http.StatusNotFound, gin.H{"error": "no Slack integration configured"})

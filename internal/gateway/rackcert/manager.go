@@ -16,7 +16,12 @@ import (
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/config"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
+	gtwlog "github.com/DocSpring/rack-gateway/internal/gateway/logging"
 )
+
+// pinRecheckInterval is how long TLSConfig reuses its configuration before it reads the pinned certificate from the
+// database again, so a refresh made by another gateway instance takes effect on this one within it.
+const pinRecheckInterval = 30 * time.Second
 
 // ErrFingerprintMismatch is returned when the rack presents a certificate with an unexpected fingerprint.
 var ErrFingerprintMismatch = fmt.Errorf("rack TLS certificate fingerprint mismatch")
@@ -49,6 +54,8 @@ type Manager struct {
 	mu      sync.RWMutex
 	cert    *db.RackTLSCert
 	tlsConf *tls.Config
+	// checkedAt is when cert was last read from (or written to) the database.
+	checkedAt time.Time
 }
 
 // NewManager constructs a new rack certificate manager.
@@ -56,18 +63,13 @@ func NewManager(cfg *config.Config, database *db.Database) *Manager {
 	return &Manager{cfg: cfg, db: database}
 }
 
-// CurrentCertificate returns the currently stored certificate if available.
+// CurrentCertificate returns the currently stored certificate if available, read again from the database every
+// pinRecheckInterval like TLSConfig's.
 func (m *Manager) CurrentCertificate(context.Context) (*db.RackTLSCert, bool, error) {
-	m.mu.RLock()
-	if m.cert != nil {
-		certCopy := *m.cert
-		m.mu.RUnlock()
-		return &certCopy, true, nil
-	}
-	m.mu.RUnlock()
-
-	if err := m.loadFromDB(); err != nil {
-		return nil, false, err
+	if m.recentTLSConfig() == nil {
+		if err := m.loadFromDB(); err != nil && m.currentTLSConfig() == nil {
+			return nil, false, err
+		}
 	}
 
 	m.mu.RLock()
@@ -83,7 +85,8 @@ func (m *Manager) CurrentCertificate(context.Context) (*db.RackTLSCert, bool, er
 //
 // Every caller gets the same *tls.Config until the pinned certificate changes, so httpclient can keep one pool of
 // connections for it (a new pointer tells it the certificate changed). Callers must not modify it; net/http and
-// gorilla/websocket clone it before each handshake.
+// gorilla/websocket clone it before each handshake. The pin is read from the database again every
+// pinRecheckInterval, as another instance may have refreshed it.
 func (m *Manager) TLSConfig(ctx context.Context) (*tls.Config, error) {
 	rck, ok := m.rackConfig()
 	if !ok {
@@ -93,11 +96,16 @@ func (m *Manager) TLSConfig(ctx context.Context) (*tls.Config, error) {
 		return nil, nil
 	}
 
-	if cfg := m.currentTLSConfig(); cfg != nil {
+	if cfg := m.recentTLSConfig(); cfg != nil {
 		return cfg, nil
 	}
 
 	if err := m.loadFromDB(); err != nil {
+		if cfg := m.currentTLSConfig(); cfg != nil {
+			// The pin in use fails closed: a rack certificate that changed meanwhile is refused.
+			gtwlog.Errorf("rack TLS manager: can't re-read the pinned certificate, keeping the current one: %v", err)
+			return cfg, nil
+		}
 		return nil, err
 	}
 
@@ -111,6 +119,16 @@ func (m *Manager) TLSConfig(ctx context.Context) (*tls.Config, error) {
 func (m *Manager) currentTLSConfig() *tls.Config {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+	return m.tlsConf
+}
+
+// recentTLSConfig returns the TLS configuration when its pin was read less than pinRecheckInterval ago.
+func (m *Manager) recentTLSConfig() *tls.Config {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if time.Since(m.checkedAt) >= pinRecheckInterval {
+		return nil
+	}
 	return m.tlsConf
 }
 
@@ -145,7 +163,10 @@ func (m *Manager) loadFromDB() error {
 	if err != nil {
 		return err
 	}
-	if !ok {
+	if !ok || m.samePin(cert) {
+		m.mu.Lock()
+		m.checkedAt = time.Now()
+		m.mu.Unlock()
 		return nil
 	}
 	rck, ok := m.rackConfig()
@@ -166,8 +187,16 @@ func (m *Manager) loadFromDB() error {
 	m.mu.Lock()
 	m.cert = cert
 	m.tlsConf = cfg
+	m.checkedAt = time.Now()
 	m.mu.Unlock()
 	return nil
+}
+
+// samePin reports whether cert is the certificate the current TLS configuration pins, which then stays in use.
+func (m *Manager) samePin(cert *db.RackTLSCert) bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.tlsConf != nil && m.cert != nil && strings.EqualFold(m.cert.Fingerprint, cert.Fingerprint)
 }
 
 func (m *Manager) fetchAndStore(ctx context.Context, rck config.RackConfig, updatedBy *int64) (*tls.Config, error) {
@@ -191,6 +220,7 @@ func (m *Manager) fetchAndStore(ctx context.Context, rck config.RackConfig, upda
 	m.mu.Lock()
 	m.cert = cert
 	m.tlsConf = cfg
+	m.checkedAt = time.Now()
 	m.mu.Unlock()
 	return cfg, nil
 }

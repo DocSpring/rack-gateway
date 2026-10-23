@@ -13,7 +13,7 @@ import (
 
 // SlackIntegration represents a Slack workspace integration
 type SlackIntegration struct {
-	ID            int64  `json:"id"`
+	ID            int64  `json:"id"             validate:"required"`
 	WorkspaceID   string `json:"workspace_id"`
 	WorkspaceName string `json:"workspace_name"`
 	// BotToken is the decrypted bot token. It is stored encrypted and never serialized.
@@ -181,10 +181,14 @@ var ErrNoSlackIntegration = errors.New("no Slack integration found to update")
 // ErrSlackChannelsChanged is returned when the channel configuration changed after the caller read it.
 var ErrSlackChannelsChanged = errors.New("the Slack channel configuration has changed")
 
-// UpdateSlackIntegrationChannels replaces the channel configuration with channelActions while it is still previous,
-// the configuration the change was made to. An edit made to an older configuration (another tab or admin saved
-// since) gets ErrSlackChannelsChanged instead of silently undoing that save.
-func (d *Database) UpdateSlackIntegrationChannels(previous, channelActions map[string]interface{}) error {
+// UpdateSlackIntegrationChannels replaces the channel configuration with channelActions while the integration is
+// still integrationID and its configuration is still previous, the configuration the change was made to. An edit
+// made to an older configuration (another tab or admin saved since), or to an integration that a reconnect has
+// replaced, gets ErrSlackChannelsChanged instead of silently undoing that save or changing the new integration.
+func (d *Database) UpdateSlackIntegrationChannels(
+	integrationID int64,
+	previous, channelActions map[string]interface{},
+) error {
 	previousJSON, err := json.Marshal(previous)
 	if err != nil {
 		return fmt.Errorf("failed to marshal previous channel_actions: %w", err)
@@ -200,11 +204,11 @@ func (d *Database) UpdateSlackIntegrationChannels(previous, channelActions map[s
 			WITH updated AS (
 				UPDATE slack_integration
 				SET channel_actions = $1, updated_at = NOW()
-				WHERE channel_actions = $2::jsonb
+				WHERE id = $3 AND channel_actions = $2::jsonb
 				RETURNING id
 			)
 			SELECT NOT EXISTS (SELECT 1 FROM updated), NOT EXISTS (SELECT 1 FROM slack_integration)
-		`, channelActionsJSON, previousJSON).Scan(&changed, &missing)
+		`, channelActionsJSON, previousJSON, integrationID).Scan(&changed, &missing)
 		if err != nil {
 			return fmt.Errorf("failed to update channel_actions: %w", err)
 		}
