@@ -129,7 +129,7 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 	extendDeadlines(w, r, rackPath)
 
 	if err := h.checkBeforeRecording(r, rackPath, authUser, approvalTracker); err != nil {
-		h.handleForwardError(w, r, err, rackConfig.Name, start)
+		h.refuseBeforeRecording(w, r, authUser, err, rackConfig.Name, start)
 		return
 	}
 

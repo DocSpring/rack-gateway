@@ -13,7 +13,7 @@ import (
 // Details over the limit stay valid JSON: the longest strings are shortened first, so short fields such as IDs and
 // an approver's notes survive a long message.
 func TestFitAuditDetailsKeepsValidJSON(t *testing.T) {
-	message := strings.Repeat(`<"é`, 4000)
+	message := strings.Repeat(`<"é`, 20000)
 	details, err := json.Marshal(map[string]interface{}{
 		"approval_id": 42,
 		"notes":       "approved after review",

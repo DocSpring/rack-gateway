@@ -87,7 +87,7 @@ func TestCreateAuditLogHashMatchesStoredRow(t *testing.T) {
 
 func TestCreateAuditLogTruncatesOversizedFields(t *testing.T) {
 	database := newAuditTestDatabase(t)
-	details := `{"blob":"` + strings.Repeat("x", 9000) + `"}`
+	details := `{"blob":"` + strings.Repeat("x", 70000) + `"}`
 	log := &gwdb.AuditLog{
 		UserEmail:  "alice@example.com",
 		UserName:   strings.Repeat("n", 300),
@@ -102,10 +102,10 @@ func TestCreateAuditLogTruncatesOversizedFields(t *testing.T) {
 	require.NoError(t, database.CreateAuditLog(log), "oversized values must not make the insert fail")
 
 	// Details stay valid JSON: the long value is shortened, and says how long it was.
-	assert.Equal(t, 8000, utf8.RuneCountInString(log.Details))
+	assert.Equal(t, 64000, utf8.RuneCountInString(log.Details))
 	var stored map[string]string
 	require.NoError(t, json.Unmarshal([]byte(log.Details), &stored))
-	assert.True(t, strings.HasSuffix(stored["blob"], "…[truncated from 9000 characters]"))
+	assert.True(t, strings.HasSuffix(stored["blob"], "…[truncated from 70000 characters]"))
 	assert.Equal(t, 2000, utf8.RuneCountInString(log.Command))
 	assert.Equal(t, 150, utf8.RuneCountInString(log.Action))
 	assert.Equal(t, 200, utf8.RuneCountInString(log.UserName))

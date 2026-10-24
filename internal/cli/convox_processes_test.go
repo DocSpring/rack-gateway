@@ -1,9 +1,13 @@
 package cli
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/convox/stdcli"
+	"github.com/spf13/cobra"
+
+	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
 )
 
 func TestScaleCommandUseIncludesService(t *testing.T) {
@@ -93,5 +97,28 @@ func assertFlag(t *testing.T, flag *stdcli.Flag, name string, value interface{})
 	}
 	if flag.Value != value {
 		t.Fatalf("want flag value %v, got %v", value, flag.Value)
+	}
+}
+
+// A command too long for the gateway's audit log is refused with the reason before any MFA prompt or process start:
+// the gateway's own refusal of an exec only shows as "websocket: bad handshake".
+func TestProcessCommandsRefuseCommandsTooLongToAudit(t *testing.T) {
+	long := strings.Repeat("x", audit.MaxRecordedCommandBytes)
+	for _, cmd := range []*cobra.Command{ExecCommand(), RunCommand()} {
+		if err := cmd.Flags().Set("app", "myapp"); err != nil {
+			t.Fatal(err)
+		}
+		_, _, err := setupProcessCommand(cmd, []string{"web", "echo", long}, cmd.Name())
+		if err == nil || !strings.Contains(err.Error(), "too long for the audit log") {
+			t.Fatalf("%s: want the command refused as too long, got %v", cmd.Name(), err)
+		}
+	}
+}
+
+// The command is measured as the gateway receives it: a header value, with line breaks as spaces and no ends.
+func TestSentCommandIsTheCommandHeaderValue(t *testing.T) {
+	got := sentCommand([]string{"rails", "runner", "'puts 1\nputs 2\r\n'\n"})
+	if want := "rails runner 'puts 1 puts 2  '"; got != want {
+		t.Fatalf("want %q, got %q", want, got)
 	}
 }
