@@ -1,6 +1,6 @@
 {
   "name": "web",
-  "version": "0.1.17",
+  "version": "0.1.18",
   "private": true,
   "type": "module",
   "scripts": {
@@ -21,6 +21,11 @@
     "test:coverage": "bunx vitest --coverage",
     "test:ui": "bunx vitest --ui",
     "typecheck": "bunx tsc -b --noEmit --pretty false"
+  },
+  "overrides": {
+    "@scalar/json-magic": {
+      "undici": "7.30.1"
+    }
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.2.0",
@@ -48,7 +53,7 @@
     "react-dom": "^19.3.0",
     "react-hot-toast": "github:DocSpring/react-hot-toast#fix/csp-inline-styles-dist",
     "tailwind-merge": "^3.7.0",
-    "zod": "^4.6.5"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.15",

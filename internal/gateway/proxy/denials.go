@@ -21,6 +21,24 @@ func (h *Handler) recordDenial(r *http.Request, authUser *auth.User, status int,
 	h.auditLogger.RecordDenial(entry)
 }
 
+// refuseBeforeRecording answers a request checkBeforeRecording refused. No attempt was recorded for it, so a refusal
+// is recorded as a denial; any other error (a rack certificate that doesn't match) is answered as a request the
+// gateway couldn't forward.
+func (h *Handler) refuseBeforeRecording(
+	w http.ResponseWriter,
+	r *http.Request,
+	authUser *auth.User,
+	err error,
+	rackName string,
+	start time.Time,
+) {
+	var refusal *refusalError
+	if errors.As(err, &refusal) {
+		h.recordDenial(r, authUser, refusal.status, refusal.Error())
+	}
+	h.handleForwardError(w, r, err, rackName, start)
+}
+
 // refuseUnauthorized refuses a request RBAC denied.
 func (h *Handler) refuseUnauthorized(
 	w http.ResponseWriter,

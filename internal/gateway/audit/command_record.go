@@ -11,8 +11,9 @@ import (
 
 // MaxRecordedCommandBytes is the longest command a request may run, measured as its audit entry stores it
 // (redacted, then JSON-encoded). An entry's details are cut at db.AuditDetailsMaxChars, and a command cut short
-// there would hide what actually ran, so a longer one is refused before it reaches the rack.
-const MaxRecordedCommandBytes = 4000
+// there would hide what actually ran, so a longer one is refused before it reaches the rack. 50 KB leaves room for
+// a sizeable script while keeping audit entries a reasonable size.
+const MaxRecordedCommandBytes = 50 << 10
 
 // RequestCommand returns the command a rack request runs (its Command header): an exec's, or a process start's
 // (`convox run`). ok is false for any other request.
@@ -33,13 +34,20 @@ func CheckCommandRecordable(r *http.Request) error {
 	if !ok {
 		return nil
 	}
+	return CheckCommandLength(command)
+}
+
+// CheckCommandLength refuses a command the audit log couldn't keep in full (see MaxRecordedCommandBytes). The CLI
+// checks a command with it too, before it starts a process for the command to run in.
+func CheckCommandLength(command string) error {
 	encoded, err := json.Marshal(RedactCommand(command))
 	if err != nil {
 		return fmt.Errorf("the command can't be recorded: %w", err)
 	}
 	if len(encoded) > MaxRecordedCommandBytes {
 		return fmt.Errorf("the command is too long for the audit log to keep in full (%d bytes as recorded, at most "+
-			"%d): put a long script in a file in the image and run that", len(encoded), MaxRecordedCommandBytes)
+			"%d, or %d KB): put a long script in a file in the image and run that",
+			len(encoded), MaxRecordedCommandBytes, MaxRecordedCommandBytes>>10)
 	}
 	return nil
 }

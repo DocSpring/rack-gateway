@@ -318,6 +318,12 @@ flowchart TD
 | **API Tokens** | Creation, deletion, usage |
 | **Settings** | Configuration changes, with each setting's value before and after (`changes` in the details) |
 
+An exec's or a process start's command (`convox run`, `convox exec`) is recorded in full in its entry's details,
+with the credentials a command line commonly carries redacted. The gateway refuses a command longer than 50 KB as
+the audit log records it (redacted, then JSON-encoded) with `400` before it reaches the rack, so nothing runs that
+the log can't show in full, and the refusal is audited as a denial. The rack-gateway CLI checks the length before it
+starts a process, so it can say why; the Convox SDK only shows `websocket: bad handshake` for a refused exec.
+
 ### What Doesn't Get Logged
 
 - Health check requests (`/api/v1/health`)

@@ -21,7 +21,7 @@ const (
 	auditCommandMax      = 2000
 	auditResourceMax     = 255
 	auditResourceTypeMax = 100
-	auditDetailsMax      = 8000
+	auditDetailsMax      = 64000 // an exec's command at audit.MaxRecordedCommandBytes, with room for its other fields
 	auditRequestIDMax    = 255
 	auditUserAgentMax    = 512
 	auditStatusMax       = 32

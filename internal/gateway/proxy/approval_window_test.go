@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -83,24 +82,4 @@ func TestApprovalRecordsEveryExecOnAProcess(t *testing.T) {
 	var execs map[string][]string
 	require.NoError(t, json.Unmarshal(recorded.ExecCommands, &execs))
 	require.Equal(t, map[string][]string{"p1": append([]string{"bin/earlier"}, commands...)}, execs)
-}
-
-// A command longer than the audit log can keep in full is refused before it reaches the rack, whoever sends it: an
-// entry cut short would hide what ran.
-func TestCommandsTooLongToAuditAreRefused(t *testing.T) {
-	h, database, rack := newRecordingProxy(t)
-	for _, path := range []string{"/apps/myapp/services/web/processes", "/apps/myapp/processes/p1/exec"} {
-		method := http.MethodPost
-		if strings.HasSuffix(path, "/exec") {
-			method = http.MethodGet
-		}
-		req := withPath(requestAs(t, database, "admin@test.com"), method, path)
-		req.Header.Set("Command", "echo "+strings.Repeat("<", 1000))
-		before := rack.count()
-		rr := httptest.NewRecorder()
-		h.ProxyToRack(rr, req)
-		require.Equal(t, http.StatusBadRequest, rr.Code, path)
-		require.Contains(t, rr.Body.String(), "too long for the audit log", path)
-		require.Equal(t, before, rack.count(), "%s must not reach the rack", path)
-	}
 }

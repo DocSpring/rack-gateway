@@ -242,3 +242,8 @@ characters as `\uXXXX`, which `encoding/json` leaves raw, so `-o json` stays val
 - Auth errors: Suggest running `rack-gateway login` again
 - Permission errors: Clear message about which role is required
 - Token expiry: Auto-detect and prompt for re-login
+- Exec and log streams: the Convox SDK (`stdsdk.Client.Websocket`) drops the response to a refused WebSocket
+  handshake, so any gateway refusal of `exec`, `run` (attached) or `logs` (401, 403, 429, 400) prints only
+  `websocket: bad handshake`. The refusal and its reason are in the gateway's audit log and request log. The CLI
+  checks what it can before it connects: `run` and `exec` refuse a command too long for the audit log
+  (`audit.CheckCommandLength`) before any MFA prompt or process start.
