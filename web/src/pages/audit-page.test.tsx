@@ -784,4 +784,59 @@ describe('AuditPage', () => {
       })
     })
   })
+
+  // Slack messages link to the events they describe with ?entry=<id>: the entry opens in the detail dialog.
+  describe('Linked entry', () => {
+    const linked = {
+      ...mockLogs[0],
+      id: 7,
+      action_type: 'convox',
+      action: 'process.exec.start',
+      details: JSON.stringify({
+        command: 'ls -la',
+        justification: 'List files for a support ticket',
+      }),
+    }
+    const mockAPI = (entry: Promise<unknown>) =>
+      vi
+        .mocked(api.get)
+        .mockImplementation((path: string) =>
+          path === '/api/v1/audit-logs/7' ? entry : Promise.resolve(makeResponse(mockLogs))
+        )
+
+    it('opens the entry a link names', async () => {
+      window.history.replaceState(null, '', '/?entry=7')
+      mockAPI(Promise.resolve(linked))
+
+      render(<AuditPage />, { wrapper: createWrapper() })
+
+      const dialog = await screen.findByRole('dialog')
+      expect(within(dialog).getByText('process.exec.start')).toBeInTheDocument()
+      expect(within(dialog).getByTestId('audit-command')).toHaveTextContent('Command: ls -la')
+      expect(window.location.search).not.toContain('entry=')
+    })
+
+    it('says when the linked entry fails to load', async () => {
+      window.history.replaceState(null, '', '/?entry=7')
+      mockAPI(Promise.reject(new Error('audit log not found')))
+
+      render(<AuditPage />, { wrapper: createWrapper() })
+
+      expect(
+        await screen.findByText('Failed to load the linked audit log entry: audit log not found')
+      ).toBeInTheDocument()
+      expect(screen.queryByRole('dialog')).toBeNull()
+    })
+
+    it("doesn't load it without access to the whole log", async () => {
+      mockUseAuth.mockReturnValue(VIEWER_AUTH)
+      window.history.replaceState(null, '', '/?entry=7')
+      mockAPI(Promise.resolve(linked))
+
+      render(<AuditPage userEmail="viewer@example.com" />, { wrapper: createWrapper() })
+
+      await waitFor(() => expect(api.get).toHaveBeenCalled())
+      expect(api.get).not.toHaveBeenCalledWith('/api/v1/audit-logs/7')
+    })
+  })
 })

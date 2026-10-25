@@ -179,6 +179,7 @@ func registerUserManagementRoutes(authenticated *gin.RouterGroup, cfg *Config, h
 	auditLogs.GET("", h.admin.ListAuditLogs)
 	auditLogs.GET("/export", h.admin.ExportAuditLogs)
 	auditLogs.GET("/verification", h.admin.GetAuditVerification)
+	auditLogs.GET("/:id", h.admin.GetAuditLog)
 
 	apiTokens := authenticated.Group("/api-tokens")
 	if cfg.SessionManager != nil {

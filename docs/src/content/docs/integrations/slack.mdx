@@ -130,6 +130,8 @@ Action names use underscores (e.g., `deploy_approval_request.*`). Use the Audit 
 | `api_token.*` | API token create/update/delete |
 | `env.*_protected` | Protected env var changes and removals (`env.set_protected`, `env.unset_protected`), including refused `--allow-protected` attempts while the step-up window is open |
 | `deploy_approval_request.*` | Request create/approve/reject |
+| `process.exec.start` | A command starting in a running process (`exec`, and the command of an attached `run`) |
+| `process.start` | A process starting (`run`): a detached run's command, or a refused run |
 | `release.promote` | Release promotions |
 | `user.*` | User create/update/delete/lock/unlock |
 
@@ -180,6 +182,19 @@ Rack Gateway (Staging)
 User: admin@example.com
 Status: success
 ```
+
+### Commands
+
+Map `process.exec.start` and `process.start` to a channel to hear about every command run on the rack, when it
+starts. These messages have their own format: who ran the command, the app and process (or service), the status,
+the full [justification](/user-guide/cli/commands/#justifications), the command's length in bytes, a script's name,
+line count and SHA-256, and a link that opens the entry in the web UI's audit log. They never include the command
+or a script's text: a command line can carry a credential the audit log's redaction doesn't recognize, and a Slack
+channel reaches more people than the audit log.
+
+An attached `run` starts a placeholder process, then execs the command in it, so its command arrives as
+`process.exec.start`. The placeholder's start isn't posted, unless it was refused. `process.exec` (an exec
+finishing, or refused) gets the same format.
 
 Deploy approval alerts start with the same line, and their **View Approval Request** link opens the request on
 that gateway.

@@ -7,6 +7,7 @@
  */
 import type {
   DbAPIToken,
+  DbAuditLog,
   DbRackTLSCert,
   DbSlackIntegration,
   DbUser,
@@ -586,6 +587,21 @@ export const getRackGatewayAPI = () => {
   ) => {
     return createGatewayClient<HandlersAuditVerificationResponse>(
       { url: `/audit-logs/verification`, method: "GET" },
+      options,
+    );
+  };
+
+  /**
+   * Returns one audit event by its ID. The audit log page opens it from a link (Slack messages link to
+   * the events they describe).
+   * @summary Get an audit log entry
+   */
+  const getAuditLogsId = (
+    id: number,
+    options?: SecondParameter<typeof createGatewayClient<DbAuditLog>>,
+  ) => {
+    return createGatewayClient<DbAuditLog>(
+      { url: `/audit-logs/${id}`, method: "GET" },
       options,
     );
   };
@@ -1635,6 +1651,7 @@ export const getRackGatewayAPI = () => {
     getAuditLogs,
     getAuditLogsExport,
     getAuditLogsVerification,
+    getAuditLogsId,
     getAuthCliCallback,
     postAuthCliCancel,
     postAuthCliComplete,
@@ -1859,6 +1876,9 @@ export type GetAuditLogsVerificationResult = NonNullable<
   Awaited<
     ReturnType<ReturnType<typeof getRackGatewayAPI>["getAuditLogsVerification"]>
   >
+>;
+export type GetAuditLogsIdResult = NonNullable<
+  Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>["getAuditLogsId"]>>
 >;
 export type GetAuthCliCallbackResult = NonNullable<
   Awaited<
