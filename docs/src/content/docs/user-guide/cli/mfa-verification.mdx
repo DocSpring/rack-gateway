@@ -131,6 +131,10 @@ another command. `run` starts its process first and asks once the process is run
 runs in it: a TOTP code or a WebAuthn challenge doesn't expire while a slow process starts. The PIN dialog shows
 the app, the rack, the command and its justification.
 
+That first process only runs `sleep 3600`, so starting it needs no MFA of its own, including for another of the
+app's releases (`run --release`). It can't use a custom image, privileged options or the service's lifecycle
+hooks: those run something besides the command, so a process start with them needs MFA on the start itself.
+
 ### One Key Touch Per Command
 
 The CLI asks for MFA once per command and sends that proof with every request the command makes. The first

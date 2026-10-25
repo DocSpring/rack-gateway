@@ -82,13 +82,16 @@ func TestProcessStartNeedsAProofOnTheRequest(t *testing.T) {
 	require.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
 }
 
-// `convox run`'s placeholder start runs nothing, so it needs no proof: the command's proof goes with the exec. A
-// placeholder start with an option that can run something else (a custom image's entrypoint, the service's
-// lifecycle hooks) or a second command needs one.
+// `convox run`'s placeholder start runs nothing, so it needs no proof: the command's proof goes with the exec. One
+// for another of the app's releases (`run --release`) doesn't either. A placeholder start with an option that can
+// run something else (a custom image's entrypoint, the service's lifecycle hooks) or a second command needs one.
 func TestAttachedRunPlaceholderStartNeedsNoProof(t *testing.T) {
 	f := newProtectedEnvFixture(t)
 	placeholder := map[string]string{"Command": convox.AttachedRunPlaceholder}
 	rr := f.processRequest(t, http.MethodPost, processStartPath, "", placeholder)
+	require.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
+	placeholder["Release"] = "RNEW123"
+	rr = f.processRequest(t, http.MethodPost, processStartPath, "", placeholder)
 	require.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
 
 	for _, option := range []string{"Image", "Use-Service-Lifecycle", "Privileged"} {

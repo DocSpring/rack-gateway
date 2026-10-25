@@ -37,7 +37,10 @@ func checkHeaderOnlyRequest(r *http.Request, path string, body []byte) error {
 }
 
 // placeholderRunOptions are the process start options that can make a process run something besides its command:
-// the privileged run options (a custom image runs its own entrypoint) and the service's lifecycle hooks.
+// the privileged run options (a custom image runs its own entrypoint) and the service's lifecycle hooks. Release
+// isn't one: it picks which of the app's own builds the placeholder sleeps in (`run --release`, as a deploy's
+// migration step does), and that build's entrypoint runs for any placeholder. Nothing the caller chooses runs
+// until the exec, which needs a proof.
 var placeholderRunOptions = func() headerSet {
 	set := newHeaderSet("Use-Service-Lifecycle")
 	for name := range privilegedRunHeaders {
