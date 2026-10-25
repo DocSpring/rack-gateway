@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+
+	"github.com/DocSpring/rack-gateway/internal/cli/terminal"
 )
 
 func newDeployApprovalWaitCommand() *cobra.Command {
@@ -83,7 +85,7 @@ func parseDeployApprovalWaitOptions(
 	}
 
 	if opts.autoApprove {
-		err := requireExplicitApprovalTarget(IsInteractive(), opts.app, false, opts.branch, opts.commit)
+		err := requireExplicitApprovalTarget(terminal.IsInteractive(), opts.app, false, opts.branch, opts.commit)
 		if err != nil {
 			return deployApprovalWaitConfig{}, err
 		}

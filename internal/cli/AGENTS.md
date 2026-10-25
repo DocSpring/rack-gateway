@@ -241,6 +241,15 @@ the gateway records and doesn't forward. When the app's `require_command_justifi
 command without one before anything starts (it reads the app's settings; API tokens can't, and rely on the
 gateway's refusal).
 
+`--script FILE` (`convox_process_command.go`) sends a local script with the command words: `scriptrun.Build` wraps
+them in a fixed `sh` runner that decodes the base64 script into a private temp directory and runs the words with
+the file's path appended. The gateway reads it back with `scriptrun.Parse` for the audit log, so the runner,
+`SafeName` and `Parse` must stay in step. A script needs command words and `--justification`. Before any MFA
+prompt, `scriptreview.Review` shows it with numbered lines and hidden characters as `<U+XXXX>`: a y/N prompt on a
+terminal, else a macOS JXA dialog (Cancel is the default; the texts go in as arguments, never into the JXA source),
+else refused. API tokens skip the review. The PIN dialog shows the script's name, line count and SHA-256, not its
+text.
+
 ### Terminal output from the gateway
 
 Every gateway-supplied string printed to the terminal (request IDs, statuses, token names and IDs, emails, error

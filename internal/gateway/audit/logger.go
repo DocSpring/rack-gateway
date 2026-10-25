@@ -318,7 +318,9 @@ func (_ *Logger) BuildDetailsJSON(r *http.Request) string {
 	// An exec or a process start records its command (the Command header, never WebSocket frames). A command line
 	// can carry credentials, which the audit log mustn't keep (see RedactCommand).
 	if cmd, ok := RequestCommand(r); ok && cmd != "" {
-		details["command"] = RedactCommand(cmd)
+		for key, value := range commandDetails(cmd) {
+			details[key] = value
+		}
 	}
 	if justification := JustificationFromContext(r.Context()); justification != "" {
 		details["justification"] = justification

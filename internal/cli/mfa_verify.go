@@ -14,6 +14,7 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
+	"github.com/DocSpring/rack-gateway/internal/cli/terminal"
 	"github.com/DocSpring/rack-gateway/internal/cli/webauthn"
 )
 
@@ -257,13 +258,7 @@ func submitWebAuthnAssertion(baseURL, sessionToken, sessionData, assertionJSON s
 }
 
 func promptMFACode() (string, error) {
-	stdinFd := os.Stdin.Fd()
-	const maxInt = int(^uint(0) >> 1)
-	if stdinFd > uintptr(maxInt) {
-		return "", fmt.Errorf("invalid file descriptor")
-	}
-	fd := int(stdinFd)
-	if term.IsTerminal(fd) {
+	if fd, ok := terminal.StdinFD(); ok {
 		fmt.Fprint(os.Stderr, "Enter MFA code (TOTP, YubiKey OTP or backup code): ")
 		codeBytes, err := term.ReadPassword(fd)
 		fmt.Fprintln(os.Stderr)

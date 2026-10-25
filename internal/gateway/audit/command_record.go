@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
+	"github.com/DocSpring/rack-gateway/internal/scriptrun"
 )
 
 // MaxRecordedCommandBytes is the longest command a request may run, measured as its audit entry stores it
@@ -37,17 +38,44 @@ func CheckCommandRecordable(r *http.Request) error {
 	return CheckCommandLength(command)
 }
 
-// CheckCommandLength refuses a command the audit log couldn't keep in full (see MaxRecordedCommandBytes). The CLI
-// checks a command with it too, before it starts a process for the command to run in.
+// CheckCommandLength refuses a command the audit log couldn't keep in full (see MaxRecordedCommandBytes): a
+// script command (see scriptrun) is measured as its command and script are recorded, together. The CLI checks a
+// command with it too, before it starts a process for the command to run in.
 func CheckCommandLength(command string) error {
-	encoded, err := json.Marshal(RedactCommand(command))
-	if err != nil {
-		return fmt.Errorf("the command can't be recorded: %w", err)
+	details := commandDetails(command)
+	recorded := 0
+	for _, key := range []string{"command", "script"} {
+		text, ok := details[key].(string)
+		if !ok {
+			continue
+		}
+		encoded, err := json.Marshal(text)
+		if err != nil {
+			return fmt.Errorf("the command can't be recorded: %w", err)
+		}
+		recorded += len(encoded)
 	}
-	if len(encoded) > MaxRecordedCommandBytes {
+	if recorded > MaxRecordedCommandBytes {
 		return fmt.Errorf("the command is too long for the audit log to keep in full (%d bytes as recorded, at most "+
 			"%d, or %d KB): put a long script in a file in the image and run that",
-			len(encoded), MaxRecordedCommandBytes, MaxRecordedCommandBytes>>10)
+			recorded, MaxRecordedCommandBytes, MaxRecordedCommandBytes>>10)
 	}
 	return nil
+}
+
+// commandDetails are the audit details that record command: the command, redacted (see RedactCommand). A script
+// command (see scriptrun) is recorded as a person would run it locally (the command words, then the script's
+// name), with the script's text (redacted too), its name and the SHA-256 of what was sent, which a copy of the
+// script can be checked against.
+func commandDetails(command string) map[string]interface{} {
+	script, ok := scriptrun.Parse(command)
+	if !ok {
+		return map[string]interface{}{"command": RedactCommand(command)}
+	}
+	return map[string]interface{}{
+		"command":       RedactCommand(script.Command()),
+		"script":        RedactCommand(script.Text),
+		"script_name":   script.Name,
+		"script_sha256": script.SHA256,
+	}
 }

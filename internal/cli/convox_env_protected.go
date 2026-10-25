@@ -10,6 +10,7 @@ import (
 	"github.com/convox/stdcli"
 	"github.com/spf13/cobra"
 
+	"github.com/DocSpring/rack-gateway/internal/cli/terminal"
 	"github.com/DocSpring/rack-gateway/internal/cli/webauthn"
 	"github.com/DocSpring/rack-gateway/internal/gateway/envutil"
 )
@@ -73,7 +74,7 @@ func envChangeMFAAuth(cmd *cobra.Command, commandName string, keys []string, all
 		if err != nil {
 			return "", err
 		}
-		if err := requireExplicitProtectedEnvApp(IsInteractive(), explicitApp); err != nil {
+		if err := requireExplicitProtectedEnvApp(terminal.IsInteractive(), explicitApp); err != nil {
 			return "", err
 		}
 	}

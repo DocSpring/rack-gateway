@@ -328,6 +328,11 @@ A command's justification (`--justification`, or the deploy approval's message f
 recorded with it as `justification` in the details. An app can require one for every command
 (`require_command_justification`): a command without one is refused with `400` and audited as a denial.
 
+A command run with a script (`--script`, see [Scripts](/user-guide/cli/commands/#scripts)) is recorded readably:
+`command` is the command as a person would run it locally (`rails runner check.rb`), `script` the script's text
+(redacted like a command line), `script_name` its file name and `script_sha256` the SHA-256 of what was sent. The
+50 KB limit counts the command and the script together.
+
 ### What Doesn't Get Logged
 
 - Health check requests (`/api/v1/health`)

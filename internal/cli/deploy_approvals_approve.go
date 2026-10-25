@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 
+	"github.com/DocSpring/rack-gateway/internal/cli/terminal"
 	"github.com/DocSpring/rack-gateway/internal/cli/webauthn"
 )
 
@@ -101,7 +102,7 @@ func executeDeployApprovalApprove(cmd *cobra.Command, args []string, opts deploy
 	}
 
 	// No ID provided - search by branch or commit
-	err = requireExplicitApprovalTarget(IsInteractive(), opts.app, opts.allApps, opts.branch, opts.commit)
+	err = requireExplicitApprovalTarget(terminal.IsInteractive(), opts.app, opts.allApps, opts.branch, opts.commit)
 	if err != nil {
 		return err
 	}
@@ -177,7 +178,7 @@ func approvePendingRequests(cmd *cobra.Command, requests []rackApproval, notes s
 			"Approve them without --mfa-code, or one at a time by ID", len(pending))
 	}
 
-	if IsInteractive() {
+	if terminal.IsInteractive() {
 		if err := promptForApproval(cmd, pending); err != nil {
 			return err
 		}

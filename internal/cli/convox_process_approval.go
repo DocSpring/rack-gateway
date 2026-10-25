@@ -71,19 +71,23 @@ func appRequiresJustification(cmd *cobra.Command, app string) (bool, error) {
 	return required, nil
 }
 
-// commandPrompt describes a command for the person approving it with MFA: where it runs, the command, and its
-// justification, in the PIN dialog, the touch prompt and the touch notification.
-func commandPrompt(action, app, rack, target string, words []string, justification string) webauthn.Prompt {
-	where := fmt.Sprintf("app %s (rack %s)", displayText(app), displayText(rack))
-	verb := "run in a new " + displayText(target) + " process"
-	if action == "exec" {
-		verb = "exec in process " + displayText(target)
+// commandPrompt describes a command for the person approving it with MFA: where it runs, the command (a script's
+// words and file name), its justification and its script's size and SHA-256, in the PIN dialog, the touch prompt
+// and the touch notification.
+func commandPrompt(process processCommand) webauthn.Prompt {
+	verb := "run in a new " + displayText(process.target) + " process"
+	if process.action == "exec" {
+		verb = "exec in process " + displayText(process.target)
 	}
-	summary := []string{fmt.Sprintf("On %s, %s: %s", where, verb, displayText(sentCommand(words)))}
-	if justification != "" {
-		summary = append(summary, "Justification: "+displayText(justification))
+	summary := []string{fmt.Sprintf("On %s, %s: %s", process.where(), verb, displayText(process.shownCommand()))}
+	if process.justification != "" {
+		summary = append(summary, "Justification: "+displayText(process.justification))
 	}
-	return webauthn.Prompt{Summary: summary, Touch: "run a command on " + where}
+	if script := process.script; script != nil {
+		summary = append(summary, fmt.Sprintf("Script: %s, %d lines, SHA-256 %s", script.Name, script.Lines(),
+			script.SHA256))
+	}
+	return webauthn.Prompt{Summary: summary, Touch: "run a command on " + process.where()}
 }
 
 // freshMFAAuth collects an MFA proof for the selected rack (one prompt or key touch, or --mfa-code), whatever the

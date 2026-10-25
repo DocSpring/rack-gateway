@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { CommandDetails } from '@/components/audit-logs/command-details'
 import type { AuditLogRecord } from '@/components/audit-logs/types'
 import { formatStatusLabel, getAPITokenInfo } from '@/components/audit-logs/utils'
 import { Button } from '@/components/ui/button'
@@ -104,6 +105,7 @@ export function AuditLogDetailDialog({ entry, onClose }: AuditLogDetailDialogPro
                 <code className="rounded border bg-secondary px-1 py-0.5">{entry.command}</code>
               </div>
             )}
+            <CommandDetails details={entry.details} />
             <div className="break-all">
               <span className="text-muted-foreground">Details:</span>
               <pre className="mt-2 max-h-64 overflow-auto rounded bg-muted p-2 text-xs">

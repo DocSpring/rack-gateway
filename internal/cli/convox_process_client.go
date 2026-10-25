@@ -2,13 +2,13 @@ package cli
 
 import (
 	"io"
-	"os"
 
 	"github.com/convox/convox/pkg/structs"
 	"github.com/convox/convox/sdk"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
+	"github.com/DocSpring/rack-gateway/internal/cli/terminal"
 	"github.com/DocSpring/rack-gateway/internal/cli/webauthn"
 	"github.com/DocSpring/rack-gateway/internal/convox"
 )
@@ -92,19 +92,9 @@ func newHeaderClient(mfaAuth string, headers map[string]string) (*sdk.Client, er
 	return client, nil
 }
 
-// stdinTerminalFD returns stdin's file descriptor when stdin is a terminal.
-func stdinTerminalFD() (int, bool) {
-	fd := os.Stdin.Fd()
-	const maxInt = int(^uint(0) >> 1)
-	if fd > uintptr(maxInt) || !term.IsTerminal(int(fd)) {
-		return 0, false
-	}
-	return int(fd), true
-}
-
 // stdinTerminalState returns stdin's terminal state, or nil when stdin isn't a terminal.
 func stdinTerminalState() *term.State {
-	fd, ok := stdinTerminalFD()
+	fd, ok := terminal.StdinFD()
 	if !ok {
 		return nil
 	}
@@ -117,7 +107,7 @@ func stdinTerminalState() *term.State {
 
 // withTerminalState runs fn with stdin's terminal in state (nil: as it is), then puts it back as it was.
 func withTerminalState(state *term.State, fn func() error) error {
-	fd, ok := stdinTerminalFD()
+	fd, ok := terminal.StdinFD()
 	if state == nil || !ok {
 		return fn()
 	}
