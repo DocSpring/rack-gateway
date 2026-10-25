@@ -43,7 +43,7 @@ export function AuditLogDetailDialog({ entry, onClose }: AuditLogDetailDialogPro
 
   return (
     <Dialog onOpenChange={(open) => !open && onClose()} open={Boolean(entry)}>
-      <DialogContent className="max-h-[80vh] max-w-2xl overflow-auto">
+      <DialogContent className="max-h-[80vh] overflow-auto sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>Audit Log</DialogTitle>
           <DialogDescription>
@@ -51,7 +51,9 @@ export function AuditLogDetailDialog({ entry, onClose }: AuditLogDetailDialogPro
           </DialogDescription>
         </DialogHeader>
         {entry ? (
-          <div className="space-y-3 text-sm">
+          // min-w-0: the dialog is a grid, whose column would otherwise widen to a script's or the details'
+          // longest line, so the text around them wouldn't wrap at the dialog's width.
+          <div className="min-w-0 space-y-3 text-sm">
             <div>
               <span className="text-muted-foreground">Timestamp:</span> {renderTimestamp(entry)}
             </div>

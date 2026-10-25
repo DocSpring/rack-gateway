@@ -383,6 +383,17 @@ export async function getUserMfaSecret(email: string): Promise<string | null> {
   })
 }
 
+// latestAuditEventId is the ID of the newest audit event (what a Slack message's link names), or null.
+export async function latestAuditEventId(): Promise<number | null> {
+  return await withDbClient(async (client) => {
+    const result = await client.query<{ id: string }>(
+      'SELECT id FROM audit.audit_event ORDER BY id DESC LIMIT 1;'
+    )
+    const id = result.rows[0]?.id
+    return id ? Number(id) : null
+  })
+}
+
 export async function getPendingTotpSecret(email: string): Promise<string | null> {
   return await withDbClient(async (client) => {
     const result = await client.query<StoredMfaSecret>(

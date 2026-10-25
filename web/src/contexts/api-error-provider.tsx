@@ -53,7 +53,7 @@ const handleUnauthorized = (error: InterceptorError): boolean => {
   }
   toast.error(SESSION_EXPIRED_MESSAGE)
 
-  // Redirect to login with returnTo parameter containing current path
+  // Redirect to login with returnTo parameter containing current path and query
   // This allows redirecting back after successful authentication
   if (typeof window !== 'undefined') {
     const currentPath = window.location.pathname
@@ -64,7 +64,7 @@ const handleUnauthorized = (error: InterceptorError): boolean => {
     // Only include returnTo if we're on an actual app page (not already on login/auth pages)
     const isAuthPage = currentPath === loginPath || currentPath.includes('/auth/')
     if (!isAuthPage && currentPath !== normalizedBase && currentPath !== `${normalizedBase}/`) {
-      const returnTo = currentPath
+      const returnTo = `${currentPath}${window.location.search}`
       const loginURL = `${loginPath}?returnTo=${encodeURIComponent(returnTo)}`
       window.location.href = loginURL
       return true

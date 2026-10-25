@@ -26,8 +26,10 @@ vi.mock('@tanstack/react-router', () => ({
     </a>
   ),
   useNavigate: () => vi.fn(),
+  // Like the app's router (basepath /app), the location leaves the basepath out.
   useLocation: () => ({
-    pathname: '/',
+    pathname:
+      typeof window === 'undefined' ? '/' : window.location.pathname.replace(/^\/app/, '') || '/',
     search: typeof window === 'undefined' ? '' : window.location.search,
     hash: '',
   }),
@@ -608,6 +610,24 @@ describe('AuditPage', () => {
         replaceSpy.mockRestore()
       }
     })
+
+    // The router's location leaves out its basepath: a URL without it is a 404 on reload, and a returnTo without
+    // it isn't accepted after sign-in.
+    it('keeps the /app basepath in the URL', async () => {
+      window.history.replaceState(null, '', '/app/audit-logs')
+      vi.mocked(api.get).mockResolvedValue(makeResponse(mockLogs))
+      render(<AuditPage />, { wrapper: createWrapper() })
+      await waitFor(() => expect(api.get).toHaveBeenCalled())
+
+      const actionTypeSelect = document.getElementById('action-type')
+      if (!actionTypeSelect) {
+        throw new Error('Action type select not found')
+      }
+      fireEvent.change(actionTypeSelect, { target: { value: 'auth' } })
+
+      await waitFor(() => expect(window.location.search).toBe('?action_type=auth'))
+      expect(window.location.pathname).toBe('/app/audit-logs')
+    })
   })
 
   describe('Custom range', () => {
@@ -804,8 +824,9 @@ describe('AuditPage', () => {
           path === '/api/v1/audit-logs/7' ? entry : Promise.resolve(makeResponse(mockLogs))
         )
 
-    it('opens the entry a link names', async () => {
-      window.history.replaceState(null, '', '/?entry=7')
+    // The link stays in the URL while the entry is shown, so a sign-in after an expired session comes back to it.
+    it('opens the entry a link names, and keeps it in the URL until the dialog closes', async () => {
+      window.history.replaceState(null, '', '/app/audit-logs?entry=7')
       mockAPI(Promise.resolve(linked))
 
       render(<AuditPage />, { wrapper: createWrapper() })
@@ -813,7 +834,13 @@ describe('AuditPage', () => {
       const dialog = await screen.findByRole('dialog')
       expect(within(dialog).getByText('process.exec.start')).toBeInTheDocument()
       expect(within(dialog).getByTestId('audit-command')).toHaveTextContent('Command: ls -la')
+      expect(window.location.search).toContain('entry=7')
+
+      fireEvent.click(within(dialog).getAllByRole('button', { name: 'Close' })[0])
+
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
       expect(window.location.search).not.toContain('entry=')
+      expect(window.location.pathname).toBe('/app/audit-logs')
     })
 
     it('says when the linked entry fails to load', async () => {

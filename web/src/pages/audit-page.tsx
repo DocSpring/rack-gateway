@@ -266,9 +266,10 @@ export function AuditPage({ userId, userEmail, showVerification = false }: Audit
         error={auditPaneError(isError ? error : null, linkedEntry.error)}
         firstRowIndex={firstRowIndex}
         lastRowIndex={lastRowIndex}
-        linkedEntry={linkedEntry.data ?? null}
+        linkedEntry={linkedEntry.entry}
         loading={Boolean(isLoading && logs.length === 0)}
         logs={logs}
+        onDialogClose={linkedEntry.dismiss}
         onNextPage={handleNextPage}
         onPreviousPage={handlePreviousPage}
         title={title}
