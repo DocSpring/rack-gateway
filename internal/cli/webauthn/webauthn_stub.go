@@ -18,3 +18,13 @@ func GetAssertionWithCachedPIN(options AssertionOptions, cachedPIN string) (*Ass
 func CheckAvailability() bool {
 	return false
 }
+
+// SingleKeyHasPIN stub - no security key support in this build
+func SingleKeyHasPIN() bool {
+	return false
+}
+
+// CheckPIN stub - no security key support in this build
+func CheckPIN(string) error {
+	return nil
+}

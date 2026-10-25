@@ -128,7 +128,7 @@ func protectedEnvMFAAuth(cmd *cobra.Command, commandName string, keys []string) 
 			return "", err
 		}
 	}
-	return freshMFAAuth(cmd, prompt)
+	return freshMFAAuth(cmd, prompt, "")
 }
 
 // protectedEnvPrompt describes a protected env change for the person approving it: one summary line per key,

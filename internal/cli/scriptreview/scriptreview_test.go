@@ -80,15 +80,15 @@ func TestReviewInDialog(t *testing.T) {
 			gotScript, gotArgs = script, args
 			return stdout, "", nil
 		}
-		err := reviewInDialog(context.Background(), run, req)
+		pin, err := reviewInDialog(context.Background(), run, req)
 		if approved {
 			require.NoError(t, err)
 		} else {
 			require.ErrorIs(t, err, ErrDeclined)
 		}
+		require.Empty(t, pin)
 		require.Equal(t, dialogScript, gotScript)
-		require.Len(t, gotArgs, 2)
-		require.Equal(t, Header(req), gotArgs[0])
+		require.Equal(t, []string{Header(req), gotArgs[1], "", ""}, gotArgs)
 		var spans []span
 		require.NoError(t, json.Unmarshal([]byte(gotArgs[1]), &spans))
 		require.Equal(t, "1 | puts 'run'", plainText(spans))
@@ -97,7 +97,58 @@ func TestReviewInDialog(t *testing.T) {
 	failing := func(context.Context, string, ...string) (string, string, error) {
 		return "", "execution error", errors.New("exit status 1")
 	}
-	require.ErrorContains(t, reviewInDialog(context.Background(), failing, req), "execution error")
+	_, err := reviewInDialog(context.Background(), failing, req)
+	require.ErrorContains(t, err, "execution error")
+}
+
+// answers is a dialog that gives each of its answers in turn, and records the problem each was asked with.
+func answers(t *testing.T, stdouts ...string) (dialogRunner, *[]string) {
+	t.Helper()
+	var problems []string
+	return func(_ context.Context, _ string, args ...string) (string, string, error) {
+		require.Len(t, args, 4)
+		require.Equal(t, "pin", args[2])
+		require.Contains(t, args[0], pinInstructions)
+		problems = append(problems, args[3])
+		require.LessOrEqual(t, len(problems), len(stdouts), "the dialog was shown too often")
+		return stdouts[len(problems)-1], "", nil
+	}, &problems
+}
+
+// With CheckPIN, the dialog asks for the security key PIN too: Run without a PIN, or with one CheckPIN rejects,
+// shows it again with the reason. The PIN it accepts is returned exactly as typed.
+func TestReviewInDialogAsksForThePIN(t *testing.T) {
+	req := testRequest(t, "puts 1\n")
+	var checked []string
+	req.CheckPIN = func(pin string) (string, error) {
+		checked = append(checked, pin)
+		if pin != " 1234 " {
+			return "wrong security key PIN: 7 tries left before the key locks", nil
+		}
+		return "", nil
+	}
+	run, problems := answers(t, "run\n\n", "run\n123456\n", "run\n 1234 \n")
+	pin, err := reviewInDialog(context.Background(), run, req)
+	require.NoError(t, err)
+	require.Equal(t, " 1234 ", pin)
+	require.Equal(t, []string{"123456", " 1234 "}, checked)
+	require.Equal(t, []string{"", enterPIN, "wrong security key PIN: 7 tries left before the key locks"}, *problems)
+}
+
+// Cancel declines the script whatever was typed, and an error from CheckPIN (a locked key) ends the review.
+func TestReviewInDialogWithPINDeclinedOrFailed(t *testing.T) {
+	req := testRequest(t, "puts 1\n")
+	req.CheckPIN = func(string) (string, error) { return "", errors.New("the key is locked") }
+
+	run, _ := answers(t, "cancel\n")
+	pin, err := reviewInDialog(context.Background(), run, req)
+	require.ErrorIs(t, err, ErrDeclined)
+	require.Empty(t, pin)
+
+	run, _ = answers(t, "run\n123456\n")
+	pin, err = reviewInDialog(context.Background(), run, req)
+	require.EqualError(t, err, "the key is locked")
+	require.Empty(t, pin)
 }
 
 // A dialog nobody answers is closed when it times out, and the script isn't approved.
@@ -108,7 +159,7 @@ func TestReviewInDialogTimesOut(t *testing.T) {
 		<-ctx.Done()
 		return "", "", errors.New("signal: killed")
 	}
-	err := reviewInDialog(ctx, waiting, testRequest(t, "puts 1\n"))
+	_, err := reviewInDialog(ctx, waiting, testRequest(t, "puts 1\n"))
 	require.ErrorIs(t, err, ErrDeclined)
 	require.ErrorContains(t, err, "the review dialog timed out")
 }

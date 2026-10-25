@@ -121,9 +121,9 @@ func reviewedScripts(t *testing.T, err error) *[]processCommand {
 	t.Helper()
 	var reviewed []processCommand
 	previous := reviewScriptWith
-	reviewScriptWith = func(process processCommand) error {
+	reviewScriptWith = func(process processCommand) (string, error) {
 		reviewed = append(reviewed, process)
-		return err
+		return "", err
 	}
 	t.Cleanup(func() { reviewScriptWith = previous })
 	return &reviewed

@@ -11,7 +11,6 @@ import (
 	"github.com/convox/stdcli"
 	"github.com/spf13/cobra"
 
-	"github.com/DocSpring/rack-gateway/internal/cli/scriptreview"
 	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
 	"github.com/DocSpring/rack-gateway/internal/scriptrun"
 )
@@ -46,6 +45,9 @@ type processCommand struct {
 	script *scriptrun.Script
 	// dryRun stops the command before anything is sent (--dry-run).
 	dryRun bool
+	// pin is the security key PIN entered in the script review dialog, for the command's MFA proof ("" when the
+	// PIN is asked for when the command runs). It's only ever passed to the security key.
+	pin string
 }
 
 // where names the command's app and rack.
@@ -105,13 +107,14 @@ func prepareProcessCommand(cobraCmd *cobra.Command, args []string, action string
 	if process.dryRun, err = cobraCmd.Flags().GetBool(dryRunFlag); err != nil {
 		return process, err
 	}
-	return process, reviewScript(process)
+	process.pin, err = reviewScript(process)
+	return process, err
 }
 
 // connect returns the client and Convox context that run the command, args being the command line's arguments.
 // A script's command replaces the command words.
 func (p processCommand) connect(cobraCmd *cobra.Command, args []string) (*processClient, *stdcli.Context, error) {
-	client, err := newProcessClient(cobraCmd, p.headers(), commandPrompt(p))
+	client, err := newProcessClient(cobraCmd, p.headers(), commandPrompt(p), p.pin)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -197,22 +200,6 @@ func readScriptFile(path string) ([]byte, error) {
 		return nil, fmt.Errorf("%s: %w", displayText(path), err)
 	}
 	return text, nil
-}
-
-// reviewScript has the person running the command approve its script before anything is sent. API tokens run
-// unattended: there's no one to ask.
-func reviewScript(process processCommand) error {
-	if process.script == nil || apiTokenOverride() != "" {
-		return nil
-	}
-	return reviewScriptWith(process)
-}
-
-// reviewScriptWith shows a script for approval (scriptreview.Review). Tests replace it.
-var reviewScriptWith = func(process processCommand) error {
-	return scriptreview.Review(scriptreview.Request{
-		Where: process.where(), Justification: process.justification, Script: *process.script,
-	})
 }
 
 // headerLineBreaks are what Go's HTTP client replaces with spaces in a header value.
