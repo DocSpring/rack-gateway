@@ -242,8 +242,8 @@ command without one before anything starts (it reads the app's settings; API tok
 gateway's refusal).
 
 `--script FILE` (`convox_process_command.go`) sends a local script with the command words: `scriptrun.Build` wraps
-them in a fixed `sh` runner that decodes the base64 script into a private temp directory and runs the words with
-the file's path appended. The gateway reads it back with `scriptrun.Parse` for the audit log, so the runner,
+them in a fixed `sh` runner that decodes the base64 script into a temp directory and runs the words with the
+file's path appended. The file is readable by every user, since the words often drop to another user (`gosu`). The gateway reads it back with `scriptrun.Parse` for the audit log, so the runner,
 `SafeName` and `Parse` must stay in step. A script needs command words and `--justification`. Before any MFA
 prompt, `scriptreview.Review` shows it with numbered lines, hidden characters as `<U+XXXX>` and chroma syntax
 highlighting (`highlight.go`: styled spans, ANSI colors in a terminal, macOS system colors in the dialog; a lexer

@@ -382,8 +382,9 @@ fit in the audit log (50 KB).
   count_pro_accounts.rb`), the script's text with credentials redacted, its name, and the SHA-256 of what was
   sent, which a copy of the script can be checked against. The web UI shows the script with numbered lines.
 - **The script travels in the command.** The CLI encodes it in base64 and wraps the command in a short `sh`
-  runner that writes the file to a new private directory, runs the command and removes the directory when it
-  exits. The image needs `sh`, `mktemp` and `base64`.
+  runner that writes the file to a new directory, runs the command and removes the directory when it exits. Every
+  user can read the file, so a command that drops to another user (with `gosu` or `su`) can run it. The image
+  needs `sh`, `mktemp`, `base64` and `chmod`.
 
 ### scale
 
