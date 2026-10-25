@@ -207,11 +207,12 @@ A restore to before the upgrade loses the audit events written since; see
 
 ## Release Notes That Need Action
 
-### Fresh MFA for every command (v0.1.19 to v0.1.21)
+### Fresh MFA for every command (v0.1.19 to v0.1.22)
 
-v0.1.19 asks for MFA on every `run` and `exec`, adds justifications and `--script`. Upgrade straight to v0.1.21:
-v0.1.20 fixes the audit log page's links, and v0.1.21 lets a script's command read the script after it drops to
-another user (`gosu`, `su`).
+v0.1.19 asks for MFA on every `run` and `exec`, adds justifications and `--script`. Upgrade straight to v0.1.22:
+v0.1.20 fixes the audit log page's links, v0.1.21 lets a script's command read the script after it drops to
+another user (`gosu`, `su`), and in v0.1.22 the script review dialog takes the security key PIN, so a script run
+without a terminal needs no separate PIN dialog.
 
 1. **Upgrade every gateway before the CLI, and run commands on each rack with the CLI that matches its gateway.**
    A CLI older than v0.1.19 skips the MFA prompt while the step-up window is open, and a v0.1.19+ gateway refuses
@@ -219,9 +220,9 @@ another user (`gosu`, `su`).
    which an older gateway refuses: the run fails with "Multi-factor authentication is required for this action"
    before any prompt. Deploy a rack that's still on the old gateway with the old CLI (`migrate` runs before the
    promote), then switch.
-2. **Keep the CLI and the gateway on the same release for scripts.** The gateway recognizes a `--script` command
-   by its runner, which v0.1.21 changed: across the two versions, the audit log records the raw `sh -c` command
-   instead of the script's name, text and SHA-256.
+2. **Run scripts with v0.1.21 or later on both the CLI and the gateway.** The gateway recognizes a `--script`
+   command by its runner, which v0.1.21 changed: when only one side has that change, the audit log records the raw
+   `sh -c` command instead of the script's name, text and SHA-256.
 3. **`require_command_justification` is off by default.** Turn it on per app (app settings page, the API, or
    `RGW_APP_<APP>_SETTING_REQUIRE_COMMAND_JUSTIFICATION=true`) once your users' CLIs are on v0.1.19+. Commands run
    under a deploy approval use the approval's message as their justification.
