@@ -108,7 +108,7 @@ func TestProcessCommandsRefuseCommandsTooLongToAudit(t *testing.T) {
 		if err := cmd.Flags().Set("app", "myapp"); err != nil {
 			t.Fatal(err)
 		}
-		_, _, err := setupProcessCommand(cmd, []string{"web", "echo", long}, cmd.Name())
+		_, _, err := setupProcessCommand(t, cmd, []string{"web", "echo", long}, cmd.Name())
 		if err == nil || !strings.Contains(err.Error(), "too long for the audit log") {
 			t.Fatalf("%s: want the command refused as too long, got %v", cmd.Name(), err)
 		}

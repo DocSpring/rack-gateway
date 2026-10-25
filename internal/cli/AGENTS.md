@@ -232,11 +232,11 @@ quotes, backslashes or anything outside printable ASCII, escaping non-ASCII char
 
 The gateway needs an MFA proof on every exec and every process start that runs a command, whatever the step-up
 window says. `convox run` (attached) starts a placeholder process (`convox.AttachedRunPlaceholder`), waits for
-it, then execs the command into it. `processClient` (`convox_process_client.go`) wraps the SDK client: the
-placeholder start and the waits go without a proof, and the proof is collected just before the exec (or a
-detached run's start), with the terminal taken out of the raw mode Convox put it in, so a TOTP code or a WebAuthn
-challenge doesn't expire while a slow process starts. The PIN dialog summary names the app, rack, command and
-justification (`commandPrompt`). `--justification` travels in `audit.JustificationHeader` (percent-encoded), which
+it, then execs the command into it. `newProcessClient` (`convox_process_client.go`) collects the command's proof
+before anything goes to the rack, so the key touch comes straight after the PIN, and `processClient` sends it with
+the exec (or a detached run's start) only: the placeholder start and the waits go without one. A process starts in
+seconds, well within a WebAuthn challenge's five minutes or a TOTP code's 30 seconds or more. The PIN dialog
+summary names the app, rack, command and justification (`commandPrompt`). `--justification` travels in `audit.JustificationHeader` (percent-encoded), which
 the gateway records and doesn't forward. When `require_command_justification` is on (gateway-wide or the app's),
 the CLI refuses a command without one before anything starts (it reads the global and app settings; API tokens
 can't, and rely on the gateway's refusal).

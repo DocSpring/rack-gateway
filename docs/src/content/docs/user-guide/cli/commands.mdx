@@ -344,8 +344,9 @@ rack-gateway run web "rake db:migrate" -a myapp \
   --justification "Run the migration for the new invoices table, which the deploy skipped"
 ```
 
-Every `run` asks for MFA, even within the step-up window. It starts the process first and asks once the process
-is running, just before the command runs (see [Running commands](/user-guide/cli/mfa-verification/#running-commands)).
+Every `run` asks for MFA, even within the step-up window, before it starts the process. An attached `run` sends
+the proof with the command once the process is running, and `run --detach` with the process start (see
+[Running commands](/user-guide/cli/mfa-verification/#running-commands)).
 
 #### Justifications
 
@@ -379,7 +380,7 @@ fit in the audit log (50 KB).
 - **The dialog takes your security key PIN** when the command will use WebAuthn and exactly one security key with
   a PIN is plugged in. Entering the PIN and pressing Return approves the script. The key checks the PIN straight
   away, without a touch: a wrong PIN shows the dialog again, with the tries left before the key locks when the key
-  reports them. When the command runs, you only touch the key. With TOTP, `--mfa-code`, several keys or a key
+  reports them. Then you touch the key, before the process starts. With TOTP, `--mfa-code`, several keys or a key
   without a PIN, the dialog only asks for approval, and the command asks for MFA as usual.
 - **The PIN dialog shows the script's name, size and SHA-256**, so you can check the touch is for the script you
   reviewed. When the review dialog took the PIN, there's no PIN dialog: the review dialog showed the same lines.
