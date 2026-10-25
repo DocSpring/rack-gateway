@@ -51,6 +51,10 @@ The CLI supports multiple MFA methods:
     you don't miss one while the terminal is out of sight. On macOS, allow notifications for Script Editor if they
     don't appear. To turn them off, set `"touch_notifications": false` in `~/.config/rack-gateway/config.json`.
 
+    Commands take turns with the key. When two run at once (say, two AI agents each running a command), the second
+    prints `Waiting for another rack-gateway command to finish with the security key...` and asks for its PIN and
+    touch only once the first has its touch, so each prompt is for one command.
+
     Only security keys marked **CLI Compatible** in the web UI can be used from the CLI.
 
     <Aside type="note">

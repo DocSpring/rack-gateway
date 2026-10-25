@@ -22,24 +22,32 @@ type pinKey interface {
 
 // SingleKeyHasPIN reports whether exactly one security key is connected and it has a PIN set. Its PIN can then be
 // asked for before the gateway sends a challenge: it's the key that will sign it. With several keys connected, the
-// key to use is only known from the challenge's credentials.
+// key to use is only known from the challenge's credentials. It holds the security key lock (see withKeyLock).
 func SingleKeyHasPIN() bool {
-	keys, err := openPINKeys()
-	return err == nil && onlyKeyHasPIN(keys)
+	hasPIN, err := withKeyLock(func() (bool, error) {
+		keys, err := openPINKeys()
+		return err == nil && onlyKeyHasPIN(keys), nil
+	})
+	return err == nil && hasPIN
 }
 
 // CheckPIN checks pin on the one connected security key, without a touch. A PIN the key refuses returns an error
 // wrapping ErrWrongPIN, which says how many tries are left. A key that can't check a PIN this way (it has no
-// credential management) returns nil, and the assertion checks the PIN.
+// credential management) returns nil, and the assertion checks the PIN. It holds the security key lock (see
+// withKeyLock).
 func CheckPIN(pin string) error {
-	keys, err := openPINKeys()
-	if err != nil {
-		return err
-	}
-	if len(keys) != 1 {
-		return fmt.Errorf("%d security keys are connected: connect only the one you use with rack-gateway", len(keys))
-	}
-	return verifyPIN(keys[0], pin)
+	_, err := withKeyLock(func() (struct{}, error) {
+		keys, err := openPINKeys()
+		if err != nil {
+			return struct{}{}, err
+		}
+		if len(keys) != 1 {
+			return struct{}{}, fmt.Errorf("%d security keys are connected: connect only the one you use with "+
+				"rack-gateway", len(keys))
+		}
+		return struct{}{}, verifyPIN(keys[0], pin)
+	})
+	return err
 }
 
 func openPINKeys() ([]pinKey, error) {

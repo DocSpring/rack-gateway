@@ -1,8 +1,9 @@
 package cli
 
 import (
-	"os"
 	"path/filepath"
+
+	"github.com/DocSpring/rack-gateway/internal/cli/filelock"
 )
 
 // updateConfig applies change to the latest config and saves it, holding the config lock throughout, so two
@@ -36,16 +37,5 @@ func lockConfig() (func(), error) {
 	if err := ensurePrivateDir(ConfigPath); err != nil {
 		return nil, err
 	}
-	file, err := os.OpenFile(filepath.Join(filepath.Clean(ConfigPath), "config.lock"), os.O_CREATE|os.O_RDWR, 0o600)
-	if err != nil {
-		return nil, err
-	}
-	if err := lockFile(file); err != nil {
-		_ = file.Close()
-		return nil, err
-	}
-	return func() {
-		_ = unlockFile(file)
-		_ = file.Close()
-	}, nil
+	return filelock.Lock(filepath.Join(filepath.Clean(ConfigPath), "config.lock"), nil)
 }
