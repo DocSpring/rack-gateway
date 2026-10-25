@@ -4,7 +4,7 @@ import { RefreshCw } from 'lucide-react'
 import { useAuth } from '@/contexts/auth-context'
 import { api } from '@/lib/api'
 import { DeployApprovalsCard } from '@/pages/settings/deploy-approvals-card'
-import { DestructiveActionsCard } from '@/pages/settings/destructive-actions-card'
+import { GlobalToggleCard } from '@/pages/settings/global-toggle-card'
 import { MfaConfigCard } from '@/pages/settings/mfa-config-card'
 import { SessionTimeoutCard } from '@/pages/settings/session-timeout-card'
 import type { GlobalSettingsResponse } from '@/pages/settings/types'
@@ -58,10 +58,32 @@ export function SettingsPage() {
       <div className="space-y-6">
         <div className="grid gap-6 md:grid-cols-2">
           <MfaConfigCard disabled={!isAdmin} settings={globalSettings} />
-          <DestructiveActionsCard disabled={!isAdmin} settings={globalSettings} />
+          <GlobalToggleCard
+            description="Control whether users can perform destructive operations such as deleting apps or racks without additional approvals."
+            disabled={!isAdmin}
+            label="Allow destructive actions"
+            settingKey="allow_destructive_actions"
+            settings={globalSettings}
+            title="Destructive Actions"
+          />
         </div>
         <div className="grid gap-6 md:grid-cols-2">
           <SessionTimeoutCard disabled={!isAdmin} settings={globalSettings} />
+          <GlobalToggleCard
+            description={
+              <>
+                Every command run in every app (<code>rack-gateway run</code> and <code>exec</code>)
+                must say why it&apos;s run and what it does, with <code>--justification</code>. The
+                audit log records it with the command. Apps can also require one on their own. A
+                command run under a deploy approval is justified by the approval&apos;s message.
+              </>
+            }
+            disabled={!isAdmin}
+            label="Require a justification for every command"
+            settingKey="require_command_justification"
+            settings={globalSettings}
+            title="Command Justifications"
+          />
         </div>
         <VcsCiCard disabled={!isAdmin} settings={globalSettings} />
         <DeployApprovalsCard disabled={!isAdmin} settings={globalSettings} />

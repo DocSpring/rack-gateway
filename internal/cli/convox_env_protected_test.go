@@ -22,25 +22,30 @@ import (
 )
 
 // envChangeGateway is a fake gateway whose MFA status reports mfaMethods (a TOTP method by default) and a step-up
-// window that is still open, that starts WebAuthn assertions, and whose apps have appSettings (none by default). It
-// records the headers of every rack-proxy request.
+// window that is still open, that starts WebAuthn assertions, and that has globalSettings and appSettings (none by
+// default). It records the headers of every rack-proxy request.
 type envChangeGateway struct {
-	mu          sync.Mutex
-	proxied     []http.Header
-	appSettings string
-	mfaMethods  []MFAMethodResponse
+	mu             sync.Mutex
+	proxied        []http.Header
+	globalSettings string
+	appSettings    string
+	mfaMethods     []MFAMethodResponse
 }
 
 func (g *envChangeGateway) handler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	if strings.HasPrefix(r.URL.Path, "/api/v1/apps/") && strings.HasSuffix(r.URL.Path, "/settings") {
+	if r.URL.Path == "/api/v1/settings" ||
+		strings.HasPrefix(r.URL.Path, "/api/v1/apps/") && strings.HasSuffix(r.URL.Path, "/settings") {
 		g.mu.Lock()
-		appSettings := g.appSettings
-		g.mu.Unlock()
-		if appSettings == "" {
-			appSettings = "{}"
+		values := g.appSettings
+		if r.URL.Path == "/api/v1/settings" {
+			values = g.globalSettings
 		}
-		_, _ = w.Write([]byte(appSettings))
+		g.mu.Unlock()
+		if values == "" {
+			values = "{}"
+		}
+		_, _ = w.Write([]byte(values))
 		return
 	}
 	if r.URL.Path == "/api/v1/auth/mfa/webauthn/assertion/start" {

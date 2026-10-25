@@ -10,6 +10,7 @@ import { ServiceImagePatternsCard } from '@/pages/app-settings/service-image-pat
 import { StringArrayCard } from '@/pages/app-settings/string-array-card'
 import type { AppSettingsResponse } from '@/pages/app-settings/types'
 import { VCSCIProvidersCard } from '@/pages/app-settings/vcs-ci-providers-card'
+import type { GlobalSettingsResponse } from '@/pages/settings/types'
 
 export function AppSettingsPage() {
   const { app } = useParams({ from: '/_app/apps/$app/settings' }) as { app: string }
@@ -25,6 +26,13 @@ export function AppSettingsPage() {
     queryFn: async () => api.get<AppSettingsResponse>(apiPath`/api/v1/apps/${app}/settings`),
     refetchOnMount: 'always',
     refetchOnWindowFocus: true,
+    staleTime: 0,
+  })
+
+  // The gateway-wide require_command_justification applies to every app, whatever the app's own setting says.
+  const { data: globalSettings } = useQuery({
+    queryKey: ['globalSettings'],
+    queryFn: () => api.get<GlobalSettingsResponse>('/api/v1/settings'),
     staleTime: 0,
   })
 
@@ -102,7 +110,12 @@ export function AppSettingsPage() {
           <ServiceImagePatternsCard app={app} disabled={!isAdmin} settings={appSettings} />
         </div>
         <div className="grid grid-cols-2 gap-12">
-          <CommandJustificationCard app={app} disabled={!isAdmin} settings={appSettings} />
+          <CommandJustificationCard
+            app={app}
+            disabled={!isAdmin}
+            gatewayWide={globalSettings?.require_command_justification}
+            settings={appSettings}
+          />
         </div>
       </div>
     </div>

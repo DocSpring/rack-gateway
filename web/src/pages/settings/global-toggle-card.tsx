@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query'
-import { useState } from 'react'
+import { type ReactNode, useState } from 'react'
 import type { SettingsSetting } from '@/api/schemas'
 import {
   getSettingValue,
@@ -16,42 +16,55 @@ import { api } from '@/lib/api'
 import { toastAPIError } from '@/lib/error-utils'
 import type { GlobalSettingsResponse } from '@/pages/settings/types'
 
-interface DestructiveActionsCardProps {
+interface GlobalToggleCardProps {
   settings: GlobalSettingsResponse | undefined
   disabled: boolean
+  // settingKey is a global setting that is its own group, saved at /api/v1/settings/<settingKey with dashes>.
+  settingKey: string
+  title: string
+  description: ReactNode
+  label: string
 }
 
-export function DestructiveActionsCard({ settings, disabled }: DestructiveActionsCardProps) {
+// GlobalToggleCard turns one true-or-false global setting on or off, with Save and Cancel, and Clear for a stored
+// value.
+export function GlobalToggleCard({
+  settings,
+  disabled,
+  settingKey,
+  title,
+  description,
+  label,
+}: GlobalToggleCardProps) {
   const qc = useQueryClient()
   const { handleStepUpError } = useStepUp()
-  const [allowDestructive, setAllowDestructive] = useState<boolean | null>(null)
+  const [pending, setPending] = useState<boolean | null>(null)
+  const setting = settings?.[settingKey]
+  const path = `/api/v1/settings/${settingKey.replaceAll('_', '-')}`
 
-  const currentValue = getSettingValue(settings?.allow_destructive_actions, false)
-  const displayValue = allowDestructive ?? currentValue
-  const hasChanges = allowDestructive !== null
+  const displayValue = pending ?? getSettingValue(setting, false)
+  const hasChanges = pending !== null
 
-  const updateMutation = useMutation({
-    mutationFn: async () => {
-      if (allowDestructive === null) {
-        return
-      }
-      return await api.put<Record<string, SettingsSetting>>(
-        '/api/v1/settings/allow-destructive-actions',
-        {
-          allow_destructive_actions: allowDestructive,
-        }
-      )
-    },
-    onSuccess: (updatedSettings) => {
+  const onSaved =
+    (message: string) => (updatedSettings: Record<string, SettingsSetting> | undefined) => {
       if (updatedSettings) {
         qc.setQueryData(['globalSettings'], (old: GlobalSettingsResponse | undefined) => ({
           ...old,
           ...updatedSettings,
         }))
       }
-      setAllowDestructive(null)
-      toast.success('Setting updated')
+      setPending(null)
+      toast.success(message)
+    }
+
+  const updateMutation = useMutation({
+    mutationFn: async () => {
+      if (pending === null) {
+        return
+      }
+      return await api.put<Record<string, SettingsSetting>>(path, { [settingKey]: pending })
     },
+    onSuccess: onSaved('Setting updated'),
     onError: (error: unknown) => {
       toastAPIError(error, 'Failed to update setting')
     },
@@ -59,27 +72,12 @@ export function DestructiveActionsCard({ settings, disabled }: DestructiveAction
 
   const clearMutation = useMutation({
     mutationFn: async () =>
-      await api.delete<Record<string, SettingsSetting>>(
-        '/api/v1/settings/allow-destructive-actions?key=allow_destructive_actions'
-      ),
-    onSuccess: (updatedSettings) => {
-      if (updatedSettings) {
-        qc.setQueryData(['globalSettings'], (old: GlobalSettingsResponse | undefined) => ({
-          ...old,
-          ...updatedSettings,
-        }))
-      }
-      setAllowDestructive(null)
-      toast.success('Setting cleared')
-    },
+      await api.delete<Record<string, SettingsSetting>>(`${path}?key=${settingKey}`),
+    onSuccess: onSaved('Setting cleared'),
     onError: (error: unknown) => {
       toastAPIError(error, 'Failed to clear setting')
     },
   })
-
-  const handleCancel = () => {
-    setAllowDestructive(null)
-  }
 
   const handleSave = async () => {
     try {
@@ -97,32 +95,27 @@ export function DestructiveActionsCard({ settings, disabled }: DestructiveAction
     }
   }
 
-  const hasDbSetting = hasStoredValue(settings?.allow_destructive_actions)
-
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Destructive Actions</CardTitle>
+        <CardTitle>{title}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-6 pb-6">
-        <p className="text-muted-foreground text-sm">
-          Control whether users can perform destructive operations such as deleting apps or racks
-          without additional approvals.
-        </p>
+        <p className="text-muted-foreground text-sm">{description}</p>
 
         <label className="flex items-center gap-3">
           <input
             checked={displayValue}
-            disabled={disabled || isSetByEnv(settings?.allow_destructive_actions)}
-            onChange={(event) => setAllowDestructive(event.target.checked)}
+            disabled={disabled || isSetByEnv(setting)}
+            onChange={(event) => setPending(event.target.checked)}
             type="checkbox"
           />
-          <span className="font-medium text-sm">Allow destructive actions</span>
-          <SourceIndicator setting={settings?.allow_destructive_actions} />
+          <span className="font-medium text-sm">{label}</span>
+          <SourceIndicator setting={setting} />
         </label>
 
         <div className="flex justify-end gap-2">
-          {hasDbSetting && (
+          {hasStoredValue(setting) && (
             <Button
               disabled={disabled || clearMutation.isPending}
               onClick={handleClear}
@@ -134,7 +127,12 @@ export function DestructiveActionsCard({ settings, disabled }: DestructiveAction
           )}
           {hasChanges && (
             <>
-              <Button disabled={disabled} onClick={handleCancel} size="sm" variant="outline">
+              <Button
+                disabled={disabled}
+                onClick={() => setPending(null)}
+                size="sm"
+                variant="outline"
+              >
                 Cancel
               </Button>
               <Button

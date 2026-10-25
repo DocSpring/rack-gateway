@@ -110,6 +110,12 @@ export const HTTP_ROUTE_MFA_REQUIREMENTS: HttpRouteMfaRequirement[] = [
   },
   {
     method: "DELETE",
+    pattern: "/api/v1/settings/require-command-justification",
+    permissions: ["gateway:setting_group:require_command_justification"],
+    mfaLevel: "always",
+  },
+  {
+    method: "DELETE",
     pattern: "/api/v1/settings/session-configuration",
     permissions: ["gateway:setting_group:session_configuration"],
     mfaLevel: "step_up",
@@ -574,6 +580,12 @@ export const HTTP_ROUTE_MFA_REQUIREMENTS: HttpRouteMfaRequirement[] = [
     method: "PUT",
     pattern: "/api/v1/settings/mfa-configuration",
     permissions: ["gateway:setting_group:mfa_configuration"],
+    mfaLevel: "always",
+  },
+  {
+    method: "PUT",
+    pattern: "/api/v1/settings/require-command-justification",
+    permissions: ["gateway:setting_group:require_command_justification"],
     mfaLevel: "always",
   },
   {

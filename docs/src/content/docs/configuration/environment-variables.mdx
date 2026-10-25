@@ -206,6 +206,7 @@ startup log lists them, and the settings page marks them and lets an admin clear
 | `RGW_SETTING_DEPLOY_APPROVAL_WINDOW_MINUTES` | Approval window |
 | `RGW_SETTING_DEPLOY_APPROVAL_REQUIRE_DIFFERENT_APPROVER` | Require a different approver |
 | `RGW_SETTING_ALLOW_DESTRUCTIVE_ACTIONS` | Allow destructive actions |
+| `RGW_SETTING_REQUIRE_COMMAND_JUSTIFICATION` | Require a justification for every command in every app |
 | `RGW_SETTING_DEFAULT_CI_PROVIDER` | Default CI provider |
 | `RGW_SETTING_DEFAULT_VCS_PROVIDER` | Default VCS provider |
 
@@ -229,7 +230,8 @@ RGW_APP_MY_APP_SETTING_SERVICE_IMAGE_PATTERNS={"*":"registry\\.example\\.com/my-
 
 See [Deploy Approvals](/integrations/deploy-approvals/) for common keys. `require_command_justification` makes
 every command run in the app (`run`, `exec`) carry a `--justification` (see
-[Justifications](/user-guide/cli/commands/#justifications)).
+[Justifications](/user-guide/cli/commands/#justifications)). `RGW_SETTING_REQUIRE_COMMAND_JUSTIFICATION` does the
+same for every app, and an app can't opt out of it.
 
 ## Audit Logging
 

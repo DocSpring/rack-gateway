@@ -126,6 +126,12 @@ func (h *SettingsHandler) UpdateGlobalAllowDestructiveActions(c *gin.Context) {
 	h.updateGlobalSettingsWithKeys(c, allowedKeys)
 }
 
+// UpdateGlobalRequireCommandJustification updates whether every command in every app needs a justification.
+func (h *SettingsHandler) UpdateGlobalRequireCommandJustification(c *gin.Context) {
+	allowedKeys := settings.GlobalSettingGroupKeyStrings(settings.GlobalSettingGroupCommandJustification)
+	h.updateGlobalSettingsWithKeys(c, allowedKeys)
+}
+
 // UpdateGlobalVCSAndCIDefaults updates VCS and CI default settings.
 func (h *SettingsHandler) UpdateGlobalVCSAndCIDefaults(c *gin.Context) {
 	allowedKeys := settings.GlobalSettingGroupKeyStrings(settings.GlobalSettingGroupVCSAndCIDefaults)
@@ -173,6 +179,12 @@ func (h *SettingsHandler) DeleteGlobalMFAConfiguration(c *gin.Context) {
 // DeleteGlobalAllowDestructiveActions deletes allow destructive actions settings.
 func (h *SettingsHandler) DeleteGlobalAllowDestructiveActions(c *gin.Context) {
 	allowedKeys := settings.GlobalSettingGroupKeyStrings(settings.GlobalSettingGroupAllowDestructive)
+	h.deleteGlobalSettingsWithKeys(c, allowedKeys)
+}
+
+// DeleteGlobalRequireCommandJustification deletes the gateway-wide require_command_justification.
+func (h *SettingsHandler) DeleteGlobalRequireCommandJustification(c *gin.Context) {
+	allowedKeys := settings.GlobalSettingGroupKeyStrings(settings.GlobalSettingGroupCommandJustification)
 	h.deleteGlobalSettingsWithKeys(c, allowedKeys)
 }
 

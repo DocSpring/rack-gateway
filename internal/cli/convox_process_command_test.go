@@ -46,17 +46,26 @@ func processCobraCommand(t *testing.T, cmd *cobra.Command, flags map[string]stri
 	return cmd
 }
 
-// Without --justification, a command in an app that requires one is refused before anything is sent to the rack
-// (the gateway's refusal of an exec would only show as "websocket: bad handshake").
+// Without --justification, a command in an app that requires one (its own setting, or the gateway-wide one) is
+// refused before anything is sent to the rack (the gateway's refusal of an exec would only show as
+// "websocket: bad handshake").
 func TestProcessCommandRefusedWithoutAJustificationTheAppRequires(t *testing.T) {
-	gateway := newEnvChangeGateway(t)
-	gateway.appSettings = `{"require_command_justification":{"value":true}}`
-	for _, cmd := range []*cobra.Command{ExecCommand(), RunCommand()} {
-		cmd = processCobraCommand(t, cmd, nil)
-		_, _, err := setupProcessCommand(cmd, []string{"web", "rails", "runner", "puts 1"}, cmd.Name())
-		require.ErrorContains(t, err, "app myapp requires a justification for every command")
+	const required = `{"require_command_justification":{"value":true}}`
+	for name, set := range map[string]func(*envChangeGateway){
+		"app setting":  func(g *envChangeGateway) { g.appSettings = required },
+		"gateway-wide": func(g *envChangeGateway) { g.globalSettings = required },
+	} {
+		t.Run(name, func(t *testing.T) {
+			gateway := newEnvChangeGateway(t)
+			set(gateway)
+			for _, cmd := range []*cobra.Command{ExecCommand(), RunCommand()} {
+				cmd = processCobraCommand(t, cmd, nil)
+				_, _, err := setupProcessCommand(cmd, []string{"web", "rails", "runner", "puts 1"}, cmd.Name())
+				require.ErrorContains(t, err, "app myapp requires a justification for every command")
+			}
+			require.Empty(t, gateway.requests())
+		})
 	}
-	require.Empty(t, gateway.requests())
 }
 
 // A justification that can't say why the command is run is refused. A good one goes with each of the command's

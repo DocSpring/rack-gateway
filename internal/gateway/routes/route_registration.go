@@ -135,6 +135,8 @@ func registerGlobalSettingsRoutes(authenticated *gin.RouterGroup, cfg *Config, h
 	settingsMutations.DELETE("/mfa-configuration", h.settings.DeleteGlobalMFAConfiguration)
 	settingsMutations.PUT("/allow-destructive-actions", h.settings.UpdateGlobalAllowDestructiveActions)
 	settingsMutations.DELETE("/allow-destructive-actions", h.settings.DeleteGlobalAllowDestructiveActions)
+	settingsMutations.PUT("/require-command-justification", h.settings.UpdateGlobalRequireCommandJustification)
+	settingsMutations.DELETE("/require-command-justification", h.settings.DeleteGlobalRequireCommandJustification)
 	settingsMutations.PUT("/vcs-and-ci-defaults", h.settings.UpdateGlobalVCSAndCIDefaults)
 	settingsMutations.DELETE("/vcs-and-ci-defaults", h.settings.DeleteGlobalVCSAndCIDefaults)
 	settingsMutations.PUT("/deploy-approvals", h.settings.UpdateGlobalDeployApprovals)

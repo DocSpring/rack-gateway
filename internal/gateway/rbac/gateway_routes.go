@@ -119,6 +119,16 @@ var httpRouteSpecs = []RouteSpec{
 	),
 	newHTTPRoute(
 		"PUT",
+		globalSettingsGroupPath(settings.GlobalSettingGroupCommandJustification),
+		GatewayGlobalSettingGroup(settings.GlobalSettingGroupCommandJustification),
+	),
+	newHTTPRoute(
+		"DELETE",
+		globalSettingsGroupPath(settings.GlobalSettingGroupCommandJustification),
+		GatewayGlobalSettingGroup(settings.GlobalSettingGroupCommandJustification),
+	),
+	newHTTPRoute(
+		"PUT",
 		globalSettingsGroupPath(settings.GlobalSettingGroupVCSAndCIDefaults),
 		GatewayGlobalSettingGroup(settings.GlobalSettingGroupVCSAndCIDefaults),
 	),

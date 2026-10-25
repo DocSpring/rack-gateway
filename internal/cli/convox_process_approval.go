@@ -50,8 +50,9 @@ func commandJustification(cmd *cobra.Command, app string) (string, error) {
 	return "", nil
 }
 
-// appRequiresJustification reads the app's require_command_justification setting. API tokens can't read settings;
-// the gateway still refuses their commands without one (deploy approvals justify theirs with the approval).
+// appRequiresJustification reads require_command_justification: the gateway-wide setting, then the app's. Either
+// one requires a justification. API tokens can't read settings; the gateway still refuses their commands without
+// one (deploy approvals justify theirs with the approval).
 func appRequiresJustification(cmd *cobra.Command, app string) (bool, error) {
 	if apiTokenOverride() != "" {
 		return false, nil
@@ -60,15 +61,19 @@ func appRequiresJustification(cmd *cobra.Command, app string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	var appSettings map[string]struct {
-		Value interface{} `json:"value"`
+	for _, path := range []string{"/settings", "/apps/" + url.PathEscape(app) + "/settings"} {
+		var values map[string]struct {
+			Value interface{} `json:"value"`
+		}
+		if err := gatewayRequest(cmd, rack, http.MethodGet, path, nil, &values); err != nil {
+			return false, fmt.Errorf("failed to read whether app %s requires a justification: %w",
+				displayText(app), err)
+		}
+		if required, _ := values[settings.KeyRequireCommandJustification].Value.(bool); required {
+			return true, nil
+		}
 	}
-	path := "/apps/" + url.PathEscape(app) + "/settings"
-	if err := gatewayRequest(cmd, rack, http.MethodGet, path, nil, &appSettings); err != nil {
-		return false, fmt.Errorf("failed to read whether app %s requires a justification: %w", displayText(app), err)
-	}
-	required, _ := appSettings[settings.KeyRequireCommandJustification].Value.(bool)
-	return required, nil
+	return false, nil
 }
 
 // commandPrompt describes a command for the person approving it with MFA: where it runs, the command (a script's

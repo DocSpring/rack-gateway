@@ -80,21 +80,28 @@ func TestInvalidCommandJustificationIsRefused(t *testing.T) {
 	require.Contains(t, f.processStartDetails(t, "denied")["reason"], "the justification")
 }
 
-// An app that requires a justification refuses a command without one, `convox run`'s placeholder start included
-// (so an attached run stops before its process starts), and takes one with it.
+// An app that requires a justification (its own setting, or the gateway-wide one) refuses a command without one,
+// `convox run`'s placeholder start included (so an attached run stops before its process starts), and takes one
+// with it.
 func TestRequiredCommandJustification(t *testing.T) {
-	f := newProtectedEnvFixture(t)
-	app := "app"
-	require.NoError(t, settings.NewService(f.database).SetAppSettings(
-		app, map[string]interface{}{settings.KeyRequireCommandJustification: true}, nil))
+	required := map[string]interface{}{settings.KeyRequireCommandJustification: true}
+	for name, set := range map[string]func(*settings.Service) error{
+		"app setting":  func(svc *settings.Service) error { return svc.SetAppSettings("app", required, nil) },
+		"gateway-wide": func(svc *settings.Service) error { return svc.SetGlobalSettings(required, nil) },
+	} {
+		t.Run(name, func(t *testing.T) {
+			f := newProtectedEnvFixture(t)
+			require.NoError(t, set(settings.NewService(f.database)))
 
-	rr := f.processRequest(t, http.MethodPost, processStartPath, "", placeholderStart(""))
-	require.Equal(t, http.StatusBadRequest, rr.Code, rr.Body.String())
-	require.Contains(t, rr.Body.String(), "this app requires a justification for every command")
-	require.Empty(t, f.processStarts())
+			rr := f.processRequest(t, http.MethodPost, processStartPath, "", placeholderStart(""))
+			require.Equal(t, http.StatusBadRequest, rr.Code, rr.Body.String())
+			require.Contains(t, rr.Body.String(), "this app requires a justification for every command")
+			require.Empty(t, f.processStarts())
 
-	justified := placeholderStart(audit.EncodeJustification(testJustification))
-	rr = f.processRequest(t, http.MethodPost, processStartPath, "", justified)
-	require.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
-	require.Len(t, f.processStarts(), 1)
+			justified := placeholderStart(audit.EncodeJustification(testJustification))
+			rr = f.processRequest(t, http.MethodPost, processStartPath, "", justified)
+			require.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
+			require.Len(t, f.processStarts(), 1)
+		})
+	}
 }

@@ -1,4 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query'
+import type { SettingsSetting } from '@/api/schemas'
 import {
   getSettingValue,
   hasStoredValue,
@@ -20,18 +21,22 @@ const settingKey = 'require_command_justification'
 interface CommandJustificationCardProps {
   app: string
   settings: AppSettingsResponse | undefined
+  // gatewayWide is the global require_command_justification, which requires one in every app.
+  gatewayWide: SettingsSetting | undefined
   disabled: boolean
 }
 
-// CommandJustificationCard turns require_command_justification on or off. A change saves at once.
+// CommandJustificationCard turns the app's require_command_justification on or off. A change saves at once.
 export function CommandJustificationCard({
   app,
   settings,
+  gatewayWide,
   disabled,
 }: CommandJustificationCardProps) {
   const qc = useQueryClient()
   const setting = settings?.[settingKey]
   const required = getSettingValue<boolean>(setting, false)
+  const requiredGatewayWide = getSettingValue<boolean>(gatewayWide, false)
 
   const onSaved = async (message: string) => {
     await qc.invalidateQueries({ queryKey: ['appSettings', app] })
@@ -71,6 +76,12 @@ export function CommandJustificationCard({
           records it with the command. A command run under a deploy approval is justified by the
           approval&apos;s message.
         </p>
+        {requiredGatewayWide && (
+          <p className="rounded-md border p-3 text-sm">
+            The gateway-wide setting requires a justification for every command in every app, so
+            this app requires one whatever its own setting says. Change it on the Settings page.
+          </p>
+        )}
         <label
           className={`flex items-center gap-3 ${toggleDisabled ? 'cursor-not-allowed opacity-50' : ''}`}
         >

@@ -55,6 +55,12 @@ Set the defaults for app-level deploy approvals:
 
 These defaults are used when an app does not specify its own provider settings.
 
+### Command Justifications
+
+Require a justification for every command run in every app (`run`, `exec`): each one must say why it's run and
+what it does (see [Justifications](/user-guide/cli/commands/#justifications)). Apps can also require one on their
+own; with this on, an app requires one whatever its own setting says. Changing it needs MFA on the request.
+
 ## App Settings (Per-App)
 
 App-specific settings are **not** on this page. Go to **Apps → `{app}` → Settings** to configure:
@@ -66,7 +72,8 @@ App-specific settings are **not** on this page. Go to **Apps → `{app}` → Set
 - Approved deploy commands
 - Service image patterns
 - Command justifications: whether every command run in the app (`run`, `exec`) must say why it's run (see
-  [Justifications](/user-guide/cli/commands/#justifications))
+  [Justifications](/user-guide/cli/commands/#justifications)). The gateway-wide setting above requires one in
+  every app, and the app's card says so when it's on
 
 ## Related
 
