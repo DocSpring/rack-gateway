@@ -188,7 +188,7 @@ func cannotListCredentials(err error) bool {
 func pinError(err error) error {
 	switch {
 	case errors.Is(err, libfido2.ErrPinInvalid):
-		return fmt.Errorf("wrong security key PIN (%w); try again", err)
+		return fmt.Errorf("%w (%w); try again", ErrWrongPIN, err)
 	case errors.Is(err, libfido2.ErrPinAuthBlocked):
 		return fmt.Errorf("too many wrong PINs in a row (%w); unplug the security key, plug it back in and try again",
 			err)

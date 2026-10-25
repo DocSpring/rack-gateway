@@ -92,7 +92,7 @@ func commandPrompt(process processCommand) webauthn.Prompt {
 
 // freshMFAAuth collects an MFA proof for the selected rack (one prompt or key touch, or --mfa-code), whatever the
 // step-up window says, with prompt describing what it approves. API tokens have no MFA.
-func freshMFAAuth(cmd *cobra.Command, prompt webauthn.Prompt) (string, error) {
+func freshMFAAuth(cmd *cobra.Command, prompt webauthn.Prompt, pin string) (string, error) {
 	if apiTokenOverride() != "" {
 		return "", nil
 	}
@@ -104,6 +104,6 @@ func freshMFAAuth(cmd *cobra.Command, prompt webauthn.Prompt) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	auth, _, err := GetMFAAuthWithPIN(cmd, gatewayURL, bearer, rack, "", prompt)
+	auth, _, err := GetMFAAuthWithPIN(cmd, gatewayURL, bearer, rack, pin, prompt)
 	return auth, err
 }

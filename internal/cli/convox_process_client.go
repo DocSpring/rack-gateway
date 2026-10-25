@@ -49,9 +49,9 @@ func (c *processClient) ProcessExec(
 }
 
 // newProcessClient returns the client for an exec or run command, whose requests all carry headers. prompt says
-// what the command's MFA proof approves.
+// what the command's MFA proof approves; pin is the security key PIN already entered for it, or "".
 func newProcessClient(
-	cobraCmd *cobra.Command, headers map[string]string, prompt webauthn.Prompt,
+	cobraCmd *cobra.Command, headers map[string]string, prompt webauthn.Prompt, pin string,
 ) (*processClient, error) {
 	client, err := newHeaderClient("", headers)
 	if err != nil {
@@ -64,7 +64,7 @@ func newProcessClient(
 		var mfaAuth string
 		err := withTerminalState(before, func() error {
 			var err error
-			mfaAuth, err = freshMFAAuth(cobraCmd, prompt)
+			mfaAuth, err = freshMFAAuth(cobraCmd, prompt, pin)
 			return err
 		})
 		if err != nil {

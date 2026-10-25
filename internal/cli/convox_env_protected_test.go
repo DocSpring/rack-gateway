@@ -21,12 +21,14 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/envutil"
 )
 
-// envChangeGateway is a fake gateway whose MFA status reports a TOTP method and a step-up window that is still
-// open, and whose apps have appSettings (none by default). It records the headers of every rack-proxy request.
+// envChangeGateway is a fake gateway whose MFA status reports mfaMethods (a TOTP method by default) and a step-up
+// window that is still open, that starts WebAuthn assertions, and whose apps have appSettings (none by default). It
+// records the headers of every rack-proxy request.
 type envChangeGateway struct {
 	mu          sync.Mutex
 	proxied     []http.Header
 	appSettings string
+	mfaMethods  []MFAMethodResponse
 }
 
 func (g *envChangeGateway) handler(w http.ResponseWriter, r *http.Request) {
@@ -41,13 +43,20 @@ func (g *envChangeGateway) handler(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(appSettings))
 		return
 	}
+	if r.URL.Path == "/api/v1/auth/mfa/webauthn/assertion/start" {
+		_, _ = w.Write([]byte(`{"options":{"publicKey":{"challenge":"Y2hhbGxlbmdl"}},"session_data":"session"}`))
+		return
+	}
 	if r.URL.Path == "/api/v1/auth/mfa/status" {
 		expiresAt := time.Now().Add(5 * time.Minute)
+		g.mu.Lock()
+		methods := g.mfaMethods
+		g.mu.Unlock()
+		if methods == nil {
+			methods = []MFAMethodResponse{{ID: 1, Type: "totp", Label: "Phone"}}
+		}
 		_ = json.NewEncoder(w).Encode(MFAStatusResponse{
-			Enrolled:              true,
-			Required:              true,
-			Methods:               []MFAMethodResponse{{ID: 1, Type: "totp", Label: "Phone"}},
-			RecentStepUpExpiresAt: &expiresAt,
+			Enrolled: true, Required: true, Methods: methods, RecentStepUpExpiresAt: &expiresAt,
 		})
 		return
 	}

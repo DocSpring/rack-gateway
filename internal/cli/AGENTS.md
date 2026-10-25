@@ -249,7 +249,12 @@ prompt, `scriptreview.Review` shows it with numbered lines, hidden characters as
 highlighting (`highlight.go`: styled spans, ANSI colors in a terminal, macOS system colors in the dialog; a lexer
 that fails or takes over 2 seconds leaves the script plain): a y/N prompt on a
 terminal, else a macOS JXA dialog (Cancel is the default; the texts go in as arguments, never into the JXA source),
-else refused. API tokens skip the review. The PIN dialog shows the script's name, line count and SHA-256, not its
+else refused. API tokens skip the review. The dialog also takes the security key PIN (`convox_process_review.go`
+`reviewPINCheck`) when the command will ask for a WebAuthn proof (not a dry run, no `--mfa-code`, `selectMFAMethod`
+picks WebAuthn) and exactly one key is plugged in and has a PIN (`webauthn.SingleKeyHasPIN`). Run is then the
+default. `webauthn.CheckPIN` checks each PIN without a touch (`CredentialsInfo`; a key without credential management
+leaves it to the assertion), a wrong one re-shows the dialog with the retries left, and the PIN goes to
+`newProcessClient`, so the assertion only needs the touch. The PIN dialog shows the script's name, line count and SHA-256, not its
 text. `--dry-run` stops after the checks and the review (`runProcessCommand`): it prints the PIN dialog summary and
 the command's size, with no MFA prompt and no request to the rack.
 
