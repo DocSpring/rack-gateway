@@ -287,7 +287,7 @@ func collectWebAuthnAssertionWithPIN(
 	options.Prompt = prompt
 	options.Prompt.Notify = touchNotificationsEnabled()
 
-	assertion, pinUsed, err := webauthn.GetAssertionWithCachedPIN(options, cachedPIN)
+	assertion, pinUsed, err := getWebAuthnAssertion(options, cachedPIN)
 	if err != nil {
 		return "", "", err
 	}
@@ -309,6 +309,9 @@ func collectWebAuthnAssertionWithPIN(
 
 	return base64.StdEncoding.EncodeToString(jsonData), pinUsed, nil
 }
+
+// getWebAuthnAssertion asks the security key for an assertion (webauthn.GetAssertionWithCachedPIN). Tests replace it.
+var getWebAuthnAssertion = webauthn.GetAssertionWithCachedPIN
 
 func marshalWebAuthnResponse(assertion *webauthn.AssertionResponse) (string, error) {
 	response := map[string]any{

@@ -25,7 +25,7 @@ func newTestProcessClient(t *testing.T, cmd *cobra.Command) (*processClient, *en
 	gateway := newEnvChangeGateway(t)
 	MFACodeFlag = "123456"
 	cmd.SetErr(io.Discard)
-	client, err := newProcessClient(cmd, nil, webauthn.Prompt{})
+	client, err := newProcessClient(cmd, nil, webauthn.Prompt{}, "")
 	require.NoError(t, err)
 	require.Empty(t, gateway.requests(), "nothing is sent before the command runs")
 	return client, gateway
@@ -60,4 +60,30 @@ func TestProcessClientSendsTheProofWithTheExec(t *testing.T) {
 	for _, header := range proxied {
 		require.Equal(t, authWithProof, basicCredential(t, header))
 	}
+}
+
+// A WebAuthn proof signs with the security key PIN entered when the script was reviewed, so the command asks only
+// for the touch.
+func TestProcessClientSignsWithTheReviewPIN(t *testing.T) {
+	gateway := newEnvChangeGateway(t)
+	gateway.mfaMethods = []MFAMethodResponse{{ID: 2, Type: "webauthn", Label: "YubiKey"}}
+	var pins []string
+	previous := getWebAuthnAssertion
+	getWebAuthnAssertion = func(_ webauthn.AssertionOptions, pin string) (*webauthn.AssertionResponse, string, error) {
+		pins = append(pins, pin)
+		return &webauthn.AssertionResponse{CredentialID: "key"}, pin, nil
+	}
+	t.Cleanup(func() { getWebAuthnAssertion = previous })
+	cmd := RunCommand()
+	cmd.SetErr(io.Discard)
+	client, err := newProcessClient(cmd, nil, webauthn.Prompt{}, "123456")
+	require.NoError(t, err)
+
+	command := "rails runner 'puts 1'"
+	_, _ = client.ProcessRun("myapp", "web", structs.ProcessRunOptions{Command: &command})
+
+	require.Equal(t, []string{"123456"}, pins)
+	proxied := gateway.requests()
+	require.Len(t, proxied, 1)
+	require.Contains(t, basicCredential(t, proxied[0]), authWithoutProof+".webauthn.")
 }

@@ -2,7 +2,13 @@
 // has no security key support (the nofido build tag).
 package webauthn
 
-import "net/url"
+import (
+	"errors"
+	"net/url"
+)
+
+// ErrWrongPIN is a security key PIN the key refused.
+var ErrWrongPIN = errors.New("wrong security key PIN")
 
 // AssertionOptions contains the challenge and credential info from the server
 type AssertionOptions struct {

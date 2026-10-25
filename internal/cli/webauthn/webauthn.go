@@ -56,6 +56,19 @@ func promptTouch(options AssertionOptions) {
 
 // openFIDODevices opens every connected security key that can be opened.
 func openFIDODevices() ([]securityKey, error) {
+	devices, err := openDevices()
+	if err != nil {
+		return nil, err
+	}
+	keys := make([]securityKey, 0, len(devices))
+	for _, device := range devices {
+		keys = append(keys, device)
+	}
+	return keys, nil
+}
+
+// openDevices opens every connected FIDO2 device that can be opened.
+func openDevices() ([]*libfido2.Device, error) {
 	locs, err := libfido2.DeviceLocations()
 	if err != nil {
 		return nil, fmt.Errorf("failed to list FIDO2 devices: %w", err)
@@ -63,7 +76,7 @@ func openFIDODevices() ([]securityKey, error) {
 	if len(locs) == 0 {
 		return nil, fmt.Errorf("no FIDO2 devices found")
 	}
-	keys := make([]securityKey, 0, len(locs))
+	devices := make([]*libfido2.Device, 0, len(locs))
 	var openErr error
 	for _, loc := range locs {
 		device, err := libfido2.NewDevice(loc.Path)
@@ -71,12 +84,12 @@ func openFIDODevices() ([]securityKey, error) {
 			openErr = err
 			continue
 		}
-		keys = append(keys, device)
+		devices = append(devices, device)
 	}
-	if len(keys) == 0 {
+	if len(devices) == 0 {
 		return nil, fmt.Errorf("failed to open FIDO2 device: %w", openErr)
 	}
-	return keys, nil
+	return devices, nil
 }
 
 func decodeCredentialIDs(ids []string) ([][]byte, error) {
