@@ -368,8 +368,9 @@ it and a justification. It must be a UTF-8 text file without NUL bytes, and the 
 fit in the audit log (50 KB).
 
 - **You review the script before anything is sent.** The CLI shows where it runs, the command, the justification
-  and the script with numbered lines, in the terminal, or in a dialog on macOS when there's no terminal (for
-  example when an AI agent runs the CLI). The dialog's default button is Cancel. Characters that would make the
+  and the script with numbered lines and syntax highlighting (the language comes from the file's extension, else
+  from the command, e.g. `rails runner` is Ruby), in the terminal, or in a dialog on macOS when there's no terminal (for example when an AI agent
+  runs the CLI). The terminal shows colors unless `NO_COLOR` is set. The dialog's default button is Cancel. Characters that would make the
   script read differently from what runs (zero-width spaces, right-to-left overrides) show as `<U+XXXX>`, with a
   warning. API tokens run unattended, so their scripts aren't reviewed.
 - **The PIN dialog shows the script's name, size and SHA-256**, so you can check the touch is for the script you

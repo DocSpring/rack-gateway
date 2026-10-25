@@ -3,6 +3,7 @@ package scriptreview
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
@@ -32,7 +33,7 @@ func TestReviewInTerminal(t *testing.T) {
 		"y\n": true, "YES\n": true, "\n": false, "n\n": false, "yes please\n": false, "": false,
 	} {
 		var out bytes.Buffer
-		err := reviewInTerminal(req, strings.NewReader(answer), &out)
+		err := reviewInTerminal(req, strings.NewReader(answer), &out, false)
 		if approved {
 			require.NoError(t, err, answer)
 		} else {
@@ -50,10 +51,13 @@ func TestReviewInTerminal(t *testing.T) {
 // Characters that would make the script read differently from what runs (a right-to-left override, a zero-width
 // space, a lone carriage return) are written out and counted, with a warning. CRLF line endings aren't.
 func TestListingShowsHiddenCharacters(t *testing.T) {
-	listing, hidden := Listing("ok = true\r\nif ok \u202e} {\u2066\r\nputs\u200b 1\rputs 2\n")
+	spans, hidden := listing(scriptrun.Script{
+		Name: "check.rb", Text: "ok = true\r\nif ok \u202e} {\u2066\r\nputs\u200b 1\rputs 2\n",
+	})
 	require.Equal(t, 4, hidden)
 	require.Equal(t,
-		"1 | ok = true\n2 | if ok <U+202E>} {<U+2066>\n3 | puts<U+200B> 1<U+000D>puts 2", listing)
+		"1 | ok = true\n2 | if ok <U+202E>} {<U+2066>\n3 | puts<U+200B> 1<U+000D>puts 2", plainText(spans))
+	require.Contains(t, spans, span{Text: "<U+202E>", Style: styleHidden})
 	require.Contains(t, Header(testRequest(t, "puts\u200b 1\n")),
 		"Warning: the script has 1 invisible or direction-changing characters, shown as <U+XXXX>.")
 }
@@ -83,7 +87,11 @@ func TestReviewInDialog(t *testing.T) {
 			require.ErrorIs(t, err, ErrDeclined)
 		}
 		require.Equal(t, dialogScript, gotScript)
-		require.Equal(t, []string{Header(req), "1 | puts 'run'"}, gotArgs)
+		require.Len(t, gotArgs, 2)
+		require.Equal(t, Header(req), gotArgs[0])
+		var spans []span
+		require.NoError(t, json.Unmarshal([]byte(gotArgs[1]), &spans))
+		require.Equal(t, "1 | puts 'run'", plainText(spans))
 	}
 
 	failing := func(context.Context, string, ...string) (string, string, error) {

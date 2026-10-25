@@ -245,7 +245,9 @@ gateway's refusal).
 them in a fixed `sh` runner that decodes the base64 script into a private temp directory and runs the words with
 the file's path appended. The gateway reads it back with `scriptrun.Parse` for the audit log, so the runner,
 `SafeName` and `Parse` must stay in step. A script needs command words and `--justification`. Before any MFA
-prompt, `scriptreview.Review` shows it with numbered lines and hidden characters as `<U+XXXX>`: a y/N prompt on a
+prompt, `scriptreview.Review` shows it with numbered lines, hidden characters as `<U+XXXX>` and chroma syntax
+highlighting (`highlight.go`: styled spans, ANSI colors in a terminal, macOS system colors in the dialog; a lexer
+that fails or takes over 2 seconds leaves the script plain): a y/N prompt on a
 terminal, else a macOS JXA dialog (Cancel is the default; the texts go in as arguments, never into the JXA source),
 else refused. API tokens skip the review. The PIN dialog shows the script's name, line count and SHA-256, not its
 text. `--dry-run` stops after the checks and the review (`runProcessCommand`): it prints the PIN dialog summary and

@@ -7,6 +7,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -41,7 +42,8 @@ const reviewTimeout = 15 * time.Minute
 // Review shows req's script and returns nil once the person approves it, or ErrDeclined.
 func Review(req Request) error {
 	if _, ok := terminal.StdinFD(); ok {
-		return reviewInTerminal(req, os.Stdin, os.Stderr)
+		color := terminal.StderrIsTerminal() && os.Getenv("NO_COLOR") == ""
+		return reviewInTerminal(req, os.Stdin, os.Stderr, color)
 	}
 	if runtime.GOOS != "darwin" {
 		return errors.New("a script needs approving before it runs, and there's no terminal to show it in: run the " +
@@ -51,13 +53,18 @@ func Review(req Request) error {
 	return reviewInDialog(context.Background(), runOsascript, req)
 }
 
-// reviewInTerminal prints the script with numbered lines to out, and approves it when the answer read from in is
-// y or yes.
-func reviewInTerminal(req Request, in io.Reader, out io.Writer) error {
+// reviewInTerminal prints the script's listing to out, in color when color is set, and approves it when the
+// answer read from in is y or yes.
+func reviewInTerminal(req Request, in io.Reader, out io.Writer, color bool) error {
 	var text strings.Builder
 	text.WriteString(Header(req) + "\n\n")
-	listing, _ := Listing(req.Script.Text)
-	text.WriteString(listing + "\n\nRun this script? [y/N] ")
+	spans, _ := listing(req.Script)
+	if color {
+		text.WriteString(ansiText(spans))
+	} else {
+		text.WriteString(plainText(spans))
+	}
+	text.WriteString("\n\nRun this script? [y/N] ")
 	if _, err := io.WriteString(out, text.String()); err != nil {
 		return err
 	}
@@ -85,35 +92,11 @@ func Header(req Request) string {
 		lines = append(lines, "Justification: "+oneLine(req.Justification))
 	}
 	lines = append(lines, fmt.Sprintf("Script: %s, %d lines, SHA-256 %s", script.Name, script.Lines(), script.SHA256))
-	if _, hidden := Listing(script.Text); hidden > 0 {
+	if hidden := hiddenCount(script.Text); hidden > 0 {
 		lines = append(lines, fmt.Sprintf("Warning: the script has %d invisible or direction-changing characters, "+
 			"shown as <U+XXXX>. Check what each one is for.", hidden))
 	}
 	return strings.Join(lines, "\n")
-}
-
-// Listing returns the script with numbered lines, every character that wouldn't show as itself written as
-// <U+XXXX> (see textcheck.Hidden), and how many there were. CRLF line endings count as line breaks.
-func Listing(text string) (string, int) {
-	lines := strings.Split(strings.TrimSuffix(strings.ReplaceAll(text, "\r\n", "\n"), "\n"), "\n")
-	width := len(fmt.Sprint(len(lines)))
-	hidden := 0
-	var out strings.Builder
-	for i, line := range lines {
-		if i > 0 {
-			out.WriteByte('\n')
-		}
-		fmt.Fprintf(&out, "%*d | ", width, i+1)
-		for _, r := range line {
-			if textcheck.Hidden(r) || r == '\n' {
-				fmt.Fprintf(&out, "<U+%04X>", r)
-				hidden++
-				continue
-			}
-			out.WriteRune(r)
-		}
-	}
-	return out.String(), hidden
 }
 
 // oneLine makes text from the command line safe for one line: hidden characters (see textcheck.Hidden), line
@@ -135,8 +118,12 @@ type dialogRunner func(ctx context.Context, script string, args ...string) (stdo
 func reviewInDialog(ctx context.Context, run dialogRunner, req Request) error {
 	ctx, cancel := context.WithTimeout(ctx, reviewTimeout)
 	defer cancel()
-	listing, _ := Listing(req.Script.Text)
-	stdout, stderr, err := run(ctx, dialogScript, Header(req), listing)
+	spans, _ := listing(req.Script)
+	listingJSON, err := json.Marshal(spans)
+	if err != nil {
+		return fmt.Errorf("failed to show the script review dialog: %w", err)
+	}
+	stdout, stderr, err := run(ctx, dialogScript, Header(req), string(listingJSON))
 	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 		return fmt.Errorf("%w: the review dialog timed out", ErrDeclined)
 	}
@@ -158,9 +145,10 @@ func runOsascript(ctx context.Context, script string, args ...string) (string, s
 	return stdout.String(), stderr.String(), err
 }
 
-// dialogScript shows an alert with the header as its text and the listing in a scrollable, read-only, monospaced
-// text view, and prints "run" when Run is clicked. Cancel is the default button (Return), so approving takes a
-// click. The texts arrive as arguments, never as part of the script.
+// dialogScript shows an alert with the header as its text and the listing (its spans, as JSON) in a scrollable,
+// read-only, monospaced text view, colored by style in the system's colors for the current appearance (light or
+// dark). It prints "run" when Run is clicked. Cancel is the default button (Return), so approving takes a click.
+// The texts arrive as arguments, never as part of the script.
 const dialogScript = `
 ObjC.import('Cocoa');
 function run(argv) {
@@ -176,13 +164,11 @@ function run(argv) {
   var view = $.NSTextView.alloc.initWithFrame($.NSMakeRect(0, 0, 820, 460));
   view.editable = false;
   view.selectable = true;
-  view.richText = false;
-  view.font = $.NSFont.monospacedSystemFontOfSizeWeight(12, 0);
   view.horizontallyResizable = true;
   view.maxSize = $.NSMakeSize(1e7, 1e7);
   view.textContainer.widthTracksTextView = false;
   view.textContainer.containerSize = $.NSMakeSize(1e7, 1e7);
-  view.string = argv[1];
+  view.textStorage.setAttributedString(listing(JSON.parse(argv[1])));
   scroll.documentView = view;
 
   var alert = $.NSAlert.alloc.init;
@@ -193,5 +179,36 @@ function run(argv) {
   alert.addButtonWithTitle('Run');
   alert.window.initialFirstResponder = view;
   return alert.runModal == $.NSAlertSecondButtonReturn ? 'run' : 'cancel';
+}
+
+function listing(spans) {
+  var font = $.NSFont.monospacedSystemFontOfSizeWeight(12, 0);
+  var bold = $.NSFont.monospacedSystemFontOfSizeWeight(12, 0.4);
+  var colors = {
+    line: $.NSColor.tertiaryLabelColor,
+    comment: $.NSColor.secondaryLabelColor,
+    keyword: $.NSColor.systemPinkColor,
+    string: $.NSColor.systemOrangeColor,
+    symbol: $.NSColor.systemGreenColor,
+    number: $.NSColor.systemPurpleColor,
+    type: $.NSColor.systemTealColor,
+    function: $.NSColor.systemBlueColor,
+    hidden: $.NSColor.whiteColor
+  };
+  var text = $.NSMutableAttributedString.alloc.init;
+  spans.forEach(function (span) {
+    var attributes = $.NSMutableDictionary.dictionary;
+    attributes.setObjectForKey(span.s === 'hidden' ? bold : font, $.NSFontAttributeName);
+    attributes.setObjectForKey(colors[span.s] || $.NSColor.labelColor, $.NSForegroundColorAttributeName);
+    if (span.s === 'hidden') {
+      attributes.setObjectForKey($.NSColor.systemRedColor, $.NSBackgroundColorAttributeName);
+    }
+    // JXA doesn't bridge initWithString:attributes:, so each piece is filled in, then styled.
+    var piece = $.NSMutableAttributedString.alloc.init;
+    piece.replaceCharactersInRangeWithString($.NSMakeRange(0, 0), span.t);
+    piece.setAttributesRange(attributes, $.NSMakeRange(0, piece.length));
+    text.appendAttributedString(piece);
+  });
+  return text;
 }
 `

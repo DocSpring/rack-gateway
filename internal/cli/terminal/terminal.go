@@ -12,6 +12,12 @@ func StdinFD() (int, bool) {
 	return terminalFD(os.Stdin)
 }
 
+// StderrIsTerminal reports whether stderr is a terminal.
+func StderrIsTerminal() bool {
+	_, ok := terminalFD(os.Stderr)
+	return ok
+}
+
 // IsInteractive reports whether stdin and stdout are both terminals.
 func IsInteractive() bool {
 	_, in := terminalFD(os.Stdin)
