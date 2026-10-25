@@ -32,7 +32,7 @@ export function AppSettingsPage() {
   // The gateway-wide require_command_justification applies to every app, whatever the app's own setting says.
   const { data: globalSettings } = useQuery({
     queryKey: ['globalSettings'],
-    queryFn: async () => api.get<GlobalSettingsResponse>('/api/v1/settings'),
+    queryFn: () => api.get<GlobalSettingsResponse>('/api/v1/settings'),
     staleTime: 0,
   })
 
