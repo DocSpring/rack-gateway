@@ -127,9 +127,8 @@ time, and the gateway refuses the request unless it carries a proof it verifies 
 ### Running Commands
 
 `run` and `exec` can read, change or delete any of an app's data, so each one asks for MFA, even right after
-another command. `run` starts its process first and asks once the process is running, just before the command
-runs in it: a TOTP code or a WebAuthn challenge doesn't expire while a slow process starts. The PIN dialog shows
-the app, the rack, the command and its justification.
+another command. They ask before anything is sent: `run` then starts its process and sends the proof with the
+command once the process is running. The PIN dialog shows the app, the rack, the command and its justification.
 
 That first process only runs `sleep 3600`, so starting it needs no MFA of its own, including for another of the
 app's releases (`run --release`). It can't use a custom image, privileged options or the service's lifecycle

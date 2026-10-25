@@ -25,9 +25,14 @@ import (
 const testJustification = "Count the templates of account 42 — checking a support ticket"
 
 // setupProcessCommand prepares and connects an exec or run command as runProcessCommand does, without running it.
+// Connecting collects the command's MFA proof, which --mfa-code 123456 answers.
 func setupProcessCommand(
-	cobraCmd *cobra.Command, args []string, action string,
+	t *testing.T, cobraCmd *cobra.Command, args []string, action string,
 ) (*processClient, *stdcli.Context, error) {
+	t.Helper()
+	previous := MFACodeFlag
+	MFACodeFlag = "123456"
+	t.Cleanup(func() { MFACodeFlag = previous })
 	process, err := prepareProcessCommand(cobraCmd, args, action)
 	if err != nil {
 		return nil, nil, err
@@ -60,7 +65,7 @@ func TestProcessCommandRefusedWithoutAJustificationTheAppRequires(t *testing.T) 
 			set(gateway)
 			for _, cmd := range []*cobra.Command{ExecCommand(), RunCommand()} {
 				cmd = processCobraCommand(t, cmd, nil)
-				_, _, err := setupProcessCommand(cmd, []string{"web", "rails", "runner", "puts 1"}, cmd.Name())
+				_, _, err := setupProcessCommand(t, cmd, []string{"web", "rails", "runner", "puts 1"}, cmd.Name())
 				require.ErrorContains(t, err, "app myapp requires a justification for every command")
 			}
 			require.Empty(t, gateway.requests())
@@ -72,15 +77,14 @@ func TestProcessCommandRefusedWithoutAJustificationTheAppRequires(t *testing.T) 
 // requests, as the header the gateway records.
 func TestProcessCommandSendsItsJustification(t *testing.T) {
 	gateway := newEnvChangeGateway(t)
-	MFACodeFlag = "123456"
 	args := []string{"web", "rails", "runner", "puts 1"}
 
 	short := processCobraCommand(t, RunCommand(), map[string]string{justificationFlag: "checking"})
-	_, _, err := setupProcessCommand(short, args, "run")
+	_, _, err := setupProcessCommand(t, short, args, "run")
 	require.ErrorContains(t, err, "the justification is too short")
 
 	cmd := processCobraCommand(t, RunCommand(), map[string]string{justificationFlag: testJustification})
-	client, _, err := setupProcessCommand(cmd, args, "run")
+	client, _, err := setupProcessCommand(t, cmd, args, "run")
 	require.NoError(t, err)
 	placeholder := convox.AttachedRunPlaceholder
 	_, _ = client.ProcessRun("myapp", "web", structs.ProcessRunOptions{Command: &placeholder})
@@ -147,7 +151,7 @@ func TestProcessCommandSendsAnApprovedScript(t *testing.T) {
 	path := writeScript(t, "count pro.rb", text)
 	for _, cmd := range []*cobra.Command{ExecCommand(), RunCommand()} {
 		cmd = processCobraCommand(t, cmd, map[string]string{scriptFlag: path, justificationFlag: testJustification})
-		_, ctx, err := setupProcessCommand(cmd, []string{"web", "rails", "runner"}, cmd.Name())
+		_, ctx, err := setupProcessCommand(t, cmd, []string{"web", "rails", "runner"}, cmd.Name())
 		require.NoError(t, err)
 		require.Equal(t, []string{"web", scriptrun.Build("count_pro.rb", []byte(text), "rails runner")}, ctx.Args)
 	}
@@ -166,13 +170,13 @@ func TestProcessCommandScriptReview(t *testing.T) {
 	flags := map[string]string{scriptFlag: writeScript(t, "count.rb", "puts 1\n"), justificationFlag: testJustification}
 	args := []string{"web", "rails", "runner"}
 
-	_, _, err := setupProcessCommand(processCobraCommand(t, RunCommand(), flags), args, "run")
+	_, _, err := setupProcessCommand(t, processCobraCommand(t, RunCommand(), flags), args, "run")
 	require.ErrorIs(t, err, scriptreview.ErrDeclined)
 	require.Len(t, *reviewed, 1)
 	require.Empty(t, gateway.requests())
 
 	t.Setenv("RACK_GATEWAY_API_TOKEN", "rgw_test_token")
-	_, _, err = setupProcessCommand(processCobraCommand(t, RunCommand(), flags), args, "run")
+	_, _, err = setupProcessCommand(t, processCobraCommand(t, RunCommand(), flags), args, "run")
 	require.NoError(t, err)
 	require.Len(t, *reviewed, 1)
 }
@@ -203,7 +207,7 @@ func TestProcessCommandRefusesAScriptItCantSend(t *testing.T) {
 			flags[justificationFlag] = tc.justification
 		}
 		cmd := processCobraCommand(t, ExecCommand(), flags)
-		_, _, err := setupProcessCommand(cmd, append([]string{"p-1"}, tc.words...), "exec")
+		_, _, err := setupProcessCommand(t, cmd, append([]string{"p-1"}, tc.words...), "exec")
 		require.ErrorContains(t, err, tc.want, name)
 	}
 	require.Empty(t, *reviewed)
