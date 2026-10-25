@@ -11,6 +11,7 @@ import (
 	"github.com/gorilla/websocket"
 
 	mclog "github.com/DocSpring/rack-gateway/cmd/mock-convox/logging"
+	"github.com/DocSpring/rack-gateway/internal/cmdenv"
 )
 
 func getProcesses(w http.ResponseWriter, r *http.Request) {
@@ -83,6 +84,13 @@ func serviceProcesses(w http.ResponseWriter, r *http.Request) {
 		rawBody,
 	)
 
+	// A rack runs whatever command it gets. This one refuses a command the gateway didn't wrap (cmdenv), so the
+	// CLI E2E tests catch a command reaching the rack with every env var.
+	if _, _, ok := cmdenv.Parse(r.Header.Get("Command")); !ok {
+		http.Error(w, "mock rack: the gateway didn't wrap the command", http.StatusBadRequest)
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusAccepted)
 	writeJSON(w, map[string]interface{}{
@@ -115,17 +123,20 @@ func execProcess(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	_ = conn.WriteMessage(websocket.TextMessage, []byte("Connected to mock exec for app="+app+" pid="+id+"\n"))
-	cmd := r.Header.Get("command")
-	if cmd == "" {
-		cmd = r.URL.Query().Get("command")
+	// The rack runs the command the gateway wrapped (cmdenv): this one prints the command and the env vars it gets.
+	// A command the gateway didn't wrap fails, so the CLI E2E tests catch it.
+	plan, cmd, ok := cmdenv.Parse(r.Header.Get("Command"))
+	if !ok {
+		_ = conn.WriteMessage(websocket.TextMessage, []byte("mock rack: the gateway didn't wrap the command\n"))
+		_ = conn.WriteMessage(websocket.TextMessage, []byte(execExitMarker+"1\n"))
+		return
 	}
-	if cmd != "" {
-		_ = conn.WriteMessage(websocket.TextMessage, []byte("$ "+cmd+"\n"))
-		if strings.HasPrefix(cmd, "echo ") {
-			_ = conn.WriteMessage(websocket.TextMessage, []byte(strings.TrimPrefix(cmd, "echo ")+"\n"))
-		} else {
-			_ = conn.WriteMessage(websocket.TextMessage, []byte("(mock output)\n"))
-		}
+	_ = conn.WriteMessage(websocket.TextMessage, []byte("$ "+cmd+"\n"))
+	_ = conn.WriteMessage(websocket.TextMessage, []byte("env: "+plan.Describe()+"\n"))
+	if strings.HasPrefix(cmd, "echo ") {
+		_ = conn.WriteMessage(websocket.TextMessage, []byte(strings.TrimPrefix(cmd, "echo ")+"\n"))
+	} else {
+		_ = conn.WriteMessage(websocket.TextMessage, []byte("(mock output)\n"))
 	}
 	// A rack ends every exec stream with this marker and the exit code. The CLI strips the line, exits with the
 	// code, and fails when the marker is missing.
