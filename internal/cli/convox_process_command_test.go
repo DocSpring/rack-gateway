@@ -1,6 +1,9 @@
 package cli
 
 import (
+	"bytes"
+	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -8,6 +11,8 @@ import (
 	"testing"
 
 	"github.com/convox/convox/pkg/structs"
+	"github.com/convox/convox/sdk"
+	"github.com/convox/stdcli"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 
@@ -18,6 +23,17 @@ import (
 )
 
 const testJustification = "Count the templates of account 42 — checking a support ticket"
+
+// setupProcessCommand prepares and connects an exec or run command as runProcessCommand does, without running it.
+func setupProcessCommand(
+	cobraCmd *cobra.Command, args []string, action string,
+) (*processClient, *stdcli.Context, error) {
+	process, err := prepareProcessCommand(cobraCmd, args, action)
+	if err != nil {
+		return nil, nil, err
+	}
+	return process.connect(cobraCmd, args)
+}
 
 // processCobraCommand returns cmd (run or exec) for app myapp, with flags set.
 func processCobraCommand(t *testing.T, cmd *cobra.Command, flags map[string]string) *cobra.Command {
@@ -182,4 +198,40 @@ func TestProcessCommandRefusesAScriptItCantSend(t *testing.T) {
 		require.ErrorContains(t, err, tc.want, name)
 	}
 	require.Empty(t, *reviewed)
+}
+
+// --dry-run checks the command and reviews its script, then says what would be sent and stops: no MFA prompt
+// (there's no code to give here, and no terminal), and nothing reaches the rack.
+func TestProcessCommandDryRun(t *testing.T) {
+	gateway := newEnvChangeGateway(t)
+	reviewed := reviewedScripts(t, nil)
+	flags := map[string]string{
+		scriptFlag: writeScript(t, "count.rb", "puts 1\nputs 2\n"), justificationFlag: testJustification,
+		dryRunFlag: "true",
+	}
+	cmd := processCobraCommand(t, RunCommand(), flags)
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+
+	require.NoError(t, runProcessCommand(cmd, []string{"web", "rails", "runner"}, "run",
+		func(sdk.Interface, *stdcli.Context) error { return errors.New("the command ran") }))
+	require.Len(t, *reviewed, 1)
+	script := (*reviewed)[0].script
+	require.Equal(t, strings.Join([]string{
+		"Dry run: nothing was sent to the rack.",
+		"On app myapp (rack us), run in a new web process: rails runner count.rb",
+		"Justification: " + testJustification,
+		"Script: count.rb, 2 lines, SHA-256 " + script.SHA256,
+		fmt.Sprintf("The command sent would be %d bytes (the script travels base64-encoded, with a sh runner that "+
+			"writes it to a temporary file).", len(scriptrun.Build("count.rb", []byte(script.Text), "rails runner"))),
+	}, "\n")+"\n", out.String())
+	require.Empty(t, gateway.requests())
+
+	// A declined script stops a dry run too.
+	declined := reviewedScripts(t, scriptreview.ErrDeclined)
+	cmd = processCobraCommand(t, RunCommand(), flags)
+	cmd.SetOut(io.Discard)
+	err := runProcessCommand(cmd, []string{"web", "rails", "runner"}, "run", nil)
+	require.ErrorIs(t, err, scriptreview.ErrDeclined)
+	require.Len(t, *declined, 1)
 }

@@ -248,7 +248,8 @@ the file's path appended. The gateway reads it back with `scriptrun.Parse` for t
 prompt, `scriptreview.Review` shows it with numbered lines and hidden characters as `<U+XXXX>`: a y/N prompt on a
 terminal, else a macOS JXA dialog (Cancel is the default; the texts go in as arguments, never into the JXA source),
 else refused. API tokens skip the review. The PIN dialog shows the script's name, line count and SHA-256, not its
-text.
+text. `--dry-run` stops after the checks and the review (`runProcessCommand`): it prints the PIN dialog summary and
+the command's size, with no MFA prompt and no request to the rack.
 
 ### Terminal output from the gateway
 

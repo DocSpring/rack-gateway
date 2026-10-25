@@ -2,10 +2,12 @@ package cli
 
 import (
 	"fmt"
+	"io"
 	"net/textproto"
 	"os"
 	"strings"
 
+	"github.com/convox/convox/sdk"
 	"github.com/convox/stdcli"
 	"github.com/spf13/cobra"
 
@@ -17,14 +19,19 @@ import (
 // scriptFlag names a local script file to run with the command (see scriptrun).
 const scriptFlag = "script"
 
+// dryRunFlag stops a command once it's checked and its script reviewed: nothing is sent to the rack.
+const dryRunFlag = "dry-run"
+
 // maxScriptFileBytes caps the script file read: the audit log keeps at most 50 KB of command and script anyway.
 const maxScriptFileBytes = 1 << 20
 
-// addProcessCommandFlags adds the flags exec and run share: --justification and --script.
+// addProcessCommandFlags adds the flags exec and run share: --justification, --script and --dry-run.
 func addProcessCommandFlags(cmd *cobra.Command) {
 	addJustificationFlag(cmd)
 	cmd.Flags().String(scriptFlag, "", "a local script file to run: the command gets the file's path as its last "+
 		"argument (e.g. rails runner), and you review the script before it runs. Needs --justification")
+	cmd.Flags().Bool(dryRunFlag, false, "check the command and review its script, then show what would be sent, "+
+		"without asking for MFA or sending anything to the rack")
 }
 
 // processCommand is an exec or run command as it's sent: where, the command, its justification and its script.
@@ -37,6 +44,8 @@ type processCommand struct {
 	justification string
 	// script is the --script file, as the gateway will record it (nil without one).
 	script *scriptrun.Script
+	// dryRun stops the command before anything is sent (--dry-run).
+	dryRun bool
 }
 
 // where names the command's app and rack.
@@ -61,32 +70,66 @@ func (p processCommand) headers() map[string]string {
 	return headers
 }
 
-// setupProcessCommand prepares exec and run, whose first argument is the process (exec) or service (run) and the
-// rest the command to run (Convox joins them with spaces). The gateway refuses a command too long for its audit
-// log, or without a justification in an app that requires one, but the Convox SDK drops the answer to a refused
-// WebSocket handshake, so an exec it refused would only show "websocket: bad handshake". Checking the command here
-// explains the refusal, before any MFA prompt or process start. A --script is reviewed here too.
-func setupProcessCommand(
-	cobraCmd *cobra.Command, args []string, action string,
-) (*processClient, *stdcli.Context, error) {
+// runProcessCommand runs exec or run with run (cli.Exec or cli.Run). Their first argument is the process (exec)
+// or service (run) and the rest the command to run (Convox joins them with spaces). With --dry-run it stops once
+// the command is checked and its script reviewed, and prints what would be sent.
+func runProcessCommand(
+	cobraCmd *cobra.Command, args []string, action string, run func(sdk.Interface, *stdcli.Context) error,
+) error {
+	process, err := prepareProcessCommand(cobraCmd, args, action)
+	if err != nil {
+		return err
+	}
+	if process.dryRun {
+		return printDryRun(cobraCmd.OutOrStdout(), process)
+	}
+	client, ctx, err := process.connect(cobraCmd, args)
+	if err != nil {
+		return err
+	}
+	return normalizeConvoxExit(run(client, ctx))
+}
+
+// prepareProcessCommand checks an exec or run command and reviews its script. The gateway refuses a command too
+// long for its audit log, or without a justification in an app that requires one, but the Convox SDK drops the
+// answer to a refused WebSocket handshake, so an exec it refused would only show "websocket: bad handshake".
+// Checking the command here explains the refusal, before any MFA prompt or process start.
+func prepareProcessCommand(cobraCmd *cobra.Command, args []string, action string) (processCommand, error) {
 	if err := resolveAppFlag(cobraCmd); err != nil {
-		return nil, nil, err
+		return processCommand{}, err
 	}
 	process, err := newProcessCommand(cobraCmd, args, action)
 	if err != nil {
-		return nil, nil, err
+		return process, err
 	}
-	if err := reviewScript(process); err != nil {
-		return nil, nil, err
+	if process.dryRun, err = cobraCmd.Flags().GetBool(dryRunFlag); err != nil {
+		return process, err
 	}
-	client, err := newProcessClient(cobraCmd, process.headers(), commandPrompt(process))
+	return process, reviewScript(process)
+}
+
+// connect returns the client and Convox context that run the command, args being the command line's arguments.
+// A script's command replaces the command words.
+func (p processCommand) connect(cobraCmd *cobra.Command, args []string) (*processClient, *stdcli.Context, error) {
+	client, err := newProcessClient(cobraCmd, p.headers(), commandPrompt(p))
 	if err != nil {
 		return nil, nil, err
 	}
-	if process.script != nil {
-		args = []string{args[0], process.command}
+	if p.script != nil {
+		args = []string{args[0], p.command}
 	}
 	return client, newConvoxContext(cobraCmd, args), nil
+}
+
+// printDryRun says what the command would send: what the PIN dialog would show, and the command's size.
+func printDryRun(out io.Writer, process processCommand) error {
+	lines := append([]string{"Dry run: nothing was sent to the rack."}, commandPrompt(process).Summary...)
+	size := fmt.Sprintf("The command sent would be %d bytes", len(process.command))
+	if process.script != nil {
+		size += " (the script travels base64-encoded, with a sh runner that writes it to a temporary file)"
+	}
+	_, err := fmt.Fprintln(out, strings.Join(append(lines, size+"."), "\n"))
+	return err
 }
 
 // newProcessCommand checks the command and its flags, and reads its script.

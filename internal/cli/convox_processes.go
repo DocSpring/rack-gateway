@@ -101,11 +101,7 @@ func ExecCommand() *cobra.Command {
 		Short: "execute a command in a running process",
 		Args:  cobra.MinimumNArgs(2),
 		RunE: SilenceOnError(func(cobraCmd *cobra.Command, args []string) error {
-			client, ctx, err := setupProcessCommand(cobraCmd, args, "exec")
-			if err != nil {
-				return err
-			}
-			return normalizeConvoxExit(cli.Exec(client, ctx))
+			return runProcessCommand(cobraCmd, args, "exec", cli.Exec)
 		}),
 	}
 
@@ -123,11 +119,7 @@ func RunCommand() *cobra.Command {
 		Short: "run a one-off process",
 		Args:  cobra.MinimumNArgs(1),
 		RunE: SilenceOnError(func(cobraCmd *cobra.Command, args []string) error {
-			client, ctx, err := setupProcessCommand(cobraCmd, args, "run")
-			if err != nil {
-				return err
-			}
-			return normalizeConvoxExit(cli.Run(client, ctx))
+			return runProcessCommand(cobraCmd, args, "run", cli.Run)
 		}),
 	}
 

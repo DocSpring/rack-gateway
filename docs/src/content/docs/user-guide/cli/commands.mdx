@@ -264,6 +264,8 @@ rack-gateway exec <process-id> <command> -a <app>
 **Flags:**
 - `--justification` - Why the command is run and what it does (see [Justifications](#justifications))
 - `--script` - A local script file for the command to run (see [Scripts](#scripts))
+- `--dry-run` - Check the command and review its script, then show what would be sent, without asking for MFA or
+  sending anything to the rack
 - `--entrypoint` - Override the entrypoint
 
 **Example:**
@@ -333,6 +335,8 @@ rack-gateway run <service> <command> -a <app>
 - `--entrypoint` - Override the entrypoint
 - `--justification` - Why the command is run and what it does (see [Justifications](#justifications))
 - `--script` - A local script file for the command to run (see [Scripts](#scripts))
+- `--dry-run` - Check the command and review its script, then show what would be sent, without asking for MFA or
+  sending anything to the rack
 
 **Example:**
 ```bash
@@ -370,6 +374,8 @@ fit in the audit log (50 KB).
   warning. API tokens run unattended, so their scripts aren't reviewed.
 - **The PIN dialog shows the script's name, size and SHA-256**, so you can check the touch is for the script you
   reviewed.
+- **`--dry-run` stops after the review** and prints what the PIN dialog would show and how many bytes would be
+  sent, without asking for MFA or sending anything. Use it to check a script before running it for real.
 - **The audit log records the script readably:** the command as you'd run it locally (`rails runner
   count_pro_accounts.rb`), the script's text with credentials redacted, its name, and the SHA-256 of what was
   sent, which a copy of the script can be checked against. The web UI shows the script with numbered lines.
