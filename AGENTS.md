@@ -123,7 +123,9 @@ exception: take the fixed version straight away.
   audits a denial. Diff the rack endpoints in Convox's `sdk/methods.go` between the two releases, and route
   (`internal/gateway/rbac/http_routes.go`) any that everyday commands call, such as the budget read behind `ps`. The
   mock rack (`cmd/mock-convox`) has to answer the same way a real rack does, or the CLI E2E tests miss it. Don't
-  route a new Convox command's own endpoints: they stay refused until someone asks for the command.
+  route a new Convox command's own endpoints: they stay refused until someone asks for the command. A request the
+  CLI makes for itself on every command and gets by without on a 404 (like the Console session GET before each
+  websocket) goes in `isRoutineConvoxCLIRequest` instead, so it isn't audited as a denial.
 
 ### 7. DeepSource Static Analysis
 

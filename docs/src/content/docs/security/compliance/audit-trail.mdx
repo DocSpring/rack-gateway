@@ -203,6 +203,13 @@ approval check or the destructive-actions policy, and requests for rack routes t
 API tokens (`token.validate`) and requests refused by a rate limit (`rate_limit.exceeded`) are recorded the same
 way.
 
+Three requests that every Convox CLI makes for itself get the same `404` but no audit entry, because they say
+nothing about the caller and the CLI works without them. `GET /machines` and `GET /racks` come before each websocket
+(build logs, `run`, `exec`, logs) to start a Convox Console session, which a rack doesn't have.
+`GET /apps/{app}/configs/cli-env-mask` reads Convox's own env mask before env is printed to a terminal, and the
+gateway has already masked secret values. The request log still has them. Any other method or config name is a
+denial.
+
 Denials are throttled so a script retrying a refused request can't flood the log. The first denial of an action
 against a target (the resource, and for a rack request its method and path) for a user (or API token, or for a
 request without either, its client IP) is written at once, so a denial against one target is never hidden among
