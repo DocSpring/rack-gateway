@@ -25,6 +25,7 @@ interface AuditLogsPaneProps {
   disableNext?: boolean
   // linkedEntry opens in the detail dialog once it has loaded (an entry a link names, see useLinkedAuditEntry).
   linkedEntry?: AuditLogRecord | null
+  onDialogClose?: () => void
 }
 
 export function AuditLogsPane({
@@ -43,6 +44,7 @@ export function AuditLogsPane({
   disablePrevious = false,
   disableNext = false,
   linkedEntry = null,
+  onDialogClose,
 }: AuditLogsPaneProps) {
   const [selected, setSelected] = useState<AuditLogRecord | null>(null)
 
@@ -65,7 +67,8 @@ export function AuditLogsPane({
 
   const handleCloseDialog = useCallback(() => {
     setSelected(null)
-  }, [])
+    onDialogClose?.()
+  }, [onDialogClose])
 
   return (
     <>

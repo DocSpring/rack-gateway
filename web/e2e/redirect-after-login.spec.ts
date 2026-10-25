@@ -249,4 +249,49 @@ test.describe('Redirect after login', () => {
     await expect(page).toHaveURL(targetPath, { timeout: 10_000 })
     await expect(page.getByRole('heading', { name: /API Tokens/i })).toBeVisible()
   })
+
+  // A Slack message links to its audit entry (?entry=<id>). Someone whose session has expired signs in and comes
+  // back to the audit log with the entry open.
+  test('returnTo keeps a linked audit entry through sign-in', async ({ page }) => {
+    const { login, typeOtpCode } = await import('./helpers')
+    const { getUserMfaSecret, latestAuditEventId } = await import('./db')
+    await login(page)
+    const entryId = String(await latestAuditEventId())
+    const auditLogs = WebRoute('audit-logs')
+
+    await page.context().clearCookies()
+    await page.goto(`${auditLogs}?entry=${entryId}`)
+
+    await expect(page).toHaveURL(/\/app\/login\?returnTo=/, { timeout: 10_000 })
+    const returnTo = new URL(new URL(page.url()).searchParams.get('returnTo') ?? '', page.url())
+    expect(returnTo.pathname).toBe(auditLogs)
+    expect(returnTo.searchParams.get('entry')).toBe(entryId)
+
+    await clickLoginButton(page)
+    const userCard = page.locator('text=Admin User').first()
+    await expect(userCard).toBeVisible()
+    await userCard.click()
+
+    await expect(page).toHaveURL(/\/app\/auth\/mfa\/challenge/, { timeout: 10_000 })
+    const secret = await getUserMfaSecret(ADMIN_EMAIL)
+    if (!secret) throw new Error('No MFA secret found for admin@example.com')
+    const { generateSync } = await import('otplib')
+    await typeOtpCode(page, page, generateSync({ secret }))
+
+    await expect(page).toHaveURL(
+      (url) => url.pathname === auditLogs && url.searchParams.get('entry') === entryId,
+      { timeout: 10_000 }
+    )
+    const dialog = page.getByRole('dialog')
+    await expect(
+      dialog.getByText('Detailed information for the selected audit log entry:')
+    ).toBeVisible()
+
+    // Closing the entry drops it from the URL, so a reload doesn't open it again.
+    await dialog.getByRole('button', { name: 'Close' }).last().click()
+    await expect(dialog).toBeHidden()
+    await expect(page).toHaveURL(
+      (url) => url.pathname === auditLogs && !url.searchParams.has('entry')
+    )
+  })
 })

@@ -16,15 +16,29 @@ function linkedEntryID(): string | null {
   return id && ENTRY_ID.test(id) ? id : null
 }
 
-// useLinkedAuditEntry loads the audit event the page's link names, for the detail dialog to open with. It's read
-// once: the page's filter sync drops ?entry from the URL after the first render.
+// dismissLinkedEntry drops ?entry from the URL once the detail dialog closes, so a reload doesn't open it again.
+function dismissLinkedEntry(): void {
+  if (typeof window === 'undefined') {
+    return
+  }
+  const url = new URL(window.location.href)
+  if (!url.searchParams.has('entry')) {
+    return
+  }
+  url.searchParams.delete('entry')
+  window.history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`)
+}
+
+// useLinkedAuditEntry loads the audit event the page's link names, for the detail dialog to open with. The ID is
+// read once; the page's filter sync keeps ?entry in the URL until dismiss drops it.
 export function useLinkedAuditEntry(enabled: boolean) {
   const [id] = useState(linkedEntryID)
-  return useQuery<AuditLogEntry, Error>({
+  const query = useQuery<AuditLogEntry, Error>({
     queryKey: ['audit-log', id],
     queryFn: () => api.get<AuditLogEntry>(apiPath`/api/v1/audit-logs/${id ?? ''}`),
     enabled: enabled && id !== null,
     retry: false,
     staleTime: Number.POSITIVE_INFINITY,
   })
+  return { entry: query.data ?? null, error: query.error, dismiss: dismissLinkedEntry }
 }

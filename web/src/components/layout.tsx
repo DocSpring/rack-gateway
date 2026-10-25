@@ -68,14 +68,16 @@ function normalizePathname(locationPathname: string): string {
   return p || '/'
 }
 
+// handleAuthRedirect sends a signed-out user to sign in, then back to the page and query they asked for (such as
+// an audit entry a link names).
 function handleAuthRedirect(pathname: string): void {
-  const redirectTarget = pathname === '/' ? undefined : `/app${pathname}`
-  const loginUrl = redirectTarget
+  if (typeof window === 'undefined') {
+    return
+  }
+  const redirectTarget = pathname === '/' ? undefined : `/app${pathname}${window.location.search}`
+  window.location.href = redirectTarget
     ? `/app/login?returnTo=${encodeURIComponent(redirectTarget)}`
     : '/app/login'
-  if (typeof window !== 'undefined') {
-    window.location.href = loginUrl
-  }
 }
 
 function buildMfaEnrollmentUrl(pathname: string, search?: string): string {

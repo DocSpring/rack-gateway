@@ -291,17 +291,22 @@ export function useAuditSearchParams(userId?: string, userEmail?: string) {
       return
     }
 
-    const currentQuery = window.location.search.startsWith('?')
-      ? window.location.search.slice(1)
-      : window.location.search
+    const { pathname, search, hash } = window.location
+    const currentQuery = search.startsWith('?') ? search.slice(1) : search
+    // A linked entry (?entry, see useLinkedAuditEntry) stays in the URL until its dialog closes, so a sign-in
+    // after an expired session comes back to it.
+    const entry = new URLSearchParams(search).get('entry')
+    const query = [routingQuery, entry === null ? '' : `entry=${encodeURIComponent(entry)}`]
+      .filter(Boolean)
+      .join('&')
 
-    if (currentQuery === routingQuery) {
+    if (currentQuery === query) {
       return
     }
 
-    const newUrl = `${location.pathname}${routingQuery ? `?${routingQuery}` : ''}${location.hash}`
-    window.history.replaceState(null, '', newUrl)
-  }, [location.hash, location.pathname, routingQuery])
+    // window.location's path keeps the router's basepath (/app), which the router's location leaves out.
+    window.history.replaceState(null, '', `${pathname}${query ? `?${query}` : ''}${hash}`)
+  }, [routingQuery])
 
   return {
     searchTerm,
