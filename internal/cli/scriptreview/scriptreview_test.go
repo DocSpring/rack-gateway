@@ -6,6 +6,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -89,4 +90,17 @@ func TestReviewInDialog(t *testing.T) {
 		return "", "execution error", errors.New("exit status 1")
 	}
 	require.ErrorContains(t, reviewInDialog(context.Background(), failing, req), "execution error")
+}
+
+// A dialog nobody answers is closed when it times out, and the script isn't approved.
+func TestReviewInDialogTimesOut(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	defer cancel()
+	waiting := func(ctx context.Context, _ string, _ ...string) (string, string, error) {
+		<-ctx.Done()
+		return "", "", errors.New("signal: killed")
+	}
+	err := reviewInDialog(ctx, waiting, testRequest(t, "puts 1\n"))
+	require.ErrorIs(t, err, ErrDeclined)
+	require.ErrorContains(t, err, "the review dialog timed out")
 }

@@ -35,6 +35,20 @@ run_admin_tests() {
         '$ echo rake db:migrate' \
         'rake db:migrate'
 
+    # A --script is reviewed before anything is sent. Without a terminal there's nowhere to show it (macOS would
+    # open the review dialog instead, so the check only runs elsewhere).
+    if [[ "$(uname)" != "Darwin" ]]; then
+        local script_file
+        script_file=$(mktemp)
+        printf 'puts Account.count\n' >"$script_file"
+        verify_rgw_command_failure \
+            "exec p-worker-1 --script $script_file --justification 'Check the script review in the CLI E2E tests' cat" \
+            "there's no terminal to show it in"
+        verify_rgw_command_failure "exec p-worker-1 --script $script_file cat" \
+            "needs --justification: say why the script is run"
+        rm -f "$script_file"
+    fi
+
     verify_rgw_command "env" \
         "DATABASE_URL=********************" \
         "NODE_ENV=production" \

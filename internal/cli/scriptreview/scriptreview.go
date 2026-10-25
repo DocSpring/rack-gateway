@@ -14,6 +14,7 @@ import (
 	"os/exec"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/DocSpring/rack-gateway/internal/cli/terminal"
 	"github.com/DocSpring/rack-gateway/internal/scriptrun"
@@ -32,6 +33,10 @@ type Request struct {
 
 // ErrDeclined is a script the person didn't approve.
 var ErrDeclined = errors.New("the script wasn't approved to run")
+
+// reviewTimeout bounds how long the review dialog waits: long enough to read a script, short enough that a command
+// left waiting doesn't run long after it was asked for.
+const reviewTimeout = 15 * time.Minute
 
 // Review shows req's script and returns nil once the person approves it, or ErrDeclined.
 func Review(req Request) error {
@@ -125,10 +130,16 @@ func oneLine(text string) string {
 // dialogRunner runs a JavaScript for Automation script with osascript, passing args to its run handler.
 type dialogRunner func(ctx context.Context, script string, args ...string) (stdout, stderr string, err error)
 
-// reviewInDialog shows the script in a macOS dialog and approves it when the person clicks Run.
+// reviewInDialog shows the script in a macOS dialog and approves it when the person clicks Run. A dialog left
+// open for reviewTimeout is closed, and the script isn't approved.
 func reviewInDialog(ctx context.Context, run dialogRunner, req Request) error {
+	ctx, cancel := context.WithTimeout(ctx, reviewTimeout)
+	defer cancel()
 	listing, _ := Listing(req.Script.Text)
 	stdout, stderr, err := run(ctx, dialogScript, Header(req), listing)
+	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		return fmt.Errorf("%w: the review dialog timed out", ErrDeclined)
+	}
 	if err != nil {
 		return fmt.Errorf("failed to show the script review dialog: %w: %s", err, strings.TrimSpace(stderr))
 	}
