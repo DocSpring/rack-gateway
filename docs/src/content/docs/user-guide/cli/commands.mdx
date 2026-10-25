@@ -344,8 +344,8 @@ rack-gateway run web "rake db:migrate" -a myapp \
   --justification "Run the migration for the new invoices table, which the deploy skipped"
 ```
 
-Every `run` asks for MFA, even within the step-up window. It asks before it starts the process, and sends the
-proof with the command once the process is running (see
+Every `run` asks for MFA, even within the step-up window, before it starts the process. An attached `run` sends
+the proof with the command once the process is running, and `run --detach` with the process start (see
 [Running commands](/user-guide/cli/mfa-verification/#running-commands)).
 
 #### Justifications
