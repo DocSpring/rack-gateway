@@ -10,6 +10,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/DocSpring/rack-gateway/internal/cmdenv"
 	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 )
@@ -67,7 +68,9 @@ func TestCommandsAtTheLimitAreRecordedInFull(t *testing.T) {
 		rr := httptest.NewRecorder()
 		h.ProxyToRack(rr, req)
 		require.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
-		require.Equal(t, command, rack.last(t).Header.Get("Command"), route.path)
+		_, forwarded, ok := cmdenv.Parse(rack.last(t).Header.Get("Command"))
+		require.True(t, ok, route.path)
+		require.Equal(t, command, forwarded, route.path)
 
 		attempt := auditDetailsFor(t, database, "admin@test.com", route.path, audit.StatusAttempted)
 		require.Equal(t, command, attempt["command"], route.path)

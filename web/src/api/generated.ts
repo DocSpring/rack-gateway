@@ -14,6 +14,8 @@ import type {
   DeleteAppsAppSettings200,
   DeleteAppsAppSettingsApprovedDeployCommands200,
   DeleteAppsAppSettingsAuditVisibleEnvVars200,
+  DeleteAppsAppSettingsCommandEnvReadOnly200,
+  DeleteAppsAppSettingsCommandEnvVars200,
   DeleteAppsAppSettingsParams,
   DeleteAppsAppSettingsProtectedEnvVars200,
   DeleteAppsAppSettingsRequireCommandJustification200,
@@ -94,6 +96,9 @@ import type {
   PutAppsAppSettingsApprovedDeployCommands200,
   PutAppsAppSettingsAuditVisibleEnvVars200,
   PutAppsAppSettingsBody,
+  PutAppsAppSettingsCommandEnvReadOnly200,
+  PutAppsAppSettingsCommandEnvReadOnlyBody,
+  PutAppsAppSettingsCommandEnvVars200,
   PutAppsAppSettingsProtectedEnvVars200,
   PutAppsAppSettingsRequireCommandJustification200,
   PutAppsAppSettingsSecretEnvVars200,
@@ -101,6 +106,7 @@ import type {
   PutAppsAppSettingsServiceImagePatternsBody,
   PutSettings200,
   PutSettingsBody,
+  SettingsApprovedCommand,
   SettingsSetting,
 } from "./schemas";
 
@@ -311,7 +317,7 @@ export const getRackGatewayAPI = () => {
    */
   const putAppsAppSettingsApprovedDeployCommands = (
     app: string,
-    putAppsAppSettingsApprovedDeployCommandsBody: string[],
+    settingsApprovedCommand: SettingsApprovedCommand[],
     options?: SecondParameter<
       typeof createGatewayClient<PutAppsAppSettingsApprovedDeployCommands200>
     >,
@@ -321,7 +327,7 @@ export const getRackGatewayAPI = () => {
         url: `/apps/${app}/settings/approved-deploy-commands`,
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        data: putAppsAppSettingsApprovedDeployCommandsBody,
+        data: settingsApprovedCommand,
       },
       options,
     );
@@ -381,6 +387,82 @@ export const getRackGatewayAPI = () => {
   ) => {
     return createGatewayClient<DeleteAppsAppSettingsAuditVisibleEnvVars200>(
       { url: `/apps/${app}/settings/audit-visible-env-vars`, method: "DELETE" },
+      options,
+    );
+  };
+
+  /**
+   * Replaces the env vars commands in the specified app get from another one unless run with --write
+   * @summary Update the read-only env vars of commands
+   */
+  const putAppsAppSettingsCommandEnvReadOnly = (
+    app: string,
+    putAppsAppSettingsCommandEnvReadOnlyBody: PutAppsAppSettingsCommandEnvReadOnlyBody,
+    options?: SecondParameter<
+      typeof createGatewayClient<PutAppsAppSettingsCommandEnvReadOnly200>
+    >,
+  ) => {
+    return createGatewayClient<PutAppsAppSettingsCommandEnvReadOnly200>(
+      {
+        url: `/apps/${app}/settings/command-env-read-only`,
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        data: putAppsAppSettingsCommandEnvReadOnlyBody,
+      },
+      options,
+    );
+  };
+
+  /**
+   * Removes the stored substitutes, so commands in the specified app get every env var's own value
+   * @summary Delete the read-only env vars of commands
+   */
+  const deleteAppsAppSettingsCommandEnvReadOnly = (
+    app: string,
+    options?: SecondParameter<
+      typeof createGatewayClient<DeleteAppsAppSettingsCommandEnvReadOnly200>
+    >,
+  ) => {
+    return createGatewayClient<DeleteAppsAppSettingsCommandEnvReadOnly200>(
+      { url: `/apps/${app}/settings/command-env-read-only`, method: "DELETE" },
+      options,
+    );
+  };
+
+  /**
+   * Replaces the env vars every command run in the specified app (exec, run) gets. Empty: every env var
+   * @summary Update the env vars commands get
+   */
+  const putAppsAppSettingsCommandEnvVars = (
+    app: string,
+    putAppsAppSettingsCommandEnvVarsBody: string[],
+    options?: SecondParameter<
+      typeof createGatewayClient<PutAppsAppSettingsCommandEnvVars200>
+    >,
+  ) => {
+    return createGatewayClient<PutAppsAppSettingsCommandEnvVars200>(
+      {
+        url: `/apps/${app}/settings/command-env-vars`,
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        data: putAppsAppSettingsCommandEnvVarsBody,
+      },
+      options,
+    );
+  };
+
+  /**
+   * Removes the stored list, so every command run in the specified app gets every env var
+   * @summary Delete the env vars commands get
+   */
+  const deleteAppsAppSettingsCommandEnvVars = (
+    app: string,
+    options?: SecondParameter<
+      typeof createGatewayClient<DeleteAppsAppSettingsCommandEnvVars200>
+    >,
+  ) => {
+    return createGatewayClient<DeleteAppsAppSettingsCommandEnvVars200>(
+      { url: `/apps/${app}/settings/command-env-vars`, method: "DELETE" },
       options,
     );
   };
@@ -1640,6 +1722,10 @@ export const getRackGatewayAPI = () => {
     deleteAppsAppSettingsApprovedDeployCommands,
     putAppsAppSettingsAuditVisibleEnvVars,
     deleteAppsAppSettingsAuditVisibleEnvVars,
+    putAppsAppSettingsCommandEnvReadOnly,
+    deleteAppsAppSettingsCommandEnvReadOnly,
+    putAppsAppSettingsCommandEnvVars,
+    deleteAppsAppSettingsCommandEnvVars,
     putAppsAppSettingsProtectedEnvVars,
     deleteAppsAppSettingsProtectedEnvVars,
     putAppsAppSettingsRequireCommandJustification,
@@ -1794,6 +1880,40 @@ export type DeleteAppsAppSettingsAuditVisibleEnvVarsResult = NonNullable<
       ReturnType<
         typeof getRackGatewayAPI
       >["deleteAppsAppSettingsAuditVisibleEnvVars"]
+    >
+  >
+>;
+export type PutAppsAppSettingsCommandEnvReadOnlyResult = NonNullable<
+  Awaited<
+    ReturnType<
+      ReturnType<
+        typeof getRackGatewayAPI
+      >["putAppsAppSettingsCommandEnvReadOnly"]
+    >
+  >
+>;
+export type DeleteAppsAppSettingsCommandEnvReadOnlyResult = NonNullable<
+  Awaited<
+    ReturnType<
+      ReturnType<
+        typeof getRackGatewayAPI
+      >["deleteAppsAppSettingsCommandEnvReadOnly"]
+    >
+  >
+>;
+export type PutAppsAppSettingsCommandEnvVarsResult = NonNullable<
+  Awaited<
+    ReturnType<
+      ReturnType<typeof getRackGatewayAPI>["putAppsAppSettingsCommandEnvVars"]
+    >
+  >
+>;
+export type DeleteAppsAppSettingsCommandEnvVarsResult = NonNullable<
+  Awaited<
+    ReturnType<
+      ReturnType<
+        typeof getRackGatewayAPI
+      >["deleteAppsAppSettingsCommandEnvVars"]
     >
   >
 >;

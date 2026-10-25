@@ -92,6 +92,10 @@ func registerAPIRoutes(authenticated *gin.RouterGroup, cfg *Config, h *handlerSe
 	appSettings.DELETE("/audit-visible-env-vars", h.settings.DeleteAppAuditVisibleEnvVars)
 	appSettings.PUT("/approved-deploy-commands", h.settings.UpdateAppApprovedDeployCommands)
 	appSettings.DELETE("/approved-deploy-commands", h.settings.DeleteAppApprovedDeployCommands)
+	appSettings.PUT("/command-env-vars", h.settings.UpdateAppCommandEnvVars)
+	appSettings.DELETE("/command-env-vars", h.settings.DeleteAppCommandEnvVars)
+	appSettings.PUT("/command-env-read-only", h.settings.UpdateAppCommandEnvReadOnly)
+	appSettings.DELETE("/command-env-read-only", h.settings.DeleteAppCommandEnvReadOnly)
 	appSettings.PUT("/service-image-patterns", h.settings.UpdateAppServiceImagePatterns)
 	appSettings.DELETE("/service-image-patterns", h.settings.DeleteAppServiceImagePatterns)
 

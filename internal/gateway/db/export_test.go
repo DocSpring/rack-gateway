@@ -12,3 +12,13 @@ func (d *Database) SetDeployApprovalCreatedAtForTest(id int64, createdAt time.Ti
 	_, err := d.exec(`UPDATE deploy_approval_requests SET created_at = ? WHERE id = ?`, createdAt, id)
 	return err
 }
+
+// RunMigrationForTest runs the migration file name again, on a database that has run every migration.
+func (d *Database) RunMigrationForTest(name string) error {
+	sql, err := migrationsFS.ReadFile("migrations/" + name)
+	if err != nil {
+		return err
+	}
+	_, err = d.db.Exec(string(sql))
+	return err
+}

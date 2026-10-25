@@ -106,6 +106,8 @@ func parseTyped(defaultValue interface{}, raw string) (interface{}, error) {
 			return nil, fmt.Errorf("must be a JSON object of strings: %w", err)
 		}
 		return m, nil
+	case []ApprovedCommand:
+		return parseEnvApprovedCommands(raw)
 	default: // strings, including optional ones with a nil default
 		return parseEnvString(raw)
 	}

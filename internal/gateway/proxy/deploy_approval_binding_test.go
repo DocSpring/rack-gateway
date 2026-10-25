@@ -342,7 +342,7 @@ func TestApprovedDeployCommandsAllowOnlyListedCommands(t *testing.T) {
 	h, database := newProxyForDeployApprovalTest(t)
 	app := "docspring"
 	require.NoError(t, database.UpsertSetting(
-		&app, "approved_deploy_commands", []string{"bin/pre_release_checks migrate"}, nil,
+		&app, "approved_deploy_commands", approvedCommands("bin/pre_release_checks migrate"), nil,
 	))
 	require.True(t, h.isCommandApproved("docspring", "bin/pre_release_checks migrate"))
 	require.False(t, h.isCommandApproved("docspring", "bin/rails console"))
@@ -363,7 +363,7 @@ func newApprovalExecHarness(t *testing.T) *approvalExecHarness {
 	h, database := newProxyForDeployApprovalTest(t)
 	app := "docspring"
 	require.NoError(t, database.UpsertSetting(
-		&app, "approved_deploy_commands", []string{"bin/pre_release_checks migrate"}, nil,
+		&app, "approved_deploy_commands", approvedCommands("bin/pre_release_checks migrate"), nil,
 	))
 	deployer := createUserWithRole(t, database, "deployer@example.com", "deployer")
 	token, err := database.CreateAPIToken(strings.Repeat("e", 64), "ci", deployer.ID, nil, nil, nil)
@@ -406,7 +406,7 @@ func TestApprovalRecordsCommandsWithoutTheirCredentials(t *testing.T) {
 	e := newApprovalExecHarness(t)
 	const command = "curl -H 'X-API-Key: s3cret' https://example.com/hooks/release"
 	app := "docspring"
-	require.NoError(t, e.database.UpsertSetting(&app, "approved_deploy_commands", []string{command}, nil))
+	require.NoError(t, e.database.UpsertSetting(&app, "approved_deploy_commands", approvedCommands(command), nil))
 	require.Zero(t, e.exec(command))
 
 	recorded, err := e.database.GetDeployApprovalRequest(e.approval.ID)

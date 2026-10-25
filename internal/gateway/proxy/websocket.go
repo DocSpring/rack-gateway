@@ -50,6 +50,9 @@ func (h *Handler) proxyWebSocket(
 	}
 
 	header := buildWebSocketHeaders(r, rack, authUser, wsURL)
+	if err := wrapCommand(r, header); err != nil {
+		return 0, err
+	}
 
 	upstreamConn, resp, err := h.dialUpstreamWebSocket(r.Context(), wsURL, header, rack.URL)
 	if err != nil {

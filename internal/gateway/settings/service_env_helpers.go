@@ -63,12 +63,6 @@ func normalizeEnvVars(vars []string) []string {
 	return result
 }
 
-// GetApprovedDeployCommands returns approved commands for an app. A stored value that isn't a list of strings is
-// an error, which allows no commands.
-func (s *Service) GetApprovedDeployCommands(appName string) ([]string, error) {
-	return s.getListSetting(appName, KeyApprovedDeployCommands, stringList)
-}
-
 // GetServiceImagePatterns returns service image patterns for an app. A stored value that isn't an object of
 // compiling patterns is an error, which refuses the app's builds: an empty map would leave its images unchecked.
 func (s *Service) GetServiceImagePatterns(appName string) (map[string]string, error) {

@@ -32,6 +32,18 @@ export const HTTP_ROUTE_MFA_REQUIREMENTS: HttpRouteMfaRequirement[] = [
   },
   {
     method: "DELETE",
+    pattern: "/api/v1/apps/:app/settings/command-env-read-only",
+    permissions: ["gateway:setting:command_env_read_only"],
+    mfaLevel: "always",
+  },
+  {
+    method: "DELETE",
+    pattern: "/api/v1/apps/:app/settings/command-env-vars",
+    permissions: ["gateway:setting:command_env_vars"],
+    mfaLevel: "always",
+  },
+  {
+    method: "DELETE",
     pattern: "/api/v1/apps/:app/settings/protected-env-vars",
     permissions: ["gateway:setting:protected_env_vars"],
     mfaLevel: "always",
@@ -503,6 +515,18 @@ export const HTTP_ROUTE_MFA_REQUIREMENTS: HttpRouteMfaRequirement[] = [
     pattern: "/api/v1/apps/:app/settings/audit-visible-env-vars",
     permissions: ["gateway:setting:audit_visible_env_vars"],
     mfaLevel: "step_up",
+  },
+  {
+    method: "PUT",
+    pattern: "/api/v1/apps/:app/settings/command-env-read-only",
+    permissions: ["gateway:setting:command_env_read_only"],
+    mfaLevel: "always",
+  },
+  {
+    method: "PUT",
+    pattern: "/api/v1/apps/:app/settings/command-env-vars",
+    permissions: ["gateway:setting:command_env_vars"],
+    mfaLevel: "always",
   },
   {
     method: "PUT",

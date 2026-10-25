@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gorilla/websocket"
 	"github.com/pquerna/otp"
 	"github.com/pquerna/otp/totp"
 	"github.com/stretchr/testify/require"
@@ -46,6 +47,7 @@ type protectedEnvRack struct {
 	created       []createdRelease
 	buildStatus   map[string]string
 	processStarts []http.Header
+	execs         []http.Header
 }
 
 type createdRelease struct {
@@ -79,6 +81,8 @@ func (rk *protectedEnvRack) handler(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`{"id":"p-1","app":"app","name":"web"}`))
 	case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/apps/app/builds/"):
 		rk.serveBuild(w, r)
+	case r.URL.Path == "/apps/app/processes/p-1/exec":
+		rk.serveExec(w, r)
 	default:
 		http.NotFound(w, r)
 	}
@@ -95,6 +99,18 @@ func (rk *protectedEnvRack) serveBuild(w http.ResponseWriter, r *http.Request) {
 	}
 	body, _ := json.Marshal(map[string]string{"id": id, "status": status})
 	_, _ = w.Write(body)
+}
+
+// serveExec records an exec's headers and ends the session at once.
+func (rk *protectedEnvRack) serveExec(w http.ResponseWriter, r *http.Request) {
+	rk.mu.Lock()
+	rk.execs = append(rk.execs, r.Header.Clone())
+	rk.mu.Unlock()
+	conn, err := (&websocket.Upgrader{}).Upgrade(w, r, nil)
+	if err != nil {
+		return
+	}
+	_ = conn.Close()
 }
 
 // setBuildStatus gives the rack a build with status.

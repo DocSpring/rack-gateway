@@ -149,6 +149,8 @@ var MFARequirements = map[string]MFALevel{
 	GatewayAppSetting(settings.AppSettingCIProvider):                    MFANone,   // Just configuration
 	GatewayAppSetting(settings.AppSettingCircleCIApprovalJobName):       MFANone,   // Just configuration
 	GatewayAppSetting(settings.AppSettingCircleCIAutoApproveOnApproval): MFAStepUp, // Auto-approving
+	GatewayAppSetting(settings.AppSettingCommandEnvReadOnly):            MFAAlways, // Read-only database access
+	GatewayAppSetting(settings.AppSettingCommandEnvVars):                MFAAlways, // Env vars commands get
 	GatewayAppSetting(settings.AppSettingDefaultBranch):                 MFANone,   // Just configuration
 	GatewayAppSetting(settings.AppSettingGitHubPostPRComment):           MFANone,   // Just notification preference
 	GatewayAppSetting(settings.AppSettingGitHubVerification):            MFAAlways, // Disabling GitHub verification

@@ -66,7 +66,7 @@ func TestApprovalRecordsEveryExecOnAProcess(t *testing.T) {
 	e := newApprovalExecHarness(t)
 	app := "docspring"
 	commands := []string{"bin/pre_release_checks migrate", "bin/pre_release_checks seed"}
-	require.NoError(t, e.database.UpsertSetting(&app, "approved_deploy_commands", commands, nil))
+	require.NoError(t, e.database.UpsertSetting(&app, "approved_deploy_commands", approvedCommands(commands...), nil))
 	_, err := e.database.DB().Exec(
 		`UPDATE deploy_approval_requests SET exec_commands = '{"p1": "bin/earlier"}'::jsonb WHERE id = $1`,
 		e.approval.ID,

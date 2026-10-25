@@ -56,6 +56,9 @@ func checkSettingValue(isApp bool, key string, value interface{}) error {
 		return err
 	case []string, map[string]string:
 		return validateCollection(key, value)
+	case []ApprovedCommand:
+		_, err := approvedCommandList(value)
+		return err
 	default: // strings, including optional ones with a nil default
 		return validateString(key, value)
 	}
@@ -105,10 +108,9 @@ func validateString(key string, value interface{}) error {
 }
 
 // stringListKeys are app settings stored as a JSON array of strings. Reading one back fails on any other shape
-// (the gateway then treats every env var as secret and protected, and allows no deploy commands), so a value of
-// another shape is refused before it is saved.
+// (the gateway then treats every env var as secret and protected), so a value of another shape is refused before
+// it is saved.
 var stringListKeys = map[string]bool{
-	KeyApprovedDeployCommands:        true,
 	KeyAuditVisibleEnvVars:           true,
 	KeyProtectedEnvVars:              true,
 	AppSettingSecretEnvVars.String(): true,
@@ -130,6 +132,12 @@ func validateCollection(key string, value interface{}) error {
 		return err
 	case stringListKeys[key]:
 		_, err := stringList(key, value)
+		return err
+	case key == KeyCommandEnvVars:
+		_, err := commandEnvVarNames(value)
+		return err
+	case key == KeyCommandEnvReadOnly:
+		_, err := readOnlyEnvMap(value)
 		return err
 	case key == KeyServiceImagePatterns:
 		return validateImagePatterns(value)
@@ -195,21 +203,9 @@ func validateImagePatterns(value interface{}) error {
 // imagePatternMap returns value as a map of service name to image pattern, or ErrInvalidSettingValue when it isn't
 // an object of strings or a pattern doesn't compile (with {{GIT_COMMIT}} standing for a commit).
 func imagePatternMap(value interface{}) (map[string]string, error) {
-	patterns := map[string]string{}
-	switch v := value.(type) {
-	case map[string]string:
-		patterns = v
-	case map[string]interface{}:
-		for service, raw := range v {
-			pattern, ok := raw.(string)
-			if !ok {
-				return nil, fmt.Errorf("%w: image pattern for %s must be a string", ErrInvalidSettingValue, service)
-			}
-			patterns[service] = pattern
-		}
-	default:
-		return nil, fmt.Errorf("%w: %s must be an object of service name to pattern", ErrInvalidSettingValue,
-			KeyServiceImagePatterns)
+	patterns, err := stringMap(KeyServiceImagePatterns, value, "service name to pattern")
+	if err != nil {
+		return nil, err
 	}
 	services := make([]string, 0, len(patterns))
 	for service := range patterns {

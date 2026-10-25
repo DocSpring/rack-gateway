@@ -176,7 +176,7 @@ func (h *SettingsHandler) DeleteAppAuditVisibleEnvVars(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param app path string true "App name"
-// @Param body body []string true "Approved command list"
+// @Param body body []settings.ApprovedCommand true "Approved commands, each with the env vars it gets"
 // @Success 200 {object} map[string]settings.Setting
 // @Failure 400 {object} ErrorResponse
 // @Failure 409 {object} ErrorResponse
@@ -202,6 +202,76 @@ func (h *SettingsHandler) UpdateAppApprovedDeployCommands(c *gin.Context) {
 // @Router /apps/{app}/settings/approved-deploy-commands [delete]
 func (h *SettingsHandler) DeleteAppApprovedDeployCommands(c *gin.Context) {
 	h.deleteAppSettingValue(c, settings.KeyApprovedDeployCommands)
+}
+
+// UpdateAppCommandEnvVars godoc
+// @Summary Update the env vars commands get
+// @Description Replaces the env vars every command run in the specified app (exec, run) gets. Empty: every env var
+// @Tags Settings
+// @Accept json
+// @Produce json
+// @Param app path string true "App name"
+// @Param body body []string true "Env var names"
+// @Success 200 {object} map[string]settings.Setting
+// @Failure 400 {object} ErrorResponse
+// @Failure 409 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Security SessionCookie
+// @Security CSRFToken
+// @Router /apps/{app}/settings/command-env-vars [put]
+func (h *SettingsHandler) UpdateAppCommandEnvVars(c *gin.Context) {
+	h.updateAppSettingValue(c, settings.KeyCommandEnvVars)
+}
+
+// DeleteAppCommandEnvVars godoc
+// @Summary Delete the env vars commands get
+// @Description Removes the stored list, so every command run in the specified app gets every env var
+// @Tags Settings
+// @Produce json
+// @Param app path string true "App name"
+// @Success 200 {object} map[string]settings.Setting
+// @Failure 400 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Security SessionCookie
+// @Security CSRFToken
+// @Router /apps/{app}/settings/command-env-vars [delete]
+func (h *SettingsHandler) DeleteAppCommandEnvVars(c *gin.Context) {
+	h.deleteAppSettingValue(c, settings.KeyCommandEnvVars)
+}
+
+// UpdateAppCommandEnvReadOnly godoc
+// @Summary Update the read-only env vars of commands
+// @Description Replaces the env vars commands in the specified app get from another one unless run with --write
+// @Tags Settings
+// @Accept json
+// @Produce json
+// @Param app path string true "App name"
+// @Param body body map[string]string true "Env var name to the env var it reads instead"
+// @Success 200 {object} map[string]settings.Setting
+// @Failure 400 {object} ErrorResponse
+// @Failure 409 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Security SessionCookie
+// @Security CSRFToken
+// @Router /apps/{app}/settings/command-env-read-only [put]
+func (h *SettingsHandler) UpdateAppCommandEnvReadOnly(c *gin.Context) {
+	h.updateAppSettingValue(c, settings.KeyCommandEnvReadOnly)
+}
+
+// DeleteAppCommandEnvReadOnly godoc
+// @Summary Delete the read-only env vars of commands
+// @Description Removes the stored substitutes, so commands in the specified app get every env var's own value
+// @Tags Settings
+// @Produce json
+// @Param app path string true "App name"
+// @Success 200 {object} map[string]settings.Setting
+// @Failure 400 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Security SessionCookie
+// @Security CSRFToken
+// @Router /apps/{app}/settings/command-env-read-only [delete]
+func (h *SettingsHandler) DeleteAppCommandEnvReadOnly(c *gin.Context) {
+	h.deleteAppSettingValue(c, settings.KeyCommandEnvReadOnly)
 }
 
 // UpdateAppServiceImagePatterns godoc

@@ -87,6 +87,8 @@ const (
 	AppSettingCIProvider
 	AppSettingCircleCIApprovalJobName
 	AppSettingCircleCIAutoApproveOnApproval
+	AppSettingCommandEnvReadOnly
+	AppSettingCommandEnvVars
 	AppSettingDefaultBranch
 	AppSettingGitHubPostPRComment
 	AppSettingGitHubVerification
@@ -108,6 +110,8 @@ const (
 	KeyCIProvider                    = "ci_provider"
 	KeyCircleCIApprovalJobName       = "circleci_approval_job_name"
 	KeyCircleCIAutoApproveOnApproval = "circleci_auto_approve_on_approval"
+	KeyCommandEnvReadOnly            = "command_env_read_only"
+	KeyCommandEnvVars                = "command_env_vars"
 	KeyDefaultBranch                 = "default_branch"
 	KeyGitHubPostPRComment           = "github_post_pr_comment"
 	KeyGitHubVerification            = "github_verification"
@@ -127,6 +131,8 @@ var appSettingKeyToString = [...]string{
 	KeyCIProvider,
 	KeyCircleCIApprovalJobName,
 	KeyCircleCIAutoApproveOnApproval,
+	KeyCommandEnvReadOnly,
+	KeyCommandEnvVars,
 	KeyDefaultBranch,
 	KeyGitHubPostPRComment,
 	KeyGitHubVerification,
@@ -197,11 +203,13 @@ var DefaultGlobalSettings = map[string]interface{}{
 // DefaultAppSettings defines all valid app-specific settings with their default values.
 var DefaultAppSettings = map[string]interface{}{
 	KeyAllowDeployFromDefaultBranch:  false,
-	KeyApprovedDeployCommands:        []string(nil),
+	KeyApprovedDeployCommands:        []ApprovedCommand(nil),
 	KeyAuditVisibleEnvVars:           []string(nil),
 	KeyCIProvider:                    nil, // nil means use global default
 	KeyCircleCIApprovalJobName:       "",
 	KeyCircleCIAutoApproveOnApproval: false,
+	KeyCommandEnvReadOnly:            map[string]string(nil),
+	KeyCommandEnvVars:                []string(nil),
 	KeyDefaultBranch:                 "main",
 	KeyGitHubPostPRComment:           true,
 	KeyGitHubVerification:            true,
