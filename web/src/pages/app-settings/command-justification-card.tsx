@@ -67,9 +67,9 @@ export function CommandJustificationCard({
       <CardContent className="space-y-4 pb-6">
         <p className="text-muted-foreground text-sm">
           Every command run in this app (<code>rack-gateway run</code> and <code>exec</code>) must
-          say why it's run and what it does, with <code>--justification</code>. The audit log
+          say why it&apos;s run and what it does, with <code>--justification</code>. The audit log
           records it with the command. A command run under a deploy approval is justified by the
-          approval's message.
+          approval&apos;s message.
         </p>
         <label
           className={`flex items-center gap-3 ${toggleDisabled ? 'cursor-not-allowed opacity-50' : ''}`}
