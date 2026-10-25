@@ -320,6 +320,9 @@ func (_ *Logger) BuildDetailsJSON(r *http.Request) string {
 	if cmd, ok := RequestCommand(r); ok && cmd != "" {
 		details["command"] = RedactCommand(cmd)
 	}
+	if justification := JustificationFromContext(r.Context()); justification != "" {
+		details["justification"] = justification
+	}
 	if strings.HasSuffix(r.URL.Path, "/exec") {
 		parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/"), "/")
 		for i, p := range parts {

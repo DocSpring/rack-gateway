@@ -38,6 +38,12 @@ export const HTTP_ROUTE_MFA_REQUIREMENTS: HttpRouteMfaRequirement[] = [
   },
   {
     method: "DELETE",
+    pattern: "/api/v1/apps/:app/settings/require-command-justification",
+    permissions: ["gateway:setting:require_command_justification"],
+    mfaLevel: "always",
+  },
+  {
+    method: "DELETE",
     pattern: "/api/v1/apps/:app/settings/secret-env-vars",
     permissions: ["gateway:setting:secret_env_vars"],
     mfaLevel: "always",
@@ -490,6 +496,12 @@ export const HTTP_ROUTE_MFA_REQUIREMENTS: HttpRouteMfaRequirement[] = [
     method: "PUT",
     pattern: "/api/v1/apps/:app/settings/protected-env-vars",
     permissions: ["gateway:setting:protected_env_vars"],
+    mfaLevel: "always",
+  },
+  {
+    method: "PUT",
+    pattern: "/api/v1/apps/:app/settings/require-command-justification",
+    permissions: ["gateway:setting:require_command_justification"],
     mfaLevel: "always",
   },
   {

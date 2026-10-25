@@ -22,14 +22,25 @@ import (
 )
 
 // envChangeGateway is a fake gateway whose MFA status reports a TOTP method and a step-up window that is still
-// open. It records the headers of every rack-proxy request.
+// open, and whose apps have appSettings (none by default). It records the headers of every rack-proxy request.
 type envChangeGateway struct {
-	mu      sync.Mutex
-	proxied []http.Header
+	mu          sync.Mutex
+	proxied     []http.Header
+	appSettings string
 }
 
 func (g *envChangeGateway) handler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
+	if strings.HasPrefix(r.URL.Path, "/api/v1/apps/") && strings.HasSuffix(r.URL.Path, "/settings") {
+		g.mu.Lock()
+		appSettings := g.appSettings
+		g.mu.Unlock()
+		if appSettings == "" {
+			appSettings = "{}"
+		}
+		_, _ = w.Write([]byte(appSettings))
+		return
+	}
 	if r.URL.Path == "/api/v1/auth/mfa/status" {
 		expiresAt := time.Now().Add(5 * time.Minute)
 		_ = json.NewEncoder(w).Encode(MFAStatusResponse{

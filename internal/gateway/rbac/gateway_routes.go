@@ -230,6 +230,16 @@ var httpRouteSpecs = []RouteSpec{
 	),
 	newHTTPRoute(
 		"PUT",
+		appSettingPath(settings.AppSettingRequireCommandJustification),
+		GatewayAppSetting(settings.AppSettingRequireCommandJustification),
+	),
+	newHTTPRoute(
+		"DELETE",
+		appSettingPath(settings.AppSettingRequireCommandJustification),
+		GatewayAppSetting(settings.AppSettingRequireCommandJustification),
+	),
+	newHTTPRoute(
+		"PUT",
 		appSettingPath(settings.AppSettingSecretEnvVars),
 		GatewayAppSetting(settings.AppSettingSecretEnvVars),
 	),

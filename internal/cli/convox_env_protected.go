@@ -116,10 +116,6 @@ func protectedEnvMFAAuth(cmd *cobra.Command, commandName string, keys []string) 
 	if err != nil {
 		return "", err
 	}
-	gatewayURL, bearer, err := LoadRackAuth(rack)
-	if err != nil {
-		return "", err
-	}
 	app, err := cmd.Flags().GetString("app")
 	if err != nil {
 		return "", err
@@ -131,8 +127,7 @@ func protectedEnvMFAAuth(cmd *cobra.Command, commandName string, keys []string) 
 			return "", err
 		}
 	}
-	auth, _, err := GetMFAAuthWithPIN(cmd, gatewayURL, bearer, rack, "", prompt)
-	return auth, err
+	return freshMFAAuth(cmd, prompt)
 }
 
 // protectedEnvPrompt describes a protected env change for the person approving it: one summary line per key,

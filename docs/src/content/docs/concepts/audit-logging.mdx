@@ -324,6 +324,10 @@ the audit log records it (redacted, then JSON-encoded) with `400` before it reac
 the log can't show in full, and the refusal is audited as a denial. The rack-gateway CLI checks the length before it
 starts a process, so it can say why; the Convox SDK only shows `websocket: bad handshake` for a refused exec.
 
+A command's justification (`--justification`, or the deploy approval's message for a command run under one) is
+recorded with it as `justification` in the details. An app can require one for every command
+(`require_command_justification`): a command without one is refused with `400` and audited as a denial.
+
 ### What Doesn't Get Logged
 
 - Health check requests (`/api/v1/health`)

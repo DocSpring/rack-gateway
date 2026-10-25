@@ -205,8 +205,8 @@ Audit logs are essential for SOC 2 compliance. Ensure they're configured with ap
 ## MFA and Roles
 
 MFA requirements belong to permissions, not roles: the same action needs the same MFA whoever performs it. Writes
-such as restarts, exec and env changes need a recent step-up; deleting apps, changing users or API tokens and
-approving deploys need MFA on the request itself. See [MFA Requirements](/security/rbac/permissions/#mfa-requirements)
+such as restarts and env changes need a recent step-up; running commands (`run`, `exec`), deleting apps, changing
+users or API tokens and approving deploys need MFA on the request itself. See [MFA Requirements](/security/rbac/permissions/#mfa-requirements)
 for the full list. API tokens can't do MFA, so give them only the permissions their pipeline needs.
 
 ## Incident Response

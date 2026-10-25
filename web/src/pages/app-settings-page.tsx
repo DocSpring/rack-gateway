@@ -5,6 +5,7 @@ import { RefreshCw } from 'lucide-react'
 import { useAuth } from '@/contexts/auth-context'
 import { api } from '@/lib/api'
 import { apiPath } from '@/lib/api-path'
+import { CommandJustificationCard } from '@/pages/app-settings/command-justification-card'
 import { ServiceImagePatternsCard } from '@/pages/app-settings/service-image-patterns-card'
 import { StringArrayCard } from '@/pages/app-settings/string-array-card'
 import type { AppSettingsResponse } from '@/pages/app-settings/types'
@@ -99,6 +100,9 @@ export function AppSettingsPage() {
             title="Approved Deploy Commands"
           />
           <ServiceImagePatternsCard app={app} disabled={!isAdmin} settings={appSettings} />
+        </div>
+        <div className="grid grid-cols-2 gap-12">
+          <CommandJustificationCard app={app} disabled={!isAdmin} settings={appSettings} />
         </div>
       </div>
     </div>

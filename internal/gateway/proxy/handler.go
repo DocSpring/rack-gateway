@@ -186,6 +186,9 @@ func (h *Handler) checkBeforeRecording(
 	if err := h.checkPromoteImages(r, rackPath, approvalTracker); err != nil {
 		return err
 	}
+	if err := h.checkCommandJustification(r, approvalTracker); err != nil {
+		return err
+	}
 	if err := audit.CheckCommandRecordable(r); err != nil {
 		return refuse(http.StatusBadRequest, err)
 	}

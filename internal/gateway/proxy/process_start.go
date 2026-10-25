@@ -6,16 +6,13 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/DocSpring/rack-gateway/internal/convox"
 	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 )
 
 // processStartRoute is where `convox run` starts a one-off process.
 const processStartRoute = "/apps/{app}/services/{service}/processes"
-
-// attachedRunCommand is the placeholder command `convox run` starts before exec'ing the real command
-// into the process (default --timeout). The real command is checked on the exec path.
-const attachedRunCommand = "sleep 3600"
 
 // headerOnlyRoutes are rack routes that take their options only from headers: the rack reads a process start's
 // options with stdapi.UnmarshalOptions, and every ProcessRunOptions field is a `header` tag, while a service restart
@@ -37,6 +34,35 @@ func checkHeaderOnlyRequest(r *http.Request, path string, body []byte) error {
 		return refuse(http.StatusBadRequest, errors.New("this request takes no body: its options are headers"))
 	}
 	return nil
+}
+
+// placeholderRunOptions are the process start options that can make a process run something besides its command:
+// the privileged run options (a custom image runs its own entrypoint) and the service's lifecycle hooks.
+var placeholderRunOptions = func() headerSet {
+	set := newHeaderSet("Use-Service-Lifecycle")
+	for name := range privilegedRunHeaders {
+		set[name] = struct{}{}
+	}
+	return set
+}()
+
+// isAttachedRunPlaceholder reports whether r starts a process that runs nothing but `convox run`'s placeholder
+// command (convox.AttachedRunPlaceholder), so it needs no MFA proof of its own: the real command comes as an exec,
+// which does.
+func isAttachedRunPlaceholder(r *http.Request) bool {
+	if r.Method != http.MethodPost || !rbac.KeyMatch3(r.URL.Path, processStartRoute) {
+		return false
+	}
+	commands := r.Header.Values("Command")
+	if len(commands) != 1 || strings.TrimSpace(commands[0]) != convox.AttachedRunPlaceholder {
+		return false
+	}
+	for name := range r.Header {
+		if placeholderRunOptions.has(name) {
+			return false
+		}
+	}
+	return true
 }
 
 func matchesAnyRoute(path string, routes []string) bool {
@@ -65,7 +91,7 @@ func (h *Handler) validateProcessCommand(r *http.Request, original string) error
 
 	app := extractAppFromPath(original)
 	command := strings.TrimSpace(r.Header.Get("Command"))
-	if command != attachedRunCommand && !h.isCommandApproved(app, command) {
+	if command != convox.AttachedRunPlaceholder && !h.isCommandApproved(app, command) {
 		return refuse(http.StatusForbidden, fmt.Errorf("command not approved: %s", audit.RedactCommand(command)))
 	}
 

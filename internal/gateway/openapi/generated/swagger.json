@@ -1015,6 +1015,126 @@
                 }
             }
         },
+        "/apps/{app}/settings/require-command-justification": {
+            "put": {
+                "security": [
+                    {
+                        "SessionCookie": []
+                    },
+                    {
+                        "CSRFToken": []
+                    }
+                ],
+                "description": "Sets whether every command run in the specified app (exec, run) must say why it's run",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Settings"
+                ],
+                "summary": "Update whether commands need a justification",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "App name",
+                        "name": "app",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Whether a justification is required",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "boolean"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "$ref": "#/definitions/settings.Setting"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "SessionCookie": []
+                    },
+                    {
+                        "CSRFToken": []
+                    }
+                ],
+                "description": "Removes the stored value; the environment variable or the default (not required) applies",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Settings"
+                ],
+                "summary": "Delete whether commands need a justification",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "App name",
+                        "name": "app",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "$ref": "#/definitions/settings.Setting"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/apps/{app}/settings/secret-env-vars": {
             "put": {
                 "security": [

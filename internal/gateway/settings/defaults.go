@@ -89,6 +89,7 @@ const (
 	AppSettingGitHubPostPRComment
 	AppSettingGitHubVerification
 	AppSettingProtectedEnvVars
+	AppSettingRequireCommandJustification
 	AppSettingRequirePRForBranch
 	AppSettingSecretEnvVars
 	AppSettingServiceImagePatterns
@@ -109,6 +110,7 @@ const (
 	KeyGitHubPostPRComment           = "github_post_pr_comment"
 	KeyGitHubVerification            = "github_verification"
 	KeyProtectedEnvVars              = "protected_env_vars"
+	KeyRequireCommandJustification   = "require_command_justification"
 	KeyRequirePRForBranch            = "require_pr_for_branch"
 	KeyServiceImagePatterns          = "service_image_patterns"
 	KeyVCSProvider                   = "vcs_provider"
@@ -127,6 +129,7 @@ var appSettingKeyToString = [...]string{
 	KeyGitHubPostPRComment,
 	KeyGitHubVerification,
 	KeyProtectedEnvVars,
+	KeyRequireCommandJustification,
 	KeyRequirePRForBranch,
 	"secret_env_vars",
 	KeyServiceImagePatterns,
@@ -200,6 +203,7 @@ var DefaultAppSettings = map[string]interface{}{
 	KeyGitHubPostPRComment:           true,
 	KeyGitHubVerification:            true,
 	KeyProtectedEnvVars:              []string(nil),
+	KeyRequireCommandJustification:   false,
 	KeyRequirePRForBranch:            true,
 	AppSettingSecretEnvVars.String(): []string(nil),
 	KeyServiceImagePatterns:          map[string]string(nil),

@@ -54,7 +54,7 @@ func (h *Handler) verifyMFAIfRequired(
 	}
 
 	mfaLevel := determineMFALevel(resource, action)
-	if mfaLevel == rbac.MFANone {
+	if mfaLevel == rbac.MFANone || isAttachedRunPlaceholder(r) {
 		return nil
 	}
 	if authUser.Session == nil {

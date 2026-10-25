@@ -41,10 +41,11 @@ const (
 // protectedEnvRack is a fake rack with one release, whose env is env (protectedEnvRackEnv by default), and the
 // builds in buildStatus. It records every release created through it.
 type protectedEnvRack struct {
-	mu          sync.Mutex
-	env         string
-	created     []createdRelease
-	buildStatus map[string]string
+	mu            sync.Mutex
+	env           string
+	created       []createdRelease
+	buildStatus   map[string]string
+	processStarts []http.Header
 }
 
 type createdRelease struct {
@@ -71,6 +72,11 @@ func (rk *protectedEnvRack) handler(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`{"id":"R2"}`))
 	case r.Method == http.MethodDelete && r.URL.Path == "/apps/app":
 		_, _ = w.Write([]byte(`{"name":"app"}`))
+	case r.Method == http.MethodPost && r.URL.Path == "/apps/app/services/web/processes":
+		rk.mu.Lock()
+		rk.processStarts = append(rk.processStarts, r.Header.Clone())
+		rk.mu.Unlock()
+		_, _ = w.Write([]byte(`{"id":"p-1","app":"app","name":"web"}`))
 	case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/apps/app/builds/"):
 		rk.serveBuild(w, r)
 	default:

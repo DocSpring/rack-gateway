@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/convox/convox/pkg/cli"
-	"github.com/convox/convox/sdk"
 	"github.com/convox/stdcli"
 	"github.com/spf13/cobra"
 
@@ -118,6 +117,7 @@ func ExecCommand() *cobra.Command {
 
 	cmd.Flags().StringP("app", "a", "", appFlagHelp)
 	cmd.Flags().String("entrypoint", "", "override entrypoint")
+	addJustificationFlag(cmd)
 
 	return cmd
 }
@@ -142,22 +142,47 @@ func RunCommand() *cobra.Command {
 	cmd.Flags().String("entrypoint", "", "override entrypoint")
 	cmd.Flags().String("release", "", "release to run")
 	cmd.Flags().StringSlice("env", []string{}, "environment variables")
+	addJustificationFlag(cmd)
 
 	return cmd
 }
 
-// setupProcessCommand prepares exec and run, whose arguments after the first are the command to run (Convox joins
-// them with spaces). The gateway refuses a command too long for its audit log, but the Convox SDK drops the answer
-// to a refused WebSocket handshake, so an exec it refused would only show "websocket: bad handshake". Checking the
-// command here explains the refusal, before any MFA prompt or process start.
-func setupProcessCommand(cobraCmd *cobra.Command, args []string, action string) (*sdk.Client, *stdcli.Context, error) {
+// setupProcessCommand prepares exec and run, whose first argument is the process (exec) or service (run) and the
+// rest the command to run (Convox joins them with spaces). The gateway refuses a command too long for its audit
+// log, or without a justification in an app that requires one, but the Convox SDK drops the answer to a refused
+// WebSocket handshake, so an exec it refused would only show "websocket: bad handshake". Checking the command here
+// explains the refusal, before any MFA prompt or process start.
+func setupProcessCommand(
+	cobraCmd *cobra.Command, args []string, action string,
+) (*processClient, *stdcli.Context, error) {
 	if err := resolveAppFlag(cobraCmd); err != nil {
 		return nil, nil, err
 	}
 	if err := audit.CheckCommandLength(sentCommand(args[1:])); err != nil {
 		return nil, nil, err
 	}
-	return setupConvoxWithMFAAction(cobraCmd, args, action)
+	app, err := cobraCmd.Flags().GetString("app")
+	if err != nil {
+		return nil, nil, err
+	}
+	justification, err := commandJustification(cobraCmd, app)
+	if err != nil {
+		return nil, nil, err
+	}
+	rack, err := SelectedRack()
+	if err != nil {
+		return nil, nil, err
+	}
+	headers := map[string]string{}
+	if justification != "" {
+		headers[audit.JustificationHeader] = audit.EncodeJustification(justification)
+	}
+	prompt := commandPrompt(action, app, rack, args[0], args[1:], justification)
+	client, err := newProcessClient(cobraCmd, headers, prompt)
+	if err != nil {
+		return nil, nil, err
+	}
+	return client, newConvoxContext(cobraCmd, args), nil
 }
 
 // headerLineBreaks are what Go's HTTP client replaces with spaces in a header value.

@@ -15,6 +15,7 @@ import type {
   DeleteAppsAppSettingsAuditVisibleEnvVars200,
   DeleteAppsAppSettingsParams,
   DeleteAppsAppSettingsProtectedEnvVars200,
+  DeleteAppsAppSettingsRequireCommandJustification200,
   DeleteAppsAppSettingsSecretEnvVars200,
   DeleteAppsAppSettingsServiceImagePatterns200,
   DeleteSettings200,
@@ -93,6 +94,7 @@ import type {
   PutAppsAppSettingsAuditVisibleEnvVars200,
   PutAppsAppSettingsBody,
   PutAppsAppSettingsProtectedEnvVars200,
+  PutAppsAppSettingsRequireCommandJustification200,
   PutAppsAppSettingsSecretEnvVars200,
   PutAppsAppSettingsServiceImagePatterns200,
   PutAppsAppSettingsServiceImagePatternsBody,
@@ -416,6 +418,47 @@ export const getRackGatewayAPI = () => {
   ) => {
     return createGatewayClient<DeleteAppsAppSettingsProtectedEnvVars200>(
       { url: `/apps/${app}/settings/protected-env-vars`, method: "DELETE" },
+      options,
+    );
+  };
+
+  /**
+   * Sets whether every command run in the specified app (exec, run) must say why it's run
+   * @summary Update whether commands need a justification
+   */
+  const putAppsAppSettingsRequireCommandJustification = (
+    app: string,
+    boolean: boolean,
+    options?: SecondParameter<
+      typeof createGatewayClient<PutAppsAppSettingsRequireCommandJustification200>
+    >,
+  ) => {
+    return createGatewayClient<PutAppsAppSettingsRequireCommandJustification200>(
+      {
+        url: `/apps/${app}/settings/require-command-justification`,
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        data: boolean,
+      },
+      options,
+    );
+  };
+
+  /**
+   * Removes the stored value; the environment variable or the default (not required) applies
+   * @summary Delete whether commands need a justification
+   */
+  const deleteAppsAppSettingsRequireCommandJustification = (
+    app: string,
+    options?: SecondParameter<
+      typeof createGatewayClient<DeleteAppsAppSettingsRequireCommandJustification200>
+    >,
+  ) => {
+    return createGatewayClient<DeleteAppsAppSettingsRequireCommandJustification200>(
+      {
+        url: `/apps/${app}/settings/require-command-justification`,
+        method: "DELETE",
+      },
       options,
     );
   };
@@ -1583,6 +1626,8 @@ export const getRackGatewayAPI = () => {
     deleteAppsAppSettingsAuditVisibleEnvVars,
     putAppsAppSettingsProtectedEnvVars,
     deleteAppsAppSettingsProtectedEnvVars,
+    putAppsAppSettingsRequireCommandJustification,
+    deleteAppsAppSettingsRequireCommandJustification,
     putAppsAppSettingsSecretEnvVars,
     deleteAppsAppSettingsSecretEnvVars,
     putAppsAppSettingsServiceImagePatterns,
@@ -1751,6 +1796,25 @@ export type DeleteAppsAppSettingsProtectedEnvVarsResult = NonNullable<
     >
   >
 >;
+export type PutAppsAppSettingsRequireCommandJustificationResult = NonNullable<
+  Awaited<
+    ReturnType<
+      ReturnType<
+        typeof getRackGatewayAPI
+      >["putAppsAppSettingsRequireCommandJustification"]
+    >
+  >
+>;
+export type DeleteAppsAppSettingsRequireCommandJustificationResult =
+  NonNullable<
+    Awaited<
+      ReturnType<
+        ReturnType<
+          typeof getRackGatewayAPI
+        >["deleteAppsAppSettingsRequireCommandJustification"]
+      >
+    >
+  >;
 export type PutAppsAppSettingsSecretEnvVarsResult = NonNullable<
   Awaited<
     ReturnType<
