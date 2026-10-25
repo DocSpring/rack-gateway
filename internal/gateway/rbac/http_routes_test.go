@@ -15,6 +15,7 @@ func TestAllGlobalSettingGroupsHaveHTTPRoutes(t *testing.T) {
 	allGroups := []settings.GlobalSettingGroup{
 		settings.GlobalSettingGroupMFAConfiguration,
 		settings.GlobalSettingGroupAllowDestructive,
+		settings.GlobalSettingGroupCommandJustification,
 		settings.GlobalSettingGroupVCSAndCIDefaults,
 		settings.GlobalSettingGroupDeployApprovals,
 		settings.GlobalSettingGroupSessionConfiguration,
@@ -55,6 +56,7 @@ func TestAllGlobalSettingGroupsHaveMFARequirements(t *testing.T) {
 	allGroups := []settings.GlobalSettingGroup{
 		settings.GlobalSettingGroupMFAConfiguration,
 		settings.GlobalSettingGroupAllowDestructive,
+		settings.GlobalSettingGroupCommandJustification,
 		settings.GlobalSettingGroupVCSAndCIDefaults,
 		settings.GlobalSettingGroupDeployApprovals,
 		settings.GlobalSettingGroupSessionConfiguration,

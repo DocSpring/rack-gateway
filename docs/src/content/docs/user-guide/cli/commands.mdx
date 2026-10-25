@@ -350,8 +350,10 @@ is running, just before the command runs (see [Running commands](/user-guide/cli
 #### Justifications
 
 `--justification` says why a command is run and what it does, in one line of 16 to 1000 characters. The gateway
-records it with the command in the audit log, and the PIN dialog shows it. An app can require one for every
-command (the `require_command_justification` setting): `run` and `exec` without one are then refused before
+records it with the command in the audit log, and the PIN dialog shows it. The `require_command_justification`
+setting requires one for every command, in every app (on the Settings page, or
+`RGW_SETTING_REQUIRE_COMMAND_JUSTIFICATION=true`) or in one app (its own setting). Either one is enough, and an app
+can't opt out of the gateway-wide setting. `run` and `exec` without a justification are then refused before
 anything starts. A command run under a deploy approval is justified by the approval's message.
 
 #### Scripts

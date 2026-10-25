@@ -19,6 +19,7 @@ const (
 	GlobalSettingDeployApprovalsEnabled
 	GlobalSettingDeployApprovalWindowMinutes
 	GlobalSettingMFARequireAllUsers
+	GlobalSettingRequireCommandJustification
 	GlobalSettingSessionTimeoutMinutes
 	GlobalSettingStepUpWindowMinutes
 	GlobalSettingTrustedDeviceTTLDays
@@ -46,6 +47,7 @@ var globalSettingKeyToString = [...]string{
 	KeyDeployApprovalsEnabled,
 	KeyDeployApprovalWindowMinutes,
 	KeyMFARequireAllUsers,
+	KeyRequireCommandJustification,
 	KeySessionTimeoutMinutes,
 	"mfa_step_up_window_minutes",
 	KeyTrustedDeviceTTLDays,
@@ -110,7 +112,7 @@ const (
 	KeyGitHubPostPRComment           = "github_post_pr_comment"
 	KeyGitHubVerification            = "github_verification"
 	KeyProtectedEnvVars              = "protected_env_vars"
-	KeyRequireCommandJustification   = "require_command_justification"
+	KeyRequireCommandJustification   = "require_command_justification" // also a global setting
 	KeyRequirePRForBranch            = "require_pr_for_branch"
 	KeyServiceImagePatterns          = "service_image_patterns"
 	KeyVCSProvider                   = "vcs_provider"
@@ -186,6 +188,7 @@ var DefaultGlobalSettings = map[string]interface{}{
 	KeyDeployApprovalsEnabled:                 true,
 	KeyDeployApprovalWindowMinutes:            DefaultDeployApprovalWindowMinutes,
 	KeyMFARequireAllUsers:                     true,
+	KeyRequireCommandJustification:            false,
 	KeySessionTimeoutMinutes:                  5,
 	GlobalSettingStepUpWindowMinutes.String(): defaultStepUpWindowMinutes,
 	KeyTrustedDeviceTTLDays:                   defaultTrustedDeviceTTLDays,

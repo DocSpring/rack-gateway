@@ -302,6 +302,40 @@ describe('SettingsPage', () => {
       })
     })
 
+    // The gateway-wide require_command_justification is its own group: it saves to its own endpoint, and Clear
+    // deletes its stored value.
+    it('saves and clears the gateway-wide justification requirement', async () => {
+      vi.mocked(api.get).mockResolvedValue({
+        require_command_justification: {
+          key: 'require_command_justification',
+          value: false,
+          source: 'db',
+          env_var: 'RGW_SETTING_REQUIRE_COMMAND_JUSTIFICATION',
+        } as SettingsSetting,
+      })
+      vi.mocked(api.put).mockResolvedValue({})
+      vi.mocked(api.delete).mockResolvedValue({})
+
+      renderSettingsPage()
+
+      const checkbox = await screen.findByLabelText(/require a justification for every command/i)
+      await waitFor(() => expect(checkbox).not.toBeChecked())
+      fireEvent.click(checkbox)
+      fireEvent.click(await screen.findByRole('button', { name: /save/i }))
+      await waitFor(() => {
+        expect(api.put).toHaveBeenCalledWith('/api/v1/settings/require-command-justification', {
+          require_command_justification: true,
+        })
+      })
+
+      fireEvent.click(screen.getByRole('button', { name: /clear/i }))
+      await waitFor(() => {
+        expect(api.delete).toHaveBeenCalledWith(
+          '/api/v1/settings/require-command-justification?key=require_command_justification'
+        )
+      })
+    })
+
     it('discards changes when Cancel is clicked', async () => {
       vi.mocked(api.get).mockResolvedValue({
         mfa_require_all_users: {

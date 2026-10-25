@@ -207,6 +207,17 @@ A restore to before the upgrade loses the audit events written since; see
 
 ## Release Notes That Need Action
 
+### Gateway-wide command justifications (v0.1.24)
+
+`require_command_justification` is now a gateway-wide setting as well as a per-app one (the Settings page, or
+`RGW_SETTING_REQUIRE_COMMAND_JUSTIFICATION=true`). With it on, every command in every app needs a justification,
+whatever the app's own setting says.
+
+1. **Turn it on once your users' CLIs are on v0.1.24.** An older CLI reads only the app's setting, so it doesn't
+   stop an `exec` without a justification before it starts: the gateway refuses it, and the CLI only shows
+   `websocket: bad handshake`. A `run` still shows the gateway's reason.
+2. **`scripts/deploy.sh` gives its migration run a justification**, so deploys keep working with the setting on.
+
 ### Fresh MFA for every command (v0.1.19 to v0.1.22)
 
 v0.1.19 asks for MFA on every `run` and `exec`, adds justifications and `--script`. Upgrade straight to v0.1.22:
@@ -224,8 +235,8 @@ without a terminal needs no separate PIN dialog.
    command by its runner, which v0.1.21 changed: when only one side has that change, the audit log records the raw
    `sh -c` command instead of the script's name, text and SHA-256.
 3. **`require_command_justification` is off by default.** Turn it on per app (app settings page, the API, or
-   `RGW_APP_<APP>_SETTING_REQUIRE_COMMAND_JUSTIFICATION=true`) once your users' CLIs are on v0.1.19+. Commands run
-   under a deploy approval use the approval's message as their justification.
+   `RGW_APP_<APP>_SETTING_REQUIRE_COMMAND_JUSTIFICATION=true`), or for every app from v0.1.24, once your users'
+   CLIs are on v0.1.19+. Commands run under a deploy approval use the approval's message as their justification.
 4. **To hear about commands in Slack, map `process.exec.start` and `process.start`** to a channel. The message
    never includes the command or the script, and links to the audit entry.
 

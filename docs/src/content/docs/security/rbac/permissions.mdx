@@ -342,9 +342,10 @@ Reads and lists need none. Any other permission needs **always** unless it's lis
 So these always need MFA on the request itself: running a command in an app (`convox:process:exec`, and
 `convox:process:start` except `convox run`'s placeholder start, whose command comes as an exec), deleting apps, importing builds, creating, changing, locking and
 deleting users, revoking sessions, creating, changing and deleting API tokens, approving, rejecting and extending deploy approvals, removing an MFA method, refreshing the rack TLS certificate,
-changing protected env vars, privileged process options, and the settings that protect secrets or loosen deploy
-checks (`mfa_configuration`, `allow_destructive_actions`, `deploy_approvals`, `vcs_ci_deploy`,
-`protected_env_vars`, `secret_env_vars`, `github_verification`, `require_pr_for_branch`).
+changing protected env vars, privileged process options, and the settings that protect secrets, loosen deploy
+checks or require justifications (`mfa_configuration`, `allow_destructive_actions`, `deploy_approvals`,
+`vcs_ci_deploy`, `protected_env_vars`, `secret_env_vars`, `github_verification`, `require_pr_for_branch`, and
+`require_command_justification`, gateway-wide and per app).
 
 API tokens can't verify MFA, so MFA levels don't apply to them; what a token may do is limited by its permissions and
 its owner's role. The levels are defined in `internal/gateway/rbac/mfa_requirements.go`.

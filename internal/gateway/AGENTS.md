@@ -108,8 +108,9 @@ Request forwarding with WebSocket support:
   no proof; the exec that follows carries the command's proof
 - Command justifications (`proxy/command_justification.go`): an exec's or process start's
   `X-Command-Justification` (percent-encoded, checked by `audit.CheckJustification`, never forwarded), or the
-  deploy approval's message, goes on the request context and into its audit entries' details. An app with
-  `require_command_justification` refuses a command without one, the placeholder start included
+  deploy approval's message, goes on the request context and into its audit entries' details. With
+  `require_command_justification` on (gateway-wide, or the app's own; `GetRequireCommandJustification` reads both),
+  a command without one is refused, the placeholder start included
 - MFA settings are read when needed (`settings.Service.GetMFASettings`, one query; the middleware reads them once
   per request), never kept from startup, so a change applies at once on every instance
 - Client IPs: use `c.ClientIP()` in gin handlers and `netutil.ClientIP(r)` elsewhere. Both trust

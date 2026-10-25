@@ -325,8 +325,9 @@ the log can't show in full, and the refusal is audited as a denial. The rack-gat
 starts a process, so it can say why; the Convox SDK only shows `websocket: bad handshake` for a refused exec.
 
 A command's justification (`--justification`, or the deploy approval's message for a command run under one) is
-recorded with it as `justification` in the details. An app can require one for every command
-(`require_command_justification`): a command without one is refused with `400` and audited as a denial.
+recorded with it as `justification` in the details. The gateway can require one for every command, in every app
+or in one app (`require_command_justification`): a command without one is refused with `400` and audited as a
+denial.
 
 A command run with a script (`--script`, see [Scripts](/user-guide/cli/commands/#scripts)) is recorded readably:
 `command` is the command as a person would run it locally (`rails runner check.rb`), `script` the script's text

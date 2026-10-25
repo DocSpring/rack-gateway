@@ -237,9 +237,9 @@ placeholder start and the waits go without a proof, and the proof is collected j
 detached run's start), with the terminal taken out of the raw mode Convox put it in, so a TOTP code or a WebAuthn
 challenge doesn't expire while a slow process starts. The PIN dialog summary names the app, rack, command and
 justification (`commandPrompt`). `--justification` travels in `audit.JustificationHeader` (percent-encoded), which
-the gateway records and doesn't forward. When the app's `require_command_justification` is on, the CLI refuses a
-command without one before anything starts (it reads the app's settings; API tokens can't, and rely on the
-gateway's refusal).
+the gateway records and doesn't forward. When `require_command_justification` is on (gateway-wide or the app's),
+the CLI refuses a command without one before anything starts (it reads the global and app settings; API tokens
+can't, and rely on the gateway's refusal).
 
 `--script FILE` (`convox_process_command.go`) sends a local script with the command words: `scriptrun.Build` wraps
 them in a fixed `sh` runner that decodes the base64 script into a temp directory and runs the words with the

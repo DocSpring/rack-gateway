@@ -15,9 +15,10 @@ var errJustificationRequired = errors.New("this app requires a justification for
 
 // checkCommandJustification finds the justification of the command r runs (an exec's, or a process start's) and
 // puts it on r, so the request's audit entries record it. A command under a deploy approval is justified by the
-// approval's message. In an app that requires one (require_command_justification), a command without one is
-// refused: `convox run`'s placeholder start too, so an attached run without one is refused before its process
-// starts, with a reason the CLI can show (it can't show why an exec's WebSocket handshake was refused).
+// approval's message. In an app that requires one (require_command_justification, the app's own or the
+// gateway-wide one), a command without one is refused: `convox run`'s placeholder start too, so an attached run
+// without one is refused before its process starts, with a reason the CLI can show (it can't show why an exec's
+// WebSocket handshake was refused).
 func (h *Handler) checkCommandJustification(r *http.Request, tracker *deployApprovalTracker) error {
 	if _, ok := audit.RequestCommand(r); !ok {
 		return nil

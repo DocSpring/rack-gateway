@@ -74,7 +74,8 @@ set +e
 rack-gateway run admin ./rack-gateway-api migrate \
   $RACK_FLAG \
   --app "$APP_NAME" \
-  --release "$RELEASE_ID"
+  --release "$RELEASE_ID" \
+  --justification "Run database migrations for $APP_NAME release $RELEASE_ID before promoting it"
 MIGRATE_EXIT_CODE=$?
 set -e
 

@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { SettingsSetting } from '@/api/schemas'
 import { CommandJustificationCard } from './command-justification-card'
 import type { AppSettingsResponse } from './types'
 
@@ -10,13 +11,20 @@ vi.mock('@/lib/api', async (importOriginal) => {
   return { ...actual, api: { ...actual.api, put: mockPut } }
 })
 
-function renderCard(settings: AppSettingsResponse) {
+function renderCard(settings: AppSettingsResponse, gatewayWide?: SettingsSetting) {
   return render(
     <QueryClientProvider client={new QueryClient()}>
-      <CommandJustificationCard app="web" disabled={false} settings={settings} />
+      <CommandJustificationCard
+        app="web"
+        disabled={false}
+        gatewayWide={gatewayWide}
+        settings={settings}
+      />
     </QueryClientProvider>
   )
 }
+
+const gatewayWideNote = /The gateway-wide setting requires a justification/
 
 const checkbox = () =>
   screen.getByRole('checkbox', { name: /Require a justification for every command/ })
@@ -53,5 +61,19 @@ describe('CommandJustificationCard', () => {
     } as AppSettingsResponse)
     expect(checkbox()).toBeChecked()
     expect(checkbox()).toBeDisabled()
+  })
+
+  // With the gateway-wide setting on, the app requires one whatever its own setting says, and the card says so.
+  it('says when the gateway-wide setting requires a justification', () => {
+    const appOff = {
+      require_command_justification: { value: false, source: 'default' },
+    } as AppSettingsResponse
+    const { unmount } = renderCard(appOff, { value: false, source: 'default' } as SettingsSetting)
+    expect(screen.queryByText(gatewayWideNote)).not.toBeInTheDocument()
+    unmount()
+
+    renderCard(appOff, { value: true, source: 'env' } as SettingsSetting)
+    expect(screen.getByText(gatewayWideNote)).toBeInTheDocument()
+    expect(checkbox()).not.toBeChecked()
   })
 })
