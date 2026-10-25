@@ -1,15 +1,8 @@
 package cli
 
 import (
-	"net/textproto"
-	"strings"
-
 	"github.com/convox/convox/pkg/cli"
-	"github.com/convox/convox/sdk"
-	"github.com/convox/stdcli"
 	"github.com/spf13/cobra"
-
-	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
 )
 
 // PsCommand creates the ps command
@@ -108,16 +101,13 @@ func ExecCommand() *cobra.Command {
 		Short: "execute a command in a running process",
 		Args:  cobra.MinimumNArgs(2),
 		RunE: SilenceOnError(func(cobraCmd *cobra.Command, args []string) error {
-			client, ctx, err := setupProcessCommand(cobraCmd, args, "exec")
-			if err != nil {
-				return err
-			}
-			return normalizeConvoxExit(cli.Exec(client, ctx))
+			return runProcessCommand(cobraCmd, args, "exec", cli.Exec)
 		}),
 	}
 
 	cmd.Flags().StringP("app", "a", "", appFlagHelp)
 	cmd.Flags().String("entrypoint", "", "override entrypoint")
+	addProcessCommandFlags(cmd)
 
 	return cmd
 }
@@ -129,11 +119,7 @@ func RunCommand() *cobra.Command {
 		Short: "run a one-off process",
 		Args:  cobra.MinimumNArgs(1),
 		RunE: SilenceOnError(func(cobraCmd *cobra.Command, args []string) error {
-			client, ctx, err := setupProcessCommand(cobraCmd, args, "run")
-			if err != nil {
-				return err
-			}
-			return normalizeConvoxExit(cli.Run(client, ctx))
+			return runProcessCommand(cobraCmd, args, "run", cli.Run)
 		}),
 	}
 
@@ -142,31 +128,9 @@ func RunCommand() *cobra.Command {
 	cmd.Flags().String("entrypoint", "", "override entrypoint")
 	cmd.Flags().String("release", "", "release to run")
 	cmd.Flags().StringSlice("env", []string{}, "environment variables")
+	addProcessCommandFlags(cmd)
 
 	return cmd
-}
-
-// setupProcessCommand prepares exec and run, whose arguments after the first are the command to run (Convox joins
-// them with spaces). The gateway refuses a command too long for its audit log, but the Convox SDK drops the answer
-// to a refused WebSocket handshake, so an exec it refused would only show "websocket: bad handshake". Checking the
-// command here explains the refusal, before any MFA prompt or process start.
-func setupProcessCommand(cobraCmd *cobra.Command, args []string, action string) (*sdk.Client, *stdcli.Context, error) {
-	if err := resolveAppFlag(cobraCmd); err != nil {
-		return nil, nil, err
-	}
-	if err := audit.CheckCommandLength(sentCommand(args[1:])); err != nil {
-		return nil, nil, err
-	}
-	return setupConvoxWithMFAAction(cobraCmd, args, action)
-}
-
-// headerLineBreaks are what Go's HTTP client replaces with spaces in a header value.
-var headerLineBreaks = strings.NewReplacer("\n", " ", "\r", " ")
-
-// sentCommand is the command words as the gateway receives them in the Command header: joined with spaces, line
-// breaks made spaces and the ends trimmed, as Go's HTTP client writes a header value.
-func sentCommand(words []string) string {
-	return textproto.TrimString(headerLineBreaks.Replace(strings.Join(words, " ")))
 }
 
 // RestartCommand creates the restart command

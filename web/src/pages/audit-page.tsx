@@ -11,6 +11,7 @@ import { AuditFilterPanel } from '@/pages/audit/filter-panel'
 import { useAuditMetrics } from '@/pages/audit/metrics'
 import { AuditStatsCards } from '@/pages/audit/stats-cards'
 import { useAuditSearchParams } from '@/pages/audit/use-audit-search-params'
+import { useLinkedAuditEntry } from '@/pages/audit/use-linked-entry'
 import { createAuditQueryParams } from '@/pages/audit/utils'
 import { AuditVerificationCard } from '@/pages/audit/verification-status'
 
@@ -57,6 +58,7 @@ export function AuditPage({ userId, userEmail, showVerification = false }: Audit
     handleCustomStartChange,
     handleCustomEndChange,
   } = useAuditSearchParams(userId, userEmail)
+  const linkedEntry = useLinkedAuditEntry(canExport && !userId && !userEmail)
 
   // Fetch audit logs
   const { data, error, isError, isLoading, refetch } = useQuery<
@@ -261,13 +263,10 @@ export function AuditPage({ userId, userEmail, showVerification = false }: Audit
         currentPage={currentPage}
         disableNext={currentPage >= totalPages}
         disablePrevious={currentPage <= 1}
-        error={
-          isError
-            ? `Failed to load audit logs: ${String((error as Error)?.message || 'Unknown error')}`
-            : null
-        }
+        error={auditPaneError(isError ? error : null, linkedEntry.error)}
         firstRowIndex={firstRowIndex}
         lastRowIndex={lastRowIndex}
+        linkedEntry={linkedEntry.data ?? null}
         loading={Boolean(isLoading && logs.length === 0)}
         logs={logs}
         onNextPage={handleNextPage}
@@ -278,6 +277,17 @@ export function AuditPage({ userId, userEmail, showVerification = false }: Audit
       />
     </div>
   )
+}
+
+// auditPaneError describes a failure to load the audit log, or the entry a link named.
+function auditPaneError(listError: Error | null, linkedError: Error | null): string | null {
+  if (listError) {
+    return `Failed to load audit logs: ${listError.message || 'Unknown error'}`
+  }
+  if (linkedError) {
+    return `Failed to load the linked audit log entry: ${linkedError.message || 'Unknown error'}`
+  }
+  return null
 }
 
 // The gateway-wide audit log.

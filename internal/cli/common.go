@@ -63,28 +63,41 @@ func SetupConvoxCommandWithMFA(
 	args []string,
 	mfaAuth string,
 ) (*sdk.Client, *stdcli.Context, error) {
-	_, gatewayURL, auth, err := resolveRackAuth(mfaAuth)
+	client, err := newConvoxClient(mfaAuth)
 	if err != nil {
 		return nil, nil, err
 	}
+	return client, newConvoxContext(cobraCmd, args), nil
+}
+
+// newConvoxClient returns a Convox SDK client for the selected rack's gateway whose requests carry mfaAuth ("" for
+// none; see buildRackURL).
+func newConvoxClient(mfaAuth string) (*sdk.Client, error) {
+	_, gatewayURL, auth, err := resolveRackAuth(mfaAuth)
+	if err != nil {
+		return nil, err
+	}
 	rackURL, err := buildRackURL(gatewayURL, auth)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	secureConvoxSDK()
 	client, err := sdk.New(rackURL)
 	if err != nil {
 		// The error would quote rackURL, which carries the session token.
-		return nil, nil, fmt.Errorf("failed to configure the Convox client for %s", gatewayURL)
+		return nil, fmt.Errorf("failed to configure the Convox client for %s", gatewayURL)
 	}
+	return client, nil
+}
 
+// newConvoxContext returns the stdcli context a Convox command runs with: args and every non-global flag.
+func newConvoxContext(cobraCmd *cobra.Command, args []string) *stdcli.Context {
 	engine := newStdCLIEngine(cobraCmd)
 	flags := collectAllNonGlobalFlags(cobraCmd)
 	ctx := newStdCLIContext(cobraCmd, args, flags)
 	injectStdCLIEngine(ctx, engine)
-
-	return client, ctx, nil
+	return ctx
 }
 
 func resolveRackAuth(mfaAuth string) (string, string, string, error) {

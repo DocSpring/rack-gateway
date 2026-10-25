@@ -21,6 +21,8 @@ import (
 	"unicode"
 
 	"golang.org/x/term"
+
+	"github.com/DocSpring/rack-gateway/internal/cli/terminal"
 )
 
 const (
@@ -71,7 +73,7 @@ type Request struct {
 
 // ReadPIN asks for the security key PIN on the terminal, or in a macOS dialog when stdin is not a terminal.
 func ReadPIN(req Request) (string, error) {
-	if fd, ok := stdinFD(); ok && term.IsTerminal(fd) {
+	if fd, ok := terminal.StdinFD(); ok {
 		return readFromTerminal(fd, os.Stderr)
 	}
 	if runtime.GOOS != "darwin" {
@@ -79,15 +81,6 @@ func ReadPIN(req Request) (string, error) {
 	}
 	_, _ = fmt.Fprintln(os.Stderr, "Waiting for the security key PIN in the rack-gateway dialog...")
 	return readFromDialog(context.Background(), runOsascript, req)
-}
-
-func stdinFD() (int, bool) {
-	fd := os.Stdin.Fd()
-	const maxInt = int(^uint(0) >> 1)
-	if fd > uintptr(maxInt) {
-		return 0, false
-	}
-	return int(fd), true
 }
 
 func readFromTerminal(fd int, prompt io.Writer) (string, error) {

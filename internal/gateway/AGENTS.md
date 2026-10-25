@@ -103,6 +103,13 @@ Request forwarding with WebSocket support:
   CLI command needs one proof; an MFAAlways permission needs a proof verified on that request
   (`verifyRequestMFA`, shared with protected env changes). The CLI proxy also requires MFA enrollment from every
   session, whatever its channel (`middleware.RequireMFAEnrollment`)
+- Running a command (`convox:process:exec`, `convox:process:start`) is MFAAlways. `convox run`'s placeholder start
+  (`convox.AttachedRunPlaceholder`, with no option that could run anything else: `isAttachedRunPlaceholder`) needs
+  no proof; the exec that follows carries the command's proof
+- Command justifications (`proxy/command_justification.go`): an exec's or process start's
+  `X-Command-Justification` (percent-encoded, checked by `audit.CheckJustification`, never forwarded), or the
+  deploy approval's message, goes on the request context and into its audit entries' details. An app with
+  `require_command_justification` refuses a command without one, the placeholder start included
 - MFA settings are read when needed (`settings.Service.GetMFASettings`, one query; the middleware reads them once
   per request), never kept from startup, so a change applies at once on every instance
 - Client IPs: use `c.ClientIP()` in gin handlers and `netutil.ClientIP(r)` elsewhere. Both trust

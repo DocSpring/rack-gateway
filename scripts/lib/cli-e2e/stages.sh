@@ -15,15 +15,39 @@ run_admin_tests() {
     # ps reads the app's budget. A route the gateway didn't know would print this error on every ps.
     refute_rgw_output "ps" "ns=cli_budget"
 
-    verify_rgw_command "run web 'echo rake db:migrate'" \
+    # Running a command needs MFA on the command itself, even right after signing in. Without a terminal the CLI
+    # can't ask for a code, so the run stops before its exec.
+    verify_rgw_command_failure "run web 'echo rake db:migrate'" \
+        "Multi-factor authentication required"
+
+    local run_mfa_code
+    clear_mfa_replay_protection
+    run_mfa_code=$(generate_totp_code "$(get_totp_secret 'admin@example.com')")
+    verify_rgw_command "run web --mfa-code $run_mfa_code 'echo rake db:migrate'" \
         'Connected to mock exec for app=rack-gateway pid=proc-123456' \
         '$ echo rake db:migrate' \
         'rake db:migrate'
 
-    verify_rgw_command "exec p-worker-1 'echo rake db:migrate'" \
+    clear_mfa_replay_protection
+    run_mfa_code=$(generate_totp_code "$(get_totp_secret 'admin@example.com')")
+    verify_rgw_command "exec p-worker-1 --mfa-code $run_mfa_code 'echo rake db:migrate'" \
         'Connected to mock exec for app=rack-gateway pid=p-worker-1' \
         '$ echo rake db:migrate' \
         'rake db:migrate'
+
+    # A --script is reviewed before anything is sent. Without a terminal there's nowhere to show it (macOS would
+    # open the review dialog instead, so the check only runs elsewhere).
+    if [[ "$(uname)" != "Darwin" ]]; then
+        local script_file
+        script_file=$(mktemp)
+        printf 'puts Account.count\n' >"$script_file"
+        verify_rgw_command_failure \
+            "exec p-worker-1 --script $script_file --justification 'Check the script review in the CLI E2E tests' cat" \
+            "there's no terminal to show it in"
+        verify_rgw_command_failure "exec p-worker-1 --script $script_file cat" \
+            "needs --justification: say why the script is run"
+        rm -f "$script_file"
+    fi
 
     verify_rgw_command "env" \
         "DATABASE_URL=********************" \

@@ -11,7 +11,6 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"golang.org/x/term"
 )
 
 // SilenceOnError wraps a command function to silence usage on errors
@@ -65,17 +64,6 @@ func OpenBrowser(url string) error {
 	}
 
 	return exec.Command(cmd, args...).Start()
-}
-
-// IsInteractive returns true if stdin and stdout are both terminals
-func IsInteractive() bool {
-	const maxInt = int(^uint(0) >> 1)
-	stdinFd := os.Stdin.Fd()
-	stdoutFd := os.Stdout.Fd()
-	if stdinFd > uintptr(maxInt) || stdoutFd > uintptr(maxInt) {
-		return false
-	}
-	return term.IsTerminal(int(stdinFd)) && term.IsTerminal(int(stdoutFd))
 }
 
 // ResolveApp determines the Convox app name using a similar precedence to the Convox CLI:

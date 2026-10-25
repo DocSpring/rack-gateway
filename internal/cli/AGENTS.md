@@ -228,6 +228,31 @@ refused before MFA, so a key can't make the dialog name another app. Without a t
 quotes, backslashes or anything outside printable ASCII, escaping non-ASCII characters (`pinentry.quoteArg`), so
 `"X --app staging-web"` can't pass for a key and a flag.
 
+### Running commands (`run`, `exec`)
+
+The gateway needs an MFA proof on every exec and every process start that runs a command, whatever the step-up
+window says. `convox run` (attached) starts a placeholder process (`convox.AttachedRunPlaceholder`), waits for
+it, then execs the command into it. `processClient` (`convox_process_client.go`) wraps the SDK client: the
+placeholder start and the waits go without a proof, and the proof is collected just before the exec (or a
+detached run's start), with the terminal taken out of the raw mode Convox put it in, so a TOTP code or a WebAuthn
+challenge doesn't expire while a slow process starts. The PIN dialog summary names the app, rack, command and
+justification (`commandPrompt`). `--justification` travels in `audit.JustificationHeader` (percent-encoded), which
+the gateway records and doesn't forward. When the app's `require_command_justification` is on, the CLI refuses a
+command without one before anything starts (it reads the app's settings; API tokens can't, and rely on the
+gateway's refusal).
+
+`--script FILE` (`convox_process_command.go`) sends a local script with the command words: `scriptrun.Build` wraps
+them in a fixed `sh` runner that decodes the base64 script into a private temp directory and runs the words with
+the file's path appended. The gateway reads it back with `scriptrun.Parse` for the audit log, so the runner,
+`SafeName` and `Parse` must stay in step. A script needs command words and `--justification`. Before any MFA
+prompt, `scriptreview.Review` shows it with numbered lines, hidden characters as `<U+XXXX>` and chroma syntax
+highlighting (`highlight.go`: styled spans, ANSI colors in a terminal, macOS system colors in the dialog; a lexer
+that fails or takes over 2 seconds leaves the script plain): a y/N prompt on a
+terminal, else a macOS JXA dialog (Cancel is the default; the texts go in as arguments, never into the JXA source),
+else refused. API tokens skip the review. The PIN dialog shows the script's name, line count and SHA-256, not its
+text. `--dry-run` stops after the checks and the review (`runProcessCommand`): it prints the PIN dialog summary and
+the command's size, with no MFA prompt and no request to the rack.
+
 ### Terminal output from the gateway
 
 Every gateway-supplied string printed to the terminal (request IDs, statuses, token names and IDs, emails, error
@@ -246,4 +271,5 @@ characters as `\uXXXX`, which `encoding/json` leaves raw, so `-o json` stays val
   handshake, so any gateway refusal of `exec`, `run` (attached) or `logs` (401, 403, 429, 400) prints only
   `websocket: bad handshake`. The refusal and its reason are in the gateway's audit log and request log. The CLI
   checks what it can before it connects: `run` and `exec` refuse a command too long for the audit log
-  (`audit.CheckCommandLength`) before any MFA prompt or process start.
+  (`audit.CheckCommandLength`), or without a justification the app requires, before any MFA prompt or process
+  start.

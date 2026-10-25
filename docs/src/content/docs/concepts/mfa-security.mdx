@@ -192,7 +192,7 @@ flowchart LR
 |--------|-----------------|-----------|
 | View applications | No | Low-risk read operation |
 | View logs | No | Low-risk read operation |
-| Run exec command | Configurable | Could access secrets |
+| Run a command (`run`, `exec`) | Every time | Can read, change or delete any data |
 | Deploy application | Yes | Changes production |
 | Manage users | Yes | Privilege escalation |
 | Manage API tokens | Yes | Credential management |

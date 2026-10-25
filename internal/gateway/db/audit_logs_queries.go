@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -314,7 +315,11 @@ func scanAuditLogAggregated(scanner interface{ Scan(...interface{}) error }) (*A
 	return log, nil
 }
 
-// GetAuditLogByID retrieves a single audit log by its ID
+// ErrAuditLogNotFound is an audit event ID with no event.
+var ErrAuditLogNotFound = errors.New("audit log not found")
+
+// GetAuditLogByID retrieves a single audit log by its ID. An ID with no event returns an error wrapping
+// ErrAuditLogNotFound.
 func (d *Database) GetAuditLogByID(id int64) (*AuditLog, error) {
 	query := `
         SELECT
@@ -366,8 +371,8 @@ func (d *Database) GetAuditLogByID(id int64) (*AuditLog, error) {
 		&deployApprovalRequestID,
 	)
 	if err != nil {
-		if err == sql.ErrNoRows {
-			return nil, fmt.Errorf("audit log %d not found", id)
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, fmt.Errorf("audit log %d: %w", id, ErrAuditLogNotFound)
 		}
 		return nil, fmt.Errorf("failed to get audit log: %w", err)
 	}

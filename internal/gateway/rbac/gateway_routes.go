@@ -179,6 +179,7 @@ var httpRouteSpecs = []RouteSpec{
 	newHTTPRoute("GET", "/api/v1/audit-logs", Gateway(ResourceAuditLog, ActionRead)),
 	newHTTPRoute("GET", "/api/v1/audit-logs/export", Gateway(ResourceAuditLog, ActionRead)),
 	newHTTPRoute("GET", "/api/v1/audit-logs/verification", Gateway(ResourceAuditLog, ActionRead)),
+	newHTTPRoute("GET", "/api/v1/audit-logs/:id", Gateway(ResourceAuditLog, ActionRead)),
 
 	// API tokens. The permissions below let a user manage their own tokens; the handlers also require
 	// gateway:api_token:manage to see or change another user's tokens, and cap a token's permissions
@@ -227,6 +228,16 @@ var httpRouteSpecs = []RouteSpec{
 		"DELETE",
 		appSettingPath(settings.AppSettingProtectedEnvVars),
 		GatewayAppSetting(settings.AppSettingProtectedEnvVars),
+	),
+	newHTTPRoute(
+		"PUT",
+		appSettingPath(settings.AppSettingRequireCommandJustification),
+		GatewayAppSetting(settings.AppSettingRequireCommandJustification),
+	),
+	newHTTPRoute(
+		"DELETE",
+		appSettingPath(settings.AppSettingRequireCommandJustification),
+		GatewayAppSetting(settings.AppSettingRequireCommandJustification),
 	),
 	newHTTPRoute(
 		"PUT",

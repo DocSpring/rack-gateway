@@ -223,10 +223,13 @@ RGW_APP_<APP>_SETTING_<KEY>=value
 RGW_APP_MY_APP_SETTING_CI_PROVIDER=circleci
 RGW_APP_MY_APP_SETTING_PROTECTED_ENV_VARS=DATABASE_URL,SECRET_KEY_BASE
 RGW_APP_MY_APP_SETTING_AUDIT_VISIBLE_ENV_VARS=PORT,RAILS_ENV
+RGW_APP_MY_APP_SETTING_REQUIRE_COMMAND_JUSTIFICATION=true
 RGW_APP_MY_APP_SETTING_SERVICE_IMAGE_PATTERNS={"*":"registry\\.example\\.com/my-app:{{GIT_COMMIT}}"}
 ```
 
-See [Deploy Approvals](/integrations/deploy-approvals/) for common keys.
+See [Deploy Approvals](/integrations/deploy-approvals/) for common keys. `require_command_justification` makes
+every command run in the app (`run`, `exec`) carry a `--justification` (see
+[Justifications](/user-guide/cli/commands/#justifications)).
 
 ## Audit Logging
 

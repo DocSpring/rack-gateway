@@ -40,6 +40,9 @@ func (n *Notifier) NotifyAuditEvent(auditLog *db.AuditLog) error {
 	if integration == nil {
 		return nil // no integration configured
 	}
+	if isAttachedRunPlaceholder(auditLog) {
+		return nil
+	}
 
 	// Match action to channels using glob patterns
 	channels := n.matchActionToChannels(auditLog.Action, integration.ChannelActions)
@@ -140,8 +143,12 @@ func matchGlob(pattern, text string) bool {
 }
 
 // formatAuditLogMessage formats an audit log into a Slack message that names the gateway. Names, resources and
-// details come from users and requests, so each value is escaped where it's formatted.
+// details come from users and requests, so each value is escaped where it's formatted. A command run in a process
+// has its own format, without the command (see processCommand).
 func (n *Notifier) formatAuditLogMessage(auditLog *db.AuditLog) (string, []map[string]interface{}) {
+	if command, ok := parseProcessCommand(auditLog); ok {
+		return n.formatProcessMessage(auditLog, command)
+	}
 	emoji := determineEmojiForAction(auditLog)
 	user := formatUserIdentifier(auditLog)
 	text := fmt.Sprintf("%s *%s* - %s", emoji, escapeMrkdwn(auditLog.Action), user)

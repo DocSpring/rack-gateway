@@ -50,10 +50,15 @@ var MFARequirements = map[string]MFALevel{
 	Convox(ResourceRelease, ActionCreate):  MFAStepUp,
 	Convox(ResourceRelease, ActionPromote): MFAStepUp,
 
+	// Running a command in the app (exec, run) can read, change or delete any of its data, so every one needs a
+	// proof of its own, whatever the step-up window says. `convox run` starts a process with a placeholder command
+	// and execs the real command into it: the placeholder start runs nothing and needs no proof (see the proxy's
+	// attached run check), and the exec carries the command's one proof.
+	Convox(ResourceProcess, ActionExec):  MFAAlways,
+	Convox(ResourceProcess, ActionStart): MFAAlways,
+
 	// Process control
-	Convox(ResourceProcess, ActionExec):      MFAStepUp,
 	Convox(ResourceProcess, ActionTerminate): MFAStepUp,
-	Convox(ResourceProcess, ActionStart):     MFAStepUp,
 	Convox(ResourceProcess, ActionStop):      MFAStepUp,
 
 	// Environment variables (secrets)
@@ -147,6 +152,7 @@ var MFARequirements = map[string]MFALevel{
 	GatewayAppSetting(settings.AppSettingGitHubPostPRComment):           MFANone,   // Just notification preference
 	GatewayAppSetting(settings.AppSettingGitHubVerification):            MFAAlways, // Disabling GitHub verification
 	GatewayAppSetting(settings.AppSettingProtectedEnvVars):              MFAAlways, // Protecting vars
+	GatewayAppSetting(settings.AppSettingRequireCommandJustification):   MFAAlways, // Requiring justifications
 	GatewayAppSetting(settings.AppSettingRequirePRForBranch):            MFAAlways, // Disabling PR requirement
 	GatewayAppSetting(settings.AppSettingSecretEnvVars):                 MFAAlways, // Masking secret values
 	GatewayAppSetting(settings.AppSettingServiceImagePatterns):          MFAStepUp, // Restricting images

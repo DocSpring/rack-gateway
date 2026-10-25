@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AuditLogRow } from '@/components/audit-logs/audit-log-row'
 import { AuditLogDetailDialog } from '@/components/audit-logs/detail-dialog'
 import type { AuditLogRecord } from '@/components/audit-logs/types'
@@ -23,6 +23,8 @@ interface AuditLogsPaneProps {
   onNextPage: () => void
   disablePrevious?: boolean
   disableNext?: boolean
+  // linkedEntry opens in the detail dialog once it has loaded (an entry a link names, see useLinkedAuditEntry).
+  linkedEntry?: AuditLogRecord | null
 }
 
 export function AuditLogsPane({
@@ -40,8 +42,15 @@ export function AuditLogsPane({
   onNextPage,
   disablePrevious = false,
   disableNext = false,
+  linkedEntry = null,
 }: AuditLogsPaneProps) {
   const [selected, setSelected] = useState<AuditLogRecord | null>(null)
+
+  useEffect(() => {
+    if (linkedEntry) {
+      setSelected(linkedEntry)
+    }
+  }, [linkedEntry])
 
   const description = useMemo(() => {
     if (logs.length === 0) {

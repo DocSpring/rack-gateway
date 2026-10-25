@@ -105,6 +105,8 @@ All under `/auth/mfa`:
 - `PUT /api-tokens/:tokenID`, `DELETE /api-tokens/:tokenID`
 - `GET /api-tokens/permissions`
 - `GET /audit-logs`, `GET /audit-logs/export`, `GET /audit-logs/verification` (the latest hourly verification)
+- `GET /audit-logs/:id`: one audit event. The web UI's audit log page opens it from a link
+  (`/app/audit-logs?entry=<id>`), which Slack messages about commands use
 - `GET /jobs`, `GET /jobs/:id`, `DELETE /jobs/:id`, `POST /jobs/:id/retry`
 - `GET /settings`
 - `PUT /settings/mfa-configuration`, `DELETE /settings/mfa-configuration`

@@ -78,7 +78,12 @@ next to an action means the row stands for that many events, e.g. repeated denia
 
 Click **View** on an entry to see everything recorded for it: timestamp, actor (for an API token, its name, ID and
 owner), type, action, event count, resource and resource type, status, RBAC decision, HTTP status, response time,
-IP address, user agent, the command (when one was recorded) and the details JSON.
+IP address, user agent and the details JSON. A command run in a process (`run`, `exec`) also shows its
+justification and command, and a script (`--script`) its name, line count, SHA-256 and text with numbered lines.
+Characters that would make the script read differently from what ran show as `<U+XXXX>`.
+
+A link to `/app/audit-logs?entry=<id>` opens that entry's details; Slack messages about commands link to their
+entries this way. It needs permission to read the whole audit log.
 
 ## Exporting Logs
 

@@ -46,6 +46,9 @@ func TestMFARequirements_ConvoxPermissions(t *testing.T) {
 	cases := []singlePermissionCase{
 		// Destructive operations - ALWAYS
 		{Convox(ResourceApp, ActionDelete), MFAAlways},
+		// Running a command in the app
+		{Convox(ResourceProcess, ActionExec), MFAAlways},
+		{Convox(ResourceProcess, ActionStart), MFAAlways},
 
 		// Sensitive operations - Step-up
 		{Convox(ResourceApp, ActionCreate), MFAStepUp},
@@ -54,8 +57,6 @@ func TestMFARequirements_ConvoxPermissions(t *testing.T) {
 		{Convox(ResourceRelease, ActionPromote), MFAStepUp},
 		{Convox(ResourceRelease, ActionCreate), MFAStepUp},
 		{Convox(ResourceBuild, ActionCreate), MFAStepUp},
-		{Convox(ResourceProcess, ActionExec), MFAStepUp},
-		{Convox(ResourceProcess, ActionStart), MFAStepUp},
 		{Convox(ResourceProcess, ActionStop), MFAStepUp},
 		{Convox(ResourceProcess, ActionTerminate), MFAStepUp},
 		{Convox(ResourceEnv, ActionSet), MFAStepUp},

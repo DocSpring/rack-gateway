@@ -10,6 +10,7 @@ import (
 	"github.com/convox/stdcli"
 	"github.com/spf13/cobra"
 
+	"github.com/DocSpring/rack-gateway/internal/cli/terminal"
 	"github.com/DocSpring/rack-gateway/internal/cli/webauthn"
 	"github.com/DocSpring/rack-gateway/internal/gateway/envutil"
 )
@@ -73,7 +74,7 @@ func envChangeMFAAuth(cmd *cobra.Command, commandName string, keys []string, all
 		if err != nil {
 			return "", err
 		}
-		if err := requireExplicitProtectedEnvApp(IsInteractive(), explicitApp); err != nil {
+		if err := requireExplicitProtectedEnvApp(terminal.IsInteractive(), explicitApp); err != nil {
 			return "", err
 		}
 	}
@@ -116,10 +117,6 @@ func protectedEnvMFAAuth(cmd *cobra.Command, commandName string, keys []string) 
 	if err != nil {
 		return "", err
 	}
-	gatewayURL, bearer, err := LoadRackAuth(rack)
-	if err != nil {
-		return "", err
-	}
 	app, err := cmd.Flags().GetString("app")
 	if err != nil {
 		return "", err
@@ -131,8 +128,7 @@ func protectedEnvMFAAuth(cmd *cobra.Command, commandName string, keys []string) 
 			return "", err
 		}
 	}
-	auth, _, err := GetMFAAuthWithPIN(cmd, gatewayURL, bearer, rack, "", prompt)
-	return auth, err
+	return freshMFAAuth(cmd, prompt)
 }
 
 // protectedEnvPrompt describes a protected env change for the person approving it: one summary line per key,

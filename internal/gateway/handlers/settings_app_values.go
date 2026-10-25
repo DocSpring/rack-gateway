@@ -238,3 +238,38 @@ func (h *SettingsHandler) UpdateAppServiceImagePatterns(c *gin.Context) {
 func (h *SettingsHandler) DeleteAppServiceImagePatterns(c *gin.Context) {
 	h.deleteAppSettingValue(c, settings.KeyServiceImagePatterns)
 }
+
+// UpdateAppRequireCommandJustification godoc
+// @Summary Update whether commands need a justification
+// @Description Sets whether every command run in the specified app (exec, run) must say why it's run
+// @Tags Settings
+// @Accept json
+// @Produce json
+// @Param app path string true "App name"
+// @Param body body bool true "Whether a justification is required"
+// @Success 200 {object} map[string]settings.Setting
+// @Failure 400 {object} ErrorResponse
+// @Failure 409 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Security SessionCookie
+// @Security CSRFToken
+// @Router /apps/{app}/settings/require-command-justification [put]
+func (h *SettingsHandler) UpdateAppRequireCommandJustification(c *gin.Context) {
+	h.updateAppSettingValue(c, settings.KeyRequireCommandJustification)
+}
+
+// DeleteAppRequireCommandJustification godoc
+// @Summary Delete whether commands need a justification
+// @Description Removes the stored value; the environment variable or the default (not required) applies
+// @Tags Settings
+// @Produce json
+// @Param app path string true "App name"
+// @Success 200 {object} map[string]settings.Setting
+// @Failure 400 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Security SessionCookie
+// @Security CSRFToken
+// @Router /apps/{app}/settings/require-command-justification [delete]
+func (h *SettingsHandler) DeleteAppRequireCommandJustification(c *gin.Context) {
+	h.deleteAppSettingValue(c, settings.KeyRequireCommandJustification)
+}

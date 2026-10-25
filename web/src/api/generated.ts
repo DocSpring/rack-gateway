@@ -7,6 +7,7 @@
  */
 import type {
   DbAPIToken,
+  DbAuditLog,
   DbRackTLSCert,
   DbSlackIntegration,
   DbUser,
@@ -15,6 +16,7 @@ import type {
   DeleteAppsAppSettingsAuditVisibleEnvVars200,
   DeleteAppsAppSettingsParams,
   DeleteAppsAppSettingsProtectedEnvVars200,
+  DeleteAppsAppSettingsRequireCommandJustification200,
   DeleteAppsAppSettingsSecretEnvVars200,
   DeleteAppsAppSettingsServiceImagePatterns200,
   DeleteSettings200,
@@ -93,6 +95,7 @@ import type {
   PutAppsAppSettingsAuditVisibleEnvVars200,
   PutAppsAppSettingsBody,
   PutAppsAppSettingsProtectedEnvVars200,
+  PutAppsAppSettingsRequireCommandJustification200,
   PutAppsAppSettingsSecretEnvVars200,
   PutAppsAppSettingsServiceImagePatterns200,
   PutAppsAppSettingsServiceImagePatternsBody,
@@ -421,6 +424,47 @@ export const getRackGatewayAPI = () => {
   };
 
   /**
+   * Sets whether every command run in the specified app (exec, run) must say why it's run
+   * @summary Update whether commands need a justification
+   */
+  const putAppsAppSettingsRequireCommandJustification = (
+    app: string,
+    boolean: boolean,
+    options?: SecondParameter<
+      typeof createGatewayClient<PutAppsAppSettingsRequireCommandJustification200>
+    >,
+  ) => {
+    return createGatewayClient<PutAppsAppSettingsRequireCommandJustification200>(
+      {
+        url: `/apps/${app}/settings/require-command-justification`,
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        data: boolean,
+      },
+      options,
+    );
+  };
+
+  /**
+   * Removes the stored value; the environment variable or the default (not required) applies
+   * @summary Delete whether commands need a justification
+   */
+  const deleteAppsAppSettingsRequireCommandJustification = (
+    app: string,
+    options?: SecondParameter<
+      typeof createGatewayClient<DeleteAppsAppSettingsRequireCommandJustification200>
+    >,
+  ) => {
+    return createGatewayClient<DeleteAppsAppSettingsRequireCommandJustification200>(
+      {
+        url: `/apps/${app}/settings/require-command-justification`,
+        method: "DELETE",
+      },
+      options,
+    );
+  };
+
+  /**
    * Replaces the list of secret environment variables for the specified app
    * @summary Update secret environment variables
    */
@@ -543,6 +587,21 @@ export const getRackGatewayAPI = () => {
   ) => {
     return createGatewayClient<HandlersAuditVerificationResponse>(
       { url: `/audit-logs/verification`, method: "GET" },
+      options,
+    );
+  };
+
+  /**
+   * Returns one audit event by its ID. The audit log page opens it from a link (Slack messages link to
+   * the events they describe).
+   * @summary Get an audit log entry
+   */
+  const getAuditLogsId = (
+    id: number,
+    options?: SecondParameter<typeof createGatewayClient<DbAuditLog>>,
+  ) => {
+    return createGatewayClient<DbAuditLog>(
+      { url: `/audit-logs/${id}`, method: "GET" },
       options,
     );
   };
@@ -1583,6 +1642,8 @@ export const getRackGatewayAPI = () => {
     deleteAppsAppSettingsAuditVisibleEnvVars,
     putAppsAppSettingsProtectedEnvVars,
     deleteAppsAppSettingsProtectedEnvVars,
+    putAppsAppSettingsRequireCommandJustification,
+    deleteAppsAppSettingsRequireCommandJustification,
     putAppsAppSettingsSecretEnvVars,
     deleteAppsAppSettingsSecretEnvVars,
     putAppsAppSettingsServiceImagePatterns,
@@ -1590,6 +1651,7 @@ export const getRackGatewayAPI = () => {
     getAuditLogs,
     getAuditLogsExport,
     getAuditLogsVerification,
+    getAuditLogsId,
     getAuthCliCallback,
     postAuthCliCancel,
     postAuthCliComplete,
@@ -1751,6 +1813,25 @@ export type DeleteAppsAppSettingsProtectedEnvVarsResult = NonNullable<
     >
   >
 >;
+export type PutAppsAppSettingsRequireCommandJustificationResult = NonNullable<
+  Awaited<
+    ReturnType<
+      ReturnType<
+        typeof getRackGatewayAPI
+      >["putAppsAppSettingsRequireCommandJustification"]
+    >
+  >
+>;
+export type DeleteAppsAppSettingsRequireCommandJustificationResult =
+  NonNullable<
+    Awaited<
+      ReturnType<
+        ReturnType<
+          typeof getRackGatewayAPI
+        >["deleteAppsAppSettingsRequireCommandJustification"]
+      >
+    >
+  >;
 export type PutAppsAppSettingsSecretEnvVarsResult = NonNullable<
   Awaited<
     ReturnType<
@@ -1795,6 +1876,9 @@ export type GetAuditLogsVerificationResult = NonNullable<
   Awaited<
     ReturnType<ReturnType<typeof getRackGatewayAPI>["getAuditLogsVerification"]>
   >
+>;
+export type GetAuditLogsIdResult = NonNullable<
+  Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>["getAuditLogsId"]>>
 >;
 export type GetAuthCliCallbackResult = NonNullable<
   Awaited<

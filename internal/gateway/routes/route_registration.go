@@ -84,6 +84,8 @@ func registerAPIRoutes(authenticated *gin.RouterGroup, cfg *Config, h *handlerSe
 	appSettings.DELETE("/vcs-ci-deploy", h.settings.DeleteAppVCSCIDeploySettings)
 	appSettings.PUT("/protected-env-vars", h.settings.UpdateAppProtectedEnvVars)
 	appSettings.DELETE("/protected-env-vars", h.settings.DeleteAppProtectedEnvVars)
+	appSettings.PUT("/require-command-justification", h.settings.UpdateAppRequireCommandJustification)
+	appSettings.DELETE("/require-command-justification", h.settings.DeleteAppRequireCommandJustification)
 	appSettings.PUT("/secret-env-vars", h.settings.UpdateAppSecretEnvVars)
 	appSettings.DELETE("/secret-env-vars", h.settings.DeleteAppSecretEnvVars)
 	appSettings.PUT("/audit-visible-env-vars", h.settings.UpdateAppAuditVisibleEnvVars)
@@ -177,6 +179,7 @@ func registerUserManagementRoutes(authenticated *gin.RouterGroup, cfg *Config, h
 	auditLogs.GET("", h.admin.ListAuditLogs)
 	auditLogs.GET("/export", h.admin.ExportAuditLogs)
 	auditLogs.GET("/verification", h.admin.GetAuditVerification)
+	auditLogs.GET("/:id", h.admin.GetAuditLog)
 
 	apiTokens := authenticated.Group("/api-tokens")
 	if cfg.SessionManager != nil {

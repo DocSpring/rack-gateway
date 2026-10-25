@@ -108,7 +108,7 @@ The CLI asks before sending the command, unless your step-up window is still ope
 
 - `deploy`, `build`, `releases promote` and `releases rollback`
 - `env set`, `env unset` and `env edit`, and `env get` / `env --unmask` when they show secret values
-- `run`, `exec`, `ps stop` and `restart`
+- `ps stop` and `restart`
 - `scale`, `apps create` and other app changes
 
 ### Step-Up Window
@@ -120,9 +120,20 @@ The window doesn't cover changes to protected env vars: `env set` and `env unset
 for MFA every time, and the gateway verifies it on the request that makes the change. See
 [Protected env vars](/user-guide/cli/commands/#protected-env-vars).
 
-Nor does it cover the commands whose permissions always need MFA (`apps delete`, `builds import`,
+Nor does it cover the commands whose permissions always need MFA (`run`, `exec`, `apps delete`, `builds import`,
 `api-token create`, `api-token update`, `api-token delete` and `deploy-approval approve`): they ask for MFA every
 time, and the gateway refuses the request unless it carries a proof it verifies on that request.
+
+### Running Commands
+
+`run` and `exec` can read, change or delete any of an app's data, so each one asks for MFA, even right after
+another command. `run` starts its process first and asks once the process is running, just before the command
+runs in it: a TOTP code or a WebAuthn challenge doesn't expire while a slow process starts. The PIN dialog shows
+the app, the rack, the command and its justification.
+
+That first process only runs `sleep 3600`, so starting it needs no MFA of its own, including for another of the
+app's releases (`run --release`). It can't use a custom image, privileged options or the service's lifecycle
+hooks: those run something besides the command, so a process start with them needs MFA on the start itself.
 
 ### One Key Touch Per Command
 
