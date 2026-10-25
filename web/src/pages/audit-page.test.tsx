@@ -615,7 +615,7 @@ describe('AuditPage', () => {
     // it isn't accepted after sign-in.
     it('keeps the /app basepath in the URL', async () => {
       window.history.replaceState(null, '', '/app/audit-logs')
-      vi.mocked(api.get).mockImplementation(async () => makeResponse(mockLogs))
+      vi.mocked(api.get).mockResolvedValue(makeResponse(mockLogs))
       render(<AuditPage />, { wrapper: createWrapper() })
       await waitFor(() => expect(api.get).toHaveBeenCalled())
 
