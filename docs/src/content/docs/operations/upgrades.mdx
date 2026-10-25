@@ -235,8 +235,9 @@ without a terminal needs no separate PIN dialog.
    command by its runner, which v0.1.21 changed: when only one side has that change, the audit log records the raw
    `sh -c` command instead of the script's name, text and SHA-256.
 3. **`require_command_justification` is off by default.** Turn it on per app (app settings page, the API, or
-   `RGW_APP_<APP>_SETTING_REQUIRE_COMMAND_JUSTIFICATION=true`), or for every app from v0.1.24, once your users'
-   CLIs are on v0.1.19+. Commands run under a deploy approval use the approval's message as their justification.
+   `RGW_APP_<APP>_SETTING_REQUIRE_COMMAND_JUSTIFICATION=true`) once your users' CLIs are on v0.1.19+, or for every
+   app from v0.1.24 once their CLIs are on v0.1.24 (see above). Commands run under a deploy approval use the
+   approval's message as their justification.
 4. **To hear about commands in Slack, map `process.exec.start` and `process.start`** to a channel. The message
    never includes the command or the script, and links to the audit entry.
 
