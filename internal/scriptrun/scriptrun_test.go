@@ -86,6 +86,8 @@ func runScript(t *testing.T, script []byte, words string) (string, error) {
 	}
 	argv, err := shellquote.Split(Build("check.rb", script, words))
 	require.NoError(t, err)
+	// Under the strictest umask, which a container's user may have.
+	argv = append([]string{"sh", "-c", `umask 077; exec "$@"`, "sh"}, argv...)
 	cmd := exec.Command(argv[0], argv[1:]...) // #nosec G204 -- the test runs the command it built
 	cmd.Env = append(os.Environ(), "TMPDIR="+t.TempDir())
 	out, err := cmd.Output()
@@ -102,6 +104,16 @@ func TestRunnerWritesTheScriptAndRemovesIt(t *testing.T) {
 	require.Equal(t, tricky, content)
 	_, err = os.Stat(filepath.Dir(path))
 	require.True(t, os.IsNotExist(err), "the script's directory is removed: %v", err)
+}
+
+// Every user can read the script, and enter its directory but not list it: the command may drop to another user
+// (`run_command deploy ... rails runner`), which must read the file.
+func TestRunnerLetsOtherUsersReadTheScript(t *testing.T) {
+	out, err := runScript(t, []byte("puts 1"), `sh -c 'find "$1" -perm 0644; find "${1%/*}" -perm 0711' --`)
+	require.NoError(t, err)
+	lines := strings.Split(strings.TrimSpace(out), "\n")
+	require.Len(t, lines, 2, "the file is 0644 and its directory 0711: %q", out)
+	require.Equal(t, filepath.Dir(lines[0]), lines[1])
 }
 
 // The command's exit status is the run's.

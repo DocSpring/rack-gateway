@@ -7,9 +7,9 @@
 //
 //	sh -c '<runner>' rack-gateway-script <name> <base64> <command words...>
 //
-// The runner decodes the script into a new private directory as <name>, runs the command words with the file's
-// path as their last argument (`rails runner /tmp/tmp.X/check.rb`) and removes the directory when it exits. The
-// image needs sh, mktemp and base64.
+// The runner decodes the script into a new directory as <name>, runs the command words with the file's path as
+// their last argument (`rails runner /tmp/tmp.X/check.rb`) and removes the directory when it exits. The image
+// needs sh, mktemp, base64 and chmod.
 package scriptrun
 
 import (
@@ -27,9 +27,14 @@ import (
 // file name and $2 the script in base64; the command words follow. It has no single quotes, so it can be
 // single-quoted as one word. The traps make the shell exit (running the EXIT trap) on a hangup, interrupt or
 // termination, so the file is removed then too.
+//
+// Every user can read the file, and enter its directory but not list it: a command often drops to another user
+// (`run_command deploy ... rails runner`, gosu), which must read the script. That shows nobody anything new, since
+// the script is in the runner's arguments, which every process in the container can read.
 const runner = `d=$(mktemp -d) || exit 1; cleanup() { rm -rf "$d"; }; trap cleanup EXIT; ` +
 	`trap "exit 129" HUP; trap "exit 130" INT; trap "exit 143" TERM; ` +
-	`f="$d/$1"; printf %s "$2" | base64 -d > "$f" || exit 1; shift 2; "$@" "$f"`
+	`f="$d/$1"; printf %s "$2" | base64 -d > "$f" && chmod 644 "$f" && chmod 711 "$d" || exit 1; ` +
+	`shift 2; "$@" "$f"`
 
 // runnerArgv0 names the runner in process listings ($0).
 const runnerArgv0 = "rack-gateway-script"
