@@ -153,10 +153,11 @@ Structured logging:
   roles' grants) in one migration: the previous release keeps serving requests between `migrate` and the promote,
   and it refuses every request it can't record, the promote included. Add the new function alongside the old one,
   and drop the old one in a later release
-- Denials (gateway `Authorize`, proxy RBAC/approval/destructive refusals, unknown rack routes) go through
-  `RecordDenial`: throttled per principal + action + target (resource, method and path) per minute in memory (one
-  gateway per rack). Past 1,000 runs, each principal's denials without a run share one, so memory stays bounded.
-  The request is refused either way; a denial that can't be written is logged and sent to Sentry
+- Denials (gateway `Authorize`, proxy RBAC/approval/destructive refusals, unknown rack routes other than the Convox
+  CLI's own requests in `isRoutineConvoxCLIRequest`) go through `RecordDenial`: throttled per principal + action +
+  target (resource, method and path) per minute in memory (one gateway per rack). Past 1,000 runs, each principal's
+  denials without a run share one, so memory stays bounded. The request is refused either way; a denial that can't
+  be written is logged and sent to Sentry
 
 Key files:
 

@@ -279,7 +279,8 @@ func (h *Handler) prepareProxyRequest(
 
 // resolveRackRoute rewrites r to its canonical rack path and finds the RBAC resource and action for it. A path
 // that isn't an allowed rack route is answered with 404 and audited as a denial, so probing the rack for routes the
-// gateway doesn't forward leaves a record.
+// gateway doesn't forward leaves a record. The requests every Convox CLI makes for itself
+// (isRoutineConvoxCLIRequest) aren't audited.
 func (h *Handler) resolveRackRoute(
 	w http.ResponseWriter,
 	r *http.Request,
@@ -289,17 +290,18 @@ func (h *Handler) resolveRackRoute(
 ) (*http.Request, rbac.Resource, rbac.Action, error) {
 	r, ok := canonicalRackRequest(r)
 	method := h.determineMethod(r)
+	safe := ok && isSafeRackPath(r.URL.Path)
 	var resource rbac.Resource
 	var action rbac.Action
-	if ok && isSafeRackPath(r.URL.Path) {
+	if safe {
 		resource, action, ok = rbac.MatchRackRoute(method, r.URL.Path)
-	} else {
-		ok = false
 	}
-	if !ok {
+	if !safe || !ok {
 		err := fmt.Errorf("unknown route: %s %s", method, r.URL.Path)
 		h.auditLogger.LogRequest(r, authUser.Email, rackName, "deny", http.StatusNotFound, time.Since(start), err)
-		h.recordDenial(r, authUser, http.StatusNotFound, "the gateway doesn't forward this rack route")
+		if !safe || !isRoutineConvoxCLIRequest(method, r.URL.Path) {
+			h.recordDenial(r, authUser, http.StatusNotFound, "the gateway doesn't forward this rack route")
+		}
 		http.NotFound(w, r)
 		return r, 0, 0, errors.New("unknown route")
 	}
