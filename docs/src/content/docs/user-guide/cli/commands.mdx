@@ -380,11 +380,13 @@ rack-gateway run web "rake db:migrate" -a myapp --write \
   --justification "Run the migration for the new invoices table, which the deploy skipped"
 ```
 
-The PIN dialog lists the env vars the command gets, such as `Env vars: DATABASE_URL (from READ_ONLY_DATABASE_URL),
-PATH`, and `--dry-run` prints the list. The dialog warns in red when `--write` lets the command change data, when
-`--all-env-vars` gives it every env var in an app that limits them, and for every `exec` in such an app (see
-below). The touch prompt says when the command can change data. The audit log and the Slack notification record
-the env vars, and whether the command ran with `--write`.
+The PIN dialog says which env vars the command gets: how many of the app's `command_env_vars`, the ones it asked
+for and the read-only ones, such as `Env vars: the 98 in the app's command_env_vars, plus SENTRY_DSN; read-only
+DATABASE_URL (from READ_ONLY_DATABASE_URL)`. `--dry-run` prints the same line, and the Slack notification says the
+same. The dialog warns in red when `--write` lets the command change data, when `--all-env-vars` gives it every env
+var in an app that limits them, and for every `exec` in such an app (see below). The touch prompt says when the
+command can change data. The audit log records every env var name the command got, the ones it asked for, and
+whether it ran with `--write`.
 
 The gateway sends the rack the command inside a short `sh` wrapper, which starts it with `env -i` and only the env
 vars it gets. An env var the release doesn't set stays unset. The image needs `sh` and `env`. A command can't start
