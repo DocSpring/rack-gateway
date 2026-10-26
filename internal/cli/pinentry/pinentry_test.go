@@ -7,12 +7,14 @@ import (
 	"strings"
 	"testing"
 	"unicode/utf8"
+
+	"github.com/DocSpring/rack-gateway/internal/cli/macdialog"
 )
 
-// fakeDialog returns a dialogRunner that records the message it was shown and replies with the given output.
-func fakeDialog(shown *string, stdout, stderr string, err error) dialogRunner {
-	return func(_ context.Context, _, message string) (string, string, error) {
-		*shown = message
+// fakeDialog returns a dialog runner that records the message it was shown and replies with the given output.
+func fakeDialog(shown *string, stdout, stderr string, err error) macdialog.Runner {
+	return func(_ context.Context, _ string, args ...string) (string, string, error) {
+		*shown = args[0]
 		return stdout, stderr, err
 	}
 }
@@ -20,7 +22,7 @@ func fakeDialog(shown *string, stdout, stderr string, err error) dialogRunner {
 func TestReadFromDialogReturnsEnteredPIN(t *testing.T) {
 	var shown string
 
-	pin, err := readFromDialog(context.Background(), fakeDialog(&shown, "12 34\n", "", nil), Request{})
+	pin, err := readFromDialog(context.Background(), fakeDialog(&shown, "approve\n12 34\n", "", nil), Request{})
 	if err != nil {
 		t.Fatalf("readFromDialog: %v", err)
 	}
@@ -36,7 +38,7 @@ func TestReadFromDialogShowsGatewayAndMaskedCommand(t *testing.T) {
 		Args:    []string{"/usr/local/bin/rack-gateway", "env", "set", "SECRET=hunter2", "-r", "us"},
 	}
 
-	if _, err := readFromDialog(context.Background(), fakeDialog(&shown, "1234\n", "", nil), req); err != nil {
+	if _, err := readFromDialog(context.Background(), fakeDialog(&shown, "approve\n1234\n", "", nil), req); err != nil {
 		t.Fatalf("readFromDialog: %v", err)
 	}
 
@@ -52,7 +54,7 @@ func TestReadFromDialogShowsGatewayAndMaskedCommand(t *testing.T) {
 
 func TestReadFromDialogCanceled(t *testing.T) {
 	var shown string
-	run := fakeDialog(&shown, "", "execution error: User canceled. (-128)", errors.New("exit status 1"))
+	run := fakeDialog(&shown, "cancel\n", "", nil)
 
 	_, err := readFromDialog(context.Background(), run, Request{})
 	if !errors.Is(err, ErrCanceled) {
@@ -76,8 +78,25 @@ func TestReadFromDialogFailure(t *testing.T) {
 func TestReadFromDialogEmptyPIN(t *testing.T) {
 	var shown string
 
-	if _, err := readFromDialog(context.Background(), fakeDialog(&shown, "\n", "", nil), Request{}); err == nil {
+	run := fakeDialog(&shown, "approve\n\n", "", nil)
+	if _, err := readFromDialog(context.Background(), run, Request{}); err == nil {
 		t.Fatal("expected an error for an empty PIN")
+	}
+}
+
+// The warnings reach the dialog as its second argument, one per line, each kept to one line.
+func TestReadFromDialogShowsTheWarnings(t *testing.T) {
+	var warnings string
+	run := func(_ context.Context, _ string, args ...string) (string, string, error) {
+		warnings = args[1]
+		return "approve\n1234\n", "", nil
+	}
+	req := Request{Warnings: []string{"This command can change data.", "exec reads\nevery env var."}}
+	if _, err := readFromDialog(context.Background(), run, req); err != nil {
+		t.Fatalf("readFromDialog: %v", err)
+	}
+	if want := "⚠ This command can change data.\n⚠ exec reads?every env var."; warnings != want {
+		t.Fatalf("warnings = %q, want %q", warnings, want)
 	}
 }
 
@@ -281,8 +300,8 @@ func TestDescribeSummaryCountsLinesPastTheLimit(t *testing.T) {
 }
 
 func TestDialogScriptActivatesBeforeShowingDialog(t *testing.T) {
-	activate := strings.Index(dialogScript, "\tactivate\n")
-	dialog := strings.Index(dialogScript, "display dialog")
+	activate := strings.Index(dialogScript, "app.activateIgnoringOtherApps(true);")
+	dialog := strings.Index(dialogScript, "alert.runModal")
 	if activate < 0 || activate > dialog {
 		t.Fatalf("dialog script must activate osascript before the dialog so the PIN field has focus:\n%s",
 			dialogScript)

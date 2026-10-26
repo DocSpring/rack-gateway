@@ -127,7 +127,6 @@ func RunCommand() *cobra.Command {
 	cmd.Flags().BoolP("detach", "d", false, "run in detached mode")
 	cmd.Flags().String("entrypoint", "", "override entrypoint")
 	cmd.Flags().String("release", "", "release to run")
-	cmd.Flags().StringSlice("env", []string{}, "environment variables")
 	addProcessCommandFlags(cmd)
 
 	return cmd

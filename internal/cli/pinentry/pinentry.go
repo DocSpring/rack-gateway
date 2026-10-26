@@ -7,13 +7,11 @@
 package pinentry
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"runtime"
 	"strconv"
 	"strings"
@@ -22,6 +20,7 @@ import (
 
 	"golang.org/x/term"
 
+	"github.com/DocSpring/rack-gateway/internal/cli/macdialog"
 	"github.com/DocSpring/rack-gateway/internal/cli/terminal"
 )
 
@@ -34,21 +33,37 @@ const (
 	maxLineLength = 160
 	// maxSummaryLines keeps a long summary readable; the lines past it are counted instead of shown.
 	maxSummaryLines = 12
-	// appleScriptUserCanceled is the AppleScript error number for a canceled dialog.
-	appleScriptUserCanceled = "(-128)"
 )
 
-// dialogScript shows the message passed as the first argument (never interpolated into the script)
-// and prints the entered PIN to stdout. `activate` brings osascript to the front first: when the CLI
-// runs in the background (e.g. from an agent) the dialog otherwise opens without keyboard focus.
-const dialogScript = `on run argv
-	activate
-	set reply to display dialog (item 1 of argv) with title "rack-gateway" default answer "" ¬
-		with hidden answer buttons {"Cancel", "Approve"} default button "Approve" cancel button "Cancel" ¬
-		with icon caution giving up after 170
-	if gave up of reply then error "PIN dialog timed out" number -128
-	return text returned of reply
-end run`
+// dialogScript shows an alert with the message (its first argument) and a security key PIN field, which has the
+// focus, and prints "approve", a line break and the PIN when Approve is clicked (or Return pressed). The warnings
+// (its second argument, one per line) show in red above the field, with a red warning icon. `activate` brings the
+// dialog to the front: when the CLI runs in the background (from an agent, say) it would otherwise open without
+// keyboard focus.
+const dialogScript = `
+ObjC.import('Cocoa');
+function run(argv) {
+  var app = $.NSApplication.sharedApplication;
+  app.setActivationPolicy($.NSApplicationActivationPolicyAccessory);
+  app.activateIgnoringOtherApps(true);
+
+  var field = $.NSSecureTextField.alloc.initWithFrame($.NSMakeRect(0, 0, 240, 24));
+  var warnings = warningsView(argv[1], 460);
+
+  var alert = $.NSAlert.alloc.init;
+  alert.icon = alertIcon(!!warnings);
+  alert.messageText = 'Approve this rack-gateway command?';
+  alert.informativeText = argv[0];
+  alert.accessoryView = stacked([field, warnings]);
+  alert.addButtonWithTitle('Approve');
+  alert.addButtonWithTitle('Cancel');
+  alert.window.initialFirstResponder = field;
+  if (alert.runModal != $.NSAlertFirstButtonReturn) {
+    return 'cancel';
+  }
+  return 'approve\n' + field.stringValue.js;
+}
+` + macdialog.Helpers
 
 // ErrCanceled is returned when the user cancels the PIN dialog or lets it time out.
 var ErrCanceled = errors.New("PIN entry canceled")
@@ -56,9 +71,6 @@ var ErrCanceled = errors.New("PIN entry canceled")
 // secretFlagWords mark flags whose values can be credentials (e.g. --api-token, --mfa-code, --password).
 // The values of other flags (--app, --rack, --commit, ...) are shown, so the user can see what they approve.
 var secretFlagWords = []string{"token", "secret", "password", "passwd", "passphrase", "key", "credential", "code"}
-
-// dialogRunner runs the AppleScript with the message as its only argument.
-type dialogRunner func(ctx context.Context, script, message string) (stdout, stderr string, err error)
 
 // Request describes what the PIN will authorize. It is shown in the dialog.
 type Request struct {
@@ -69,21 +81,26 @@ type Request struct {
 	// Summary optionally describes what the command approves, one item per line (for example each deploy
 	// approval it makes). The dialog lists it above the command line.
 	Summary []string
+	// Warnings say what the command can do that the person approving it must notice. The dialog shows them in red.
+	Warnings []string
 }
 
 // ReadPIN asks for the security key PIN on the terminal, or in a macOS dialog when stdin is not a terminal.
 func ReadPIN(req Request) (string, error) {
 	if fd, ok := terminal.StdinFD(); ok {
-		return readFromTerminal(fd, os.Stderr)
+		return readFromTerminal(fd, os.Stderr, req.Warnings)
 	}
 	if runtime.GOOS != "darwin" {
 		return "", errors.New("security key PIN required but stdin is not a terminal; run the command in a terminal")
 	}
 	_, _ = fmt.Fprintln(os.Stderr, "Waiting for the security key PIN in the rack-gateway dialog...")
-	return readFromDialog(context.Background(), runOsascript, req)
+	return readFromDialog(context.Background(), macdialog.Run, req)
 }
 
-func readFromTerminal(fd int, prompt io.Writer) (string, error) {
+func readFromTerminal(fd int, prompt io.Writer, warnings []string) (string, error) {
+	for _, warning := range warnings {
+		_, _ = fmt.Fprintln(prompt, "WARNING: "+SingleLine(warning, maxLineLength))
+	}
 	_, _ = fmt.Fprint(prompt, "Enter your security key PIN: ")
 	pinBytes, err := term.ReadPassword(fd)
 	_, _ = fmt.Fprintln(prompt)
@@ -94,32 +111,34 @@ func readFromTerminal(fd int, prompt io.Writer) (string, error) {
 }
 
 // readFromDialog shows the PIN dialog and returns the entered PIN.
-func readFromDialog(ctx context.Context, run dialogRunner, req Request) (string, error) {
+func readFromDialog(ctx context.Context, run macdialog.Runner, req Request) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, dialogTimeout)
 	defer cancel()
 
-	stdout, stderr, err := run(ctx, dialogScript, dialogMessage(req))
+	stdout, stderr, err := run(ctx, dialogScript, dialogMessage(req), dialogWarnings(req.Warnings))
+	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		return "", ErrCanceled
+	}
 	if err != nil {
-		if strings.Contains(stderr, appleScriptUserCanceled) || errors.Is(ctx.Err(), context.DeadlineExceeded) {
-			return "", ErrCanceled
-		}
 		return "", fmt.Errorf("failed to show PIN dialog: %w: %s", err, strings.TrimSpace(stderr))
 	}
-
-	pin := strings.TrimSuffix(stdout, "\n")
+	answer, pin, _ := strings.Cut(strings.TrimSuffix(stdout, "\n"), "\n")
+	if answer != "approve" {
+		return "", ErrCanceled
+	}
 	if pin == "" {
 		return "", errors.New("no PIN entered")
 	}
 	return pin, nil
 }
 
-func runOsascript(ctx context.Context, script, message string) (string, string, error) {
-	var stdout, stderr bytes.Buffer
-	cmd := exec.CommandContext(ctx, "osascript", "-e", script, message)
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	err := cmd.Run()
-	return stdout.String(), stderr.String(), err
+// dialogWarnings renders the warnings for the dialog, one per line, each made safe for one line (see SingleLine).
+func dialogWarnings(warnings []string) string {
+	lines := make([]string, 0, len(warnings))
+	for _, warning := range warnings {
+		lines = append(lines, "⚠ "+SingleLine(warning, maxLineLength))
+	}
+	return strings.Join(lines, "\n")
 }
 
 // dialogMessage renders the dialog text. Everything that comes from outside the dialog (the summary, the

@@ -53,6 +53,26 @@ func (e CommandEnv) Plan(req cmdenv.Request) (cmdenv.Plan, error) {
 	return cmdenv.New(req.AllEnvVars || len(e.Vars) == 0, vars, readOnly)
 }
 
+// CommandEnvFromValues reads command_env_vars and command_env_read_only from their values, as the settings API
+// returns them (JSON-decoded). A value of the wrong shape is an error (ErrInvalidSettingValue).
+func CommandEnvFromValues(vars, readOnly interface{}) (CommandEnv, error) {
+	var env CommandEnv
+	var err error
+	if env.Vars, err = commandEnvVarNames(vars); err != nil {
+		return CommandEnv{}, err
+	}
+	if env.ReadOnly, err = readOnlyEnvMap(readOnly); err != nil {
+		return CommandEnv{}, err
+	}
+	return env, nil
+}
+
+// Limits reports whether the app keeps anything from its commands: env vars they don't get, or the real values of
+// read-only ones.
+func (e CommandEnv) Limits() bool {
+	return len(e.Vars) > 0 || len(e.ReadOnly) > 0
+}
+
 // commandEnvVarNames returns command_env_vars's value as env var names, or ErrInvalidSettingValue when it isn't a
 // list of env var names (surrounding spaces aside), or it names RACK_URL. Names keep their case: a process's env
 // var names are case-sensitive.

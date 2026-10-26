@@ -27,6 +27,7 @@ var reviewScriptWith = func(process processCommand) (string, error) {
 	}
 	return scriptreview.Review(scriptreview.Request{
 		Where: process.where(), Justification: process.justification, Script: *process.script, CheckPIN: checkPIN,
+		Warnings: process.envWarnings(),
 	})
 }
 

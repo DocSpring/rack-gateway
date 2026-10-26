@@ -11,6 +11,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/DocSpring/rack-gateway/internal/cli/macdialog"
 	"github.com/DocSpring/rack-gateway/internal/scriptrun"
 )
 
@@ -46,6 +47,26 @@ func TestReviewInTerminal(t *testing.T) {
 		require.Contains(t, out.String(), "1 | accounts = Account.where(plan: 'pro')\n2 | puts accounts.count")
 		require.True(t, strings.HasSuffix(out.String(), "Run this script? [y/N] "))
 	}
+}
+
+// The warnings show first, in the terminal (in red with color) and in the dialog (its last argument, one per line,
+// each kept to one line).
+func TestReviewShowsTheWarnings(t *testing.T) {
+	req := testRequest(t, "puts 1\n")
+	req.Warnings = []string{"This command can change data.", "exec reads\nevery env var."}
+	var out bytes.Buffer
+	require.NoError(t, reviewInTerminal(req, strings.NewReader("y\n"), &out, true))
+	require.True(t, strings.HasPrefix(out.String(), "\x1b[1;31mWARNING: This command can change data.\x1b[0m\n"+
+		"\x1b[1;31mWARNING: exec reads?every env var.\x1b[0m\nReview this script"), out.String())
+
+	var warnings string
+	run := func(_ context.Context, _ string, args ...string) (string, string, error) {
+		warnings = args[4]
+		return "run\n", "", nil
+	}
+	_, err := reviewInDialog(context.Background(), run, req)
+	require.NoError(t, err)
+	require.Equal(t, "⚠ This command can change data.\n⚠ exec reads?every env var.", warnings)
 }
 
 // Characters that would make the script read differently from what runs (a right-to-left override, a zero-width
@@ -88,7 +109,7 @@ func TestReviewInDialog(t *testing.T) {
 		}
 		require.Empty(t, pin)
 		require.Equal(t, dialogScript, gotScript)
-		require.Equal(t, []string{Header(req), gotArgs[1], "", ""}, gotArgs)
+		require.Equal(t, []string{Header(req), gotArgs[1], "", "", ""}, gotArgs)
 		var spans []span
 		require.NoError(t, json.Unmarshal([]byte(gotArgs[1]), &spans))
 		require.Equal(t, "1 | puts 'run'", plainText(spans))
@@ -102,11 +123,11 @@ func TestReviewInDialog(t *testing.T) {
 }
 
 // answers is a dialog that gives each of its answers in turn, and records the problem each was asked with.
-func answers(t *testing.T, stdouts ...string) (dialogRunner, *[]string) {
+func answers(t *testing.T, stdouts ...string) (macdialog.Runner, *[]string) {
 	t.Helper()
 	var problems []string
 	return func(_ context.Context, _ string, args ...string) (string, string, error) {
-		require.Len(t, args, 4)
+		require.Len(t, args, 5)
 		require.Equal(t, "pin", args[2])
 		require.Contains(t, args[0], pinInstructions)
 		problems = append(problems, args[3])

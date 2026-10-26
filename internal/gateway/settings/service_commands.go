@@ -47,11 +47,8 @@ func (s *Service) GetCommandEnv(appName string) (CommandEnv, error) {
 	if err != nil {
 		return CommandEnv{}, err
 	}
-	var env CommandEnv
-	if env.Vars, err = commandEnvVarNames(vars.Value); err != nil {
-		return CommandEnv{}, fmt.Errorf("app %s: %w", appName, err)
-	}
-	if env.ReadOnly, err = readOnlyEnvMap(readOnly.Value); err != nil {
+	env, err := CommandEnvFromValues(vars.Value, readOnly.Value)
+	if err != nil {
 		return CommandEnv{}, fmt.Errorf("app %s: %w", appName, err)
 	}
 	return env, nil

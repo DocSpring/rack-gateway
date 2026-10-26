@@ -25,6 +25,9 @@ type AssertionOptions struct {
 type Prompt struct {
 	// Summary lists what the command approves, one item per line, for the PIN dialog.
 	Summary []string
+	// Warnings say what the command can do that a person approving it must notice (change data, read every env
+	// var). The PIN dialog shows them in red.
+	Warnings []string
 	// Touch says what this touch is for, e.g. "approve api on staging (2 of 4)". Without it the touch is to
 	// "authenticate to" the gateway.
 	Touch string
