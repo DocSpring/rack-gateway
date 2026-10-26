@@ -1,6 +1,7 @@
 package mfa
 
 import (
+	"errors"
 	"sync"
 	"testing"
 	"time"
@@ -61,7 +62,8 @@ func TestVerifyTOTP_RateLimiting(t *testing.T) {
 	// 6th attempt should be rate limited (not locked, since only 4 failed verifications)
 	if _, err := svc.VerifyTOTP(user, "123456", "1.2.3.4", "test-agent", nil); err == nil {
 		t.Fatal("expected rate limiting to reject attempt")
-	} else if err.Error() != "too many attempts - try again in 5 minutes" {
+	} else if !errors.Is(err, db.ErrMFAAttemptLimit) ||
+		err.Error() != "too many failed MFA attempts: try again in 5 minutes" {
 		t.Fatalf("expected rate limit error, got: %v", err)
 	}
 }
