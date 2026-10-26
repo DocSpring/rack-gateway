@@ -63,7 +63,7 @@ func (p processCommand) envSummary() string {
 	if !ok {
 		return ""
 	}
-	return "Env vars: " + plan.Describe()
+	return "Env vars: " + plan.Summary()
 }
 
 // writtenVars are the app's read-only env vars the command gets the real values of (--write), sorted.

@@ -29,14 +29,18 @@ func CommandEnvFromContext(ctx context.Context) (CommandEnv, bool) {
 }
 
 // details are the audit details that record the environment: all_env_vars when the command got every env var
-// (except RACK_URL), or env_vars, the names it got (only those that were set reached it); env_read_only, each
-// read-only var it got with the var it took its value from; and write when it was given their real values.
+// (except RACK_URL), or env_vars, the names it got (only those that were set reached it), and env_vars_added, the
+// ones it asked for besides the app's; env_read_only, each read-only var it got with the var it took its value
+// from; and write when it was given their real values.
 func (e CommandEnv) details() map[string]interface{} {
 	details := map[string]interface{}{}
 	if e.Plan.All {
 		details["all_env_vars"] = true
 	} else {
 		details["env_vars"] = append([]string{}, e.Plan.Vars...)
+	}
+	if len(e.Plan.Added) > 0 {
+		details["env_vars_added"] = e.Plan.Added
 	}
 	if len(e.Plan.ReadOnly) > 0 {
 		details["env_read_only"] = e.Plan.ReadOnly

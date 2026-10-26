@@ -35,10 +35,11 @@ type processCommand struct {
 	ScriptName    string `json:"script_name"`
 	ScriptSHA256  string `json:"script_sha256"`
 	// The env vars the command got (see audit.CommandEnv).
-	EnvVars     []string          `json:"env_vars"`
-	AllEnvVars  bool              `json:"all_env_vars"`
-	EnvReadOnly map[string]string `json:"env_read_only"`
-	Write       bool              `json:"write"`
+	EnvVars      []string          `json:"env_vars"`
+	EnvVarsAdded []string          `json:"env_vars_added"`
+	AllEnvVars   bool              `json:"all_env_vars"`
+	EnvReadOnly  map[string]string `json:"env_read_only"`
+	Write        bool              `json:"write"`
 }
 
 // parseProcessCommand reads the command of a process action's audit entry. ok is false for any other entry.
@@ -91,7 +92,8 @@ func (p processCommand) env() string {
 	if p.EnvVars == nil && !p.AllEnvVars {
 		return ""
 	}
-	text := escapeMrkdwn(cmdenv.Plan{All: p.AllEnvVars, Vars: p.EnvVars, ReadOnly: p.EnvReadOnly}.Describe())
+	plan := cmdenv.Plan{All: p.AllEnvVars, Vars: p.EnvVars, ReadOnly: p.EnvReadOnly, Added: p.EnvVarsAdded}
+	text := escapeMrkdwn(plan.Summary())
 	if p.Write {
 		text = ":warning: *Can change data:* run with --write, so it got the real values of the read-only env " +
 			"vars\n" + text

@@ -156,7 +156,16 @@ func TestCommandEnvPlan(t *testing.T) {
 		{env: limited, want: cmdenv.Plan{Vars: []string{"DATABASE_URL", "PATH"}, ReadOnly: readOnly}},
 		{
 			env: limited, names: []string{"STRIPE_KEY"}, write: true,
-			want: cmdenv.Plan{Vars: []string{"DATABASE_URL", "PATH", "STRIPE_KEY"}},
+			want: cmdenv.Plan{Vars: []string{"DATABASE_URL", "PATH", "STRIPE_KEY"}, Added: []string{"STRIPE_KEY"}},
+		},
+		// Added names only the ones the app doesn't give every command, once each, sorted.
+		{
+			env: limited, names: []string{"STRIPE_KEY", "PATH", "SENTRY_DSN", "STRIPE_KEY"},
+			want: cmdenv.Plan{
+				Vars:     []string{"DATABASE_URL", "PATH", "SENTRY_DSN", "STRIPE_KEY"},
+				ReadOnly: readOnly,
+				Added:    []string{"SENTRY_DSN", "STRIPE_KEY"},
+			},
 		},
 		{env: limited, all: true, want: cmdenv.Plan{All: true, ReadOnly: readOnly}},
 	} {

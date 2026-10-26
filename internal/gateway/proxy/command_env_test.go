@@ -68,6 +68,7 @@ func TestACommandRunsWithTheAppsEnvVarsAndTheOnesItAsksFor(t *testing.T) {
 	details := f.processStartDetails(t, "success")
 	require.Equal(t, "rake db:migrate", details["command"])
 	require.Equal(t, []interface{}{"DATABASE_URL", "PATH", "STRIPE_KEY"}, details["env_vars"])
+	require.Equal(t, []interface{}{"STRIPE_KEY"}, details["env_vars_added"])
 	require.Equal(t, map[string]interface{}{"DATABASE_URL": "READ_ONLY_DATABASE_URL"}, details["env_read_only"])
 	require.NotContains(t, details, "write")
 	require.NotContains(t, details, "all_env_vars")
@@ -220,9 +221,12 @@ func TestAnApprovedCommandsEntryDecidesItsEnvVars(t *testing.T) {
 	}, nil))
 
 	for command, want := range map[string]audit.CommandEnv{
-		"bin/pre_release_checks migrate": {Plan: cmdenv.Plan{Vars: []string{"DATABASE_URL", "PATH"}}, Write: true},
+		"bin/pre_release_checks migrate": {
+			Plan: cmdenv.Plan{Vars: []string{"DATABASE_URL", "PATH"}, Added: []string{"DATABASE_URL"}}, Write: true,
+		},
 		"rake stripe:prepare": {Plan: cmdenv.Plan{
 			Vars: []string{"DATABASE_URL", "PATH", "STRIPE_KEY"}, ReadOnly: readOnlyDatabase,
+			Added: []string{"DATABASE_URL", "STRIPE_KEY"},
 		}},
 		"bin/pre_release_checks": {Plan: cmdenv.Plan{All: true, ReadOnly: readOnlyDatabase}},
 	} {

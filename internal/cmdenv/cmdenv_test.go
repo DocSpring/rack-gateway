@@ -165,6 +165,23 @@ func TestDescribe(t *testing.T) {
 		mustPlan(t, true, nil, readOnly).Describe())
 }
 
+// Summary counts the app's env vars, and names only the ones added for the command and the read-only ones.
+func TestSummary(t *testing.T) {
+	readOnly := map[string]string{"DATABASE_URL": "READ_ONLY_DATABASE_URL"}
+	plan := mustPlan(t, false, []string{"PATH", "DATABASE_URL", "HOME", "SENTRY_DSN"}, readOnly)
+	require.Equal(t, "the 4 in the app's command_env_vars; read-only DATABASE_URL (from READ_ONLY_DATABASE_URL)",
+		plan.Summary())
+	plan.Added = []string{"SENTRY_DSN"}
+	require.Equal(t, "the 3 in the app's command_env_vars, plus SENTRY_DSN; read-only DATABASE_URL "+
+		"(from READ_ONLY_DATABASE_URL)", plan.Summary())
+	plan.ReadOnly = nil
+	require.Equal(t, "the 3 in the app's command_env_vars, plus SENTRY_DSN", plan.Summary())
+	// Every env var, and none, read as Describe says them.
+	require.Equal(t, "every env var except RACK_URL; read-only DATABASE_URL (from READ_ONLY_DATABASE_URL)",
+		mustPlan(t, true, nil, readOnly).Summary())
+	require.Equal(t, "no env vars", Plan{}.Summary())
+}
+
 // shell is a shell the rack's image might have: how to run it, and the directory holding the env it uses (""
 // for the one on PATH).
 type shell struct {
