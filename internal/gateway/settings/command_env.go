@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/DocSpring/rack-gateway/internal/cmdenv"
@@ -50,7 +51,17 @@ func (e CommandEnv) Plan(req cmdenv.Request) (cmdenv.Plan, error) {
 		readOnly = nil
 	}
 	vars := append(append([]string(nil), e.Vars...), req.Env...)
-	return cmdenv.New(req.AllEnvVars || len(e.Vars) == 0, vars, readOnly)
+	plan, err := cmdenv.New(req.AllEnvVars || len(e.Vars) == 0, vars, readOnly)
+	if err != nil || plan.All {
+		return plan, err
+	}
+	for _, name := range req.Env {
+		if !slices.Contains(e.Vars, name) && !slices.Contains(plan.Added, name) {
+			plan.Added = append(plan.Added, name)
+		}
+	}
+	slices.Sort(plan.Added)
+	return plan, nil
 }
 
 // CommandEnvFromValues reads command_env_vars and command_env_read_only from their values, as the settings API

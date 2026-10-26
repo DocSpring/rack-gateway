@@ -43,6 +43,9 @@ type Plan struct {
 	// ReadOnly maps an env var the command gets to the env var it takes its value from instead (DATABASE_URL to
 	// READ_ONLY_DATABASE_URL, say). When the substitute isn't set, the command doesn't get the var at all.
 	ReadOnly map[string]string
+	// Added are the Vars the command gets besides the ones every command in its app gets (the ones it asked for),
+	// sorted. They only change how Summary describes the plan.
+	Added []string
 }
 
 // New returns the plan that gives a command every env var (all), or only vars, with the substitutes in readOnly
@@ -267,6 +270,22 @@ func (p Plan) Describe() string {
 		return "no env vars"
 	}
 	return strings.Join(p.described(p.Vars), ", ")
+}
+
+// Summary describes the plan in a line, for the person approving the command or reading about it: how many of the
+// app's command_env_vars it gets, the ones added for it, and the read-only ones. Describe names every env var.
+func (p Plan) Summary() string {
+	if p.All || len(p.Vars) == 0 {
+		return p.Describe()
+	}
+	summary := fmt.Sprintf("the %d in the app's command_env_vars", len(p.Vars)-len(p.Added))
+	if len(p.Added) > 0 {
+		summary += ", plus " + strings.Join(p.Added, ", ")
+	}
+	if len(p.ReadOnly) > 0 {
+		summary += "; read-only " + strings.Join(p.described(sortedKeys(p.ReadOnly)), ", ")
+	}
+	return summary
 }
 
 // described names each of names, with its read-only substitute: "DATABASE_URL (from READ_ONLY_DATABASE_URL)".

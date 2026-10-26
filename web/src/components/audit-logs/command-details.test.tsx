@@ -56,7 +56,20 @@ describe('CommandDetails', () => {
     expect(screen.getByTestId('audit-command-env')).toHaveTextContent(
       'Env vars: DATABASE_URL (from READ_ONLY_DATABASE_URL), PATH'
     )
+    expect(screen.queryByTestId('audit-command-env-added')).toBeNull()
     expect(screen.queryByTestId('audit-command-write')).toBeNull()
+
+    // The ones it asked for besides the app's are named again.
+    rerender(
+      <CommandDetails
+        details={JSON.stringify({
+          command: 'rake stripe:sync',
+          env_vars: ['DATABASE_URL', 'PATH', 'STRIPE_KEY'],
+          env_vars_added: ['STRIPE_KEY'],
+        })}
+      />
+    )
+    expect(screen.getByTestId('audit-command-env-added')).toHaveTextContent('Asked for: STRIPE_KEY')
 
     rerender(
       <CommandDetails

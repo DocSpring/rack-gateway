@@ -8,6 +8,8 @@ interface CommandAuditDetails {
   scriptName?: string
   scriptSHA256?: string
   env?: string
+  // envAdded are the env vars the command asked for besides the ones every command in the app gets.
+  envAdded: string[]
   write: boolean
 }
 
@@ -68,6 +70,9 @@ function parseCommandDetails(details: string | null | undefined): CommandAuditDe
     scriptName: stringField(record, 'script_name'),
     scriptSHA256: stringField(record, 'script_sha256'),
     env: envDescription(record),
+    envAdded: Array.isArray(record.env_vars_added)
+      ? record.env_vars_added.filter((name): name is string => typeof name === 'string')
+      : [],
     write: record.write === true,
   }
 }
@@ -145,6 +150,11 @@ export function CommandDetails({ details }: { details: string | null | undefined
       {command.env && (
         <div className="break-words" data-testid="audit-command-env">
           <span className="text-muted-foreground">Env vars:</span> {command.env}
+        </div>
+      )}
+      {command.envAdded.length > 0 && (
+        <div className="break-words" data-testid="audit-command-env-added">
+          <span className="text-muted-foreground">Asked for:</span> {command.envAdded.join(', ')}
         </div>
       )}
       {command.write && (

@@ -75,12 +75,14 @@ func limitedProcess(action string, req cmdenv.Request) processCommand {
 // environment. The touch says when it can change data.
 func TestCommandPromptDescribesTheCommandsEnvVars(t *testing.T) {
 	prompt := commandPrompt(limitedProcess("run", cmdenv.Request{Env: []string{"STRIPE_KEY"}}))
-	require.Contains(t, prompt.Summary, "Env vars: DATABASE_URL (from READ_ONLY_DATABASE_URL), PATH, STRIPE_KEY")
+	require.Contains(t, prompt.Summary, "Env vars: the 2 in the app's command_env_vars, plus STRIPE_KEY; read-only "+
+		"DATABASE_URL (from READ_ONLY_DATABASE_URL)")
 	require.Empty(t, prompt.Warnings)
 	require.Equal(t, "run a command on app myapp (rack us)", prompt.Touch)
 
 	prompt = commandPrompt(limitedProcess("run", cmdenv.Request{Write: true}))
-	require.Contains(t, prompt.Summary, "Env vars: DATABASE_URL, PATH")
+	require.Contains(t, prompt.Summary, "Env vars: the 2 in the app's command_env_vars")
+	require.NotContains(t, prompt.Summary, "; read-only")
 	require.Equal(t, []string{
 		"This command can change data: --write gives it the real DATABASE_URL, not the read-only one.",
 	}, prompt.Warnings)
@@ -119,7 +121,8 @@ func TestProcessCommandDryRunShowsTheEnvVars(t *testing.T) {
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	require.NoError(t, runProcessCommand(cmd, []string{"web", "rake", "db:migrate"}, "run", nil))
-	require.Contains(t, out.String(), "Env vars: DATABASE_URL, PATH")
+	require.Contains(t, out.String(), "Env vars: the 2 in the app's command_env_vars\n")
+	require.NotContains(t, out.String(), "; read-only")
 	require.Contains(t, out.String(), "WARNING: This command can change data: --write gives it the real DATABASE_URL")
 	require.Empty(t, gateway.requests())
 }

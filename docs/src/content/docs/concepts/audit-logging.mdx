@@ -331,8 +331,9 @@ denial.
 
 The env vars a command got (see [Env vars](/user-guide/cli/commands/#env-vars)) are recorded with it: `env_vars`,
 the names it got (only the ones the release sets reached it), or `all_env_vars: true` for every env var except
-`RACK_URL`; `env_read_only`, each read-only env var it got with the env var it took its value from; and
-`write: true` when it ran with `--write`, with the real values. `command` is the command as it was sent, without the
+`RACK_URL`; `env_vars_added`, the ones it asked for besides the app's `command_env_vars` (with `--env`, or in its
+`approved_deploy_commands` entry); `env_read_only`, each read-only env var it got with the env var it took its
+value from; and `write: true` when it ran with `--write`, with the real values. `command` is the command as it was sent, without the
 `sh` wrapper the gateway adds.
 
 A command run with a script (`--script`, see [Scripts](/user-guide/cli/commands/#scripts)) is recorded readably:

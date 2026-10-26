@@ -119,9 +119,12 @@ func TestOnlyProcessCommandsGetTheProcessFormat(t *testing.T) {
 // An entry from before the gateway recorded them says nothing about them.
 func TestProcessMessageSaysWhichEnvVarsTheCommandGot(t *testing.T) {
 	for want, env := range map[string]map[string]interface{}{
-		"*Env vars:*\\nDATABASE_URL (from READ_ONLY_DATABASE_URL), PATH": {
+		"*Env vars:*\\nthe 2 in the app's command_env_vars; read-only DATABASE_URL (from READ_ONLY": {
 			"env_vars":      []string{"DATABASE_URL", "PATH"},
 			"env_read_only": map[string]string{"DATABASE_URL": "READ_ONLY_DATABASE_URL"},
+		},
+		"*Env vars:*\\nthe 2 in the app's command_env_vars, plus SENTRY_DSN": {
+			"env_vars": []string{"DATABASE_URL", "PATH", "SENTRY_DSN"}, "env_vars_added": []string{"SENTRY_DSN"},
 		},
 		"*Env vars:*\\n:warning: *Can change data:* run with --write": {
 			"env_vars": []string{"DATABASE_URL", "PATH"}, "write": true,
