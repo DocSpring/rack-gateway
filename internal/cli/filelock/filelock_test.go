@@ -15,23 +15,32 @@ func TestLockWaitsForTheHolder(t *testing.T) {
 	unlockFirst, err := Lock(path, func() { t.Error("nothing holds the lock yet") })
 	require.NoError(t, err)
 
+	type result struct {
+		unlock func()
+		err    error
+	}
 	waiting := make(chan struct{})
-	acquired := make(chan func())
+	acquired := make(chan result, 1)
 	go func() {
 		unlock, err := Lock(path, func() { close(waiting) })
-		require.NoError(t, err)
-		acquired <- unlock
+		acquired <- result{unlock, err}
 	}()
 
-	<-waiting
+	select {
+	case second := <-acquired:
+		require.NoError(t, second.err)
+		t.Fatal("the second Lock took the lock while the first held it")
+	case <-waiting:
+	}
 	select {
 	case <-acquired:
 		t.Fatal("the second Lock took the lock while the first held it")
 	case <-time.After(200 * time.Millisecond):
 	}
 	unlockFirst()
-	unlockSecond := <-acquired
-	unlockSecond()
+	second := <-acquired
+	require.NoError(t, second.err)
+	second.unlock()
 
 	unlockThird, err := Lock(path, func() { t.Error("the lock was released") })
 	require.NoError(t, err)

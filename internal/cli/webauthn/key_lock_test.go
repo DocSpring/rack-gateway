@@ -20,7 +20,7 @@ func TestSecurityKeyUsersWaitForTheLock(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "security-key.lock")
 	lockPath, open := keyLockPath, openDevices
 	t.Cleanup(func() { keyLockPath, openDevices = lockPath, open })
-	keyLockPath = func() string { return path }
+	keyLockPath = func() (string, error) { return path, nil }
 	errNoKey := errors.New("no security key in tests")
 	openDevices = func() ([]*libfido2.Device, error) { return nil, errNoKey }
 
@@ -31,7 +31,9 @@ func TestSecurityKeyUsersWaitForTheLock(t *testing.T) {
 		},
 		"PIN check": func() error { return CheckPIN("1234") },
 		"PIN query": func() error {
-			require.False(t, SingleKeyHasPIN())
+			if SingleKeyHasPIN() {
+				return errors.New("SingleKeyHasPIN found a PIN without a key")
+			}
 			return errNoKey
 		},
 	} {
