@@ -375,31 +375,6 @@ type RevokeAllSessionsResponse struct {
 	RevokedCount int64 `json:"revoked_count" validate:"required"`
 }
 
-// UpdateProtectedEnvVarsRequest defines the payload for updating protected environment variables.
-type UpdateProtectedEnvVarsRequest struct {
-	ProtectedEnvVars []string `json:"protected_env_vars"`
-}
-
-// UpdateApprovedCommandsRequest defines the payload for updating approved commands for CI/CD exec.
-type UpdateApprovedCommandsRequest struct {
-	ApprovedCommands []string `json:"approved_commands"`
-}
-
-// UpdateAppImagePatternsRequest defines the payload for updating app image tag patterns.
-type UpdateAppImagePatternsRequest struct {
-	AppImagePatterns map[string]string `json:"app_image_patterns"`
-}
-
-// UpdateAllowDestructiveActionsRequest defines the payload for toggling destructive actions.
-type UpdateAllowDestructiveActionsRequest struct {
-	AllowDestructiveActions bool `json:"allow_destructive_actions"`
-}
-
-// UpdateMFASettingsRequest defines the payload for updating MFA enforcement defaults.
-type UpdateMFASettingsRequest struct {
-	RequireAllUsers bool `json:"require_all_users"`
-}
-
 // UpdatePreferredMFAMethodRequest defines the payload for updating user's preferred MFA method.
 type UpdatePreferredMFAMethodRequest struct {
 	PreferredMethod *string `json:"preferred_method"` // "totp", "webauthn", or null to clear
