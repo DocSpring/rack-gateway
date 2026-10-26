@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/DocSpring/rack-gateway/internal/gateway/envutil"
+	"github.com/DocSpring/rack-gateway/internal/cmdenv"
 )
 
 // ErrInvalidSettingValue means a setting value has the wrong shape for its key.
@@ -187,7 +187,7 @@ func envVarNameList(key string, value interface{}) ([]string, error) {
 func invalidEnvVarNames(names []string) string {
 	var invalid []string
 	for _, name := range names {
-		if !envutil.ValidName(strings.TrimSpace(name)) {
+		if !cmdenv.ValidName(strings.TrimSpace(name)) {
 			invalid = append(invalid, strconv.Quote(name))
 		}
 	}

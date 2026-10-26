@@ -24,8 +24,6 @@ import (
 	"strings"
 
 	"github.com/kballard/go-shellquote"
-
-	"github.com/DocSpring/rack-gateway/internal/gateway/envutil"
 )
 
 // RackURL is the env var Convox gives every process of every app: the rack API's URL, with the rack's API password
@@ -110,7 +108,7 @@ func CheckReadOnly(readOnly map[string]string) error {
 }
 
 func checkName(name string) error {
-	if !envutil.ValidName(name) {
+	if !ValidName(name) {
 		return fmt.Errorf("%q isn't an env var name (letters, digits and underscores, not starting with a digit)",
 			name)
 	}
@@ -181,9 +179,16 @@ const (
 )
 
 var (
+	validName  = regexp.MustCompile(`^` + namePattern + `$`)
 	assignment = regexp.MustCompile(`^\$\{(` + namePattern + `)\+"(` + namePattern + `)=\$(` + namePattern + `)"\} `)
 	unsetLine  = regexp.MustCompile(`^unset ` + RackURL + `((?: ` + namePattern + `)*); exec env -- `)
 )
+
+// ValidName reports whether name is a valid env var name: letters, digits and underscores, not starting with a
+// digit.
+func ValidName(name string) bool {
+	return validName.MatchString(name)
+}
 
 // Parse reads a command Build made back into its plan and the command it runs. ok is false for anything else.
 func Parse(wrapped string) (plan Plan, command string, ok bool) {
