@@ -41,6 +41,54 @@ describe('CommandDetails', () => {
     }
   })
 
+  // The env vars the command got, with each read-only one's source, and a warning when it could change data.
+  it('shows the env vars the command got', () => {
+    const readOnly = { DATABASE_URL: 'READ_ONLY_DATABASE_URL' }
+    const { rerender } = render(
+      <CommandDetails
+        details={JSON.stringify({
+          command: 'rake db:migrate',
+          env_vars: ['DATABASE_URL', 'PATH'],
+          env_read_only: readOnly,
+        })}
+      />
+    )
+    expect(screen.getByTestId('audit-command-env')).toHaveTextContent(
+      'Env vars: DATABASE_URL (from READ_ONLY_DATABASE_URL), PATH'
+    )
+    expect(screen.queryByTestId('audit-command-write')).toBeNull()
+
+    rerender(
+      <CommandDetails
+        details={JSON.stringify({ command: 'rake db:migrate', all_env_vars: true, write: true })}
+      />
+    )
+    expect(screen.getByTestId('audit-command-env')).toHaveTextContent(
+      'Env vars: every env var except RACK_URL'
+    )
+    expect(screen.getByTestId('audit-command-write')).toHaveTextContent('Can change data')
+
+    rerender(
+      <CommandDetails
+        details={JSON.stringify({
+          command: 'rails c',
+          all_env_vars: true,
+          env_read_only: readOnly,
+        })}
+      />
+    )
+    expect(screen.getByTestId('audit-command-env')).toHaveTextContent(
+      'Env vars: every env var except RACK_URL; read-only DATABASE_URL (from READ_ONLY_DATABASE_URL)'
+    )
+
+    rerender(<CommandDetails details={JSON.stringify({ command: 'sleep 3600', env_vars: [] })} />)
+    expect(screen.getByTestId('audit-command-env')).toHaveTextContent('Env vars: no env vars')
+
+    // An entry from before the gateway recorded env vars says nothing about them.
+    rerender(<CommandDetails details={JSON.stringify({ command: 'ls' })} />)
+    expect(screen.queryByTestId('audit-command-env')).toBeNull()
+  })
+
   // Characters that would make the script read differently from what ran are written out and counted, with a
   // warning. CRLF line endings aren't.
   it('writes out hidden characters', () => {

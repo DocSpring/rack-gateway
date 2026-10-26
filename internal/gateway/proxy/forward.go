@@ -336,6 +336,9 @@ func (h *Handler) rackRequest(
 	if err != nil {
 		return nil, nil, err
 	}
+	if err := wrapCommand(r, proxyReq.Header); err != nil {
+		return nil, nil, err
+	}
 	client, err := h.httpClient(r.Context(), forwardTimeout(r, path))
 	if err != nil {
 		log.Printf(`{"level":"error","event":"rack_tls_config_error","message":%q}`, err.Error())

@@ -6,7 +6,7 @@ import { useAuth } from '@/contexts/auth-context'
 import { api } from '@/lib/api'
 import { apiPath } from '@/lib/api-path'
 import { CommandJustificationCard } from '@/pages/app-settings/command-justification-card'
-import { ServiceImagePatternsCard } from '@/pages/app-settings/service-image-patterns-card'
+import { JsonSettingCard } from '@/pages/app-settings/json-setting-card'
 import { StringArrayCard } from '@/pages/app-settings/string-array-card'
 import type { AppSettingsResponse } from '@/pages/app-settings/types'
 import { VCSCIProvidersCard } from '@/pages/app-settings/vcs-ci-providers-card'
@@ -97,17 +97,66 @@ export function AppSettingsPage() {
           />
         </div>
         <div className="grid grid-cols-2 gap-12">
-          <StringArrayCard
+          <JsonSettingCard
             app={app}
-            description="The exact commands a CI/CD token can run during an approved deploy request. An empty list allows none."
+            description={
+              <>
+                The exact commands a CI/CD token can run during an approved deploy request, each
+                with the env vars it gets: &quot;env&quot; lists the ones it needs besides the
+                app&apos;s command env vars, &quot;all_env_vars&quot; gives it every env var, and
+                &quot;write&quot; gives it the real values of the read-only env vars. An empty list
+                allows none.
+              </>
+            }
             disabled={!isAdmin}
+            label="JSON list of commands"
             pathSegment="approved-deploy-commands"
-            placeholder="e.g. bundle exec rake db:migrate"
+            placeholder='[{"command": "bundle exec rake db:migrate", "write": true}]'
             settingKey="approved_deploy_commands"
             settings={appSettings}
             title="Approved Deploy Commands"
           />
-          <ServiceImagePatternsCard app={app} disabled={!isAdmin} settings={appSettings} />
+          <JsonSettingCard
+            app={app}
+            description={
+              <>
+                Per-service regex patterns for the Docker images in convox.yml, matched against the
+                whole image reference. Required for builds made under a deploy approval: every
+                service needs a pattern (its own or &quot;*&quot;) that names the image repository.{' '}
+                {'{{GIT_COMMIT}}'} is replaced with the approved commit.
+              </>
+            }
+            disabled={!isAdmin}
+            label="JSON object (service name → regex)"
+            pathSegment="service-image-patterns"
+            placeholder='{"*": "docker\\.io/myorg/app:{{GIT_COMMIT}}-amd64"}'
+            settingKey="service_image_patterns"
+            settings={appSettings}
+            title="Service Image Patterns"
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-12">
+          <StringArrayCard
+            app={app}
+            description="The env vars every command run with exec or run gets. A command can ask for more with --env, or for every env var with --all-env-vars. An empty list gives every command every env var except RACK_URL."
+            disabled={!isAdmin}
+            pathSegment="command-env-vars"
+            placeholder="e.g. PATH"
+            settingKey="command_env_vars"
+            settings={appSettings}
+            title="Command Env Vars"
+          />
+          <JsonSettingCard
+            app={app}
+            description="Env vars a command gets with another env var's value, unless it's run with --write. For example, a command's DATABASE_URL can take the value of READ_ONLY_DATABASE_URL, a database user that can't change data."
+            disabled={!isAdmin}
+            label="JSON object (env var → env var it takes its value from)"
+            pathSegment="command-env-read-only"
+            placeholder='{"DATABASE_URL": "READ_ONLY_DATABASE_URL"}'
+            settingKey="command_env_read_only"
+            settings={appSettings}
+            title="Read-Only Env Vars for Commands"
+          />
         </div>
         <div className="grid grid-cols-2 gap-12">
           <CommandJustificationCard

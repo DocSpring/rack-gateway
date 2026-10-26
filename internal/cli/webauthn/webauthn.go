@@ -48,7 +48,9 @@ func requestAssertion(options AssertionOptions, cachedPIN string) (*AssertionRes
 		return nil, "", err
 	}
 
-	pinRequest := pinentry.Request{Gateway: options.Origin, Args: os.Args, Summary: options.Prompt.Summary}
+	pinRequest := pinentry.Request{
+		Gateway: options.Origin, Args: os.Args, Summary: options.Prompt.Summary, Warnings: options.Prompt.Warnings,
+	}
 	flow := assertionFlow{
 		key:            chooseKey(keys, options.RPID, allowList),
 		readPIN:        func() (string, error) { return pinentry.ReadPIN(pinRequest) },

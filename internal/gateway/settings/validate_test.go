@@ -8,7 +8,6 @@ import (
 
 func TestValidateCollection(t *testing.T) {
 	valid := map[string]interface{}{
-		KeyApprovedDeployCommands:        []interface{}{"bin/pre_release_checks migrate"},
 		KeyAuditVisibleEnvVars:           []interface{}{"PORT"},
 		KeyProtectedEnvVars:              []string{"DATABASE_URL"},
 		AppSettingSecretEnvVars.String(): []interface{}{},
@@ -22,8 +21,6 @@ func TestValidateCollection(t *testing.T) {
 	}
 
 	invalid := map[string]interface{}{
-		// The shape the CLI E2E seed used to store: it read back as an empty list.
-		KeyApprovedDeployCommands:        map[string]interface{}{"commands": []interface{}{"echo rake db:migrate"}},
 		KeyAuditVisibleEnvVars:           map[string]interface{}{"PORT": true},
 		KeyProtectedEnvVars:              "DATABASE_URL",
 		AppSettingSecretEnvVars.String(): []interface{}{"A", 1},
@@ -55,8 +52,6 @@ func TestValidateCollectionRefusesInvalidEnvVarNames(t *testing.T) {
 			require.ErrorIsf(t, err, ErrInvalidSettingValue, "key %s, names %q", key, names)
 		}
 	}
-	// Approved deploy commands are commands, not names.
-	require.NoError(t, validateCollection(KeyApprovedDeployCommands, []string{`bin/rails "db:migrate"`}))
 }
 
 // Each setting takes only values of its own type: a boolean sent as a string, a fractional or out-of-range number,

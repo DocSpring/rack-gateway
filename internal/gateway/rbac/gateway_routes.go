@@ -281,6 +281,26 @@ var httpRouteSpecs = []RouteSpec{
 	),
 	newHTTPRoute(
 		"PUT",
+		appSettingPath(settings.AppSettingCommandEnvVars),
+		GatewayAppSetting(settings.AppSettingCommandEnvVars),
+	),
+	newHTTPRoute(
+		"DELETE",
+		appSettingPath(settings.AppSettingCommandEnvVars),
+		GatewayAppSetting(settings.AppSettingCommandEnvVars),
+	),
+	newHTTPRoute(
+		"PUT",
+		appSettingPath(settings.AppSettingCommandEnvReadOnly),
+		GatewayAppSetting(settings.AppSettingCommandEnvReadOnly),
+	),
+	newHTTPRoute(
+		"DELETE",
+		appSettingPath(settings.AppSettingCommandEnvReadOnly),
+		GatewayAppSetting(settings.AppSettingCommandEnvReadOnly),
+	),
+	newHTTPRoute(
+		"PUT",
 		appSettingPath(settings.AppSettingServiceImagePatterns),
 		GatewayAppSetting(settings.AppSettingServiceImagePatterns),
 	),

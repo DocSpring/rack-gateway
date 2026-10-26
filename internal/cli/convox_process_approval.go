@@ -25,9 +25,9 @@ func addJustificationFlag(cmd *cobra.Command) {
 }
 
 // commandJustification returns --justification, checked, or "" without one. A command without one in an app that
-// requires one is refused here, before anything starts: the gateway refuses it too, but the CLI can't show why the
-// gateway refused an exec's WebSocket handshake.
-func commandJustification(cmd *cobra.Command, app string) (string, error) {
+// requires one (required) is refused here, before anything starts: the gateway refuses it too, but the CLI can't
+// show why the gateway refused an exec's WebSocket handshake.
+func commandJustification(cmd *cobra.Command, app string, required bool) (string, error) {
 	text, err := cmd.Flags().GetString(justificationFlag)
 	if err != nil {
 		return "", err
@@ -38,10 +38,6 @@ func commandJustification(cmd *cobra.Command, app string) (string, error) {
 		}
 		return strings.TrimSpace(text), nil
 	}
-	required, err := appRequiresJustification(cmd, app)
-	if err != nil {
-		return "", err
-	}
 	if required {
 		return "", fmt.Errorf("app %s requires a justification for every command: add --justification, saying "+
 			"why the command is run and what it does (at least %d characters)",
@@ -50,30 +46,58 @@ func commandJustification(cmd *cobra.Command, app string) (string, error) {
 	return "", nil
 }
 
-// appRequiresJustification reads require_command_justification: the gateway-wide setting, then the app's. Either
-// one requires a justification. API tokens can't read settings; the gateway still refuses their commands without
-// one (deploy approvals justify theirs with the approval).
-func appRequiresJustification(cmd *cobra.Command, app string) (bool, error) {
+// commandSettings is what the gateway's settings say about the commands run in an app: whether each needs a
+// justification (the gateway-wide require_command_justification, or the app's own), and the env vars they get.
+// API tokens can't read settings, so known is false; the gateway still checks their commands.
+type commandSettings struct {
+	known                 bool
+	justificationRequired bool
+	env                   settings.CommandEnv
+}
+
+// settingValues is a settings response: each setting's value.
+type settingValues map[string]struct {
+	Value interface{} `json:"value"`
+}
+
+// readCommandSettings reads the settings that apply to commands run in app.
+func readCommandSettings(cmd *cobra.Command, app string) (commandSettings, error) {
 	if apiTokenOverride() != "" {
-		return false, nil
+		return commandSettings{}, nil
 	}
 	rack, err := SelectedRack()
 	if err != nil {
-		return false, err
+		return commandSettings{}, err
 	}
-	for _, path := range []string{"/settings", "/apps/" + url.PathEscape(app) + "/settings"} {
-		var values map[string]struct {
-			Value interface{} `json:"value"`
-		}
-		if err := gatewayRequest(cmd, rack, http.MethodGet, path, nil, &values); err != nil {
-			return false, fmt.Errorf("failed to read whether app %s requires a justification: %w",
+	var global, values settingValues
+	for path, into := range map[string]*settingValues{
+		"/settings": &global, "/apps/" + url.PathEscape(app) + "/settings": &values,
+	} {
+		if err := gatewayRequest(cmd, rack, http.MethodGet, path, nil, into); err != nil {
+			return commandSettings{}, fmt.Errorf("failed to read the settings of app %s's commands: %w",
 				displayText(app), err)
 		}
-		if required, _ := values[settings.KeyRequireCommandJustification].Value.(bool); required {
-			return true, nil
-		}
 	}
-	return false, nil
+	required := func(values settingValues) bool {
+		on, _ := values[settings.KeyRequireCommandJustification].Value.(bool)
+		return on
+	}
+	env, err := settings.CommandEnvFromValues(
+		valueOr(values, settings.KeyCommandEnvVars, []interface{}{}),
+		valueOr(values, settings.KeyCommandEnvReadOnly, map[string]interface{}{}),
+	)
+	if err != nil {
+		return commandSettings{}, fmt.Errorf("app %s: %w", displayText(app), err)
+	}
+	return commandSettings{known: true, justificationRequired: required(global) || required(values), env: env}, nil
+}
+
+// valueOr returns the value of setting key, or empty when it's unset (null).
+func valueOr(values settingValues, key string, empty interface{}) interface{} {
+	if value := values[key].Value; value != nil {
+		return value
+	}
+	return empty
 }
 
 // commandPrompt describes a command for the person approving it with MFA: where it runs, the command (a script's
@@ -92,7 +116,14 @@ func commandPrompt(process processCommand) webauthn.Prompt {
 		summary = append(summary, fmt.Sprintf("Script: %s, %d lines, SHA-256 %s", script.Name, script.Lines(),
 			script.SHA256))
 	}
-	return webauthn.Prompt{Summary: summary, Touch: "run a command on " + process.where()}
+	if env := process.envSummary(); env != "" {
+		summary = append(summary, env)
+	}
+	touch := "run a command on "
+	if process.canChangeData() {
+		touch = "run a command that can change data on "
+	}
+	return webauthn.Prompt{Summary: summary, Warnings: process.envWarnings(), Touch: touch + process.where()}
 }
 
 // freshMFAAuth collects an MFA proof for the selected rack (one prompt or key touch, or --mfa-code), whatever the

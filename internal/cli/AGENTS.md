@@ -241,6 +241,14 @@ the gateway records and doesn't forward. When `require_command_justification` is
 the CLI refuses a command without one before anything starts (it reads the global and app settings; API tokens
 can't, and rely on the gateway's refusal).
 
+`--env`, `--all-env-vars` and `--write` (`convox_process_env.go`) travel as the `cmdenv.Request` headers, checked
+before anything starts (`cmdenv.CheckCommand` refuses an empty command or one starting with `NAME=value`). The CLI
+reads the app's `command_env_vars` and `command_env_read_only` (`readCommandSettings`, with the justification
+settings) to list the command's env vars in the PIN dialog summary (`settings.CommandEnv.Plan`, as the gateway
+decides them) and to warn: `envWarnings` go to `webauthn.Prompt.Warnings`, which the PIN dialog and the script
+review dialog show in red (a JXA NSAlert, `macdialog`), and the terminal and `--dry-run` print as `WARNING:` lines.
+The touch prompt says "can change data" when `--write` gets a read-only env var's real value.
+
 `--script FILE` (`convox_process_command.go`) sends a local script with the command words: `scriptrun.Build` wraps
 them in a fixed `sh` runner that decodes the base64 script into a temp directory and runs the words with the
 file's path appended. The file is readable by every user, since the words often drop to another user (`gosu`). The gateway reads it back with `scriptrun.Parse` for the audit log, so the runner,

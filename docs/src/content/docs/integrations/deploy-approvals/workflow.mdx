@@ -346,7 +346,7 @@ A promote the gateway refuses is answered with 403 and isn't forwarded, and one 
 | Build create | `POST /apps/{app}/builds` | The approval's archive, manifest check |
 | Build and build log read | `GET /apps/{app}/builds/{id}`, build logs | The approval's build |
 | Release read and promote | `GET /apps/{app}/releases/{id}`, `POST .../promote` | The approval's release |
-| Process start | `POST /apps/{app}/services/{service}/processes` | The approval's release, command in `approved_deploy_commands` |
+| Process start | `POST /apps/{app}/services/{service}/processes` | The approval's release, command in `approved_deploy_commands` (run with the env vars its entry gives it) |
 | Process exec and stop | `SOCKET /apps/{app}/processes/{pid}/exec`, `DELETE /apps/{app}/processes/{pid}` | A process started under the approval |
 
 Each check also requires that the token's owner could do the action themselves: an approval never gives a token

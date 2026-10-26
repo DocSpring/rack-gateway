@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/DocSpring/rack-gateway/internal/cmdenv"
 	"github.com/DocSpring/rack-gateway/internal/convox"
 	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
@@ -33,6 +34,11 @@ type processCommand struct {
 	Script        string `json:"script"`
 	ScriptName    string `json:"script_name"`
 	ScriptSHA256  string `json:"script_sha256"`
+	// The env vars the command got (see audit.CommandEnv).
+	EnvVars     []string          `json:"env_vars"`
+	AllEnvVars  bool              `json:"all_env_vars"`
+	EnvReadOnly map[string]string `json:"env_read_only"`
+	Write       bool              `json:"write"`
 }
 
 // parseProcessCommand reads the command of a process action's audit entry. ok is false for any other entry.
@@ -79,6 +85,20 @@ func (p processCommand) where(action string) string {
 	return "in a new process"
 }
 
+// env describes the env vars the command got, as escaped mrkdwn, with a warning when it was given the real values of
+// the app's read-only ones, or "" when its entry doesn't say (an entry from before the gateway recorded them).
+func (p processCommand) env() string {
+	if p.EnvVars == nil && !p.AllEnvVars {
+		return ""
+	}
+	text := escapeMrkdwn(cmdenv.Plan{All: p.AllEnvVars, Vars: p.EnvVars, ReadOnly: p.EnvReadOnly}.Describe())
+	if p.Write {
+		text = ":warning: *Can change data:* run with --write, so it got the real values of the read-only env " +
+			"vars\n" + text
+	}
+	return truncateMrkdwn(text, maxSectionValue)
+}
+
 // size describes the command's length and its script, without their text.
 func (p processCommand) size() string {
 	text := "Command: " + strconv.Itoa(len(p.Command)) + " bytes"
@@ -119,8 +139,13 @@ func (n *Notifier) formatProcessMessage(
 			},
 		},
 		mrkdwnSection("*Justification:*\n" + justification),
-		{"type": "context", "elements": []map[string]interface{}{mrkdwnElement(command.size())}},
 	}
+	if env := command.env(); env != "" {
+		blocks = append(blocks, mrkdwnSection("*Env vars:*\n"+env))
+	}
+	blocks = append(blocks, map[string]interface{}{
+		"type": "context", "elements": []map[string]interface{}{mrkdwnElement(command.size())},
+	})
 	if link := n.auditEntryLink(auditLog.ID); link != "" {
 		blocks = append(blocks, mrkdwnSection(link))
 	}

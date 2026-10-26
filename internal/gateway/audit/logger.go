@@ -315,16 +315,7 @@ func (_ *Logger) BuildDetailsJSON(r *http.Request) string {
 		details["query"] = debugredact.RedactQuery(r.URL.RawQuery)
 	}
 
-	// An exec or a process start records its command (the Command header, never WebSocket frames). A command line
-	// can carry credentials, which the audit log mustn't keep (see RedactCommand).
-	if cmd, ok := RequestCommand(r); ok && cmd != "" {
-		for key, value := range commandDetails(cmd) {
-			details[key] = value
-		}
-	}
-	if justification := JustificationFromContext(r.Context()); justification != "" {
-		details["justification"] = justification
-	}
+	addCommandDetails(details, r)
 	if strings.HasSuffix(r.URL.Path, "/exec") {
 		parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/"), "/")
 		for i, p := range parts {
@@ -346,6 +337,25 @@ func (_ *Logger) BuildDetailsJSON(r *http.Request) string {
 	}
 
 	return string(data)
+}
+
+// addCommandDetails adds what an exec or a process start records: its command (the Command header, never WebSocket
+// frames), its justification and its env vars. A command line can carry credentials, which the audit log mustn't
+// keep (see RedactCommand).
+func addCommandDetails(details map[string]interface{}, r *http.Request) {
+	if cmd, ok := RequestCommand(r); ok && cmd != "" {
+		for key, value := range commandDetails(cmd) {
+			details[key] = value
+		}
+	}
+	if justification := JustificationFromContext(r.Context()); justification != "" {
+		details["justification"] = justification
+	}
+	if env, ok := CommandEnvFromContext(r.Context()); ok {
+		for key, value := range env.details() {
+			details[key] = value
+		}
+	}
 }
 
 // MapHTTPStatusToStatus converts HTTP status code to audit status string

@@ -329,6 +329,12 @@ recorded with it as `justification` in the details. The gateway can require one 
 or in one app (`require_command_justification`): a command without one is refused with `400` and audited as a
 denial.
 
+The env vars a command got (see [Env vars](/user-guide/cli/commands/#env-vars)) are recorded with it: `env_vars`,
+the names it got (only the ones the release sets reached it), or `all_env_vars: true` for every env var except
+`RACK_URL`; `env_read_only`, each read-only env var it got with the env var it took its value from; and
+`write: true` when it ran with `--write`, with the real values. `command` is the command as it was sent, without the
+`sh` wrapper the gateway adds.
+
 A command run with a script (`--script`, see [Scripts](/user-guide/cli/commands/#scripts)) is recorded readably:
 `command` is the command as a person would run it locally (`rails runner check.rb`), `script` the script's text
 (redacted like a command line), `script_name` its file name and `script_sha256` the SHA-256 of what was sent. The

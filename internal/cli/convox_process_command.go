@@ -11,6 +11,7 @@ import (
 	"github.com/convox/stdcli"
 	"github.com/spf13/cobra"
 
+	"github.com/DocSpring/rack-gateway/internal/cmdenv"
 	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
 	"github.com/DocSpring/rack-gateway/internal/scriptrun"
 )
@@ -24,9 +25,11 @@ const dryRunFlag = "dry-run"
 // maxScriptFileBytes caps the script file read: the audit log keeps at most 50 KB of command and script anyway.
 const maxScriptFileBytes = 1 << 20
 
-// addProcessCommandFlags adds the flags exec and run share: --justification, --script and --dry-run.
+// addProcessCommandFlags adds the flags exec and run share: --justification, --script, --dry-run and the env var
+// flags (--env, --all-env-vars and --write).
 func addProcessCommandFlags(cmd *cobra.Command) {
 	addJustificationFlag(cmd)
+	addEnvFlags(cmd)
 	cmd.Flags().String(scriptFlag, "", "a local script file to run: the command gets the file's path as its last "+
 		"argument (e.g. rails runner), and you review the script before it runs. Needs --justification")
 	cmd.Flags().Bool(dryRunFlag, false, "check the command and review its script, then show what would be sent, "+
@@ -43,6 +46,10 @@ type processCommand struct {
 	justification string
 	// script is the --script file, as the gateway will record it (nil without one).
 	script *scriptrun.Script
+	// env is what the command asks for: env vars besides the app's, every env var, or write access.
+	env cmdenv.Request
+	// settings are the app's settings for commands.
+	settings commandSettings
 	// dryRun stops the command before anything is sent (--dry-run).
 	dryRun bool
 	// pin is the security key PIN entered in the script review dialog, for the command's MFA proof ("" when the
@@ -68,6 +75,9 @@ func (p processCommand) headers() map[string]string {
 	headers := map[string]string{}
 	if p.justification != "" {
 		headers[audit.JustificationHeader] = audit.EncodeJustification(p.justification)
+	}
+	for name, value := range p.env.Headers() {
+		headers[name] = value
 	}
 	return headers
 }
@@ -126,7 +136,11 @@ func (p processCommand) connect(cobraCmd *cobra.Command, args []string) (*proces
 
 // printDryRun says what the command would send: what the PIN dialog would show, and the command's size.
 func printDryRun(out io.Writer, process processCommand) error {
-	lines := append([]string{"Dry run: nothing was sent to the rack."}, commandPrompt(process).Summary...)
+	prompt := commandPrompt(process)
+	lines := append([]string{"Dry run: nothing was sent to the rack."}, prompt.Summary...)
+	for _, warning := range prompt.Warnings {
+		lines = append(lines, "WARNING: "+warning)
+	}
 	size := fmt.Sprintf("The command sent would be %d bytes", len(process.command))
 	if process.script != nil {
 		size += " (the script travels base64-encoded, with a sh runner that writes it to a temporary file)"
@@ -150,10 +164,20 @@ func newProcessCommand(cobraCmd *cobra.Command, args []string, action string) (p
 	if err := audit.CheckCommandLength(process.command); err != nil {
 		return process, err
 	}
+	if err := cmdenv.CheckCommand(process.command); err != nil {
+		return process, err
+	}
+	if process.env, err = envRequest(cobraCmd); err != nil {
+		return process, err
+	}
 	if process.app, err = cobraCmd.Flags().GetString("app"); err != nil {
 		return process, err
 	}
-	if process.justification, err = commandJustification(cobraCmd, process.app); err != nil {
+	if process.settings, err = readCommandSettings(cobraCmd, process.app); err != nil {
+		return process, err
+	}
+	process.justification, err = commandJustification(cobraCmd, process.app, process.settings.justificationRequired)
+	if err != nil {
 		return process, err
 	}
 	if process.script != nil && process.justification == "" {

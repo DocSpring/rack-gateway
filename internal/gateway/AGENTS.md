@@ -111,6 +111,15 @@ Request forwarding with WebSocket support:
   deploy approval's message, goes on the request context and into its audit entries' details. With
   `require_command_justification` on (gateway-wide, or the app's own; `GetRequireCommandJustification` reads both),
   a command without one is refused, the placeholder start included
+- Command env vars (`proxy/command_env.go`, `internal/cmdenv`): `checkCommandEnv` decides the env vars of every
+  exec's and process start's command from the app's `command_env_vars` and `command_env_read_only` and the
+  `X-Command-Env`, `X-Command-All-Env-Vars` and `X-Command-Write` headers (never forwarded), or from the command's
+  `approved_deploy_commands` entry under a deploy approval, where the headers are refused. The placeholder start
+  always gets none. `wrapCommand` (`forward.go`, `websocket.go`) then replaces the forwarded Command header with
+  `cmdenv.Build`'s `sh` wrapper, and refuses to forward a command whose env vars weren't decided. The audit log,
+  the approval checks and `exec_commands` all read the command as it was sent. No command gets `RACK_URL`. The
+  mock rack (`cmd/mock-convox`) unwraps with `cmdenv.Parse` and refuses unwrapped commands, so keep `Build` and
+  `Parse` in step
 - MFA settings are read when needed (`settings.Service.GetMFASettings`, one query; the middleware reads them once
   per request), never kept from startup, so a change applies at once on every instance
 - Client IPs: use `c.ClientIP()` in gin handlers and `netutil.ClientIP(r)` elsewhere. Both trust

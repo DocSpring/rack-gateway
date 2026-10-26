@@ -9,13 +9,13 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"regexp"
 	"sort"
 	"strings"
 	"time"
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/DocSpring/rack-gateway/internal/cmdenv"
 	"github.com/DocSpring/rack-gateway/internal/gateway/config"
 	"github.com/DocSpring/rack-gateway/internal/gateway/httpclient"
 )
@@ -43,14 +43,6 @@ var (
 	ErrInvalidEnvEntry = errors.New("invalid environment variable name or value")
 )
 
-var envKeyPattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
-
-// ValidName reports whether name is a valid env var name: letters, digits and underscores, not starting with a
-// digit.
-func ValidName(name string) bool {
-	return envKeyPattern.MatchString(name)
-}
-
 // maxShownKeyBytes is how much of a key an error message shows: the message goes back to the client and into the
 // logs, and a key can be most of a posted env.
 const maxShownKeyBytes = 40
@@ -59,7 +51,7 @@ const maxShownKeyBytes = 40
 // than tab. An invalid name isn't shown in the error (it may be a line of a multi-line secret value); a value error
 // names its key, cut to 40 bytes.
 func ValidateEnvEntry(key, value string) error {
-	if !ValidName(key) {
+	if !cmdenv.ValidName(key) {
 		return fmt.Errorf("%w: names must be letters, digits and underscores, not starting with a digit",
 			ErrInvalidEnvEntry)
 	}

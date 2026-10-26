@@ -415,7 +415,7 @@ export async function clearAllGlobalSettings() {
     await client.query(
       `DELETE FROM settings
        WHERE app_name IS NULL
-       AND key NOT IN ('mfa', 'approved_commands', 'service_image_patterns')`
+       AND key NOT IN ('mfa', 'service_image_patterns')`
     )
   })
 }

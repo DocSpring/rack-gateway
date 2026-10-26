@@ -238,9 +238,11 @@ func TestMalformedStoredListsFailClosed(t *testing.T) {
 		require.Nil(t, names)
 	}
 
-	require.NoError(t, database.UpsertSetting(&app, KeyApprovedDeployCommands, "bin/migrate", nil))
-	_, err := svc.GetApprovedDeployCommands(app)
-	require.ErrorIs(t, err, ErrInvalidSettingValue)
+	for _, value := range []interface{}{"bin/migrate", []string{"bin/migrate"}, nil} {
+		require.NoError(t, database.UpsertSetting(&app, KeyApprovedDeployCommands, value, nil))
+		_, err := svc.GetApprovedDeployCommands(app)
+		require.ErrorIsf(t, err, ErrInvalidSettingValue, "stored %#v", value)
+	}
 	commands, err := svc.GetApprovedDeployCommands("unset-app")
 	require.NoError(t, err)
 	require.Empty(t, commands)

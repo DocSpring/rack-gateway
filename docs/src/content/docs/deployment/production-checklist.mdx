@@ -208,7 +208,10 @@ Use this checklist before deploying Rack Gateway to production. Each item addres
   - Approval job names match
   - GitHub integration tested
   - `service_image_patterns` set for each app, pinning the image repository (approval-bound builds are refused without it)
-  - `approved_deploy_commands` lists the exact commands CI runs (an empty list allows none)
+  - `approved_deploy_commands` lists the exact commands CI runs (an empty list allows none), each with the env
+    vars it needs (`env`, `write`)
+  - `command_env_vars` lists the env vars every command gets, and `command_env_read_only` points the database URL
+    at a read-only user (see [Env vars](/user-guide/cli/commands/#env-vars))
   - `vcs_repo` set to `owner/repo` for CircleCI auto-approval
 
 - [ ] **CI/CD tokens created**

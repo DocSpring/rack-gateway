@@ -1,5 +1,30 @@
 # shellcheck shell=bash
 
+# An app's command_env_vars and command_env_read_only decide the env vars its commands get, with --env and --write.
+# The mock rack prints the env vars the gateway's wrapper gives the command.
+run_command_env_tests() {
+    psql_exec "INSERT INTO settings (app_name, key, value, updated_at) VALUES ('rack-gateway', 'command_env_vars', '[\"PATH\", \"DATABASE_URL\"]'::jsonb, NOW()) ON CONFLICT (COALESCE(app_name, ''), key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW();"
+    psql_exec "INSERT INTO settings (app_name, key, value, updated_at) VALUES ('rack-gateway', 'command_env_read_only', '{\"DATABASE_URL\": \"READ_ONLY_DATABASE_URL\"}'::jsonb, NOW()) ON CONFLICT (COALESCE(app_name, ''), key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW();"
+
+    local mfa_code
+    clear_mfa_replay_protection
+    mfa_code=$(generate_totp_code "$(get_totp_secret 'admin@example.com')")
+    verify_rgw_command "run web --mfa-code $mfa_code --env SENTRY_DSN 'echo rake db:migrate'" \
+        '$ echo rake db:migrate' \
+        'env: DATABASE_URL (from READ_ONLY_DATABASE_URL), PATH, SENTRY_DSN'
+
+    clear_mfa_replay_protection
+    mfa_code=$(generate_totp_code "$(get_totp_secret 'admin@example.com')")
+    verify_rgw_command "exec p-worker-1 --mfa-code $mfa_code --write 'echo rake db:migrate'" \
+        '$ echo rake db:migrate' \
+        'env: DATABASE_URL, PATH'
+
+    verify_rgw_command_failure "run web --env RACK_URL 'echo rake db:migrate'" \
+        "no command can have RACK_URL"
+
+    psql_exec "DELETE FROM settings WHERE app_name = 'rack-gateway' AND key IN ('command_env_vars', 'command_env_read_only');"
+}
+
 run_admin_tests() {
     if [[ -n "$SKIP_ADMIN_TESTS" ]]; then
         return
@@ -26,6 +51,7 @@ run_admin_tests() {
     verify_rgw_command "run web --mfa-code $run_mfa_code 'echo rake db:migrate'" \
         'Connected to mock exec for app=rack-gateway pid=proc-123456' \
         '$ echo rake db:migrate' \
+        'env: every env var except RACK_URL' \
         'rake db:migrate'
 
     clear_mfa_replay_protection
@@ -34,6 +60,8 @@ run_admin_tests() {
         'Connected to mock exec for app=rack-gateway pid=p-worker-1' \
         '$ echo rake db:migrate' \
         'rake db:migrate'
+
+    run_command_env_tests
 
     # A --script is reviewed before anything is sent. Without a terminal there's nowhere to show it (macOS would
     # open the review dialog instead, so the check only runs elsewhere).

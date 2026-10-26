@@ -99,7 +99,8 @@ Every approval is tied to a specific full (40-character) git commit SHA. An API 
 - Build the archive it uploaded under that approval (one upload and one build per approval)
 - Send no `git-sha`, or one equal to the approved commit (the gateway always uses the approved commit, never the client's)
 - Reference only pre-built images, each tagged with the approved commit (`<sha>` or `<sha>-<suffix>`, e.g. `<sha>-amd64`), with no digest (`@sha256:...`: the runtime would pull the digest whatever the tag says) and matching the app's `service_image_patterns`. Every image a service runs is checked (its `image` and its `initContainer.image`); resource image overrides and any other `image` key are refused, and `${...}` can't change an image or the manifest's structure (see [What the Manifest Check Covers](/integrations/deploy-approvals/workflow/#what-the-manifest-check-covers))
-- Run only commands listed in `approved_deploy_commands` (an empty list allows none)
+- Run only commands listed in `approved_deploy_commands` (an empty list allows none), with the env vars their
+  entries give them
 
 `service_image_patterns` is required for approval-bound builds: the commit tag alone does not pin the image repository.
 
@@ -229,7 +230,23 @@ Configure via UI or environment variables:
 | `circleci_approval_job_name` | CircleCI approval job name |
 | `circleci_auto_approve_on_approval` | Enable auto-approval (the gateway first checks the workflow's pipeline builds the approved commit of `vcs_repo`) |
 | `service_image_patterns` | **Required.** Map of service name (or `*`) to an anchored regex; `{{GIT_COMMIT}}` is replaced with the approved commit, e.g. `{"*": "docker\\.io/org/app:{{GIT_COMMIT}}-amd64"}` |
-| `approved_deploy_commands` | Exact commands a token may run under an approval (e.g. migrations); empty allows none |
+| `approved_deploy_commands` | The exact commands a token may run under an approval (e.g. migrations), each with the env vars it gets (see below); empty allows none |
+
+Each entry of `approved_deploy_commands` is an object: `command`, the exact command, and the env vars it gets on top
+of the app's `command_env_vars` (see [Env vars](/user-guide/cli/commands/#env-vars)): `env`, a list of names;
+`all_env_vars: true` for every env var except `RACK_URL`; and `write: true` for the real values of the app's
+read-only env vars (`command_env_read_only`), so it can change data.
+
+```json
+[
+  { "command": "bin/pre_release_checks" },
+  { "command": "bundle exec rake db:migrate", "write": true },
+  { "command": "bundle exec rake stripe:prepare", "env": ["STRIPE_SECRET_KEY"], "write": true }
+]
+```
+
+A command run under an approval can't ask for env vars itself (`--env`, `--all-env-vars` and `--write` are
+refused): its entry decides. A command listed twice, an unknown field, or `env` with `all_env_vars` is refused.
 
 <Aside type="tip">
 Configure per-app settings via environment variables:

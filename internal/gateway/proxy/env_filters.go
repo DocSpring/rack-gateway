@@ -10,6 +10,7 @@ import (
 	gtwlog "github.com/DocSpring/rack-gateway/internal/gateway/logging"
 	"github.com/DocSpring/rack-gateway/internal/gateway/logutil"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
+	"github.com/DocSpring/rack-gateway/internal/gateway/settings"
 )
 
 func (h *Handler) filterReleaseEnvForUser(r *http.Request, body []byte, app string) []byte {
@@ -164,26 +165,32 @@ func (h *Handler) captureProcessCreation(_ *http.Request, body []byte, tracker *
 	})
 }
 
-// isCommandApproved reports whether command is in the app's approved_deploy_commands.
-// An empty list allows no commands under a deploy approval (fail closed).
-func (h *Handler) isCommandApproved(app, command string) bool {
+// approvedCommand returns command's entry in the app's approved_deploy_commands, and whether it has one. An empty
+// list approves no commands under a deploy approval (fail closed), and so does one the gateway can't read.
+func (h *Handler) approvedCommand(app, command string) (settings.ApprovedCommand, bool) {
 	if h.settingsService == nil {
-		return false
+		return settings.ApprovedCommand{}, false
 	}
 
 	approvedCommands, err := h.settingsService.GetApprovedDeployCommands(app)
 	if err != nil {
 		log.Printf("Failed to get approved commands for app %s: %v", logutil.SanitizeForLog(app), err)
-		return false
+		return settings.ApprovedCommand{}, false
 	}
 
 	for _, approved := range approvedCommands {
-		if strings.TrimSpace(command) == strings.TrimSpace(approved) {
-			return true
+		if strings.TrimSpace(command) == strings.TrimSpace(approved.Command) {
+			return approved, true
 		}
 	}
 
-	return false
+	return settings.ApprovedCommand{}, false
+}
+
+// isCommandApproved reports whether command is in the app's approved_deploy_commands (see approvedCommand).
+func (h *Handler) isCommandApproved(app, command string) bool {
+	_, ok := h.approvedCommand(app, command)
+	return ok
 }
 
 // filterEnvironmentMapResponse masks values in the GET /apps/{app}/environment response.

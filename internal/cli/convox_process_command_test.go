@@ -235,6 +235,7 @@ func TestProcessCommandDryRun(t *testing.T) {
 		"On app myapp (rack us), run in a new web process: rails runner count.rb",
 		"Justification: " + testJustification,
 		"Script: count.rb, 2 lines, SHA-256 " + script.SHA256,
+		"Env vars: every env var except RACK_URL",
 		fmt.Sprintf("The command sent would be %d bytes (the script travels base64-encoded, with a sh runner that "+
 			"writes it to a temporary file).", len(scriptrun.Build("count.rb", []byte(script.Text), "rails runner"))),
 	}, "\n")+"\n", out.String())

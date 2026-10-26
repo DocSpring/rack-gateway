@@ -114,3 +114,39 @@ func TestOnlyProcessCommandsGetTheProcessFormat(t *testing.T) {
 	_, ok = parseProcessCommand(&db.AuditLog{Action: actionProcessStart, Details: "not json"})
 	require.False(t, ok)
 }
+
+// A command's message says which env vars it got, and warns when it was given the real values of the read-only ones.
+// An entry from before the gateway recorded them says nothing about them.
+func TestProcessMessageSaysWhichEnvVarsTheCommandGot(t *testing.T) {
+	for want, env := range map[string]map[string]interface{}{
+		"*Env vars:*\\nDATABASE_URL (from READ_ONLY_DATABASE_URL), PATH": {
+			"env_vars":      []string{"DATABASE_URL", "PATH"},
+			"env_read_only": map[string]string{"DATABASE_URL": "READ_ONLY_DATABASE_URL"},
+		},
+		"*Env vars:*\\n:warning: *Can change data:* run with --write": {
+			"env_vars": []string{"DATABASE_URL", "PATH"}, "write": true,
+		},
+		"*Env vars:*\\nevery env var except RACK_URL": {"all_env_vars": true},
+		"*Env vars:*\\nno env vars":                   {"env_vars": []string{}},
+	} {
+		details := map[string]interface{}{
+			"path": "/apps/myapp/processes/p1/exec", "process_id": "p1", "command": "rake",
+		}
+		for key, value := range env {
+			details[key] = value
+		}
+		data, err := json.Marshal(details)
+		require.NoError(t, err)
+		entry := processEntry(t, actionProcessExecStart, audit.StatusSuccess, nil)
+		entry.Details = string(data)
+
+		text, blocks := NewNotifier(nil, testGateway).formatAuditLogMessage(entry)
+		require.Contains(t, messageText(t, text, blocks), want)
+	}
+
+	entry := processEntry(t, actionProcessExecStart, audit.StatusSuccess, map[string]string{
+		"path": "/apps/myapp/processes/p1/exec", "process_id": "p1", "command": "rake",
+	})
+	text, blocks := NewNotifier(nil, testGateway).formatAuditLogMessage(entry)
+	require.NotContains(t, messageText(t, text, blocks), "Env vars")
+}

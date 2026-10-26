@@ -9,7 +9,8 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/scriptrun"
 )
 
-// A script command reaches the rack as sent, and its audit entry holds the script readably, not its base64.
+// A script command reaches the rack as sent (inside the env wrapper), and its audit entry holds the script readably,
+// not its base64.
 func TestScriptCommandIsForwardedAsSentAndRecordedReadably(t *testing.T) {
 	f := newProtectedEnvFixture(t)
 	text := "accounts = Account.where(plan: 'pro')\nputs accounts.count\n"
@@ -20,7 +21,8 @@ func TestScriptCommandIsForwardedAsSentAndRecordedReadably(t *testing.T) {
 
 	starts := f.processStarts()
 	require.Len(t, starts, 1)
-	require.Equal(t, command, starts[0].Get("Command"))
+	_, forwardedCommand := forwarded(t, starts[0])
+	require.Equal(t, command, forwardedCommand)
 	details := f.processStartDetails(t, "success")
 	require.Equal(t, "rails runner count.rb", details["command"])
 	require.Equal(t, text, details["script"])
