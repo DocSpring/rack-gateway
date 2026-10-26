@@ -78,8 +78,9 @@ const (
 
 var (
 
-	// ErrMFAAttemptLimit is returned by ReserveMFAAttempt when the user has made the most attempts the window allows.
-	ErrMFAAttemptLimit = errors.New("too many MFA attempts")
+	// ErrMFAAttemptLimit is returned by ReserveMFAAttempt when the user has made the most failed attempts the window
+	// allows.
+	ErrMFAAttemptLimit = errors.New("too many failed MFA attempts")
 	// ErrUserLocked is returned by ReserveMFAAttempt for a locked user.
 	ErrUserLocked = errors.New("user is locked")
 )
@@ -94,16 +95,20 @@ type MFAAttemptRequest struct {
 }
 
 // MFAAttempt is an MFA verification attempt recorded by ReserveMFAAttempt. It counts toward the rate limit at once,
-// and toward the automatic lock (CountRecentFailedMFAAttempts) once Finish records that it failed.
+// until Finish records that it succeeded, and toward the automatic lock (CountRecentFailedMFAAttempts) once Finish
+// records that it failed.
 type MFAAttempt struct {
 	db *Database
 	ID int64
 }
 
 // ReserveMFAAttempt records an attempt before its factor is checked. It holds the user's row lock while it checks
-// that they aren't locked (ErrUserLocked) and have made fewer than limit attempts of this kind in the last
-// minutes, so concurrent attempts are counted one at a time and can't pass the limit together. Over the limit it
-// records a rate_limited attempt and returns ErrMFAAttemptLimit.
+// that they aren't locked (ErrUserLocked) and have fewer than limit attempts of this kind in the last minutes that
+// failed or are still being verified, so concurrent attempts are counted one at a time and can't pass the limit
+// together. Successful attempts don't count: every command asks for a fresh MFA proof, and a person running several
+// commands, or approving several deploys, verifies many times in a few minutes. Refused (rate_limited) attempts
+// don't count either, or retries would keep the limit in force. Over the limit it records a rate_limited attempt
+// and returns ErrMFAAttemptLimit.
 func (d *Database) ReserveMFAAttempt(req MFAAttemptRequest, limit, minutes int) (*MFAAttempt, error) {
 	tx, err := d.db.Begin()
 	if err != nil {
@@ -126,7 +131,8 @@ func (d *Database) ReserveMFAAttempt(req MFAAttemptRequest, limit, minutes int) 
 
 	var count int
 	err = tx.QueryRow(d.rebind(`SELECT COUNT(*) FROM mfa_attempts
-		WHERE user_id = ? AND method_type = ? AND attempted_at > NOW() - INTERVAL '1 minute' * ?`),
+		WHERE user_id = ? AND method_type = ? AND attempted_at > NOW() - INTERVAL '1 minute' * ?
+		  AND success = FALSE AND COALESCE(failure_reason, '') <> 'rate_limited'`),
 		req.UserID, req.MethodType, minutes).Scan(&count)
 	if err != nil {
 		return nil, fmt.Errorf("failed to count MFA attempts: %w", err)

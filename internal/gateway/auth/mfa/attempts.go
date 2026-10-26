@@ -8,8 +8,8 @@ import (
 )
 
 const (
-	// attemptLimit is the most attempts with one kind of factor (codes, or security keys) a user may make in
-	// attemptWindowMinutes.
+	// attemptLimit is the most failed (or unfinished) attempts with one kind of factor (codes, or security keys) a
+	// user may have in attemptWindowMinutes (see db.ReserveMFAAttempt).
 	attemptLimit         = 5
 	attemptWindowMinutes = 5
 )
@@ -36,7 +36,7 @@ func (s *Service) reserveAttempt(
 	case errors.Is(err, db.ErrUserLocked):
 		return nil, fmt.Errorf("account locked - contact administrator")
 	case errors.Is(err, db.ErrMFAAttemptLimit):
-		return nil, fmt.Errorf("too many attempts - try again in 5 minutes")
+		return nil, fmt.Errorf("%w: try again in %d minutes", err, attemptWindowMinutes)
 	case err != nil:
 		return nil, fmt.Errorf("failed to check rate limit: %w", err)
 	}

@@ -433,3 +433,53 @@ func TestCreateAPIToken_AlwaysRequiresMFACode(t *testing.T) {
 		require.NotEmpty(t, response["token"])
 	})
 }
+
+// An approval refused by the MFA rate limit says so (429), rather than calling the proof wrong: it was never checked.
+func TestApproveDeployApprovalRequest_RateLimitedMFA(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	database := dbtest.NewDatabase(t)
+	fixture := setupDeployApprovalMFATest(t, database)
+	req, err := database.CreateDeployApprovalRequest(
+		"Test deploy", "test-app", "abc123def4567890abc123def4567890abc123de", "main", "", []byte("{}"),
+		fixture.admin.ID, nil, fixture.apiToken.ID,
+	)
+	require.NoError(t, err)
+	for range 5 {
+		attempt, err := database.ReserveMFAAttempt(
+			db.MFAAttemptRequest{UserID: fixture.admin.ID, MethodType: db.MFAMethodTypeTOTP}, 5, 5,
+		)
+		require.NoError(t, err)
+		require.NoError(t, attempt.Finish(nil, false, "invalid_code"))
+	}
+
+	_, session, err := fixture.sessionManager.CreateSession(fixture.admin, auth.SessionMetadata{Channel: "web"})
+	require.NoError(t, err)
+	now := time.Now()
+	session.MFAVerifiedAt = &now
+	router := gin.New()
+	router.POST("/api/v1/deploy-approval-requests/:id/approve", func(c *gin.Context) {
+		authUser := &auth.User{
+			Email: fixture.admin.Email, Name: fixture.admin.Name, Roles: fixture.admin.Roles, Session: session,
+			MFAType: "totp", MFAValue: "000000",
+		}
+		c.Request = c.Request.WithContext(context.WithValue(c.Request.Context(), auth.UserContextKey, authUser))
+		c.Set("user_email", fixture.admin.Email)
+		c.Next()
+	}, middleware.EnforceMFARequirements(fixture.mfaService, database, fixture.mfaSettings),
+		fixture.handler.ApproveDeployApprovalRequest)
+
+	w := httptest.NewRecorder()
+	httpReq, _ := http.NewRequest(
+		"POST", "/api/v1/deploy-approval-requests/"+req.PublicID+"/approve", bytes.NewReader([]byte("{}")),
+	)
+	httpReq.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(w, httpReq)
+
+	require.Equal(t, http.StatusTooManyRequests, w.Code)
+	var response map[string]interface{}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
+	require.Equal(t, "mfa_rate_limited", response["error"])
+	approval, err := database.GetDeployApprovalRequestByPublicID(req.PublicID)
+	require.NoError(t, err)
+	require.Equal(t, "pending", approval.Status)
+}

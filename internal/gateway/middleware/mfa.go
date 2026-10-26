@@ -3,6 +3,7 @@ package middleware
 import (
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"log"
 	"net/http"
 	"time"
@@ -316,7 +317,7 @@ func verifyByType(
 			sessionID,
 		)
 		if err != nil {
-			return handleVerifyError(c, authUser.MFAType)
+			return handleVerifyError(c, authUser.MFAType, err)
 		}
 		if result != nil {
 			log.Printf("Inline MFA verification successful: method_id=%d", result.MethodID)
@@ -332,7 +333,7 @@ func verifyByType(
 			c.GetHeader("User-Agent"),
 			sessionID,
 		); err != nil {
-			return handleVerifyError(c, authUser.MFAType)
+			return handleVerifyError(c, authUser.MFAType, err)
 		}
 		return true
 	default:
@@ -344,7 +345,14 @@ func verifyByType(
 	}
 }
 
-func handleVerifyError(c *gin.Context, mfaType string) bool {
+func handleVerifyError(c *gin.Context, mfaType string, err error) bool {
+	if errors.Is(err, db.ErrMFAAttemptLimit) {
+		c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
+			"error":   "mfa_rate_limited",
+			"message": "Too many failed MFA attempts. Wait 5 minutes and try again.",
+		})
+		return false
+	}
 	message := "Verification code is incorrect or has expired. Please try again."
 	if mfaType == "webauthn" {
 		message = "Security key verification failed. Please try again."

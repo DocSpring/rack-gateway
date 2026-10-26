@@ -120,6 +120,12 @@ func (h *Handler) requireRequestMFA(
 		)
 	case errors.Is(err, errMFAUnavailable):
 		h.logMFADenial(r, w, authUser, rackConfig, start, "failed to verify MFA", http.StatusInternalServerError, err)
+	case errors.Is(err, db.ErrMFAAttemptLimit):
+		h.logMFADenial(
+			r, w, authUser, rackConfig, start,
+			"Too many failed MFA attempts. Wait 5 minutes and try again.",
+			http.StatusTooManyRequests, err,
+		)
 	default:
 		h.logMFADenial(
 			r, w, authUser, rackConfig, start,

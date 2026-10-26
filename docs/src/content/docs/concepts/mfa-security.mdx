@@ -227,7 +227,9 @@ flowchart LR
 
 1. **Rate limit attempts**
 
-   Prevent brute-force attacks on 6-digit codes
+   Prevent brute-force attacks on 6-digit codes. Rack Gateway allows five failed (or still unchecked) attempts with
+   each kind of factor in five minutes, and answers further attempts with `429`. Successful verifications don't
+   count: every `run`, `exec` and deploy approval needs its own MFA proof
 
 2. **Lock out after failures**
 
