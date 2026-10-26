@@ -25,7 +25,20 @@ func GetAssertion(options AssertionOptions) (*AssertionResponse, error) {
 // GetAssertionWithCachedPIN authenticates with FIDO2 device, optionally using a cached PIN.
 // Returns the assertion response and the PIN used (for caching in subsequent calls).
 // If cachedPIN is empty, asks for the PIN when the key has one. Otherwise uses the cached PIN.
+// It holds the security key lock throughout (see withKeyLock).
 func GetAssertionWithCachedPIN(options AssertionOptions, cachedPIN string) (*AssertionResponse, string, error) {
+	var pin string
+	resp, err := withKeyLock(func() (*AssertionResponse, error) {
+		var resp *AssertionResponse
+		var err error
+		resp, pin, err = requestAssertion(options, cachedPIN)
+		return resp, err
+	})
+	return resp, pin, err
+}
+
+// requestAssertion is GetAssertionWithCachedPIN, without the lock.
+func requestAssertion(options AssertionOptions, cachedPIN string) (*AssertionResponse, string, error) {
 	allowList, err := decodeCredentialIDs(options.AllowCredentials)
 	if err != nil {
 		return nil, "", err
@@ -67,8 +80,8 @@ func openFIDODevices() ([]securityKey, error) {
 	return keys, nil
 }
 
-// openDevices opens every connected FIDO2 device that can be opened.
-func openDevices() ([]*libfido2.Device, error) {
+// openDevices opens every connected FIDO2 device that can be opened. Tests replace it.
+var openDevices = func() ([]*libfido2.Device, error) {
 	locs, err := libfido2.DeviceLocations()
 	if err != nil {
 		return nil, fmt.Errorf("failed to list FIDO2 devices: %w", err)
