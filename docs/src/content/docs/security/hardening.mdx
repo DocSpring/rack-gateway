@@ -184,6 +184,18 @@ Changing either list needs MFA on that request, even within the step-up window, 
 Audit log entries (and so Slack) never show env var values unless the app lists the key in
 `audit_visible_env_vars`; secret and protected keys stay hidden even then.
 
+### Commands' Env Vars
+
+A command run with `run` or `exec` gets every env var of the app unless the app limits them. Set
+`command_env_vars` to the env vars the app needs to boot, and let each command ask for the others it needs
+(`--env`). Point the database URL at a read-only user with `command_env_read_only`, so a command can change data
+only when it's run with `--write`. See [Env vars](/user-guide/cli/commands/#env-vars).
+
+Convox gives every app process `RACK_URL`, which holds the rack's API password, unless the rack's
+`system-env-disable` feature gate is on. The gateway keeps it from every command it runs, but the app's own
+processes still have it, and an `exec` can read it from the process it runs in. The gate also removes `RACK`, which
+the gateway reads, so set `RACK` on the gateway app before turning the gate on.
+
 ### Secret Storage
 
 Store secrets securely:
@@ -294,6 +306,7 @@ audit write fails, so a load balancer takes an instance with a broken audit log 
 - [ ] Session timeout ≤ 15 minutes
 - [ ] Admin users ≤ 3
 - [ ] CI/CD uses CI/CD role tokens
+- [ ] `command_env_vars` and `command_env_read_only` set for each app
 - [ ] Database encrypted and VPC-only
 - [ ] Audit logging enabled
 - [ ] S3 WORM configured (if required)
