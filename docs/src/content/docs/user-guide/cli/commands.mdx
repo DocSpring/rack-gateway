@@ -263,6 +263,7 @@ rack-gateway exec <process-id> <command> -a <app>
 
 **Flags:**
 - `--justification` - Why the command is run and what it does (see [Justifications](#justifications))
+- `--env`, `--all-env-vars`, `--write` - The env vars the command gets (see [Env vars](#env-vars))
 - `--script` - A local script file for the command to run (see [Scripts](#scripts))
 - `--dry-run` - Check the command and review its script, then show what would be sent, without asking for MFA or
   sending anything to the rack
@@ -331,9 +332,9 @@ rack-gateway run <service> <command> -a <app>
 **Flags:**
 - `-d, --detach` - Don't attach to the process
 - `--release` - Run a specific release
-- `--env` - Extra environment variables
 - `--entrypoint` - Override the entrypoint
 - `--justification` - Why the command is run and what it does (see [Justifications](#justifications))
+- `--env`, `--all-env-vars`, `--write` - The env vars the command gets (see [Env vars](#env-vars))
 - `--script` - A local script file for the command to run (see [Scripts](#scripts))
 - `--dry-run` - Check the command and review its script, then show what would be sent, without asking for MFA or
   sending anything to the rack
@@ -356,6 +357,48 @@ setting requires one for every command, in every app (on the Settings page, or
 `RGW_SETTING_REQUIRE_COMMAND_JUSTIFICATION=true`) or in one app (its own setting). Either one is enough, and an app
 can't opt out of the gateway-wide setting. `run` and `exec` without a justification are then refused before
 anything starts. A command run under a deploy approval is justified by the approval's message.
+
+#### Env vars
+
+A command gets only the env vars its app gives commands, and the ones it asks for. The rest of the release's env
+vars, credentials included, never reach it.
+
+- **`command_env_vars`** (an app setting) lists the env vars every command in the app gets. Without it, every
+  command gets every env var except `RACK_URL`. No command ever gets `RACK_URL`: it holds the rack's API password.
+- **`--env NAME`** gives the command another env var (repeat the flag, or separate names with commas). Only the
+  name travels: the value is the release's.
+- **`--all-env-vars`** gives it every env var except `RACK_URL`.
+- **`command_env_read_only`** (an app setting) gives an env var another one's value, for example
+  `{"DATABASE_URL": "READ_ONLY_DATABASE_URL"}`, so commands reach the database as a user that can't change data.
+  It applies to commands that get the env var (from `command_env_vars`, `--env` or `--all-env-vars`).
+- **`--write`** gives the command the real values of the read-only env vars, so it can change data.
+
+```bash
+rack-gateway run web "rake stripe:sync" -a myapp --env STRIPE_SECRET_KEY \
+  --justification "Sync the new prices from Stripe after the pricing change"
+rack-gateway run web "rake db:migrate" -a myapp --write \
+  --justification "Run the migration for the new invoices table, which the deploy skipped"
+```
+
+The PIN dialog lists the env vars the command gets, such as `Env vars: DATABASE_URL (from READ_ONLY_DATABASE_URL),
+PATH`, and `--dry-run` prints the list. The dialog warns in red when `--write` lets the command change data, when
+`--all-env-vars` gives it every env var in an app that limits them, and for every `exec` in such an app (see
+below). The touch prompt says when the command can change data. The audit log and the Slack notification record
+the env vars, and whether the command ran with `--write`.
+
+The gateway sends the rack the command inside a short `sh` wrapper, which starts it with `env -i` and only the env
+vars it gets. An env var the release doesn't set stays unset. The image needs `sh` and `env`. A command can't start
+with `NAME=value`: use `--env` instead.
+
+<Aside type="caution">
+`exec` runs inside a running process, so the command can read that process's environment (for example
+`/proc/1/environ`), with every env var's real value. The wrapper keeps the other env vars out of the command's own
+environment, where the tools it runs look for them, but it doesn't stop a command that goes looking. Use `run` for
+anything that mustn't see them: a `run` starts a new process with no env vars, then runs the command in it.
+</Aside>
+
+A command run under a deploy approval can't use these flags: its entry in `approved_deploy_commands` says which env
+vars it gets (see [Per-App Settings](/integrations/deploy-approvals/#per-app-settings)).
 
 #### Scripts
 

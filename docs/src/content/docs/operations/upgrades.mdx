@@ -207,6 +207,27 @@ A restore to before the upgrade loses the audit events written since; see
 
 ## Release Notes That Need Action
 
+### Each command gets only the env vars it may have (v0.1.25)
+
+The gateway now runs every `run` and `exec` command inside a short `sh` wrapper that gives it only the env vars it
+may have (see [Env vars](/user-guide/cli/commands/#env-vars)). Until you set `command_env_vars`, commands get every
+env var as before, except `RACK_URL`.
+
+1. **Rewrite `approved_deploy_commands` as objects.** Each command becomes `{"command": "..."}`, with `env`,
+   `all_env_vars` and `write` for the env vars it needs. The migration rewrites values stored in the database. A
+   `RGW_APP_<APP>_SETTING_APPROVED_DEPLOY_COMMANDS` env var that still holds a list of strings stops the new gateway
+   from starting, and the object form stops the old one, so change it in the same release as the new image: set
+   it without promoting (`convox env set ... --app rack-gateway` without `--promote`), then build, migrate and
+   promote v0.1.25.
+2. **Set `command_env_vars` and `command_env_read_only` after the upgrade**, and give each approved deploy command
+   the env vars it needs at the same time: once `command_env_vars` is set, an approved command gets only those
+   and its entry's `env`, and a command that writes to a read-only database needs `"write": true`.
+3. **Images need `sh` and `env`** to run commands. A process start without a command (one that would run the
+   service's default command) and a command that starts with `NAME=value` are refused.
+4. **Upgrade the CLI after every gateway.** An older gateway ignores the v0.1.25 CLI's `--env`, `--all-env-vars`
+   and `--write`, and gives every command every env var. `run --env` used to set values (`--env KEY=VALUE`); it now
+   names env vars from the release, and a value is refused.
+
 ### Gateway-wide command justifications (v0.1.24)
 
 `require_command_justification` is now a gateway-wide setting as well as a per-app one (the Settings page, or

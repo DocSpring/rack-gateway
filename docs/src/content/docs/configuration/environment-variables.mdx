@@ -173,11 +173,15 @@ An environment variable pins its setting: the web UI shows it read-only, and the
 - Numbers: whole numbers from 1 to the setting's maximum: 1440 (a day) for `session_timeout_minutes` and
   `mfa_step_up_window_minutes`, 365 for `mfa_trusted_device_ttl_days`, and 10080 (a week) for
   `deploy_approval_window_minutes`
-- Lists: a JSON array of strings, or a comma-separated list (use the JSON form when a value contains a comma,
-  e.g. an approved deploy command). A quoted value such as `"A,B"` (what `jsonencode` writes for a string) is
-  refused: use `jsonencode` on a list. The env var lists (`protected_env_vars`, `secret_env_vars`,
-  `audit_visible_env_vars`) must hold valid env var names, here and when saved through the API.
-- Maps (`service_image_patterns`): a JSON object of strings
+- Lists: a JSON array of strings, or a comma-separated list (use the JSON form when a value contains a comma). A
+  quoted value such as `"A,B"` (what `jsonencode` writes for a string) is refused: use `jsonencode` on a list. The
+  env var lists (`protected_env_vars`, `secret_env_vars`, `audit_visible_env_vars`, `command_env_vars`) must hold
+  valid env var names, here and when saved through the API. `command_env_vars` keeps each name's case and can't
+  name `RACK_URL`.
+- Maps (`service_image_patterns`, `command_env_read_only`): a JSON object of strings. `command_env_read_only` maps
+  env var names to env var names.
+- `approved_deploy_commands`: a JSON array of objects, such as `[{"command": "bin/migrate", "write": true}]` (see
+  [Per-App Settings](/integrations/deploy-approvals/#per-app-settings)). A list of strings is refused.
 - Strings: the plain value, or a JSON string (`"main"`, as Terraform's `jsonencode` writes it). Other quoting is
   refused. `verify_git_commit_mode` must be `latest` or `branch`.
 
@@ -226,12 +230,16 @@ RGW_APP_MY_APP_SETTING_PROTECTED_ENV_VARS=DATABASE_URL,SECRET_KEY_BASE
 RGW_APP_MY_APP_SETTING_AUDIT_VISIBLE_ENV_VARS=PORT,RAILS_ENV
 RGW_APP_MY_APP_SETTING_REQUIRE_COMMAND_JUSTIFICATION=true
 RGW_APP_MY_APP_SETTING_SERVICE_IMAGE_PATTERNS={"*":"registry\\.example\\.com/my-app:{{GIT_COMMIT}}"}
+RGW_APP_MY_APP_SETTING_APPROVED_DEPLOY_COMMANDS=[{"command":"bin/migrate","write":true}]
+RGW_APP_MY_APP_SETTING_COMMAND_ENV_VARS=PATH,HOME,RAILS_ENV,DATABASE_URL
+RGW_APP_MY_APP_SETTING_COMMAND_ENV_READ_ONLY={"DATABASE_URL":"READ_ONLY_DATABASE_URL"}
 ```
 
 See [Deploy Approvals](/integrations/deploy-approvals/) for common keys. `require_command_justification` makes
 every command run in the app (`run`, `exec`) carry a `--justification` (see
 [Justifications](/user-guide/cli/commands/#justifications)). `RGW_SETTING_REQUIRE_COMMAND_JUSTIFICATION` does the
-same for every app, and an app can't opt out of it.
+same for every app, and an app can't opt out of it. `command_env_vars` and `command_env_read_only` decide the env
+vars of the app's commands (see [Env vars](/user-guide/cli/commands/#env-vars)).
 
 ## Audit Logging
 
