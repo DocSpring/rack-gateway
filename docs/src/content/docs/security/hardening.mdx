@@ -194,7 +194,12 @@ only when it's run with `--write`. See [Env vars](/user-guide/cli/commands/#env-
 Convox gives every app process `RACK_URL`, which holds the rack's API password, unless the rack's
 `system-env-disable` feature gate is on. The gateway keeps it from every command it runs, but the app's own
 processes still have it, and an `exec` can read it from the process it runs in. The gate also removes `RACK`, which
-the gateway reads, so set `RACK` on the gateway app before turning the gate on.
+the gateway reads, so set `RACK` on the gateway app (and any other app that reads it) before turning the gate on:
+`convox rack params set api_feature_gates=system-env-disable=true`, or `api_feature_gates =
+"system-env-disable=true"` in the rack's Terraform. Convox reads each gate as `name=value` and ignores a bare name.
+New processes stop getting Convox's `RACK` and `RACK_URL` at once (a `RACK` you set yourself stays); running ones
+keep them until their app's next promote. Then rotate the rack's API password, which every process could read until
+now, and set the gateway's `RACK_TOKEN` to the new one.
 
 ### Secret Storage
 
