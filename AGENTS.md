@@ -617,9 +617,14 @@ a PR with green CI (admins can bypass). The Release workflow only runs on `v*` t
 The Release workflow (`.github/workflows/release.yml`):
 - Checks the tag matches `web/package.json` and waits for CI + E2E to pass on the tagged commit
 - Builds the Docker image without any build cache and pushes it by digest, without a tag
-- Builds the CLI (`rack-gateway version` reports the release version) with checksums
-- Publishes signed build provenance attestations for the image and the CLI archive
-- Creates a draft GitHub release with the CLI archive and checksum
+- Builds the CLI archives with `scripts/build-cli-release.sh`, each on its own runner: `darwin-arm64` (with security
+  key support: libfido2 linked statically from Homebrew), `linux-amd64` and `linux-arm64` (`nofido`). The script
+  checks the binary's `build-info` reports the release version
+- Publishes signed build provenance attestations for the image and each CLI archive
+- Creates a draft GitHub release with each CLI archive, its checksum and its attestation bundle (`.sigstore.json`),
+  and `scripts/install-release.sh` as `install.sh`. The install script and `rack-gateway update` download these, so
+  keep the asset names (`rack-gateway-<os>-<arch>.tar.gz`, holding one `rack-gateway` binary) and the workflow's
+  path (`.github/workflows/release.yml`, the signer identity the CLI checks) as they are
 - Only then tags the image `:vX.Y.Z` and `:<short-sha>` (plus `:latest` when this is the highest stable version,
   whatever order releases finish in) and publishes the release. If that last job fails, re-run it: nothing public
   points at a release that didn't finish

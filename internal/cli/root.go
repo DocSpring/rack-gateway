@@ -27,7 +27,10 @@ Rack management:
   rack-gateway switch <rack>       # Switch to a different rack
   rack-gateway login <rack> <url>  # Login to a new rack`,
 		// Every step of a command uses the rack that was current when it started.
-		PersistentPreRun: func(*cobra.Command, []string) { pinCurrentRack() },
+		PersistentPreRun: func(cmd *cobra.Command, _ []string) {
+			pinCurrentRack()
+			startUpdateCheck(cmd)
+		},
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			// If no subcommand is specified, show help
 			return cmd.Help()
@@ -53,6 +56,8 @@ Rack management:
 		SwitchCommand(),
 		RacksCommand(),
 		VersionCommand(),
+		UpdateCommand(),
+		BuildInfoCommand(),
 		GatewayCommand(),
 		WebCommand(),
 		CompletionCommand(),

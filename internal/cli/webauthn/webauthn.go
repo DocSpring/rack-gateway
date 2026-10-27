@@ -16,6 +16,9 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/cli/touchnotify"
 )
 
+// Supported reports whether this build can use security keys (it was built with libfido2).
+const Supported = true
+
 // GetAssertion prompts the user to authenticate with their FIDO2 device
 func GetAssertion(options AssertionOptions) (*AssertionResponse, error) {
 	resp, _, err := GetAssertionWithCachedPIN(options, "")
