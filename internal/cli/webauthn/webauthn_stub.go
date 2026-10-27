@@ -4,6 +4,9 @@ package webauthn
 
 import "fmt"
 
+// Supported reports whether this build can use security keys. This one was built with the nofido tag.
+const Supported = false
+
 // GetAssertion stub - WebAuthn not available in this build
 func GetAssertion(options AssertionOptions) (*AssertionResponse, error) {
 	return nil, fmt.Errorf("WebAuthn support not compiled in this build (use -tags without nofido)")
