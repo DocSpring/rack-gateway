@@ -12,9 +12,13 @@ import (
 	"github.com/keys-pub/go-libfido2"
 )
 
-// infoRetryDelay is how long to wait before reading a security key's info a second time. A read can fail for a
-// moment, for example while another app (a browser or password manager) is using the key.
-const infoRetryDelay = 500 * time.Millisecond
+// keyRetryDelay is how long to wait before asking a security key again after a request that can fail for a moment,
+// for example while another app (a browser or password manager) is using the key.
+const keyRetryDelay = 500 * time.Millisecond
+
+// assertionAttempts is how many times getAssertion asks the key for an assertion that fails with libfido2's
+// "unsupported option" although it was sent a PIN (see assertionError). The next try usually works.
+const assertionAttempts = 3
 
 // CTAP error codes go-libfido2 has no name for.
 var (
@@ -45,8 +49,8 @@ type assertionFlow struct {
 	key securityKey
 	// readPIN asks the user for the key's PIN.
 	readPIN func() (string, error)
-	// infoRetryDelay is the wait before reading the key's info again after a failed read.
-	infoRetryDelay time.Duration
+	// retryDelay is the wait before asking the key again after a failed info read or assertion.
+	retryDelay time.Duration
 }
 
 // getAssertion signs the challenge in options with the key. It returns the PIN it used, so later assertions in
@@ -72,14 +76,32 @@ func (f assertionFlow) getAssertion(options AssertionOptions, cachedPIN string) 
 		return nil, "", err
 	}
 
-	promptTouch(options)
-	assertion, err := f.key.Assertion(options.RPID, clientDataHash, allowList, pin, buildAssertionOptions(options))
+	assertion, err := f.assert(options, clientDataHash, allowList, pin)
 	if err != nil {
 		return nil, "", assertionError(err, pin)
 	}
 
 	resp, err := buildAssertionResponse(assertion, clientDataJSON)
 	return resp, pin, err
+}
+
+// assert asks the key for the assertion, asking the user for a touch each time. When the key answers "unsupported
+// option" although it was sent a PIN, it asks again with the same PIN, up to assertionAttempts times in all, so the
+// user only touches the key again.
+func (f assertionFlow) assert(
+	options AssertionOptions, clientDataHash []byte, allowList [][]byte, pin string,
+) (*libfido2.Assertion, error) {
+	opts := buildAssertionOptions(options)
+	for attempt := 1; ; attempt++ {
+		promptTouch(options)
+		assertion, err := f.key.Assertion(options.RPID, clientDataHash, allowList, pin, opts)
+		if err == nil || pin == "" || !errors.Is(err, libfido2.ErrUnsupportedOption) || attempt == assertionAttempts {
+			return assertion, err
+		}
+		fmt.Fprintf(os.Stderr, "The security key didn't answer (%v); trying again (%d of %d)\n",
+			err, attempt+1, assertionAttempts)
+		<-time.After(f.retryDelay)
+	}
 }
 
 // pinFor returns the PIN to send with the assertion: the cached one, or one the user enters when the key has a
@@ -107,13 +129,13 @@ func (f assertionFlow) pinFor(options AssertionOptions, cachedPIN string) (strin
 	return pin, nil
 }
 
-// readInfo reads the key's info, trying once more after infoRetryDelay if the first read fails.
+// readInfo reads the key's info, trying once more after retryDelay if the first read fails.
 func (f assertionFlow) readInfo() (*libfido2.DeviceInfo, error) {
 	info, err := f.key.Info()
 	if err == nil {
 		return info, nil
 	}
-	<-time.After(f.infoRetryDelay)
+	<-time.After(f.retryDelay)
 	info, err = f.key.Info()
 	if err != nil {
 		return nil, keyUnreadableError(err)
@@ -202,7 +224,8 @@ func pinError(err error) error {
 
 // assertionError explains a failed assertion. libfido2 reports "unsupported option" when a key with no PIN set
 // and no built-in user verification is asked to verify the user. It also reports it when the key didn't answer
-// libfido2's info request while being opened: libfido2 then treats it as a U2F key, which can't take a PIN.
+// libfido2's info request while being opened: libfido2 then treats it as a U2F key, which can't take a PIN. With a
+// PIN it's the second case, which usually passes, so assert has already tried again.
 func assertionError(err error, pin string) error {
 	if pinErr := pinError(err); pinErr != nil {
 		return pinErr
