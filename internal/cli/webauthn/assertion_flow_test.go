@@ -30,6 +30,9 @@ type fakeKey struct {
 	credentialsPIN   string
 	credentialsCalls int
 
+	// assertionErrs are the errors of successive Assertion calls. A nil entry succeeds, and a call past the end gets
+	// assertionErr.
+	assertionErrs      []error
 	assertionErr       error
 	assertionCalls     int
 	assertionPIN       string
@@ -58,8 +61,12 @@ func (k *fakeKey) Assertion(
 	k.assertionPIN = pin
 	k.assertionAllowList = credentialIDs
 	k.assertionOpts = opts
-	if k.assertionErr != nil {
-		return nil, k.assertionErr
+	err := k.assertionErr
+	if k.assertionCalls <= len(k.assertionErrs) {
+		err = k.assertionErrs[k.assertionCalls-1]
+	}
+	if err != nil {
+		return nil, err
 	}
 	authData, err := cbor.Marshal([]byte("authenticator-data"))
 	if err != nil {
@@ -297,6 +304,23 @@ func TestChooseKeyPicksTheKeyHoldingACredential(t *testing.T) {
 	require.Zero(t, only.assertionCalls, "a single key isn't probed")
 }
 
+// A key that answers "unsupported option" although it was sent a PIN didn't answer libfido2's info request while
+// being opened, which passes: it gets asked again with the same PIN, so the user only touches it again.
+func TestGetAssertionAsksAgainAfterUnsupportedOptionWithAPIN(t *testing.T) {
+	unsupported := fmt.Errorf("failed to get assertion: %w", libfido2.ErrUnsupportedOption)
+	key := &fakeKey{options: pinOptions, assertionErrs: []error{unsupported, unsupported}}
+	prompts := 0
+
+	resp, pin, err := testFlow(key, "1234", &prompts).getAssertion(testAssertionOptions(), "")
+
+	require.NoError(t, err)
+	require.Equal(t, base64.RawURLEncoding.EncodeToString(credentialA), resp.CredentialID)
+	require.Equal(t, "1234", pin)
+	require.Equal(t, 1, prompts, "the PIN is asked for once")
+	require.Equal(t, 3, key.assertionCalls)
+	require.Equal(t, "1234", key.assertionPIN)
+}
+
 func TestGetAssertionExplainsAssertionErrors(t *testing.T) {
 	unsupported := fmt.Errorf("failed to get assertion: %w", libfido2.ErrUnsupportedOption)
 	tests := []struct {
@@ -305,18 +329,21 @@ func TestGetAssertionExplainsAssertionErrors(t *testing.T) {
 		cachedPIN string
 		err       error
 		want      string
+		attempts  int
 	}{
 		{
-			name: "unsupported option without a PIN",
-			err:  unsupported,
-			want: "the security key can't verify you without a PIN (failed to get assertion: unsupported option)",
+			name:     "unsupported option without a PIN",
+			err:      unsupported,
+			want:     "the security key can't verify you without a PIN (failed to get assertion: unsupported option)",
+			attempts: 1,
 		},
 		{
-			name:      "unsupported option with a PIN",
+			name:      "unsupported option with a PIN, every time",
 			options:   pinOptions,
 			cachedPIN: "1234",
 			err:       unsupported,
 			want:      "couldn't read the security key (failed to get assertion: unsupported option)",
+			attempts:  assertionAttempts,
 		},
 		{
 			name:      "wrong PIN",
@@ -324,6 +351,7 @@ func TestGetAssertionExplainsAssertionErrors(t *testing.T) {
 			cachedPIN: "1234",
 			err:       fmt.Errorf("failed to get assertion: %w", libfido2.ErrPinInvalid),
 			want:      "wrong security key PIN (failed to get assertion: pin invalid); try again",
+			attempts:  1,
 		},
 		{
 			name:      "no registered credential",
@@ -331,6 +359,7 @@ func TestGetAssertionExplainsAssertionErrors(t *testing.T) {
 			cachedPIN: "1234",
 			err:       fmt.Errorf("failed to get assertion: %w", libfido2.ErrNoCredentials),
 			want:      "this security key holds none of your registered credentials for this gateway",
+			attempts:  1,
 		},
 		{
 			name:      "other errors",
@@ -338,6 +367,7 @@ func TestGetAssertionExplainsAssertionErrors(t *testing.T) {
 			cachedPIN: "1234",
 			err:       fmt.Errorf("failed to get assertion: %w", libfido2.ErrOperationDenied),
 			want:      "failed to get assertion: failed to get assertion: operation denied",
+			attempts:  1,
 		},
 	}
 	for _, tt := range tests {
@@ -349,7 +379,7 @@ func TestGetAssertionExplainsAssertionErrors(t *testing.T) {
 
 			require.ErrorIs(t, err, tt.err)
 			require.ErrorContains(t, err, tt.want)
-			require.Equal(t, 1, key.assertionCalls)
+			require.Equal(t, tt.attempts, key.assertionCalls)
 		})
 	}
 }
