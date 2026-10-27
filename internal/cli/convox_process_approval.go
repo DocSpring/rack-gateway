@@ -25,8 +25,7 @@ func addJustificationFlag(cmd *cobra.Command) {
 }
 
 // commandJustification returns --justification, checked, or "" without one. A command without one in an app that
-// requires one (required) is refused here, before anything starts: the gateway refuses it too, but the CLI can't
-// show why the gateway refused an exec's WebSocket handshake.
+// requires one (required) is refused here, before any MFA prompt or process start: the gateway refuses it too.
 func commandJustification(cmd *cobra.Command, app string, required bool) (string, error) {
 	text, err := cmd.Flags().GetString(justificationFlag)
 	if err != nil {

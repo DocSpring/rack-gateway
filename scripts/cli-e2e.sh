@@ -23,6 +23,8 @@ source "${ROOT_DIR}/scripts/lib/cli-e2e/cli_helpers.sh"
 # shellcheck disable=SC1091
 source "${ROOT_DIR}/scripts/lib/cli-e2e/stages.sh"
 # shellcheck disable=SC1091
+source "${ROOT_DIR}/scripts/lib/cli-e2e/roles.sh"
+# shellcheck disable=SC1091
 source "${ROOT_DIR}/scripts/lib/cli-e2e/suite.sh"
 
 trap 'reset_all_test_state || true' EXIT
