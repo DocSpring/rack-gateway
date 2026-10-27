@@ -5,6 +5,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -42,7 +43,9 @@ func startUpdateCheck(cmd *cobra.Command) {
 	}
 	checker := &update.Checker{
 		Client:  update.NewClient(Version, updateCheckTimeout),
-		Current: Version,
+		Current: currentBuildInfo(),
+		GOOS:    runtime.GOOS,
+		GOARCH:  runtime.GOARCH,
 		Load: func() ([]byte, error) {
 			return fs.ReadFile(os.DirFS(ConfigPath), updateCheckFile)
 		},

@@ -48,36 +48,45 @@ func tarGz(t *testing.T, entries ...tarEntry) []byte {
 }
 
 type releaseFixture struct {
-	archive  []byte
+	archive []byte
+	// checksum is the .sha256 file; nil means the archive's correct one.
 	checksum []byte
 	verified [][]byte
 	verify   error
 	info     BuildInfo
 	exe      string
+	goos     string
+	goarch   string
 }
 
 func newReleaseFixture(t *testing.T) *releaseFixture {
 	t.Helper()
 	archive := tarGz(t, tarEntry{name: "rack-gateway", body: "new binary", typeflag: tar.TypeReg})
-	sum := sha256.Sum256(archive)
 	exe := filepath.Join(t.TempDir(), "rack-gateway")
 	require.NoError(t, os.WriteFile(exe, []byte("old binary"), 0o600))
 	binaryMode := os.FileMode(0o751)
 	require.NoError(t, os.Chmod(exe, binaryMode))
 	return &releaseFixture{
-		archive:  archive,
-		checksum: []byte(hex.EncodeToString(sum[:]) + "  " + testAsset + "\n"),
-		info:     BuildInfo{Version: "0.1.29", SecurityKeys: true},
-		exe:      exe,
+		archive: archive,
+		info:    BuildInfo{Version: "0.1.29", SecurityKeys: true},
+		exe:     exe,
+		goos:    "linux",
+		goarch:  "amd64",
 	}
 }
 
 func (f *releaseFixture) installer(t *testing.T, current BuildInfo) *Installer {
 	t.Helper()
+	asset, _ := AssetName(f.goos, f.goarch)
+	checksum := f.checksum
+	if checksum == nil {
+		sum := sha256.Sum256(f.archive)
+		checksum = []byte(hex.EncodeToString(sum[:]) + "  " + asset + "\n")
+	}
 	assets := map[string][]byte{
-		testAsset:                    f.archive,
-		testAsset + ".sha256":        f.checksum,
-		testAsset + ".sigstore.json": []byte(`{"bundle":true}`),
+		asset:                    f.archive,
+		asset + ".sha256":        checksum,
+		asset + ".sigstore.json": []byte(`{"bundle":true}`),
 	}
 	client := testClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, ok := assets[filepath.Base(r.URL.Path)]
@@ -103,8 +112,8 @@ func (f *releaseFixture) installer(t *testing.T, current BuildInfo) *Installer {
 		},
 		Executable: f.exe,
 		Current:    current,
-		GOOS:       "linux",
-		GOARCH:     "amd64",
+		GOOS:       f.goos,
+		GOARCH:     f.goarch,
 		Out:        &bytes.Buffer{},
 	}
 }
@@ -123,7 +132,8 @@ var release0129 = &Release{Tag: "v0.1.29"}
 
 func TestInstallReplacesTheBinary(t *testing.T) {
 	f := newReleaseFixture(t)
-	installer := f.installer(t, BuildInfo{Version: "0.1.28", SecurityKeys: true})
+	f.info.SecurityKeys = false
+	installer := f.installer(t, BuildInfo{Version: "0.1.28"})
 	var out bytes.Buffer
 	installer.Out = &out
 
@@ -167,10 +177,14 @@ func TestInstallLeavesTheBinaryAloneWhenAStepFails(t *testing.T) {
 			wantErr: "reports version 0.1.30, not 0.1.29",
 		},
 		{
-			name:    "release would drop security key support",
-			modify:  func(f *releaseFixture) { f.info.SecurityKeys = false },
+			// Only the macOS release should have security keys: this one is broken.
+			name: "release would drop security key support",
+			modify: func(f *releaseFixture) {
+				f.goos, f.goarch = "darwin", "arm64"
+				f.info.SecurityKeys = false
+			},
 			current: BuildInfo{Version: "0.1.28", SecurityKeys: true},
-			wantErr: "has no security key support, and this build has it",
+			wantErr: "the darwin/arm64 release has no security key support, and this build has it",
 		},
 	}
 	for _, tt := range tests {
@@ -184,10 +198,21 @@ func TestInstallLeavesTheBinaryAloneWhenAStepFails(t *testing.T) {
 	}
 }
 
-func TestInstallWithoutSecurityKeysAcceptsAReleaseWithout(t *testing.T) {
+func TestInstallOnMacKeepsSecurityKeys(t *testing.T) {
 	f := newReleaseFixture(t)
-	f.info.SecurityKeys = false
-	require.NoError(t, f.installer(t, BuildInfo{Version: "0.1.28"}).Install(context.Background(), release0129))
+	f.goos, f.goarch = "darwin", "arm64"
+	installer := f.installer(t, BuildInfo{Version: "0.1.28", SecurityKeys: true})
+	require.NoError(t, installer.Install(context.Background(), release0129))
+}
+
+// A Linux build with security keys (built from source) is refused before anything is downloaded: the Linux
+// releases have none.
+func TestInstallRefusesToReplaceALinuxBuildWithSecurityKeys(t *testing.T) {
+	f := newReleaseFixture(t)
+	err := f.installer(t, BuildInfo{Version: "0.1.28", SecurityKeys: true}).Install(context.Background(), release0129)
+	require.ErrorContains(t, err, "the linux/amd64 release has no security key support, and this build has it")
+	require.Empty(t, f.verified)
+	f.requireUnchanged(t)
 }
 
 func TestInstallNeedsAWritableDirectory(t *testing.T) {
@@ -209,7 +234,8 @@ func TestInstallRefusesUnsupportedPlatforms(t *testing.T) {
 	f := newReleaseFixture(t)
 	installer := f.installer(t, BuildInfo{Version: "0.1.28"})
 	installer.GOOS, installer.GOARCH = "darwin", "amd64"
-	require.ErrorContains(t, installer.Install(context.Background(), release0129), "no build for darwin/amd64")
+	require.ErrorContains(t, installer.Install(context.Background(), release0129),
+		"releases have no build for darwin/amd64")
 	f.requireUnchanged(t)
 }
 

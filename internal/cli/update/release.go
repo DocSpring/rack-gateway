@@ -173,6 +173,20 @@ func TagFor(version string) string {
 	return "v" + strings.TrimPrefix(version, "v")
 }
 
+// Replaceable returns why no release can replace a build for this platform, or nil when one can. Releases have
+// builds for darwin/arm64, linux/amd64 and linux/arm64, and only the macOS one supports security keys, which a
+// build that supports them must keep.
+func Replaceable(goos, goarch string, securityKeys bool) error {
+	if _, ok := AssetName(goos, goarch); !ok {
+		return fmt.Errorf("releases have no build for %s/%s: build the CLI from source", goos, goarch)
+	}
+	if securityKeys && goos != "darwin" {
+		return fmt.Errorf("the %s/%s release has no security key support, and this build has it: "+
+			"build the CLI from source to keep it", goos, goarch)
+	}
+	return nil
+}
+
 // AssetName returns the name of the release archive for a platform, and whether releases include one.
 func AssetName(goos, goarch string) (string, bool) {
 	switch goos + "/" + goarch {

@@ -77,10 +77,10 @@ type Installer struct {
 // that the binary inside runs and is a release this build can be replaced with, and then renames it over the
 // running binary. Until that rename, the installed binary is untouched.
 func (i *Installer) Install(ctx context.Context, rel *Release) error {
-	asset, ok := AssetName(i.GOOS, i.GOARCH)
-	if !ok {
-		return fmt.Errorf("releases have no build for %s/%s: build the CLI from source", i.GOOS, i.GOARCH)
+	if err := Replaceable(i.GOOS, i.GOARCH, i.Current.SecurityKeys); err != nil {
+		return err
 	}
+	asset, _ := AssetName(i.GOOS, i.GOARCH)
 	dir := filepath.Dir(i.Executable)
 	tmp, err := os.CreateTemp(dir, "."+binaryName+".update-*")
 	if err != nil {
@@ -141,7 +141,7 @@ func (i *Installer) download(ctx context.Context, tag, asset string) ([]byte, er
 }
 
 // check makes the new binary executable like the one it replaces, runs it, and checks it is the release we asked
-// for and keeps security key support when this build has it.
+// for and keeps security key support when this build has it (Replaceable says which releases should).
 func (i *Installer) check(ctx context.Context, path string, rel *Release) error {
 	current, err := os.Stat(i.Executable)
 	if err != nil {

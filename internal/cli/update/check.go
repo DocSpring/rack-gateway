@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"runtime"
 	"time"
 )
 
@@ -20,7 +19,9 @@ type checkState struct {
 // Checker checks GitHub for a newer release at most once per CheckInterval.
 type Checker struct {
 	Client  *Client
-	Current string
+	Current BuildInfo
+	GOOS    string
+	GOARCH  string
 	// Load returns the saved state, or an error when there is none. Save replaces it.
 	Load func() ([]byte, error)
 	Save func([]byte) error
@@ -30,16 +31,22 @@ type Checker struct {
 // Check is an update check that may still be running in the background.
 type Check struct {
 	client  *Client
-	current string
-	saved   checkState
-	done    chan struct{}
-	cancel  context.CancelFunc
-	fresh   *checkState
+	current BuildInfo
+	// replaceable is why `rack-gateway update` can't replace this build, or nil (see Replaceable).
+	replaceable error
+	saved       checkState
+	done        chan struct{}
+	cancel      context.CancelFunc
+	fresh       *checkState
 }
 
 // Start begins a background check when the last one is more than CheckInterval old. It never blocks.
 func (c *Checker) Start() *Check {
-	check := &Check{client: c.Client, current: c.Current}
+	check := &Check{
+		client:      c.Client,
+		current:     c.Current,
+		replaceable: Replaceable(c.GOOS, c.GOARCH, c.Current.SecurityKeys),
+	}
 	if data, err := c.Load(); err == nil {
 		_ = json.Unmarshal(data, &check.saved)
 	}
@@ -89,15 +96,15 @@ func (k *Check) Notice(wait time.Duration) string {
 		timer.Stop()
 		k.cancel()
 	}
-	if state.LatestTag == "" || !IsNewer(state.LatestTag, k.current) {
+	if state.LatestTag == "" || !IsNewer(state.LatestTag, k.current.Version) {
 		return ""
 	}
 	latest := Release{Tag: state.LatestTag}
-	if _, ok := AssetName(runtime.GOOS, runtime.GOARCH); !ok {
+	if k.replaceable != nil {
 		return fmt.Sprintf("A new release of rack-gateway is available: %s → %s. Build it from source: %s",
-			k.current, latest.Version(), k.client.ReleaseURL(latest.Tag))
+			k.current.Version, latest.Version(), k.client.ReleaseURL(latest.Tag))
 	}
 	return fmt.Sprintf(
 		"A new release of rack-gateway is available: %s → %s. Run \"rack-gateway update\" to install it.",
-		k.current, latest.Version())
+		k.current.Version, latest.Version())
 }

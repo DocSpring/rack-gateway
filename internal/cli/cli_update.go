@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -53,7 +54,11 @@ func runUpdate(ctx context.Context, cmd *cobra.Command, client *update.Client, c
 		return err
 	}
 	out := cmd.OutOrStdout()
+	replaceable := update.Replaceable(runtime.GOOS, runtime.GOARCH, webauthn.Supported)
 	switch {
+	case rel.Version() == Version && version != "":
+		_, _ = fmt.Fprintf(out, "rack-gateway %s is already installed.\n", Version)
+		return nil
 	case rel.Version() == Version:
 		_, _ = fmt.Fprintf(out, "rack-gateway %s is the latest release.\n", Version)
 		return nil
@@ -61,12 +66,24 @@ func runUpdate(ctx context.Context, cmd *cobra.Command, client *update.Client, c
 		_, _ = fmt.Fprintf(out, "rack-gateway %s is newer than the latest release (%s).\n", Version, rel.Version())
 		return nil
 	case checkOnly:
-		_, _ = fmt.Fprintf(out, "rack-gateway %s is available (this is %s): %s\n",
-			rel.Version(), Version, client.ReleaseURL(rel.Tag))
-		_, _ = fmt.Fprintln(out, `Run "rack-gateway update" to install it.`)
+		printAvailableRelease(out, client, rel, replaceable)
 		return nil
+	case replaceable != nil:
+		return replaceable
 	}
 	return installRelease(ctx, cmd, client, rel)
+}
+
+// printAvailableRelease says a release is available, and how to install it: `rack-gateway update`, unless no
+// release can replace this build (replaceable).
+func printAvailableRelease(out io.Writer, client *update.Client, rel *update.Release, replaceable error) {
+	_, _ = fmt.Fprintf(out, "rack-gateway %s is available (this is %s): %s\n",
+		rel.Version(), Version, client.ReleaseURL(rel.Tag))
+	if replaceable != nil {
+		_, _ = fmt.Fprintf(out, "rack-gateway update can't install it: %s.\n", replaceable)
+		return
+	}
+	_, _ = fmt.Fprintln(out, `Run "rack-gateway update" to install it.`)
 }
 
 // targetRelease returns the release named by --version, or the latest release.

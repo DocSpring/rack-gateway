@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"runtime"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -22,7 +21,9 @@ type memoryState struct {
 func (m *memoryState) checker(client *Client, current string) *Checker {
 	return &Checker{
 		Client:  client,
-		Current: current,
+		Current: BuildInfo{Version: current},
+		GOOS:    "linux",
+		GOARCH:  "amd64",
 		Load: func() ([]byte, error) {
 			if m.data == nil {
 				return nil, errors.New("no state")
@@ -63,13 +64,31 @@ func latestHandler(t *testing.T, requests *atomic.Int32, tag string) http.Handle
 // requireNotice checks notice suggests updating from 0.1.28 to 0.1.29.
 func requireNotice(t *testing.T, notice string) {
 	t.Helper()
-	if _, ok := AssetName(runtime.GOOS, runtime.GOARCH); !ok {
-		require.Contains(t, notice,
-			"A new release of rack-gateway is available: 0.1.28 → 0.1.29. Build it from source: ")
-		return
-	}
 	require.Equal(t, `A new release of rack-gateway is available: 0.1.28 → 0.1.29. `+
 		`Run "rack-gateway update" to install it.`, notice)
+}
+
+// A build no release can replace is told to build the new release from source instead.
+func TestNoticeForBuildsNoReleaseReplaces(t *testing.T) {
+	var requests atomic.Int32
+	client := testClient(t, latestHandler(t, &requests, "v0.1.29"))
+	sourceBuild := "A new release of rack-gateway is available: 0.1.28 → 0.1.29. Build it from source: " +
+		client.DownloadBaseURL + "/DocSpring/rack-gateway/releases/tag/v0.1.29"
+
+	for name, modify := range map[string]func(c *Checker){
+		"linux with security keys": func(c *Checker) { c.Current.SecurityKeys = true },
+		"intel mac":                func(c *Checker) { c.GOOS = "darwin" },
+	} {
+		t.Run(name, func(t *testing.T) {
+			checker := (&memoryState{}).checker(client, "0.1.28")
+			modify(checker)
+			require.Equal(t, sourceBuild, checker.Start().Notice(5*time.Second))
+		})
+	}
+
+	macWithKeys := (&memoryState{}).checker(client, "0.1.28")
+	macWithKeys.GOOS, macWithKeys.GOARCH, macWithKeys.Current.SecurityKeys = "darwin", "arm64", true
+	requireNotice(t, macWithKeys.Start().Notice(5*time.Second))
 }
 
 func TestCheckAsksGitHubOnceADay(t *testing.T) {

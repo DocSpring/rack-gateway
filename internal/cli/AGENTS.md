@@ -174,6 +174,9 @@ installed binary untouched:
    build has it. Then the rename.
 
 Development builds (`Version` isn't a release) refuse to update. Without `--version`, it never downgrades.
+`update.Replaceable` says which builds no release can replace: a platform without a release build, or a Linux
+build with security keys (only the macOS release has them). `update` refuses those before downloading anything, and
+the notice and `update --check` tell them to build the new release from source.
 `update.Repository` defaults to `DocSpring/rack-gateway`; `scripts/build-cli-release.sh` sets it to the repository
 that builds the release.
 

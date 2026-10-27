@@ -5,6 +5,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"runtime"
 	"testing"
 	"time"
 
@@ -62,6 +63,12 @@ func TestUpdateWhenAlreadyCurrentOrNewer(t *testing.T) {
 	out, err = runUpdateForTest(t, releaseClient(t, "v0.1.27"), false, "")
 	require.NoError(t, err)
 	require.Equal(t, "rack-gateway 0.1.28 is newer than the latest release (0.1.27).\n", out)
+
+	// --version naming this build's own release doesn't claim it's the latest.
+	setVersion(t, "0.1.27")
+	out, err = runUpdateForTest(t, releaseClient(t, "v0.1.29"), false, "v0.1.27")
+	require.NoError(t, err)
+	require.Equal(t, "rack-gateway 0.1.27 is already installed.\n", out)
 }
 
 func TestUpdateCheckOnlyReportsTheRelease(t *testing.T) {
@@ -69,9 +76,13 @@ func TestUpdateCheckOnlyReportsTheRelease(t *testing.T) {
 
 	out, err := runUpdateForTest(t, releaseClient(t, "v0.1.29"), true, "")
 	require.NoError(t, err)
+	howTo := "Run \"rack-gateway update\" to install it.\n"
+	// A Linux test build with security keys, or a platform without releases, can't be replaced by a release.
+	if replaceable := update.Replaceable(runtime.GOOS, runtime.GOARCH, webauthn.Supported); replaceable != nil {
+		howTo = "rack-gateway update can't install it: " + replaceable.Error() + ".\n"
+	}
 	require.Equal(t, "rack-gateway 0.1.29 is available (this is 0.1.28): "+
-		"https://github.com/DocSpring/rack-gateway/releases/tag/v0.1.29\n"+
-		"Run \"rack-gateway update\" to install it.\n", out)
+		"https://github.com/DocSpring/rack-gateway/releases/tag/v0.1.29\n"+howTo, out)
 
 	// --version names a release even when it's older than this one.
 	out, err = runUpdateForTest(t, releaseClient(t, "v0.1.29"), true, "0.1.27")
