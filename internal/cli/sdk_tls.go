@@ -30,9 +30,12 @@ var sdkRootCAs *x509.CertPool
 // Gateway connections ignore HTTP(S)_PROXY / ALL_PROXY, as stdsdk's own HTTP client always did. gorilla
 // would otherwise use the TLS hook to dial the proxy itself (and skip TLS to the gateway), which breaks
 // logs, exec and run behind a proxy.
+//
+// Both websocket dialers record the gateway's answer to a refused handshake (see explainRefusedHandshake).
 func secureConvoxSDK() {
 	stdsdk.DefaultClient = newVerifyingSDKClient()
 	websocket.DefaultDialer.NetDialTLSContext = dialVerifiedTLS
+	websocket.DefaultDialer.NetDialContext = dialRecordingHandshake
 	websocket.DefaultDialer.Proxy = nil
 }
 
@@ -64,7 +67,11 @@ func dialVerifiedTLS(ctx context.Context, network, addr string) (net.Conn, error
 		NetDialer: &net.Dialer{Timeout: 30 * time.Second, KeepAlive: 10 * time.Second},
 		Config:    verifyingTLSConfig(host),
 	}
-	return dialer.DialContext(ctx, network, addr)
+	conn, err := dialer.DialContext(ctx, network, addr)
+	if err != nil {
+		return nil, err
+	}
+	return recordHandshake(conn), nil
 }
 
 // parseGatewayURL parses a gateway base URL and refuses ones the CLI must not send credentials to: plain HTTP

@@ -100,8 +100,7 @@ func assertFlag(t *testing.T, flag *stdcli.Flag, name string, value interface{})
 	}
 }
 
-// A command too long for the gateway's audit log is refused with the reason before any MFA prompt or process start:
-// the gateway's own refusal of an exec only shows as "websocket: bad handshake".
+// A command too long for the gateway's audit log is refused with the reason before any MFA prompt or process start.
 func TestProcessCommandsRefuseCommandsTooLongToAudit(t *testing.T) {
 	long := strings.Repeat("x", audit.MaxRecordedCommandBytes)
 	for _, cmd := range []*cobra.Command{ExecCommand(), RunCommand()} {

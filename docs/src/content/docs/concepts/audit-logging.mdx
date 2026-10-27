@@ -322,7 +322,7 @@ An exec's or a process start's command (`convox run`, `convox exec`) is recorded
 with the credentials a command line commonly carries redacted. The gateway refuses a command longer than 50 KB as
 the audit log records it (redacted, then JSON-encoded) with `400` before it reaches the rack, so nothing runs that
 the log can't show in full, and the refusal is audited as a denial. The rack-gateway CLI checks the length before it
-starts a process, so it can say why; the Convox SDK only shows `websocket: bad handshake` for a refused exec.
+asks for MFA or starts a process.
 
 A command's justification (`--justification`, or the deploy approval's message for a command run under one) is
 recorded with it as `justification` in the details. The gateway can require one for every command, in every app

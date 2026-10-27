@@ -103,9 +103,8 @@ func runProcessCommand(
 }
 
 // prepareProcessCommand checks an exec or run command and reviews its script. The gateway refuses a command too
-// long for its audit log, or without a justification in an app that requires one, but the Convox SDK drops the
-// answer to a refused WebSocket handshake, so an exec it refused would only show "websocket: bad handshake".
-// Checking the command here explains the refusal, before any MFA prompt or process start.
+// long for its audit log, or without a justification in an app that requires one; checking the command here
+// refuses it before any MFA prompt or process start.
 func prepareProcessCommand(cobraCmd *cobra.Command, args []string, action string) (processCommand, error) {
 	if err := resolveAppFlag(cobraCmd); err != nil {
 		return processCommand{}, err

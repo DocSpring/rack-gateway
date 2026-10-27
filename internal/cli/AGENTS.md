@@ -282,8 +282,10 @@ characters as `\uXXXX`, which `encoding/json` leaves raw, so `-o json` stays val
 - Permission errors: Clear message about which role is required
 - Token expiry: Auto-detect and prompt for re-login
 - Exec and log streams: the Convox SDK (`stdsdk.Client.Websocket`) drops the response to a refused WebSocket
-  handshake, so any gateway refusal of `exec`, `run` (attached) or `logs` (401, 403, 429, 400) prints only
-  `websocket: bad handshake`. The refusal and its reason are in the gateway's audit log and request log. The CLI
-  checks what it can before it connects: `run` and `exec` refuse a command too long for the audit log
+  handshake and returns only `websocket.ErrBadHandshake`. The CLI's websocket dialers (`secureConvoxSDK`) wrap each
+  connection in `handshakeRecordingConn`, which keeps the gateway's response to a refused handshake (and stops
+  recording at an accepted one's headers), and `Execute` turns the error into the status and the gateway's reason
+  (`explainRefusedHandshake`), for example `the gateway refused the connection (403 Forbidden): ...`. The CLI
+  still checks what it can before it connects: `run` and `exec` refuse a command too long for the audit log
   (`audit.CheckCommandLength`), or without a justification the app requires, before any MFA prompt or process
   start.

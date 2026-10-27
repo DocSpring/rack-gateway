@@ -88,5 +88,5 @@ Rack management:
 		InstancesCommand(),
 	)
 
-	return rootCmd.Execute()
+	return explainRefusedHandshake(rootCmd.Execute())
 }

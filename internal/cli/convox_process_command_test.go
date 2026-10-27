@@ -52,8 +52,7 @@ func processCobraCommand(t *testing.T, cmd *cobra.Command, flags map[string]stri
 }
 
 // Without --justification, a command in an app that requires one (its own setting, or the gateway-wide one) is
-// refused before anything is sent to the rack (the gateway's refusal of an exec would only show as
-// "websocket: bad handshake").
+// refused before anything is sent to the rack.
 func TestProcessCommandRefusedWithoutAJustificationTheAppRequires(t *testing.T) {
 	const required = `{"require_command_justification":{"value":true}}`
 	for name, set := range map[string]func(*envChangeGateway){
