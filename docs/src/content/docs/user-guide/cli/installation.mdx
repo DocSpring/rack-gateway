@@ -1,28 +1,50 @@
 ---
 title: "CLI Installation"
-description: "How to install the rack-gateway CLI on macOS, Linux, and Windows."
+description: "How to install and update the rack-gateway CLI on macOS and Linux."
 ---
 
 import { Aside, Tabs, TabItem, Steps } from '@astrojs/starlight/components';
 
 The `rack-gateway` CLI is distributed as a single binary. Choose the installation method that works best for your platform.
 
-## Download from GitHub Releases (Linux x86_64)
+## Install a Release
 
-Each release publishes a Linux x86_64 build with a checksum and a signed build provenance attestation:
+Releases include builds for macOS on Apple Silicon and for Linux (x86_64 and arm64). Install the latest one with:
 
 ```bash
-VERSION=v0.1.10  # see https://github.com/docspring/rack-gateway/releases
-curl -fsSLO https://github.com/docspring/rack-gateway/releases/download/$VERSION/rack-gateway-linux-amd64.tar.gz
-curl -fsSLO https://github.com/docspring/rack-gateway/releases/download/$VERSION/rack-gateway-linux-amd64.tar.gz.sha256
-sha256sum --check rack-gateway-linux-amd64.tar.gz.sha256
-gh attestation verify rack-gateway-linux-amd64.tar.gz --repo DocSpring/rack-gateway
-tar xzf rack-gateway-linux-amd64.tar.gz
-sudo install -m 0755 rack-gateway-linux-amd64 /usr/local/bin/rack-gateway
+curl -fsSL https://github.com/DocSpring/rack-gateway/releases/latest/download/install.sh | sh
 ```
 
-The release build has no WebAuthn support (no CGO), so it verifies MFA with TOTP, YubiKey OTP or backup codes. To
-use a security key from the CLI, or on macOS and other platforms, [build from source](#building-from-source).
+The script downloads the build for your machine and checks its SHA-256 checksum. When the GitHub CLI (`gh`) is
+installed, it also checks the build provenance attestation: the archive must have been built by the repository's
+Release workflow. It installs `rack-gateway` into `/usr/local/bin` when you can write to it, or `~/.local/bin`.
+
+| Variable | Description |
+|----------|-------------|
+| `RACK_GATEWAY_VERSION` | The release to install, such as `v0.1.29` (default: the latest release) |
+| `RACK_GATEWAY_INSTALL_DIR` | Where to install the binary |
+| `RACK_GATEWAY_REPOSITORY` | The GitHub repository to install from (default: `DocSpring/rack-gateway`) |
+
+The macOS build supports security keys (WebAuthn). The Linux builds don't: they verify MFA with TOTP, YubiKey OTP or
+backup codes. To use a security key from Linux, or to run the CLI on an Intel Mac,
+[build from source](#building-from-source).
+
+### Installing by hand
+
+Each release has, for each platform, an archive holding the `rack-gateway` binary, its checksum and its attestation
+bundle:
+
+```bash
+VERSION=v0.1.29     # see https://github.com/DocSpring/rack-gateway/releases
+PLATFORM=linux-amd64  # or linux-arm64, darwin-arm64
+BASE=https://github.com/DocSpring/rack-gateway/releases/download/$VERSION
+curl -fsSLO $BASE/rack-gateway-$PLATFORM.tar.gz
+curl -fsSLO $BASE/rack-gateway-$PLATFORM.tar.gz.sha256
+shasum -a 256 --check rack-gateway-$PLATFORM.tar.gz.sha256
+gh attestation verify rack-gateway-$PLATFORM.tar.gz --repo DocSpring/rack-gateway
+tar xzf rack-gateway-$PLATFORM.tar.gz
+sudo install -m 0755 rack-gateway /usr/local/bin/rack-gateway
+```
 
 ## Verify Installation
 
@@ -33,7 +55,7 @@ rack-gateway version
 You should see output like:
 
 ```
-client: v0.1.10
+client: 0.1.29
 gateway: (not logged in)
 server: (not logged in)
 ```
@@ -121,7 +143,7 @@ Security keys (WebAuthn/FIDO2) in the CLI need a build with libfido2. Install it
 </Tabs>
 
 <Aside type="note" title="WebAuthn is Optional">
-WebAuthn support is optional. Without it (the release build, or `task go:build:cli:nofido`), the CLI offers your
+WebAuthn support is optional. Without it (the Linux releases, or `task go:build:cli:nofido`), the CLI offers your
 other MFA methods: an authenticator app (TOTP), a YubiKey OTP or a backup code.
 </Aside>
 
@@ -168,7 +190,24 @@ task go:build:cli:nofido
 
 ## Updating
 
-To update, download the new release (Linux x86_64), or rebuild from source:
+```bash
+rack-gateway update
+```
+
+`rack-gateway update` downloads the latest release for your platform, checks its checksum and its build provenance
+attestation (signed by the Release workflow for that release's tag), runs the new binary to check it works, and then
+replaces the installed one. `rack-gateway update --check` only reports whether there's a newer release, and
+`rack-gateway update --version v0.1.29` installs that release, even an older one.
+
+If you can't write to the directory the CLI is installed in, run `sudo rack-gateway update`. A Linux build from
+source with security key support isn't replaced by a release, which has none: rebuild it from source instead.
+
+Once a day, the CLI checks GitHub for a newer release in the background, and after a command, prints a line
+suggesting `rack-gateway update` when there is one. Only release builds check, and only when stderr is a terminal:
+never when `CI` is set, or for `version`, `update` and `completion`. Set `RACK_GATEWAY_NO_UPDATE_CHECK=1` to turn it
+off. The last result is kept in `update-check.json` in the CLI's config directory.
+
+If you built the CLI from source, rebuild it:
 
 ```bash
 cd rack-gateway
@@ -204,7 +243,8 @@ chmod +x /usr/local/bin/rack-gateway
 
 ### macOS security warning
 
-On macOS, you may see a security warning the first time you run the CLI. Either:
+The install script and `rack-gateway update` download with `curl` and Go, which don't mark the binary as downloaded
+from the internet. If you downloaded the archive with a browser, macOS may refuse to run it the first time. Either:
 
 1. Right-click the binary in Finder and select "Open", then click "Open" in the dialog
 2. Or run: `xattr -d com.apple.quarantine /usr/local/bin/rack-gateway`

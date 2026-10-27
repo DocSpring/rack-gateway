@@ -165,13 +165,13 @@ commands:
       - run:
           name: Install the rack-gateway CLI
           command: |
-            VERSION=v0.1.10
-            BASE=https://github.com/docspring/rack-gateway/releases/download/$VERSION
+            VERSION=v0.1.29
+            BASE=https://github.com/DocSpring/rack-gateway/releases/download/$VERSION
             curl -fsSLO $BASE/rack-gateway-linux-amd64.tar.gz
             curl -fsSLO $BASE/rack-gateway-linux-amd64.tar.gz.sha256
             sha256sum --check rack-gateway-linux-amd64.tar.gz.sha256
             tar xzf rack-gateway-linux-amd64.tar.gz
-            sudo install -m 0755 rack-gateway-linux-amd64 /usr/local/bin/rack-gateway
+            sudo install -m 0755 rack-gateway /usr/local/bin/rack-gateway
 ```
 
 Set `RACK_GATEWAY_API_TOKEN` (a token with the `cicd` role) and `RACK_GATEWAY_URL` in a CircleCI context or the

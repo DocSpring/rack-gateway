@@ -153,6 +153,41 @@ rack-gateway convox <any-convox-command>
 
 Proxies command to Convox API through the gateway with authentication.
 
+### Update (`internal/cli/update`)
+
+```bash
+rack-gateway update [--check] [--version vX.Y.Z]
+```
+
+Replaces the running binary (symlinks resolved) with a GitHub release, in this order, so a failed step leaves the
+installed binary untouched:
+
+1. A temporary file in the binary's directory: an unwritable directory fails before anything is downloaded, with a
+   `sudo` hint, and the final rename stays on one filesystem.
+2. The archive for this platform (`update.AssetName`: darwin/arm64, linux/amd64, linux/arm64), its `.sha256` and
+   its `.sigstore.json`, over HTTPS from GitHub only (`isGitHubURL` also checks every redirect), with size limits.
+3. The checksum, then the Sigstore bundle (`ProvenanceVerifier`): a SLSA provenance attestation for the archive's
+   digest, signed by `.github/workflows/release.yml@refs/tags/<tag>` in `update.Repository` with GitHub Actions'
+   OIDC issuer. The trusted root comes from the public Sigstore instance through TUF, with no local cache.
+4. The `rack-gateway` file from the archive (a regular file only), then the new binary's hidden `build-info`
+   command: it must report the release's version, and keep security key support (`webauthn.Supported`) when this
+   build has it. Then the rename.
+
+Development builds (`Version` isn't a release) refuse to update. Without `--version`, it never downgrades.
+`update.Repository` defaults to `DocSpring/rack-gateway`; `scripts/build-cli-release.sh` sets it to the repository
+that builds the release.
+
+The daily check (`cli_update_check.go`): the root command's `PersistentPreRun` starts `update.Checker` in the
+background when the saved result (`update-check.json` in the config dir) is a day old, and `main` prints the notice
+after the command and its error, waiting at most a second for a check still running. A canceled check isn't saved,
+a failed one is (so an offline machine doesn't retry on every command). It's skipped for development builds, when
+stderr isn't a terminal, when `CI` or `RACK_GATEWAY_NO_UPDATE_CHECK` is set, and for the commands in
+`skipUpdateCheckCommands` (including cobra's completion requests).
+
+`update/testdata` holds the v0.1.28 Linux archive's real attestation bundle and the public Sigstore trusted root
+from October 2026, so a test checks the production verifier options against what `actions/attest-build-provenance`
+creates. The other verifier tests sign with sigstore-go's `VirtualSigstore`.
+
 ## Testing
 
 ### E2E Tests

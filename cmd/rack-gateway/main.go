@@ -18,9 +18,13 @@ func main() {
 	cli.BuildTime = buildTime
 
 	// Execute CLI
-	if err := cli.Execute(); err != nil {
+	err := cli.Execute()
+	if err != nil {
 		// Errors can quote gateway responses; DisplayError keeps them from driving the terminal.
 		fmt.Fprintf(os.Stderr, "Error: %s\n", cli.DisplayError(err))
+	}
+	cli.PrintUpdateNotice()
+	if err != nil {
 		os.Exit(1)
 	}
 }
