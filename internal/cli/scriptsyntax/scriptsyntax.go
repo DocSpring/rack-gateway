@@ -23,9 +23,10 @@ const (
 	maxOutputLines = 30
 )
 
-// stdinLocation is how Ruby names the script it read from stdin, at the start of a message, with whatever comes
-// before it: the path of the Ruby that's running (3.4), or "-: " (3.3).
-var stdinLocation = regexp.MustCompile(`(?m)^(?:\S*ruby: |-: )?-:(\d+)`)
+// stdinLocation is how Ruby names the script it read from stdin at the start of a line, with the line number and
+// whatever comes before it: the path of the Ruby that's running (3.4), "-: " (3.3), or no line number on the
+// "-: compile error" line that ends the output (3.2).
+var stdinLocation = regexp.MustCompile(`(?m)^(?:\S*ruby\S*: )?(?:-: )?-(:\d+:|: )`)
 
 // Check returns an error when the local Ruby refuses the syntax of text, the script in the file called name. It
 // only checks .rb files. A machine without a Ruby that runs leaves the script unchecked, as does a Ruby that fails
@@ -90,7 +91,7 @@ func withoutShebang(text []byte) []byte {
 // describe is Ruby's output as the error shows it: naming the script, and cut to maxOutputLines. name is safe to use
 // in a replacement: scriptrun.SafeName leaves no $.
 func describe(output []byte, name string) string {
-	message := stdinLocation.ReplaceAllString(strings.TrimSpace(string(output)), name+":$1")
+	message := stdinLocation.ReplaceAllString(strings.TrimSpace(string(output)), name+"${1}")
 	lines := strings.Split(message, "\n")
 	if extra := len(lines) - maxOutputLines; extra > 0 {
 		lines = append(lines[:maxOutputLines], fmt.Sprintf("(%d more lines)", extra))

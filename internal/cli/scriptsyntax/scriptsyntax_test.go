@@ -38,8 +38,11 @@ cat > %q/stdin
 func TestCheckRefusesWhatRubyRefuses(t *testing.T) {
 	dir := fakeRuby(t, 0, `echo '/opt/rubies/3.4.1/bin/ruby: -:3: syntax errors found (SyntaxError)' >&2
 echo '> 3 | end' >&2
-echo '-: -:4: older format' >&2
-echo '-:5: oldest format' >&2
+echo '/usr/bin/ruby3.4: -:4: a packaged Ruby' >&2
+echo '-: -:5: ruby 3.3' >&2
+echo '-:6: ruby 3.2' >&2
+echo 'puts -:7: code Ruby echoes' >&2
+echo '-: compile error (SyntaxError)' >&2
 exit 1`)
 
 	err := Check(context.Background(), "count.rb", []byte("#!/usr/bin/env -S ruby -s\nputs 1\n"))
@@ -47,8 +50,11 @@ exit 1`)
 	require.EqualError(t, err, `count.rb has a syntax error, according to ruby 3.4.1:
 count.rb:3: syntax errors found (SyntaxError)
 > 3 | end
-count.rb:4: older format
-count.rb:5: oldest format`)
+count.rb:4: a packaged Ruby
+count.rb:5: ruby 3.3
+count.rb:6: ruby 3.2
+puts -:7: code Ruby echoes
+count.rb: compile error (SyntaxError)`)
 	args, readErr := os.ReadFile(filepath.Join(dir, "args")) // #nosec G304 -- the test's own directory
 	require.NoError(t, readErr)
 	require.Equal(t, "--disable=all -c -\n", string(args))
