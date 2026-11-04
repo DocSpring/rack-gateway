@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -138,7 +139,16 @@ func reviewedScripts(t *testing.T, err error) *[]processCommand {
 		return "", err
 	}
 	t.Cleanup(func() { reviewScriptWith = previous })
+	acceptScriptSyntax(t)
 	return &reviewed
+}
+
+// acceptScriptSyntax has the syntax check accept every script, so that tests don't depend on this machine's Ruby.
+func acceptScriptSyntax(t *testing.T) {
+	t.Helper()
+	previous := checkScriptSyntaxWith
+	checkScriptSyntaxWith = func(context.Context, string, []byte) error { return nil }
+	t.Cleanup(func() { checkScriptSyntaxWith = previous })
 }
 
 // With --script, the command sent is the script command (scriptrun.Build) made from the command words and the
@@ -247,4 +257,53 @@ func TestProcessCommandDryRun(t *testing.T) {
 	err := runProcessCommand(cmd, []string{"web", "rails", "runner"}, "run", nil)
 	require.ErrorIs(t, err, scriptreview.ErrDeclined)
 	require.Len(t, *declined, 1)
+}
+
+// --dry-run works, but neither run nor exec shows it in their help: the real command does the same checks first.
+func TestDryRunIsHiddenFromTheHelp(t *testing.T) {
+	for _, cmd := range []*cobra.Command{RunCommand(), ExecCommand()} {
+		require.NotContains(t, cmd.UsageString(), dryRunFlag, cmd.Name())
+		require.NotNil(t, cmd.Flags().Lookup(dryRunFlag), cmd.Name())
+		require.Contains(t, cmd.UsageString(), skipSyntaxCheckFlag, cmd.Name())
+	}
+}
+
+// A script with a syntax error is refused before anyone is asked to review it, and nothing reaches the rack. The
+// check gets the script's name and exact text.
+func TestProcessCommandChecksScriptSyntaxBeforeTheReview(t *testing.T) {
+	gateway := newEnvChangeGateway(t)
+	reviewed := reviewedScripts(t, nil)
+	var checked []string
+	previous := checkScriptSyntaxWith
+	checkScriptSyntaxWith = func(_ context.Context, name string, text []byte) error {
+		checked = append(checked, name, string(text))
+		return errors.New("count.rb has a syntax error")
+	}
+	t.Cleanup(func() { checkScriptSyntaxWith = previous })
+	text := "#!/usr/bin/env ruby\nputs (1\n"
+	flags := map[string]string{scriptFlag: writeScript(t, "count.rb", text), justificationFlag: testJustification}
+
+	cmd := processCobraCommand(t, RunCommand(), flags)
+	err := runProcessCommand(cmd, []string{"web", "rails", "runner"}, "run", nil)
+
+	require.ErrorContains(t, err, "count.rb has a syntax error\nNothing was sent. Fix the script")
+	require.ErrorContains(t, err, "--"+skipSyntaxCheckFlag)
+	require.Equal(t, []string{"count.rb", text}, checked)
+	require.Empty(t, *reviewed, "nobody is asked to review it")
+	require.Empty(t, gateway.requests())
+
+	// --skip-syntax-check goes straight to the review. A dry run is checked like any other command.
+	checked = nil
+	flags[skipSyntaxCheckFlag], flags[dryRunFlag] = "true", "true"
+	cmd = processCobraCommand(t, RunCommand(), flags)
+	cmd.SetOut(io.Discard)
+	require.NoError(t, runProcessCommand(cmd, []string{"web", "rails", "runner"}, "run", nil))
+	require.Empty(t, checked)
+	require.Len(t, *reviewed, 1)
+
+	delete(flags, skipSyntaxCheckFlag)
+	cmd = processCobraCommand(t, RunCommand(), flags)
+	err = runProcessCommand(cmd, []string{"web", "rails", "runner"}, "run", nil)
+	require.ErrorContains(t, err, "syntax error")
+	require.Len(t, *reviewed, 1)
 }

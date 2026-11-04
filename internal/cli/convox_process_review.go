@@ -1,13 +1,39 @@
 package cli
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"strings"
 
+	"github.com/spf13/cobra"
+
 	"github.com/DocSpring/rack-gateway/internal/cli/scriptreview"
+	"github.com/DocSpring/rack-gateway/internal/cli/scriptsyntax"
 	"github.com/DocSpring/rack-gateway/internal/cli/terminal"
 	"github.com/DocSpring/rack-gateway/internal/cli/webauthn"
 )
+
+// checkScriptSyntaxWith checks a script's syntax. Tests replace it.
+var checkScriptSyntaxWith = scriptsyntax.Check
+
+// checkScriptSyntax refuses a script with a syntax error (scriptsyntax.Check) before anyone is asked to review it,
+// unless --skip-syntax-check says the local Ruby can't judge it.
+func checkScriptSyntax(cobraCmd *cobra.Command, process processCommand) error {
+	if process.script == nil {
+		return nil
+	}
+	skip, err := cobraCmd.Flags().GetBool(skipSyntaxCheckFlag)
+	if err != nil || skip {
+		return err
+	}
+	err = checkScriptSyntaxWith(context.Background(), process.script.Name, []byte(process.script.Text))
+	if err != nil {
+		return fmt.Errorf("%w\nNothing was sent. Fix the script, or if the rack's Ruby understands this syntax and "+
+			"yours doesn't, add --%s", err, skipSyntaxCheckFlag)
+	}
+	return nil
+}
 
 // reviewScript has the person running the command approve its script before anything is sent, and returns the
 // security key PIN they entered with the approval, or "". API tokens run unattended: there's no one to ask.

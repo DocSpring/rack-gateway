@@ -291,8 +291,13 @@ The touch prompt says "can change data" when `--write` gets a read-only env var'
 `--script FILE` (`convox_process_command.go`) sends a local script with the command words: `scriptrun.Build` wraps
 them in a fixed `sh` runner that decodes the base64 script into a temp directory and runs the words with the
 file's path appended. The file is readable by every user, since the words often drop to another user (`gosu`). The gateway reads it back with `scriptrun.Parse` for the audit log, so the runner,
-`SafeName` and `Parse` must stay in step. A script needs command words and `--justification`. Before any MFA
-prompt, `scriptreview.Review` shows it with numbered lines, hidden characters as `<U+XXXX>` and chroma syntax
+`SafeName` and `Parse` must stay in step. A script needs command words and `--justification`. A `.rb` script's syntax
+is checked first (`scriptsyntax.Check`, `checkScriptSyntax`): `ruby --disable=all -c -` from the PATH, with the bytes
+that will be sent on stdin and any `#!` line blanked, since nobody has reviewed the script yet and none of it may run
+(`RUBYOPT`, `BEGIN` blocks, `#!` switches: `TestCheckRunsNothingInTheScript`). A Ruby that doesn't run, or fails any
+other way than by exiting with an error, leaves the script unchecked. `--skip-syntax-check` is for syntax a local
+Ruby is too old for. Before any MFA prompt, `scriptreview.Review` shows it with numbered lines, hidden characters as
+`<U+XXXX>` and chroma syntax
 highlighting (`highlight.go`: styled spans, ANSI colors in a terminal, macOS system colors in the dialog; a lexer
 that fails or takes over 2 seconds leaves the script plain): a y/N prompt on a
 terminal, else a macOS JXA dialog (Cancel is the default; the texts go in as arguments, never into the JXA source),
@@ -302,8 +307,15 @@ picks WebAuthn) and exactly one key is plugged in and has a PIN (`webauthn.Singl
 default. `webauthn.CheckPIN` checks each PIN without a touch (`CredentialsInfo`; a key without credential management
 leaves it to the assertion), a wrong one re-shows the dialog with the retries left, and the PIN goes to
 `newProcessClient`, so the assertion only needs the touch. The PIN dialog shows the script's name, line count and SHA-256, not its
-text. `--dry-run` stops after the checks and the review (`runProcessCommand`): it prints the PIN dialog summary and
-the command's size, with no MFA prompt and no request to the rack.
+text.
+
+`--dry-run` is hidden from `--help` and the docs site, and is only for developing and testing these features. It stops
+after the checks and the review (`runProcessCommand`): it prints the PIN dialog summary, the env var warnings and the
+command's size, with no MFA prompt and no request to the rack. Use it to see a change to the checks or the summary
+without a security key, and, with `--script` and no terminal on macOS, to see a change to the review dialog (without
+its PIN field; Run there runs nothing). Keep it out of the user docs and runbooks, and don't run it before a real
+command: a real run does the same checks before it asks anyone anything, so a dry run with a script only makes the
+person approve the same dialog twice.
 
 ### Terminal output from the gateway
 

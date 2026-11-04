@@ -19,21 +19,28 @@ import (
 // scriptFlag names a local script file to run with the command (see scriptrun).
 const scriptFlag = "script"
 
-// dryRunFlag stops a command once it's checked and its script reviewed: nothing is sent to the rack.
+// dryRunFlag stops a command once it's checked and its script reviewed: nothing is sent to the rack. It's hidden: it
+// helps when developing the script review, and a real run does the same checks first (internal/cli/AGENTS.md).
 const dryRunFlag = "dry-run"
+
+// skipSyntaxCheckFlag sends a .rb script without checking its syntax with the local Ruby (see scriptsyntax).
+const skipSyntaxCheckFlag = "skip-syntax-check"
 
 // maxScriptFileBytes caps the script file read: the audit log keeps at most 50 KB of command and script anyway.
 const maxScriptFileBytes = 1 << 20
 
-// addProcessCommandFlags adds the flags exec and run share: --justification, --script, --dry-run and the env var
-// flags (--env, --all-env-vars and --write).
+// addProcessCommandFlags adds the flags exec and run share: --justification, --script, --skip-syntax-check, --dry-run
+// and the env var flags (--env, --all-env-vars and --write).
 func addProcessCommandFlags(cmd *cobra.Command) {
 	addJustificationFlag(cmd)
 	addEnvFlags(cmd)
 	cmd.Flags().String(scriptFlag, "", "a local script file to run: the command gets the file's path as its last "+
 		"argument (e.g. rails runner), and you review the script before it runs. Needs --justification")
+	cmd.Flags().Bool(skipSyntaxCheckFlag, false, "don't check a .rb script's syntax with your local Ruby first: for "+
+		"syntax the rack's Ruby understands and yours doesn't")
 	cmd.Flags().Bool(dryRunFlag, false, "check the command and review its script, then show what would be sent, "+
 		"without asking for MFA or sending anything to the rack")
+	cmd.Flags().Lookup(dryRunFlag).Hidden = true
 }
 
 // processCommand is an exec or run command as it's sent: where, the command, its justification and its script.
@@ -114,6 +121,9 @@ func prepareProcessCommand(cobraCmd *cobra.Command, args []string, action string
 		return process, err
 	}
 	if process.dryRun, err = cobraCmd.Flags().GetBool(dryRunFlag); err != nil {
+		return process, err
+	}
+	if err := checkScriptSyntax(cobraCmd, process); err != nil {
 		return process, err
 	}
 	process.pin, err = reviewScript(process)
