@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-FROM oven/bun:1.4.3-alpine@sha256:629e17411f1f129dbec3af78d5af9c9f2a937435c80349437206c6b0b7422373 AS webbuild
+FROM oven/bun:1.4.4-alpine@sha256:4cf82f5686b196504fe119db3fcd9185b191f82ece82c40680e597228ec6070a AS webbuild
 
 WORKDIR /app/web
 
@@ -44,7 +44,7 @@ RUN VERSION=$(node -p "require('./web/package.json').version") && \
     -o /out/rack-gateway-api ./cmd/gateway \
     && /out/rack-gateway-api build-info
 
-FROM alpine:3.24.2@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6
+FROM alpine:3.24.3@sha256:be2656061b536c1883c4034790e21d0a09c5aaaf51968b89368a3c0371ea2c9a
 
 # ca-certificates for outbound TLS. No curl: the compose healthcheck uses busybox wget.
 # /app/certs is made here because COPY --chmod would give a directory it creates the file's mode, which leaves no
