@@ -74,7 +74,8 @@ rack-gateway logs -a myapp -r eu-prod
 ```
 
 The `--rack` flag doesn't change your default; it only affects that one command. Deploy approval commands also
-take a comma-separated list of racks, or `all`.
+take several racks: repeat the flag (`--rack us --rack eu`), separate names with commas (`--rack us,eu`), or use
+`all`. Repeated racks count once. Commands that use one rack refuse several, rather than picking one of them.
 
 ## Environment Variable Override
 

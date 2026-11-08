@@ -43,6 +43,8 @@ app on every listed rack, shows them, and approves the pending ones: one PIN, th
 Requests that are already approved or deployed count as done. If a listed app has no request on a listed rack,
 nothing is approved and the command fails.
 
+--rack takes several racks: repeat it (--rack us --rack eu), separate names with commas (--rack us,eu), or use all.
+
 From a terminal it asks for Enter first. Without a terminal (scripts, AI agents) it doesn't, and it needs an
 explicit --app list and a full 40-character --commit (no --branch or --all-apps). The macOS PIN dialog then lists
 every approval the command makes (branch, app, rack, commit and message) above the command line.
@@ -65,6 +67,9 @@ Examples:
 
   # Approve two apps' requests for a commit on US and EU (one PIN, one touch per approval)
   cx deploy-approval approve --app web,worker --commit <sha> --rack us,eu
+
+  # The same, with one --rack per rack
+  cx deploy-approval approve --app web,worker --commit <sha> --rack us --rack eu
 
   # Approve every app's request for a commit
   cx deploy-approval approve --all-apps --commit <sha> --rack staging`,

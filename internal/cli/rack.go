@@ -30,8 +30,27 @@ func currentRack() (string, error) {
 	return GetCurrentRack()
 }
 
-// SelectedRack determines which rack to use based on flags, env vars, or config
+// SelectedRack is the one rack a command uses: --rack, else RACK_GATEWAY_RACK, else the current rack. Several racks
+// (a repeated --rack, or comma-separated names) are refused rather than using one of them and ignoring the rest;
+// deploy approval commands take several through resolveRacks.
 func SelectedRack() (string, error) {
+	selection, err := rackSelection()
+	if err != nil || !strings.Contains(selection, ",") {
+		return selection, err
+	}
+	racks, err := parseRackList(selection)
+	if err != nil {
+		return "", err
+	}
+	if len(racks) > 1 {
+		return "", fmt.Errorf("this command uses one rack, but several were selected: %s", strings.Join(racks, ", "))
+	}
+	return racks[0], nil
+}
+
+// rackSelection is the rack selection as given: --rack (several racks are joined with commas), else
+// RACK_GATEWAY_RACK, else the current rack.
+func rackSelection() (string, error) {
 	if RackFlag != "" {
 		return RackFlag, nil
 	}

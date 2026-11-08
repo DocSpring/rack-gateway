@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"slices"
 	"strings"
 	"time"
 
@@ -143,27 +144,32 @@ var errGatewayURLWithManyRacks = errors.New(
 	"RACK_GATEWAY_URL names a single gateway; unset it to use --rack all or a list of racks",
 )
 
-// resolveRacks parses the selected rack. Deploy approval commands accept comma-separated rack names
-// through the global --rack flag. Special value "all" expands to all configured racks. RACK_GATEWAY_URL names one
-// gateway, so it is refused with several racks: each rack's request would go to that one host.
+// errAllWithOtherRacks explains why "all" can't be listed with rack names.
+var errAllWithOtherRacks = errors.New("--rack all already selects every rack; don't list other racks with it")
+
+// resolveRacks parses the selected racks for deploy approval commands: the global --rack flag, repeated or with
+// comma-separated names, or RACK_GATEWAY_RACK (rackSelection). Repeats are dropped, keeping the order given. The
+// special value "all" expands to all configured racks. RACK_GATEWAY_URL names one gateway, so it is refused with
+// several racks: each rack's request would go to that one host.
 func resolveRacks() ([]string, error) {
-	rack, err := SelectedRack()
+	selection, err := rackSelection()
 	if err != nil {
 		return nil, err
 	}
 
-	trimmed := strings.TrimSpace(rack)
+	racks, err := parseRackList(selection)
+	if err != nil {
+		return nil, err
+	}
 	envURL := strings.TrimSpace(os.Getenv("RACK_GATEWAY_URL"))
-	if trimmed == "all" {
+	if slices.Contains(racks, "all") {
+		if len(racks) > 1 {
+			return nil, errAllWithOtherRacks
+		}
 		if envURL != "" {
 			return nil, errGatewayURLWithManyRacks
 		}
 		return expandAllRacks()
-	}
-
-	racks, err := parseRackList(trimmed)
-	if err != nil {
-		return nil, err
 	}
 	if envURL != "" {
 		// The rack name is a label for that gateway, and LoadRackAuth checks it against a stored session.
@@ -174,21 +180,6 @@ func resolveRacks() ([]string, error) {
 	}
 	if err := validateConfiguredRacks(racks); err != nil {
 		return nil, err
-	}
-	return racks, nil
-}
-
-func parseRackList(raw string) ([]string, error) {
-	parts := strings.Split(raw, ",")
-	racks := make([]string, 0, len(parts))
-	for _, part := range parts {
-		value := strings.TrimSpace(part)
-		if value != "" {
-			racks = append(racks, value)
-		}
-	}
-	if len(racks) == 0 {
-		return nil, fmt.Errorf("no valid rack names provided")
 	}
 	return racks, nil
 }

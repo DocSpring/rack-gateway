@@ -114,6 +114,12 @@ cx deploy-approval approve --app web,worker --commit <40-char sha> --rack us,eu
 
 The `all` value expands to all configured racks in `gateways`, excluding any racks listed in `all_racks_exclude`. This is useful for avoiding local development racks when operating on production infrastructure.
 
+`--rack` is a `rackFlagValue` (`rack_flag.go`): a repeated flag adds to the list instead of replacing it, so
+`--rack us --rack eu`, `--rack us,eu` and `--rack us --rack us,eu` all select US and EU (`parseRackList` drops
+repeats, keeping the order given). Deploy approval commands read the list through `resolveRacks`. Every other command
+uses `SelectedRack`, which refuses several racks: a plain string flag kept only the last `--rack`, so
+`approve --rack us --rack eu` once approved EU alone with no warning. Login refuses rack names with commas.
+
 Without `--commit`, deploy approval commands use the full SHA of `HEAD` (`git rev-parse HEAD`): the gateway matches
 `--commit` as a prefix, so a short SHA could also match another commit's request. `wait --approve` in a terminal asks
 for y/N on every request whose commit isn't exactly the full `--commit` (found by `--branch`, or by a short

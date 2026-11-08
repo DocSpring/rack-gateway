@@ -132,8 +132,8 @@ func resolveLoginTarget(args []string) (string, string, error) {
 		return rack, gatewayURL, nil
 	case 1:
 		rack := rackArg
-		if rack == "" {
-			return "", "", fmt.Errorf("rack name cannot be empty")
+		if err := checkLoginRackName(rack); err != nil {
+			return "", "", err
 		}
 		gatewayURL, err := resolveLoginGatewayURL(rack)
 		if err != nil {
@@ -143,8 +143,8 @@ func resolveLoginTarget(args []string) (string, string, error) {
 	case 2:
 		rack := rackArg
 		gatewayURL := gatewayArg
-		if rack == "" {
-			return "", "", fmt.Errorf("rack name cannot be empty")
+		if err := checkLoginRackName(rack); err != nil {
+			return "", "", err
 		}
 		if gatewayURL == "" {
 			return "", "", fmt.Errorf("gateway URL cannot be empty")
@@ -153,6 +153,17 @@ func resolveLoginTarget(args []string) (string, string, error) {
 	default:
 		return "", "", fmt.Errorf("unexpected number of arguments")
 	}
+}
+
+// checkLoginRackName refuses a rack name that --rack couldn't select: --rack separates rack names with commas.
+func checkLoginRackName(rack string) error {
+	if rack == "" {
+		return fmt.Errorf("rack name cannot be empty")
+	}
+	if strings.Contains(rack, ",") {
+		return fmt.Errorf("rack name %q can't contain a comma: --rack uses commas to separate racks", rack)
+	}
+	return nil
 }
 
 func normalizeLoginArgs(args []string) (string, string) {

@@ -6,6 +6,11 @@ import (
 
 // Execute runs the root command
 func Execute() error {
+	return explainRefusedHandshake(newRootCommand().Execute())
+}
+
+// newRootCommand builds the root command with its global flags and every subcommand.
+func newRootCommand() *cobra.Command {
 	rootCmd := &cobra.Command{
 		Use:           "rack-gateway",
 		Short:         "API gateway for Convox with authentication and RBAC",
@@ -39,8 +44,7 @@ Rack management:
 
 	// Global flags
 	rootCmd.PersistentFlags().StringVar(&ConfigPath, "config", ConfigPath, "Config directory")
-	rootCmd.PersistentFlags().
-		StringVarP(&RackFlag, "rack", "r", "", "Rack to use (deploy approvals accept comma-separated names or all)")
+	addRackFlag(rootCmd.PersistentFlags(), &RackFlag)
 	rootCmd.PersistentFlags().
 		StringVar(&APITokenFlag, "api-token", "", "API token for CLI requests (overrides RACK_GATEWAY_API_TOKEN)")
 	rootCmd.PersistentFlags().
@@ -93,5 +97,5 @@ Rack management:
 		InstancesCommand(),
 	)
 
-	return explainRefusedHandshake(rootCmd.Execute())
+	return rootCmd
 }

@@ -29,6 +29,8 @@ func newDeployApprovalShowCommand() *cobra.Command {
 If no ID is provided, searches for the latest approval request matching the current app and git branch.
 Use --branch or --commit to search by specific criteria instead.
 
+--rack takes several racks: repeat it (--rack us --rack eu), separate names with commas (--rack us,eu), or use all.
+
 Examples:
   # Show by ID
   cx deploy-approval show abc123-def456-...
