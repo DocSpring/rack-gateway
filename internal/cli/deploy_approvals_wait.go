@@ -29,6 +29,8 @@ In a terminal, --approve asks you to confirm (y/N) each request whose commit isn
 --branch and no --commit it finds the newest request for the branch whatever its commit, and a short --commit
 matches any commit that starts with it.
 
+--rack takes several racks: repeat it (--rack us --rack eu), separate names with commas (--rack us,eu), or use all.
+
 Examples:
   # Approve two apps' requests for a commit on staging (one PIN, one touch per approval)
   rack-gateway deploy-approval wait --approve --app web,worker --commit <sha> --rack staging`,

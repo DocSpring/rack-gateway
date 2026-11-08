@@ -286,6 +286,9 @@ pending request can be approved; one that is already approved or deployed counts
 # Every listed app's request for the commit, on every listed rack
 rack-gateway deploy-approval approve --app web,worker --commit <sha> --rack us,eu
 
+# The same, with one --rack per rack
+rack-gateway deploy-approval approve --app web,worker --commit <sha> --rack us --rack eu
+
 # Every app's request for the commit
 rack-gateway deploy-approval approve --all-apps --commit <sha> --rack staging
 ```

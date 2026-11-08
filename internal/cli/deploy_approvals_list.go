@@ -26,7 +26,9 @@ func newDeployApprovalListCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List deploy approval requests",
-		Long:  "List deploy approval requests with optional filtering by status, app and commit.",
+		Long: `List deploy approval requests with optional filtering by status, app and commit.
+
+--rack takes several racks: repeat it (--rack us --rack eu), separate names with commas (--rack us,eu), or use all.`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return executeDeployApprovalList(cmd, opts)
 		},
