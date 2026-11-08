@@ -97,5 +97,5 @@ func TestApprovalTouchAndSummaryNeutralizeTheRequestID(t *testing.T) {
 	req := &deployApprovalRequest{PublicID: "req-1\x1b[2J", GitCommitHash: appsTestCommit, Message: "Deploy"}
 
 	require.Equal(t, "approve request req-1?[2J on us", approvalTouch("us", req, 0, 0))
-	require.Equal(t, `request req-1?[2J on us, commit 36a302d01234: "Deploy"`, approvalSummaryLine("us", req))
+	require.Equal(t, `request req-1?[2J on us, commit 36a302d, "Deploy"`, approvalSummaryLine("us", req))
 }

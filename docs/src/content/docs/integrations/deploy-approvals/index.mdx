@@ -295,8 +295,9 @@ each listed rack. If any is missing, it approves nothing and exits non-zero, nam
 so a retry approves them all together. Requests that are already approved or deployed count as done.
 
 From a terminal it asks you to press Enter before approving. Scripts and AI agents (no terminal) skip that prompt.
-Instead, the macOS PIN dialog lists every approval the command makes (app, rack, short commit and message) above
-the command line, and each approval needs a key touch. The dialog masks `KEY=value` arguments and the values of
+Instead, the macOS PIN dialog lists every approval the command makes above the command line, each starting with
+its branch, then its app, rack, short commit and message. Each approval needs a key touch, and the touch prompt
+and notification name the branch too. The dialog masks `KEY=value` arguments and the values of
 flags that can carry secrets (tokens, passwords, keys, MFA codes); other flag values such as `--app`, `--rack` and
 `--commit` are shown. Without a terminal the command line must also say exactly what is approved: an explicit
 `--app` list and a full 40-character `--commit`, with no `--branch` or `--all-apps`.
