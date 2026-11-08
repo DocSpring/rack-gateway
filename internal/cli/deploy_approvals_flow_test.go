@@ -184,7 +184,7 @@ func TestApproveByIDShowsTheRequestBeforeApproving(t *testing.T) {
 		require.Contains(t, shown, want, "the request is shown before it is approved")
 	}
 	require.NotContains(t, shown, "\x1b[2J", "CI-supplied text is shown safely")
-	require.Contains(t, gateway.output.String(), approveFlowRequestID+" (web, commit 36a302d01234) approved")
+	require.Contains(t, gateway.output.String(), approveFlowRequestID+" (web, commit 36a302d) approved")
 }
 
 func TestApproveByIDOnlyApprovesPendingRequests(t *testing.T) {
@@ -283,14 +283,14 @@ func TestApprovalSummaryDescribesEachApproval(t *testing.T) {
 
 	got := approvalSummary([]rackApproval{{rack: "staging", req: &web}, {rack: "us", req: &unnamed}})
 	require.Equal(t, []string{
-		`web on staging, commit 36a302d01234: "Deploy web?with a second line"`,
-		`request p-unnamed on us, commit 36a302d01234: "Deploy "`,
+		`main: web on staging, commit 36a302d, "Deploy web?with a second line"`,
+		`main: request p-unnamed on us, commit 36a302d, "Deploy "`,
 	}, got)
 }
 
 func TestShortCommit(t *testing.T) {
-	require.Equal(t, "36a302d01234", shortCommit(appsTestCommit))
-	require.Equal(t, "36a302d", shortCommit("36a302d"))
+	require.Equal(t, "36a302d", shortCommit(appsTestCommit))
+	require.Equal(t, "36a3", shortCommit("36a3"))
 	require.Equal(t, "(none)", shortCommit(""))
 	require.Equal(t, "?[2J", shortCommit("\x1b[2J"))
 }

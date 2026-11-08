@@ -45,7 +45,7 @@ nothing is approved and the command fails.
 
 From a terminal it asks for Enter first. Without a terminal (scripts, AI agents) it doesn't, and it needs an
 explicit --app list and a full 40-character --commit (no --branch or --all-apps). The macOS PIN dialog then lists
-every approval the command makes (app, rack, commit and message) above the command line.
+every approval the command makes (branch, app, rack, commit and message) above the command line.
 
 Examples:
   # Show a request and approve it

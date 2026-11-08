@@ -27,7 +27,7 @@ func TestWaitShowsTheCommitOfEachRequest(t *testing.T) {
 	out := gateway.output.String()
 	require.Contains(t, out, "Deploy Approval Request Found")
 	require.Contains(t, out, appsTestCommit, "the pending request's details show its full commit")
-	require.Contains(t, out, "✓ Already approved on rack staging: a-worker (worker, commit 36a302d01234)")
+	require.Contains(t, out, "✓ Already approved on rack staging: a-worker (worker, commit 36a302d)")
 	require.Empty(t, gateway.seen(), "without --approve, wait only shows requests")
 }
 
@@ -51,8 +51,8 @@ func TestWaitApproveShowsTheRequestAndSummarizesTheCommit(t *testing.T) {
 	}
 
 	require.NoError(t, waiter.printSummary())
-	require.Contains(t, gateway.output.String(), "p-web (web, commit 36a302d01234) approved")
-	require.Contains(t, gateway.output.String(), "staging  web  p-web  commit 36a302d01234")
+	require.Contains(t, gateway.output.String(), "p-web (web, commit 36a302d) approved")
+	require.Contains(t, gateway.output.String(), "staging  web  p-web  commit 36a302d")
 }
 
 // The newest request for a branch can be for any commit, so approving by branch alone needs a confirmation.
@@ -121,9 +121,9 @@ func TestWaitPINSummaryListsEveryApprovalTheRunCanMake(t *testing.T) {
 	waiter.markHandled("staging", web)
 	waiter.markHandled("us", shownRequest("a-worker", "worker", "approved"))
 	require.Equal(t, []string{
-		`web on staging, commit 36a302d01234: "Deploy web"`,
-		"worker on staging, commit 36a302d01234 (when its request appears)",
-		"web on us, commit 36a302d01234 (when its request appears)",
+		`main: web on staging, commit 36a302d, "Deploy web"`,
+		"worker on staging, commit 36a302d (when its request appears)",
+		"web on us, commit 36a302d (when its request appears)",
 	}, waiter.pinSummary("staging", web))
 
 	byBranch := newDeployApprovalWaiter(&cobra.Command{}, deployApprovalWaitConfig{
@@ -131,7 +131,7 @@ func TestWaitPINSummaryListsEveryApprovalTheRunCanMake(t *testing.T) {
 	})
 	byBranch.markHandled("staging", web)
 	require.Equal(t, []string{
-		`web on staging, commit 36a302d01234: "Deploy web"`,
+		`main: web on staging, commit 36a302d, "Deploy web"`,
 		"worker on staging, branch main (when its request appears)",
 	}, byBranch.pinSummary("staging", web))
 }
