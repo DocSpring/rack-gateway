@@ -50,7 +50,9 @@ monitoring service's key, so the gateway never logs them.
 - **Uptime** (`UPTIME_HEARTBEAT_URL`): requested when the gateway starts and every 15 minutes
   (`UPTIME_HEARTBEAT_INTERVAL_MINUTES`) while the health check would pass. It's a background job, so it stops when
   the gateway is down, can't reach its database, has stopped running jobs, or can't write its audit log. Give the
-  monitor that schedule and some grace for restarts, for example 15 minutes.
+  monitor that schedule and some grace for restarts, for example 15 minutes. A failed request is logged, and from
+  the third failure in a row it's also reported to Sentry, with the reason (an HTTP status, a timeout): one failure
+  is usually the monitoring service or the network, and the monitor alerts when requests stop anyway.
 - **Audit verification** (`AUDIT_VERIFY_HEARTBEAT_URL`): requested after every
   [hourly audit verification](/deployment/terraform/s3-worm-storage/#hourly-verification-in-the-gateway) run,
   half past every hour (UTC), whatever it found: failures already alert through Sentry and Slack, and the monitor

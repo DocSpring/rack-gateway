@@ -204,7 +204,8 @@ Key files:
   `AUDIT_VERIFY_HEARTBEAT_URL`, so a heartbeat monitor alerts when runs stop.
 - `heartbeat/`, `jobs/uptime/` - Heartbeat pings (https URLs from env vars, never logged: they carry the monitor's
   key). `UPTIME_HEARTBEAT_URL` is pinged on start and every `UPTIME_HEARTBEAT_INTERVAL_MINUTES` while the health
-  check would pass.
+  check would pass. A failed ping is logged; the job fails (and so reports to Sentry) only from
+  `uptime.FailuresBeforeReport` failures in a row.
 
 ### `/middleware` - HTTP Middleware
 
