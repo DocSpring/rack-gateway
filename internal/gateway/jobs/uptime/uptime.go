@@ -9,6 +9,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/riverqueue/river"
@@ -27,6 +28,12 @@ const (
 
 // DefaultInterval is how often the gateway pings unless UPTIME_HEARTBEAT_INTERVAL_MINUTES says otherwise.
 const DefaultInterval = 15 * time.Minute
+
+// FailuresBeforeReport is how many pings in a row must fail before the job fails, which reports it to Sentry. A
+// single failed ping is usually the monitoring service or the network having a moment, and the heartbeat monitor
+// alerts when pings stop arriving, whatever the gateway reports. The job error is for a ping that keeps failing (a
+// wrong URL, a revoked key), and says why.
+const FailuresBeforeReport = 3
 
 // IntervalFromEnv returns UPTIME_HEARTBEAT_INTERVAL_MINUTES, or DefaultInterval when it isn't set.
 func IntervalFromEnv() (time.Duration, error) {
@@ -54,6 +61,9 @@ type Worker struct {
 	// health is the health check's audit check (audit.WriteHealth).
 	health func(time.Time) error
 	now    func() time.Time
+	// failures counts the pings that have failed in a row. The worker lives as long as the process, and a gateway
+	// runs one process.
+	failures atomic.Int32
 }
 
 // NewWorker returns the worker; ping requests the heartbeat URL.
@@ -62,13 +72,24 @@ func NewWorker(ping func(context.Context) error) *Worker {
 }
 
 // Work pings the heartbeat unless the health check would fail: a gateway that refuses every request because it
-// can't write its audit log isn't up. A failed ping isn't retried; the next one is due within the interval.
+// can't write its audit log isn't up. A failed ping isn't retried; the next one is due within the interval. A failed
+// ping is logged, and the job fails from the FailuresBeforeReport-th failure in a row.
 func (w *Worker) Work(ctx context.Context, _ *river.Job[Args]) error {
 	if err := w.health(w.now()); err != nil {
 		gtwlog.Errorf("Uptime heartbeat: not pinging, the gateway is unhealthy: %v", err)
 		return nil
 	}
-	return w.ping(ctx)
+	if err := w.ping(ctx); err != nil {
+		failures := w.failures.Add(1)
+		if failures < FailuresBeforeReport {
+			gtwlog.Warnf("Uptime heartbeat: ping failed (%d in a row, reported from %d): %v",
+				failures, FailuresBeforeReport, err)
+			return nil
+		}
+		return fmt.Errorf("%w (%d pings in a row have failed)", err, failures)
+	}
+	w.failures.Store(0)
+	return nil
 }
 
 // PeriodicJob pings when the gateway starts and every interval.
