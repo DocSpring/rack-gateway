@@ -33,17 +33,17 @@ The high-level workflow looks like this:
 
 7. Once the worker finishes, run a review cycle from the worktree before merging:
 
-   - If the worker left changes unstaged, run CodeRabbit against the working tree. If they committed, review the commit directly. **Run CodeRabbit only once per branch.** If you need to make follow-up format-only fixes (e.g., gofmt), skip re-running CodeRabbit; rely on your own review instead. Formally:
+   - Run an AI code review with the whole repository as context: Claude Code's `/code-review` in the worktree, or Codex. If the worker left changes unstaged, review the working tree. If they committed, review the commits against `origin/main`. **Review once per branch.** If you need to make follow-up format-only fixes (e.g., gofmt), skip another review; rely on your own reading instead. With Codex:
 
      ```bash
      # unstaged diff
-     coderabbit review --plain --type uncommitted
+     codex review --uncommitted
 
      # committed changes versus origin/main
-     coderabbit review --plain --type committed --base-commit origin/main
+     codex review --base origin/main
      ```
 
-     Address minor suggestions immediately; if coderabbit flags major rework, spin up another worker with a follow-up task entry.
+     Address minor findings immediately; if the review calls for major rework, spin up another worker with a follow-up task entry.
 
    - Re-run the required `task` commands locally. Do not merge until the branch is fully green (at minimum: `task go:test`).
 
