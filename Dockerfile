@@ -14,7 +14,7 @@ RUN test -n "$COMMIT_SHA" || (echo "COMMIT_SHA build arg is required" && exit 1)
 ENV COMMIT_SHA=${COMMIT_SHA}
 RUN bun run build
 
-FROM golang:1.27.3-alpine@sha256:f2c872bcee949b7be9c490efd02b48a8a2fbf947cdf533f1c58525ec9d8170fd AS builder
+FROM golang:1.27.4-alpine@sha256:0a5f7fe796599ff487605987432e7619ae45beeb2fba4c2ce0b907879932aebf AS builder
 
 RUN apk add --no-cache git ca-certificates make gcc musl-dev nodejs npm
 
