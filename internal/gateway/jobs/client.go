@@ -165,6 +165,27 @@ func (c *Client) Insert(
 	return c.river.Insert(ctx, args, opts)
 }
 
+// afterWriteInsertTimeout bounds InsertAfterWrite, so a stalled database can't hold the request that wrote the record.
+const afterWriteInsertTimeout = 10 * time.Second
+
+// InsertAfterWrite enqueues the follow-up job of a write that has already been committed, such as the Slack
+// notification of a new deploy approval request. It ignores the caller's cancellation: a client that hangs up as soon
+// as its record is saved mustn't lose the job that tells people about it.
+func (c *Client) InsertAfterWrite(
+	ctx context.Context,
+	args river.JobArgs,
+	opts *river.InsertOpts,
+) (*rivertype.JobInsertResult, error) {
+	insertCtx, cancel := afterWriteContext(ctx)
+	defer cancel()
+	return c.river.Insert(insertCtx, args, opts)
+}
+
+// afterWriteContext keeps ctx's values but not its cancellation or deadline, and gives the insert its own timeout.
+func afterWriteContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.WithoutCancel(ctx), afterWriteInsertTimeout)
+}
+
 // InsertTx enqueues a new job within a transaction
 func (c *Client) InsertTx(
 	ctx context.Context,
