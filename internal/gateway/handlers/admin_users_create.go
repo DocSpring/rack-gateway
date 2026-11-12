@@ -213,7 +213,7 @@ func (h *AdminHandler) notifyUserCreated(c *gin.Context, req CreateUserRequest) 
 
 	// Enqueue welcome email to new user
 	if recipient != "" {
-		_, err := h.jobsClient.Insert(c.Request.Context(), jobemail.WelcomeArgs{
+		_, err := h.jobsClient.InsertAfterWrite(c.Request.Context(), jobemail.WelcomeArgs{
 			Email:        recipient,
 			Name:         req.Name,
 			Roles:        req.Roles,
@@ -247,7 +247,7 @@ func (h *AdminHandler) notifyUserCreated(c *gin.Context, req CreateUserRequest) 
 	sort.Strings(filtered)
 	recipients := prioritiseInviterFirst(filtered, inviterEmail)
 
-	_, err := h.jobsClient.Insert(c.Request.Context(), jobemail.UserAddedAdminArgs{
+	_, err := h.jobsClient.InsertAfterWrite(c.Request.Context(), jobemail.UserAddedAdminArgs{
 		AdminEmails:  recipients,
 		NewUserEmail: req.Email,
 		NewUserName:  req.Name,

@@ -338,7 +338,7 @@ func (h *AdminHandler) enqueueCircleCIApprovalJob(c *gin.Context, record *db.Dep
 
 	if h.jobsClient != nil {
 		args := circleCIApprovalJobArgs(record, circleciMetadata, repo)
-		_, err := h.jobsClient.Insert(c.Request.Context(), args, &river.InsertOpts{
+		_, err := h.jobsClient.InsertAfterWrite(c.Request.Context(), args, &river.InsertOpts{
 			Queue:       jobs.QueueIntegrations,
 			MaxAttempts: jobs.MaxAttemptsNotification,
 		})

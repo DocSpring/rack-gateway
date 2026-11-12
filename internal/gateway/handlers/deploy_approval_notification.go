@@ -25,7 +25,7 @@ func (h *APIHandler) sendSlackNotification(c *gin.Context, recordID int64) {
 		return
 	}
 
-	_, err := h.jobsClient.Insert(c.Request.Context(), jobslack.DeployApprovalArgs{
+	_, err := h.jobsClient.InsertAfterWrite(c.Request.Context(), jobslack.DeployApprovalArgs{
 		DeployApprovalRequestID: recordID,
 	}, &river.InsertOpts{
 		Queue:       jobs.QueueNotifications,
@@ -97,7 +97,7 @@ func (h *APIHandler) enqueueGitHubComment(c *gin.Context, args jobgithub.PostPRC
 		return
 	}
 
-	_, err := h.jobsClient.Insert(c.Request.Context(), args, &river.InsertOpts{
+	_, err := h.jobsClient.InsertAfterWrite(c.Request.Context(), args, &river.InsertOpts{
 		Queue:       jobs.QueueIntegrations,
 		MaxAttempts: jobs.MaxAttemptsNotification,
 	})
