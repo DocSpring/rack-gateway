@@ -18,7 +18,8 @@ const autoApprovalNote = "Approved automatically: deploy_approval_auto_approve i
 
 // autoApprove approves a new request straight away when deploy_approval_auto_approve is on: a gateway for a rack
 // where the CI pipeline's own approval step decides when a deploy runs. The approval works like a person's (the
-// same window, binding and approved commands), with no approving user, and it never approves a CircleCI job. It
+// same window, binding and approved commands), with no approving user, and it never approves a CircleCI job. Its
+// audit event is written in the approval's transaction. It
 // doesn't apply while deploy_approval_require_different_approver is on. When a setting can't be read or the
 // approval fails, the request stays pending for a person to approve, and ok is false.
 func (h *APIHandler) autoApprove(c *gin.Context, record *db.DeployApprovalRequest) (*db.DeployApprovalRequest, bool) {
@@ -32,13 +33,18 @@ func (h *APIHandler) autoApprove(c *gin.Context, record *db.DeployApprovalReques
 		return nil, false
 	}
 
-	approved, err := h.database.AutoApproveDeployApprovalRequest(record.ID, expiresAt, autoApprovalNote)
+	// The approval and its audit event commit together: without its record, there's no approval.
+	ctx := c.Request.Context()
+	approved, event, err := h.database.AutoApproveDeployApprovalRequest(record.ID, expiresAt, autoApprovalNote,
+		func(approved *db.DeployApprovalRequest) *db.AuditLog {
+			return audit.PrepareRequestEntry(ctx, audit.DeployApprovalAutoApprovedEntry(approved))
+		})
 	if err != nil {
+		audit.RecordedRequestEntries(ctx, nil, err)
 		reportAutoApprovalFailure(record, err)
 		return nil, false
 	}
-
-	_ = h.auditLogger.LogRequestEntry(c.Request.Context(), audit.DeployApprovalAutoApprovedEntry(approved))
+	audit.RecordedRequestEntries(ctx, []*db.AuditLog{event}, nil)
 	return approved, true
 }
 

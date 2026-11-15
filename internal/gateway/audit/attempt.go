@@ -155,3 +155,26 @@ func detailsCarryRequestID(details string) bool {
 	_, ok := fields["request_id"].(string)
 	return ok
 }
+
+// PrepareRequestEntry gives al the request ID of the attempt recorded for ctx's request, for an entry the database
+// appends in the same transaction as the change it records. Once that transaction ends, pass the entries and its
+// error to RecordedRequestEntries.
+func PrepareRequestEntry(ctx context.Context, al *db.AuditLog) *db.AuditLog {
+	if attempt := AttemptFromContext(ctx); attempt != nil {
+		setRequestID(al, attempt.RequestID)
+	}
+	return al
+}
+
+// RecordedRequestEntries is RecordedInTransaction for entries a request appended in a transaction: once
+// committed, they count as the request's results.
+func RecordedRequestEntries(ctx context.Context, events []*db.AuditLog, err error) {
+	RecordedInTransaction(events, err)
+	attempt := AttemptFromContext(ctx)
+	if attempt == nil || err != nil {
+		return
+	}
+	for range events {
+		attempt.results.Add(1)
+	}
+}
