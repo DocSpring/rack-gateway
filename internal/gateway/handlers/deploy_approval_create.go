@@ -94,14 +94,17 @@ func (h *APIHandler) CreateDeployApprovalRequest(c *gin.Context) {
 	}
 
 	h.logApprovalCreation(c.Request.Context(), userEmail, dbUser.Name, token.PublicID, record, verification)
-	h.sendSlackNotification(c, record.ID)
 
-	if !h.shouldPostPRComment(verification.prURL) {
-		c.JSON(http.StatusCreated, toDeployApprovalRequestResponse(record))
+	if approved, ok := h.autoApprove(c, record); ok {
+		// Nobody needs to act on it, so no Slack alert or PR comment asks anyone to approve it.
+		c.JSON(http.StatusCreated, toDeployApprovalRequestResponse(approved))
 		return
 	}
 
-	h.postPRCommentAsync(c, app, verification.prURL, record.PublicID, record.GitCommitHash)
+	h.sendSlackNotification(c, record.ID)
+	if h.shouldPostPRComment(verification.prURL) {
+		h.postPRCommentAsync(c, app, verification.prURL, record.PublicID, record.GitCommitHash)
+	}
 	c.JSON(http.StatusCreated, toDeployApprovalRequestResponse(record))
 }
 

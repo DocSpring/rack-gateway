@@ -15,6 +15,7 @@ const (
 	GlobalSettingAllowDestructiveActions GlobalSettingKey = iota
 	GlobalSettingDefaultCIProvider
 	GlobalSettingDefaultVCSProvider
+	GlobalSettingDeployApprovalAutoApprove
 	GlobalSettingDeployApprovalRequireDifferentApprover
 	GlobalSettingDeployApprovalsEnabled
 	GlobalSettingDeployApprovalWindowMinutes
@@ -31,6 +32,7 @@ const (
 	KeyAllowDestructiveActions                = "allow_destructive_actions"
 	KeyDefaultCIProvider                      = "default_ci_provider"
 	KeyDefaultVCSProvider                     = "default_vcs_provider"
+	KeyDeployApprovalAutoApprove              = "deploy_approval_auto_approve"
 	KeyDeployApprovalRequireDifferentApprover = "deploy_approval_require_different_approver"
 	KeyDeployApprovalsEnabled                 = "deploy_approvals_enabled"
 	KeyDeployApprovalWindowMinutes            = "deploy_approval_window_minutes"
@@ -43,6 +45,7 @@ var globalSettingKeyToString = [...]string{
 	KeyAllowDestructiveActions,
 	KeyDefaultCIProvider,
 	KeyDefaultVCSProvider,
+	KeyDeployApprovalAutoApprove,
 	KeyDeployApprovalRequireDifferentApprover,
 	KeyDeployApprovalsEnabled,
 	KeyDeployApprovalWindowMinutes,
@@ -190,6 +193,7 @@ var DefaultGlobalSettings = map[string]interface{}{
 	KeyAllowDestructiveActions:                false,
 	KeyDefaultCIProvider:                      "circleci",
 	KeyDefaultVCSProvider:                     "github",
+	KeyDeployApprovalAutoApprove:              false,
 	KeyDeployApprovalRequireDifferentApprover: false,
 	KeyDeployApprovalsEnabled:                 true,
 	KeyDeployApprovalWindowMinutes:            DefaultDeployApprovalWindowMinutes,

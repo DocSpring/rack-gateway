@@ -27,12 +27,14 @@ interface DeployApprovalValues {
   deploy_approvals_enabled: boolean
   deploy_approval_window_minutes: number
   deploy_approval_require_different_approver: boolean
+  deploy_approval_auto_approve: boolean
 }
 
 const DEFAULTS: DeployApprovalValues = {
   deploy_approvals_enabled: true,
   deploy_approval_window_minutes: 15,
   deploy_approval_require_different_approver: false,
+  deploy_approval_auto_approve: false,
 }
 
 const KEYS = Object.keys(DEFAULTS) as (keyof DeployApprovalValues)[]
@@ -169,6 +171,23 @@ export function DeployApprovalsCard({ settings, disabled }: DeployApprovalsCardP
           <p className="mt-1 text-muted-foreground text-xs">
             Nobody can approve or extend a deploy they requested: the person who created the
             request, or the owner of its API token
+          </p>
+        </div>
+
+        <div>
+          <label className="flex items-center gap-3">
+            <input
+              checked={display('deploy_approval_auto_approve')}
+              disabled={isLocked('deploy_approval_auto_approve')}
+              onChange={(event) => change('deploy_approval_auto_approve', event.target.checked)}
+              type="checkbox"
+            />
+            <span className="font-medium text-sm">Approve requests automatically</span>
+            <SourceIndicator setting={settings?.deploy_approval_auto_approve} />
+          </label>
+          <p className="mt-1 text-muted-foreground text-xs">
+            Each request is approved as it's created, for a rack where the CI pipeline's own
+            approval step decides when to deploy. Off while a different approver is required
           </p>
         </div>
 

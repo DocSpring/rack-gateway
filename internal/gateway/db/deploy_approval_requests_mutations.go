@@ -170,8 +170,9 @@ func (d *Database) handleDeployApprovalInsertError(
 
 // approvalStatusUpdate is an approval or a rejection of a deploy approval request.
 type approvalStatusUpdate struct {
-	newStatus   string
-	actorUserID int64
+	newStatus string
+	// actorUserID is the user who approved or rejected it: nil for an approval the gateway made by itself.
+	actorUserID *int64
 	// expiresAt is when an approval's window ends (approvals only).
 	expiresAt *time.Time
 	notes     string
@@ -274,8 +275,24 @@ func (d *Database) ApproveDeployApprovalRequest(
 	pendingMaxAge time.Duration,
 ) (*DeployApprovalRequest, error) {
 	err := d.updateApprovalStatus("id", id, approvalStatusUpdate{
-		newStatus: DeployApprovalRequestStatusApproved, actorUserID: approverUserID, expiresAt: &expiresAt,
+		newStatus: DeployApprovalRequestStatusApproved, actorUserID: &approverUserID, expiresAt: &expiresAt,
 		notes: notes, pendingMaxAge: pendingMaxAge,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return d.GetDeployApprovalRequest(id)
+}
+
+// AutoApproveDeployApprovalRequest approves a pending deploy approval request, by internal ID, with no approving
+// user: the gateway approved it by itself when it was created (deploy_approval_auto_approve).
+func (d *Database) AutoApproveDeployApprovalRequest(
+	id int64,
+	expiresAt time.Time,
+	notes string,
+) (*DeployApprovalRequest, error) {
+	err := d.updateApprovalStatus("id", id, approvalStatusUpdate{
+		newStatus: DeployApprovalRequestStatusApproved, expiresAt: &expiresAt, notes: notes,
 	})
 	if err != nil {
 		return nil, err
@@ -293,7 +310,7 @@ func (d *Database) ApproveDeployApprovalRequestByPublicID(
 	pendingMaxAge time.Duration,
 ) (*DeployApprovalRequest, error) {
 	err := d.updateApprovalStatus("public_id", publicID, approvalStatusUpdate{
-		newStatus: DeployApprovalRequestStatusApproved, actorUserID: approverUserID, expiresAt: &expiresAt,
+		newStatus: DeployApprovalRequestStatusApproved, actorUserID: &approverUserID, expiresAt: &expiresAt,
 		notes: notes, pendingMaxAge: pendingMaxAge,
 	})
 	if err != nil {
@@ -309,7 +326,7 @@ func (d *Database) RejectDeployApprovalRequest(
 	notes string,
 ) (*DeployApprovalRequest, error) {
 	err := d.updateApprovalStatus("id", id, approvalStatusUpdate{
-		newStatus: DeployApprovalRequestStatusRejected, actorUserID: approverUserID, notes: notes,
+		newStatus: DeployApprovalRequestStatusRejected, actorUserID: &approverUserID, notes: notes,
 	})
 	if err != nil {
 		return nil, err
@@ -324,7 +341,7 @@ func (d *Database) RejectDeployApprovalRequestByPublicID(
 	notes string,
 ) (*DeployApprovalRequest, error) {
 	err := d.updateApprovalStatus("public_id", publicID, approvalStatusUpdate{
-		newStatus: DeployApprovalRequestStatusRejected, actorUserID: approverUserID, notes: notes,
+		newStatus: DeployApprovalRequestStatusRejected, actorUserID: &approverUserID, notes: notes,
 	})
 	if err != nil {
 		return nil, err

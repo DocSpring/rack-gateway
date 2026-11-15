@@ -16,6 +16,12 @@ func (s *Service) GetDeployApprovalRequireDifferentApprover() (bool, error) {
 	return readGlobal(s, KeyDeployApprovalRequireDifferentApprover, nil, boolValue)
 }
 
+// GetDeployApprovalAutoApprove returns whether the gateway approves each deploy approval request as it's created,
+// for a rack where CI's own approval step is the approval.
+func (s *Service) GetDeployApprovalAutoApprove() (bool, error) {
+	return readGlobal(s, KeyDeployApprovalAutoApprove, nil, boolValue)
+}
+
 // GetDeployApprovalWindowMinutes returns the deploy approval window in minutes.
 func (s *Service) GetDeployApprovalWindowMinutes() (int, error) {
 	return readGlobal(s, KeyDeployApprovalWindowMinutes, nil, wholeNumber)

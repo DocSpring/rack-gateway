@@ -151,6 +151,25 @@ which. The approval's audit entry records `different_approver_required: true`.
 
 It's off by default, so a team with one admin can still deploy.
 
+### Auto-Approval (Optional)
+
+Some racks don't need a person to approve each deploy, such as a staging rack where the CI pipeline's own approval
+step decides when a deploy runs. Turn on **Approve requests automatically** (Settings > Deploy Approvals, or
+`RGW_SETTING_DEPLOY_APPROVAL_AUTO_APPROVE=true`) and the gateway approves each request as it's created. Everything
+else about the approval stays the same: it's bound to its app, commit and API token, it lasts for the approval
+window, and its `approved_deploy_commands` get their env vars. The deploy's builds, releases and commands still go
+through the gateway and are audit-logged.
+
+The approval has no approving user. Its notes say it was approved automatically, and its audit entry is the
+gateway's own (`system`) `deploy_approval_request.approve` with `auto_approved: true`. Nobody needs to act, so the
+gateway sends no Slack alert and posts no PR comment for it, and it never approves a CircleCI job: put the pipeline's
+approval step before the job that requests the deploy approval.
+
+It doesn't apply while **Require a different approver** is on: requests then wait for an approver. When the gateway
+can't read the setting or the approval fails, the request waits for an approver too.
+
+It's off by default. Turn it on only for a rack where whoever can run the CI pipeline may deploy to it.
+
 ### Time-Limited Approvals
 
 Approvals expire after a configurable window (default 15 minutes):
