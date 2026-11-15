@@ -14,11 +14,14 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/settings"
 )
 
-// newAutoApproveFixture is a create fixture with a settings service holding the given global settings.
+// newAutoApproveFixture is a create fixture with a settings service holding the given global settings. GitHub
+// verification is off for its app (the fixture has no GitHub).
 func newAutoApproveFixture(t *testing.T, globals map[string]interface{}) *createApprovalFixture {
 	t.Helper()
 	f := newCreateApprovalFixture(t)
 	f.handler.settingsService = settings.NewService(f.handler.database)
+	require.NoError(t, f.handler.settingsService.SetAppSettings("myapp",
+		map[string]interface{}{settings.KeyGitHubVerification: false}, nil))
 	if len(globals) > 0 {
 		require.NoError(t, f.handler.settingsService.SetGlobalSettings(globals, nil))
 	}
