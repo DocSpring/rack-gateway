@@ -49,22 +49,16 @@ func (h *APIHandler) autoApprovalApplies() bool {
 		return false
 	}
 
-	enabled, err := h.settingsService.GetDeployApprovalAutoApprove()
+	autoApproval, err := h.settingsService.GetDeployApprovalAutoApproval()
 	if err != nil {
-		gtwlog.Errorf("deploy approvals: failed to read %s: %v", settings.KeyDeployApprovalAutoApprove, err)
-		return false
-	}
-	if !enabled {
-		return false
-	}
-
-	differentApprover, err := h.settingsService.GetDeployApprovalRequireDifferentApprover()
-	if err != nil {
-		gtwlog.Errorf("deploy approvals: failed to read %s: %v",
+		gtwlog.Errorf("deploy approvals: failed to read %s and %s: %v", settings.KeyDeployApprovalAutoApprove,
 			settings.KeyDeployApprovalRequireDifferentApprover, err)
 		return false
 	}
-	if differentApprover {
+	if !autoApproval.Enabled {
+		return false
+	}
+	if autoApproval.RequireDifferentApprover {
 		gtwlog.Warnf("deploy approvals: %s is on, so %s doesn't apply; the request waits for an approver",
 			settings.KeyDeployApprovalRequireDifferentApprover, settings.KeyDeployApprovalAutoApprove)
 		return false
