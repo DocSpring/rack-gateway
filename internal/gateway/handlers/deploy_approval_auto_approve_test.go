@@ -31,7 +31,9 @@ func newAutoApproveFixture(t *testing.T, globals map[string]interface{}) *create
 func createAndDecode(t *testing.T, f *createApprovalFixture) DeployApprovalRequestResponse {
 	t.Helper()
 	resp := f.create(t, "abc123def4567890abc123def4567890abc123de")
-	require.Equal(t, http.StatusCreated, resp.StatusCode, responseError(t, resp))
+	if resp.StatusCode != http.StatusCreated {
+		require.FailNow(t, "the create wasn't accepted", "status %d: %s", resp.StatusCode, responseError(t, resp))
+	}
 	var got DeployApprovalRequestResponse
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&got))
 	return got
