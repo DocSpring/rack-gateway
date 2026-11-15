@@ -45,6 +45,9 @@ the caller's role. Stopping a process isn't affected. This is a global safety sw
 
 **Enable deploy approvals** turns the [deploy approval](/integrations/deploy-approvals/) workflow on or off, and
 **Approval Window (minutes)** (default 15) sets how long an approved request can be used to deploy.
+**Require a different approver** stops anyone approving a deploy they requested, and **Approve requests
+automatically** approves each request as it's created, for a rack where the CI pipeline's own approval step decides
+(see [Auto-Approval](/integrations/deploy-approvals/#auto-approval-optional)).
 
 ## Default VCS & CI Providers
 

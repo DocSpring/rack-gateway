@@ -147,6 +147,10 @@ graph LR
 
 The setting is off by default. Turn it on if your controls require segregation of duties.
 
+`deploy_approval_auto_approve` approves each request as it's created, with no human approver, so leave it off on
+any rack inside your change management scope. It's meant for racks outside it, such as staging. The gateway still
+audit-logs each auto-approval and every build, release and command of the deploy.
+
 ### CC9: Risk Mitigation
 
 | Criterion | Requirement | Gateway Implementation |
@@ -243,6 +247,7 @@ curl -b "session_token=TOKEN" \
 
 - [ ] Deploy approvals enabled
 - [ ] Different approver required (`RGW_SETTING_DEPLOY_APPROVAL_REQUIRE_DIFFERENT_APPROVER=true`)
+- [ ] Auto-approval off on production racks (`RGW_SETTING_DEPLOY_APPROVAL_AUTO_APPROVE` unset or `false`)
 - [ ] CI/CD uses dedicated tokens
 - [ ] Change log maintained
 

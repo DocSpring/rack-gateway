@@ -302,6 +302,45 @@ describe('SettingsPage', () => {
       })
     })
 
+    it('saves automatic approval for deploy approvals, and locks it when an env var sets it', async () => {
+      vi.mocked(api.get).mockResolvedValue({
+        deploy_approval_auto_approve: {
+          key: 'deploy_approval_auto_approve',
+          value: false,
+          source: 'default',
+          env_var: 'RGW_SETTING_DEPLOY_APPROVAL_AUTO_APPROVE',
+        } as SettingsSetting,
+      })
+      vi.mocked(api.put).mockResolvedValue({})
+
+      const { unmount } = renderSettingsPage()
+
+      const checkbox = await screen.findByLabelText(/approve requests automatically/i)
+      await waitFor(() => expect(checkbox).not.toBeChecked())
+      fireEvent.click(checkbox)
+      fireEvent.click(await screen.findByRole('button', { name: /save/i }))
+
+      await waitFor(() => {
+        expect(api.put).toHaveBeenCalledWith('/api/v1/settings/deploy-approvals', {
+          deploy_approval_auto_approve: true,
+        })
+      })
+      unmount()
+
+      vi.mocked(api.get).mockResolvedValue({
+        deploy_approval_auto_approve: {
+          key: 'deploy_approval_auto_approve',
+          value: true,
+          source: 'env',
+          env_var: 'RGW_SETTING_DEPLOY_APPROVAL_AUTO_APPROVE',
+        } as SettingsSetting,
+      })
+      renderSettingsPage()
+      const locked = await screen.findByLabelText(/approve requests automatically/i)
+      await waitFor(() => expect(locked).toBeChecked())
+      expect(locked).toBeDisabled()
+    })
+
     // The gateway-wide require_command_justification is its own group: it saves to its own endpoint, and Clear
     // deletes its stored value.
     it('saves and clears the gateway-wide justification requirement', async () => {

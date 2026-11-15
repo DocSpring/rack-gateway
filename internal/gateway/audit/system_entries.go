@@ -3,6 +3,7 @@ package audit
 import (
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
@@ -39,6 +40,24 @@ func DeployApprovalExpiredEntry(expired db.ExpiredDeployApproval) *db.AuditLog {
 			"previous_status": expired.PreviousStatus,
 		})
 	entry.DeployApprovalRequestID = &expired.ID
+	return entry
+}
+
+// DeployApprovalAutoApprovedEntry is the audit event for a deploy approval request the gateway approved as it was
+// created, because deploy_approval_auto_approve is on.
+func DeployApprovalAutoApprovedEntry(approved *db.DeployApprovalRequest) *db.AuditLog {
+	details := map[string]interface{}{
+		"public_id":       approved.PublicID,
+		"app":             approved.App,
+		"git_commit_hash": approved.GitCommitHash,
+		"auto_approved":   true,
+	}
+	if approved.ApprovalExpiresAt != nil {
+		details["approval_expires_at"] = approved.ApprovalExpiresAt.UTC().Format(time.RFC3339)
+	}
+	entry := systemEntry(rbac.ResourceDeployApprovalRequest, rbac.ActionApprove.String(),
+		fmt.Sprintf("%d", approved.ID), details)
+	entry.DeployApprovalRequestID = &approved.ID
 	return entry
 }
 
