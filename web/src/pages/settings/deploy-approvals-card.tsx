@@ -39,6 +39,33 @@ const DEFAULTS: DeployApprovalValues = {
 
 const KEYS = Object.keys(DEFAULTS) as (keyof DeployApprovalValues)[]
 
+interface ToggleSettingProps {
+  checked: boolean
+  disabled: boolean
+  hint: string
+  label: string
+  onChange: (checked: boolean) => void
+  setting: SettingsSetting | undefined
+}
+
+function ToggleSetting({ checked, disabled, hint, label, onChange, setting }: ToggleSettingProps) {
+  return (
+    <div>
+      <label className="flex items-center gap-3">
+        <input
+          checked={checked}
+          disabled={disabled}
+          onChange={(event) => onChange(event.target.checked)}
+          type="checkbox"
+        />
+        <span className="font-medium text-sm">{label}</span>
+        <SourceIndicator setting={setting} />
+      </label>
+      <p className="mt-1 text-muted-foreground text-xs">{hint}</p>
+    </div>
+  )
+}
+
 export function DeployApprovalsCard({ settings, disabled }: DeployApprovalsCardProps) {
   const qc = useQueryClient()
   const { handleStepUpError } = useStepUp()
@@ -155,41 +182,23 @@ export function DeployApprovalsCard({ settings, disabled }: DeployApprovalsCardP
           </p>
         </div>
 
-        <div>
-          <label className="flex items-center gap-3">
-            <input
-              checked={display('deploy_approval_require_different_approver')}
-              disabled={isLocked('deploy_approval_require_different_approver')}
-              onChange={(event) =>
-                change('deploy_approval_require_different_approver', event.target.checked)
-              }
-              type="checkbox"
-            />
-            <span className="font-medium text-sm">Require a different approver</span>
-            <SourceIndicator setting={settings?.deploy_approval_require_different_approver} />
-          </label>
-          <p className="mt-1 text-muted-foreground text-xs">
-            Nobody can approve or extend a deploy they requested: the person who created the
-            request, or the owner of its API token
-          </p>
-        </div>
+        <ToggleSetting
+          checked={display('deploy_approval_require_different_approver')}
+          disabled={isLocked('deploy_approval_require_different_approver')}
+          hint="Nobody can approve or extend a deploy they requested: the person who created the request, or the owner of its API token"
+          label="Require a different approver"
+          onChange={(checked) => change('deploy_approval_require_different_approver', checked)}
+          setting={settings?.deploy_approval_require_different_approver}
+        />
 
-        <div>
-          <label className="flex items-center gap-3">
-            <input
-              checked={display('deploy_approval_auto_approve')}
-              disabled={isLocked('deploy_approval_auto_approve')}
-              onChange={(event) => change('deploy_approval_auto_approve', event.target.checked)}
-              type="checkbox"
-            />
-            <span className="font-medium text-sm">Approve requests automatically</span>
-            <SourceIndicator setting={settings?.deploy_approval_auto_approve} />
-          </label>
-          <p className="mt-1 text-muted-foreground text-xs">
-            Each request is approved as it's created, for a rack where the CI pipeline's own
-            approval step decides when to deploy. Off while a different approver is required
-          </p>
-        </div>
+        <ToggleSetting
+          checked={display('deploy_approval_auto_approve')}
+          disabled={isLocked('deploy_approval_auto_approve')}
+          hint="Each request is approved as it's created, for a rack where the CI pipeline's own approval step decides when to deploy. Off while a different approver is required"
+          label="Approve requests automatically"
+          onChange={(checked) => change('deploy_approval_auto_approve', checked)}
+          setting={settings?.deploy_approval_auto_approve}
+        />
 
         <div className="flex justify-end gap-2">
           {storedKeys.length > 0 && (
