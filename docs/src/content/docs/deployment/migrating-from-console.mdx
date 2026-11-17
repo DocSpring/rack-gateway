@@ -1,0 +1,138 @@
+---
+title: "Migrating from Convox Console"
+description: "Move a Console-managed rack to Rack Gateway without rebuilding the rack or redeploying its apps."
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+A rack that [Convox Console](https://docs.convox.com/management/console-rack-management) manages can move to Rack
+Gateway in place. You don't need a new rack, and the apps on it keep running. Two things change: the rack's
+Terraform state moves from Console to you, and the gateway takes over the job Console did of deciding who can do
+what on the rack.
+
+## What Changes
+
+| | With Convox Console | After the migration |
+|---|---|---|
+| Rack Terraform state | Held by Console | Held by you: on your machine at first, then in your own backend |
+| Rack updates | From Console, or a CLI logged in to Console | `terraform apply` from your copy of the rack's Terraform |
+| How people sign in | `convox login console.convox.com` | `rack-gateway login`, with Google OAuth and MFA |
+| CI deploys | Console deploy keys and workflows | Gateway [API tokens](/user-guide/web-ui/api-tokens/), optionally with [deploy approvals](/integrations/deploy-approvals/) |
+| Roles and audit log | Console | The gateway's [RBAC](/security/rbac/) and [audit log](/concepts/audit-logging/) |
+
+Console features with no gateway equivalent stop working for the rack, such as Console's deploy workflows, metrics
+dashboards and cost tracking. Compare the two in
+[Convox Console vs Rack Gateway](/getting-started/what-is-convox/#convox-console-vs-rack-gateway).
+
+## Before You Start
+
+- The `convox` CLI, logged in to your Console organization (`convox racks` lists the rack as `<org>/<rack>`).
+- No deploy or rack update in progress: Convox won't move a rack that has one.
+- AWS credentials for the rack's account. Console ran the rack's Terraform with its own access. Once the state is
+  yours, Terraform runs with your credentials.
+- A Google OAuth client and a PostgreSQL database for the gateway (see [OAuth Setup](/configuration/oauth-setup/)
+  and [Database Setup](/deployment/database-setup/)).
+
+<Aside type="caution">
+Once the rack leaves Console, anyone or anything that reaches it through Console loses access, including CI. Apps
+don't restart and keep serving traffic. Pause CI deploys and tell your team before step 1. Until the gateway is
+running, you're the only one with access: through the `convox` CLI on the machine that holds the state.
+</Aside>
+
+## Steps
+
+<Steps>
+
+1. **Move the rack's Terraform out of Console**
+
+   Convox calls this moving a rack back to the CLI. The name stays the same; only the organization prefix goes:
+
+   ```bash
+   convox racks                                 # acme/production  aws  running
+   convox rack mv acme/production production
+   convox racks                                 # production       aws  running
+   ```
+
+   The CLI now keeps the rack's Terraform in its config directory, under `racks/production`: `main.tf`,
+   `vars.json` and `terraform.tfstate`. The config directory is `~/.config/convox` on Linux,
+   `~/Library/Application Support/convox` on macOS, or `$CONVOX_CONFIG` when that's set. See Convox's
+   [Moving a Rack Back to CLI](https://docs.convox.com/management/import-rack#moving-a-rack-back-to-cli).
+
+   <Aside type="caution">
+   `terraform.tfstate` holds the rack's API password and is now the only copy of the rack's state. Back it up
+   before you do anything else, and keep it out of git.
+   </Aside>
+
+2. **Give the Terraform a proper home**
+
+   Kept on one laptop, the rack's state can be lost, and nobody else can update the rack. Copy the three files
+   into a directory of a private repository, add a remote backend to it (for example S3 with encryption and state
+   locking), and move the state into the backend:
+
+   ```bash
+   terraform init -migrate-state
+   terraform plan    # expect no changes
+   ```
+
+   If the plan shows changes, find out why before you apply anything. Once the state is in the backend, delete
+   the local `terraform.tfstate` copy from the repository directory, and commit `main.tf`, `vars.json` and the
+   backend configuration only.
+
+   From then on, change the rack in that repository: edit the `release` and variables in `main.tf`, then
+   `terraform apply`. `convox rack update` and `convox rack params set` work on the CLI's own copy of the files,
+   which stops matching your repository after the first change.
+
+3. **Get the rack API address and password**
+
+   The `api` output is the rack API's URL, with the password in it:
+
+   ```bash
+   terraform output -raw api    # https://convox:<password>@api.<rack host>
+   ```
+
+   The gateway takes the password as `RACK_TOKEN`. When the gateway runs on the rack it protects, leave
+   `RACK_HOST` unset and it reaches the API inside the cluster. Otherwise set `RACK_HOST` to the URL without the
+   credentials (`https://api.<rack host>`). See [Environment Variables](/configuration/environment-variables/).
+
+4. **Deploy the gateway**
+
+   Deploy it to the rack as a normal app with the `convox` CLI, as in [Convox Deployment](/deployment/convox/).
+   Keep it off the public internet: [Private Network](/deployment/private-network/) explains how. Sign in as one of
+   the `ADMIN_USERS`, enroll MFA, then add your team and their roles.
+
+5. **Move people and CI to the gateway**
+
+   - Everyone installs the [CLI](/user-guide/cli/installation/) and runs `rack-gateway login`. The commands they
+     know from `convox` work the same way through the gateway: see [Commands](/user-guide/cli/commands/).
+   - Create an API token for each CI pipeline, with only the role it needs, and replace its Console deploy key with
+     the token. To have a person approve each production deploy, turn on
+     [deploy approvals](/integrations/deploy-approvals/).
+
+6. **Close the old ways in**
+
+   - **Console's AWS role.** Importing an AWS rack into Console maps Console's role
+     (`convox-<org id>-ConsoleRole-...`) to `system:masters` in the cluster's `aws-auth` ConfigMap. If yours has
+     that `mapRoles` entry, remove it (save a copy of the ConfigMap first), then delete the role in IAM.
+   - **The password in your apps.** Convox gives every app process `RACK_URL`, which contains the rack API
+     password. Turn that off first, as described in
+     [Hardening](/security/hardening/), or every app process gets the new password too.
+   - **The rack API password.** Console had it, and so has anyone who could read the rack's Terraform state.
+     Rotate it by replacing the password resource in the rack's Terraform, then set the gateway's
+     `RACK_TOKEN` to the new value:
+
+     ```bash
+     terraform state list | grep random_string.password
+     terraform apply -replace='<the address listed>'
+     terraform output -raw api
+     ```
+
+     The rack API restarts with the new password. Apps keep running.
+
+</Steps>
+
+## After the Migration
+
+- Update the rack with `terraform apply` from your repository, after reading the Convox release notes for each
+  version in the jump.
+- Update the gateway as in [Upgrades](/operations/upgrades/), and go through the
+  [Production Checklist](/deployment/production-checklist/).
