@@ -194,6 +194,10 @@ export default defineConfig({
             { label: 'Docker', slug: 'deployment/docker' },
             { label: 'Convox', slug: 'deployment/convox' },
             {
+              label: 'Migrating from Convox Console',
+              slug: 'deployment/migrating-from-console',
+            },
+            {
               label: 'Private Network',
               slug: 'deployment/private-network',
             },
